@@ -1,36 +1,125 @@
 # Telemetry / GSI 设计基线
 
-> 状态：**M1 Design Baseline**。本文冻结进入 M1 前已经足够明确的 Telemetry / GSI 设计；凡是必须依赖真实 Windows + CS2 spectator 数据才能确认的行为，明确标为“待真实 capture 验证”，不把推测写成既定事实。
+> 状态：**M1 Design Baseline**。
 >
-> 本文服从 ADR-0001～0003 的 authority、RuntimeState、identity、time 与 delivery invariant；如与 `docs/architecture.md` 中较早的 package ownership 简写冲突，以本文关于 telemetry / capture / replay 的更具体说明为准。
+> 本文定义 RivalHub Broadcast 在 M1 阶段的 Telemetry / CS2 Game State Integration（GSI）边界、数据语义、capture/replay 约束与真实环境验证要求。本文服从 ADR-0001～0003 中已经接受的 authority、RuntimeState、identity、time 与 delivery invariant。
+>
+> 对于必须依赖真实 Windows + CS2 spectator 运行才能确认的行为，本文明确标记为“待真实 capture 验证”；这些内容在获得真实证据前不得被实现视为既定协议事实。
 
-## 1. 用人话先说明：这一层到底在做什么
+## 1. 目标与范围
 
-CS2 会不断把“我现在看到的比赛状态”通过 GSI HTTP POST 发给 Companion。这个输入并不是 RivalHub 的官方比赛结果，也不是可以直接给 HUD 使用的一份完整业务状态。
-
-M1 要解决的是：
+M1 Telemetry 层负责建立以下稳定链路：
 
 ```text
-CS2 发来的原始 GSI
-        ↓
-先可靠接住、记录、补全 partial update
-        ↓
-翻译成不带 Valve/GSI 特有细节的 NormalizedTelemetry
-        ↓
-交给 Core
-        ↓
-Core 再决定 RuntimeState / transition / identity / scene 等业务语义
+CS2 Raw GSI
+    ↓
+Companion GSI ingress
+    ↓
+GSI source-state reconstruction
+    ↓
+Normalized Telemetry
+    ↓
+Broadcast Core
 ```
 
-因此最重要的原则是：
+目标是将 CS2 提供的 source-specific、partial、可能随版本变化的 GSI 输入，转换为 Core 可以稳定消费的 telemetry observation，同时保留完整的可验证性与可重放性。
 
-> **GSI adapter 负责“把 CS2 说的话翻译清楚”；Core 负责“这些观测对比赛运行意味着什么”。**
+本阶段重点解决：
 
-不要让一个 GSI library 直接替 Core 决定 `round_started`、`map_ended`、`bomb_planted` 等 Broadcast domain transition。
+- Raw GSI 接收与 source ownership；
+- partial update reconstruction；
+- Raw GSI → normalized telemetry 的 adapter boundary；
+- 时间、序列、unknown/unavailable 语义；
+- production capture 与 replay；
+- 真实 Windows + CS2 spectator reference corpus；
+- 第一个真实 workspace dependency 出现后的 build graph 验证。
+
+本阶段不负责：
+
+- RivalHub #610 / #615 uplink；
+- canonical Match / Map result；
+- 完整 RuntimeState / Scene Engine；
+- Program / Radar renderer；
+- browser realtime transport；
+- observer camera control；
+- HLAE / server-event sidecar；
+- DAK postmatch evidence pipeline。
 
 ---
 
-## 2. 目标数据流
+## 2. 核心设计原则
+
+### 2.1 Source adapter 与 domain semantics 分离
+
+GSI adapter 负责：
+
+```text
+parse
+validate
+partial-state reconstruction
+normalize
+source diagnostics
+```
+
+Broadcast Core 负责：
+
+```text
+RuntimeState
+RuntimeTransition
+session / identity
+map epoch
+accumulators
+scene policy
+capability
+```
+
+因此，GSI adapter 不直接拥有或输出 Broadcast domain transition，例如：
+
+```text
+round_started
+round_ended
+map_started
+map_ended
+bomb_planted
+side_changed
+```
+
+这些 transition 必须由 Core 根据 normalized observation 与现有 RuntimeState 推导。
+
+第三方 GSI library 即使提供 change/event API，也不得成为 Broadcast domain transition 的 owner。
+
+### 2.2 Raw GSI 不泄漏到 Core / Web / RivalHub adapter
+
+Raw GSI schema、Valve 字段名、`previously`、`added` 等 source-specific 结构限定在 `packages/telemetry-gsi` 及 capture/replay tooling 边界内。
+
+Core、Web、RivalHub adapter 不直接依赖 Raw GSI 类型。
+
+### 2.3 Normalized telemetry 是 observation，不是 RuntimeState
+
+`NormalizedTelemetry` / `TelemetryObservation` 表示：
+
+> 当前 telemetry source 能够提供的、已经完成 source reconstruction 与 normalization 的观测。
+
+它不包含：
+
+- RivalHub canonical identity；
+- official lifecycle / result；
+- liveSessionId 的最终可信绑定；
+- scene state；
+- operator override；
+- accumulator 结果。
+
+这些语义属于 Core 与 RivalHub context 组合后的 runtime 层。
+
+### 2.4 Replay 必须经过 production adapter
+
+真实 capture 的 replay 不得直接注入“测试专用 normalized state”。
+
+生产输入与 replay 输入必须复用同一条 telemetry adapter 路径，以便 parser、partial merge、normalization 与兼容性逻辑能够被真实 corpus 持续验证。
+
+---
+
+## 3. 目标数据流
 
 ```text
 CS2
@@ -38,51 +127,47 @@ CS2
  ▼
 apps/companion — GSI ingress
  │
- │ auth / request limits / receive timestamps
+ │ authentication / request limits
+ │ receive monotonic timestamp
+ │ receive UTC timestamp
  │
  ├──────────────► Production Capture Recorder
- │                 sanitized raw payload
- │                 + monotonic pacing metadata
+ │                 sanitized raw frame
+ │                 + capture timing metadata
  │
  ▼
 packages/telemetry-gsi
  │
- │ tolerant parse / validation
- │ partial-frame source-state merge
+ │ raw parsing / tolerant validation
+ │ source-state reconstruction
  │ GSI-specific diagnostics
  │ normalization
  ▼
-packages/core — Core-owned TelemetryObservation / NormalizedTelemetry contract
- │
+packages/core
+ │ Core-owned telemetry input contract
  ▼
 RuntimeState / RuntimeTransition / identity / accumulators
 ```
 
-### 为什么要分这么多层
-
-如果 HTTP、GSI partial merge、比赛 transition、HUD 状态全部写进一个处理函数，短期很快，但后面会出现三个问题：
-
-1. replay 很难复现生产路径；
-2. Valve 字段变化会直接污染整个 Runtime；
-3. 很难判断一个 bug 是“CS2 数据问题”还是“我们业务逻辑问题”。
-
-M1 的目标不是追求类和文件越多越好，而是把这三个责任边界分清。
+Production capture 与 runtime processing 共享同一个 accepted raw input，但 recorder 不得成为 telemetry processing 的前置阻塞条件。
 
 ---
 
-## 3. Ownership
+## 4. Package ownership
 
-### `packages/core`
+### 4.1 `packages/core`
 
-Core 拥有 telemetry 进入 domain 的稳定输入 contract，例如概念上的：
+Core 拥有 telemetry 进入 domain 的稳定输入 contract。
+
+概念上，该 contract 至少需要表达：
 
 ```text
 TelemetryObservation
-├─ seq
-├─ receivedAt              UTC wall clock
-├─ receivedMonotonic       process-local monotonic time
+├─ sequence
+├─ receivedAt
+├─ receivedMonotonic
 ├─ source
-│  ├─ kind = cs2-gsi
+│  ├─ kind
 │  ├─ providerTimestamp?
 │  └─ capabilities
 ├─ telemetry
@@ -97,32 +182,30 @@ TelemetryObservation
 └─ diagnostics
 ```
 
-这里的名字只是当前语义草图；最终 TypeScript 字段在第一张 M1 implementation Issue 中收敛。
+以上是语义结构，不是最终 TypeScript schema。字段与类型在第一张 M1 implementation Issue 中根据真实实现进一步收敛。
 
-Core contract **不得**出现：
+Core contract 不应出现：
 
 ```text
-GSI 的 auth / previously / added
-Valve-specific raw shape
-Fastify Request
-matchId / liveSessionId / RivalHub team identity
-official result
+GSI auth
+GSI previously / added
+Valve-specific raw payload shape
+Fastify Request / Reply
+RivalHub Match object
+RivalHub canonical result
 ```
 
-原因：后四类事实需要 Core 与 RivalHub context 组合之后才能确定，不能让 GSI adapter 猜。
+### 4.2 `packages/telemetry-gsi`
 
-### `packages/telemetry-gsi`
+负责：
 
-拥有：
-
-- Raw CS2 GSI schema / tolerant parser；
-- GSI partial update 的 source-state merge；
+- Raw CS2 GSI schema；
+- tolerant parser / validator；
+- partial source-state reconstruction；
 - GSI-specific diagnostics；
-- Raw GSI → Core-owned normalized telemetry 的 adapter。
+- Raw GSI → Core-owned telemetry contract 的 normalization adapter。
 
-Raw GSI type 不得泄漏给 `packages/core`、`apps/web` 或 RivalHub adapter。
-
-推荐依赖方向：
+初始依赖方向：
 
 ```text
 packages/telemetry-gsi
@@ -130,143 +213,270 @@ packages/telemetry-gsi
 packages/core
 ```
 
-也就是 adapter 依赖 Core 定义的 input contract；Core 不知道 GSI 的存在。
+Core 不反向依赖 `packages/telemetry-gsi`。
 
-### `apps/companion`
+### 4.3 `apps/companion`
 
-拥有：
+负责：
 
 - GSI HTTP ingress；
-- GSI token / body size / local endpoint policy；
-- 接收时的 monotonic + wall-clock timestamp；
+- GSI token validation；
+- request/body size policy；
+- request receive timestamps；
 - production capture recorder；
-- telemetry-gsi 与 Core 的 composition。
+- telemetry-gsi 与 Core 的 composition；
+- telemetry ingress health / diagnostics 的 process-level owner。
 
-### `packages/testkit`
+### 4.4 `packages/testkit`
 
-拥有：
+负责：
 
 - capture reader；
 - ReplayClock；
 - replay runner；
 - simulator；
 - fault injection；
-- fixture tooling。
+- fixture transformation / sanitization tooling；
+- deterministic replay assertions。
 
-**不拥有生产 recorder。**
+`packages/testkit` **不拥有 production recorder，也不得成为 production runtime dependency**。
 
-这条说明修正 `docs/architecture.md` 早期把 `recorder` 简写在 `testkit` 下的表述：真实 Windows + CS2 运行时需要 production recorder，而生产 app 不应 runtime-depend on testkit。testkit 消费 capture 做测试，不反向成为生产依赖。
+`docs/architecture.md` 中较早的 `testkit = recorder / replay / simulator / ...` 表述，在 telemetry / capture ownership 上由本文收敛为：
+
+```text
+production capture recorder
+→ apps/companion telemetry runtime
+
+capture consumption / replay / simulation
+→ packages/testkit
+```
 
 ---
 
-## 4. Raw GSI 与 partial update 语义
+## 5. Raw GSI ingestion boundary
 
-CS2 GSI 不是每个 POST 都完整重复所有状态。Adapter 必须维护一份 **GSI source state**，把连续 partial frame 合并成当前完整观测。
+第一版 GSI ingress 应保持最小职责：
 
-这份 `GsiSourceState` 只是 source-side reconstruction，不是第二份 `RuntimeState`。
+1. 接收 CS2 HTTP POST；
+2. 执行本地 GSI authentication；
+3. 应用 body/request limit；
+4. 记录接收时间；
+5. 将 accepted raw payload 同时交给 recorder 与 telemetry adapter；
+6. 快速返回，不在 request path 中执行重型业务逻辑。
 
-第一版采用以下语义，并要求之后用真实 capture 验证：
+Ingress 不负责：
+
+```text
+RivalHub match binding
+RuntimeTransition derivation
+scene selection
+cloud uplink
+HUD projection
+```
+
+默认监听仍遵守本仓安全基线：
+
+```text
+127.0.0.1
+```
+
+LAN exposure 不属于 M1 telemetry baseline 的默认行为。
+
+---
+
+## 6. Raw GSI 与 source-state reconstruction
+
+### 6.1 Partial update model
+
+CS2 GSI 应视为 partial state feed，而不是“每个 POST 都包含完整比赛状态”。
+
+`packages/telemetry-gsi` 因此维护一份 source-local `GsiSourceState`，用于将连续 GSI frame 重建为当前完整 source observation。
+
+`GsiSourceState`：
+
+- 是 adapter 内部状态；
+- 不属于 Core RuntimeState；
+- 不直接暴露到 renderer；
+- process/replay reset 时必须可显式重置。
+
+### 6.2 初始 merge semantics
+
+在真实 capture 完成前，采用以下初始语义作为 implementation hypothesis：
 
 ```text
 top-level block absent
-→ unchanged
+→ previous source value remains unchanged
 
-普通 object field absent
-→ unchanged
+ordinary nested field absent
+→ previous source value remains unchanged
 
-allplayers / grenades / weapons 等 collection block 出现
-→ 视为该 collection 的当前集合
-→ block 内消失的 entry 可以从 source state 移除
+collection block explicitly present
+→ represents current source-side collection for that block
+→ entries absent from the new collection may be removed
 
-某能力因 cfg / spectator context 根本不可用
+capability unavailable because of cfg / spectator context
 → unavailable
-→ 不能伪装成 empty / zero / false
+→ must not be represented as empty / zero / false
 ```
 
-### `previously` / `added`
+其中 collection replacement / deletion 的精确 corner case 必须通过真实 Windows + CS2 spectator capture 验证。
 
-Raw capture 可以保留 Valve 原始 payload 中的 `previously` / `added` 以便 diagnostics 与兼容性调查；但：
+### 6.3 `previously` / `added`
 
-- 不把它们暴露为 Core contract；
-- 不把它们直接当 RuntimeTransition；
-- Core transition 必须由稳定后的 normalized observation + RuntimeState 推导。
-
-### Unknown 不等于 0
-
-必须保持：
+Raw capture 可以保留 CS2 payload 中的：
 
 ```text
-unknown ≠ 0
-unknown ≠ false
-unknown ≠ []
+previously
+added
 ```
 
-例如没有观测到 armor、grenade collection 或 phase，不应该为了类型方便填成 `0`、空数组或任意默认 enum。
+用途限定为：
+
+- source diagnostics；
+- compatibility investigation；
+- corpus analysis；
+- parser regression evidence。
+
+它们不得：
+
+- 直接进入 Core telemetry contract；
+- 直接映射为 RuntimeTransition；
+- 成为 canonical result evidence 的唯一来源。
 
 ---
 
-## 5. Validation / forward compatibility
+## 7. Unknown / unavailable semantics
 
-Telemetry adapter 应“严格结构、宽容新值”。
+Telemetry model 必须区分：
 
-### 应拒绝或降级为 invalid frame
+```text
+known value
+unknown value
+unavailable capability
+empty collection
+zero / false
+```
+
+以下等价关系均禁止：
+
+```text
+unknown == 0
+unknown == false
+unknown == []
+unavailable == empty
+```
 
 例如：
 
-- body 根本不是可解析 JSON object；
-- 关键字段类型完全错误；
-- 数值/对象形态破坏到无法安全理解。
+- 未观测到 armor 不等于 armor = 0；
+- grenade capability 不可用不等于当前 grenades = []；
+- phase 字段不可解释不等于任意默认 phase；
+- observer-only field 缺失不应伪装成正常空值。
 
-### 不应因为以下情况把整帧丢掉
+Normalized contract 应通过 optional / nullable / discriminated availability 等明确方式表达缺失语义，而不是依赖 magic default。
 
-例如 Valve 未来增加：
+---
 
-- 新 phase 字符串；
-- 新 weapon / grenade type；
+## 8. Validation 与 forward compatibility
+
+Telemetry parser 应遵守：
+
+> **结构约束严格；新增 source value 宽容。**
+
+### 8.1 Invalid frame
+
+以下情况可以判定 frame invalid 或产生明确 degraded diagnostic：
+
+- body 不是 JSON object；
+- 关键字段类型与结构不可解析；
+- 数值或对象 shape 已破坏到无法安全读取；
+- payload 超出 ingress policy 限制。
+
+### 8.2 Unknown future values
+
+以下变化不应导致整帧被丢弃：
+
+- 新 phase string；
+- 新 weapon type；
+- 新 grenade type；
 - 新 bomb state；
-- 当前代码不认识的附加字段。
+- 新附加字段；
+- 已知 block 中出现尚未识别的 enum/string value。
 
-未知 enum/string 可以保留 raw value，并把对应高级语义标为 unknown/degraded；不要因为一个未来新值让其他健康的 map/player state 一起消失。
+对未知 source value，应优先：
 
----
+1. 保留 raw value 供 diagnostics；
+2. 将无法确定的高级语义标记为 unknown/degraded；
+3. 保留同一 frame 中其他仍然有效的 telemetry。
 
-## 6. Time 语义
-
-遵守 ADR-0003：
-
-```text
-monotonic clock
-→ “过去了多久”
-→ staleness / timeout / replay pacing / interpolation
-
-UTC wall clock
-→ “什么时候发生”
-→ receivedAt / logs / audit / cross-machine evidence
-```
-
-GSI `provider.timestamp` 可以作为 source evidence，但不能替代 Companion 自己的 monotonic receive clock。
-
-第一版 `TelemetryObservation.seq` 是 Companion/process scope 下的接收序列，用于本地 diagnostics/replay；不要提前把它等同于后续 RivalHub #610/#615 的 wire sequence。
+禁止因为一个未知 enum 导致整份 map/player/bomb state 丢失。
 
 ---
 
-## 7. Production Capture Recorder
+## 9. Time 与 sequence semantics
 
-### 为什么一定要录 Raw GSI
+时间语义服从 ADR-0003。
 
-真实 CS2 + spectator 环境昂贵而且难重复。Recorder 的目的不是保存比赛历史，而是把一次真实运行转换成之后可在 Mac / CI 反复使用的测试输入：
+### 9.1 Monotonic time
+
+用于：
 
 ```text
-真实 Windows + CS2
-        ↓ 一次 capture
-sanitized raw corpus
-        ↓ 无限次 replay
-Mac / Linux / Windows CI
+staleness
+timeout
+replay pacing
+interpolation
+ingress interval measurement
 ```
 
-因此 capture 记录的是 **accepted raw GSI**，不是已经 normalized 的输出。这样 parser / merge / normalizer 未来改动时仍然可以重新验证。
+推荐来源包括：
 
-### 建议格式
+```text
+performance.now()
+process.hrtime.bigint()
+```
+
+### 9.2 UTC wall clock
+
+用于：
+
+```text
+receivedAt
+loggedAt
+audit / diagnostics
+cross-machine evidence
+capture metadata
+```
+
+### 9.3 Provider timestamp
+
+GSI `provider.timestamp` 可以保留为 source evidence，但不作为本地 timeout / staleness 的唯一时钟。
+
+### 9.4 Local sequence
+
+M1 初始 `TelemetryObservation.sequence` 表示 Companion / producer process 内的接收顺序。
+
+该 sequence：
+
+- 主要服务 diagnostics、replay 与 local ordering；
+- 不提前等同于 RivalHub #610 / #615 的 wire sequence；
+- process restart 后的 continuity 由后续 `producerInstanceId` / session semantics 处理。
+
+---
+
+## 10. Production Capture Recorder
+
+### 10.1 Purpose
+
+Production capture 的目标是将昂贵、难重复的真实 Windows + CS2 spectator 输入转换为可重复执行的测试证据。
+
+Capture 不是官方比赛历史，也不是长期 telemetry data warehouse。
+
+应记录 **accepted raw GSI input**，而不是只记录 normalized output，以保证 parser、merge、normalization 未来发生变化后仍可对原始现实输入重新验证。
+
+### 10.2 Physical format
+
+初始格式：
 
 ```text
 captures/<capture-id>/
@@ -280,118 +490,143 @@ captures/<capture-id>/
 formatVersion
 captureId
 createdAt
-platform / Windows version
-CS2 build/version（可获得时）
-Broadcast commit
-scenario / notes
-sanitized GSI config
+platform
+windowsVersion?
+cs2Build?
+broadcastCommit
+scenario
+notes?
+gsiConfig
 complete
 frameCount
 droppedFrames
 ```
 
-每个 `frames.jsonl` record 至少表达：
+每条 `frames.jsonl` record 至少表达：
 
 ```text
-v
-seq
-elapsedUs       ← monotonic pacing
-receivedAt      ← UTC evidence
-payload         ← sanitized raw GSI
+version
+sequence
+elapsedUs
+receivedAt
+payload
 ```
 
-### 敏感信息
+其中：
 
-写入 capture 前至少永久移除：
+```text
+elapsedUs
+→ monotonic capture pacing
+
+receivedAt
+→ UTC evidence timestamp
+```
+
+### 10.3 Sanitization
+
+写入 capture 时必须永久移除：
 
 ```text
 auth.token
 ```
 
-进入 Git 仓库的 fixture corpus 还必须经过 deterministic sanitizer，避免真实 SteamID、observer account、玩家姓名等个人数据无意长期进入测试资产。
+进入仓库的 fixture/reference corpus 还必须执行 deterministic sanitization，至少覆盖：
 
-### Recorder failure 不能拖死直播
+- SteamID / Steam64；
+- observer account identity；
+- player display name；
+- 其他不需要长期进入 fixture 的个人或赛事敏感字段。
 
-Recorder 必须是 bounded writer：
+Sanitizer 必须保持稳定映射，使跨 frame identity continuity 不被破坏。
+
+### 10.4 Recorder backpressure
+
+Recorder 不能通过无限内存队列保证“绝不丢 frame”。
+
+要求：
 
 ```text
-正常
-→ 连续写盘
-
-磁盘/写入跟不上
-→ bounded queue 达上限
-→ 标记 capture incomplete / droppedFrames > 0
-→ 产生 diagnostic incident
-→ telemetry runtime 继续工作
+bounded writer queue
 ```
 
-禁止通过无限 RAM queue 保证“一个 frame 都不能掉”，也禁止为了 recorder 把 GSI ingress 长时间阻塞。
+当磁盘或 writer 无法跟上 ingress 时：
 
-不完整 capture 不能被标为 gold/reference fixture。
+1. runtime telemetry processing 继续；
+2. recorder 不无限占用 RAM；
+3. capture 标记为 incomplete；
+4. `droppedFrames` 可观测；
+5. 产生明确 diagnostic / incident；
+6. incomplete capture 不得作为 gold/reference fixture。
+
+Recorder failure 不应阻塞 live telemetry path。
 
 ---
 
-## 8. Replay / Simulator
+## 11. Replay / simulator
 
-Replay 的核心原则：
+### 11.1 Deterministic replay
 
-> **记录下来的生产输入必须重新走 production telemetry adapter。**
-
-不要创建一条“测试专用 normalized state 注入”捷径，让测试绕过真正容易出错的 parser/merge/normalizer。
-
-### Layer A — deterministic replay
+主要 CI / integration replay 路径：
 
 ```text
-frames.jsonl
+capture frames
 → ReplayClock
-→ same GSI adapter accept path
+→ production GSI adapter accept path
+→ normalized telemetry
 → Core
 ```
 
-主要供 unit / integration / CI。
-
-第一版至少支持：
+第一版 ReplayClock 至少支持：
 
 ```text
 step
-1x
+1x realtime
 Nx accelerated
 ```
 
-### Layer B — ingress integration replay
+### 11.2 HTTP ingress integration replay
 
-少量测试可以：
+少量 integration test 额外覆盖：
 
 ```text
-frames.jsonl
+capture frames
 → HTTP POST /gsi
-→ real Companion ingress
-→ same telemetry adapter
+→ Companion ingress
+→ production GSI adapter
 ```
 
-用来验证 Fastify body parsing、auth、limits 与 composition。
+该路径用于验证：
 
-### 后续 fault injection
+- Fastify request/body parsing；
+- auth；
+- payload limits；
+- ingress composition；
+- recorder/adapter fan-out。
 
-在相同 capture 基础上再增加：
+它不是所有 replay test 的默认执行方式。
+
+### 11.3 Fault injection
+
+后续可在同一 capture corpus 上增加：
 
 ```text
 drop
 duplicate
 jitter
 reorder
-disconnect / reconnect
+disconnect
+reconnect
 ```
 
-不需要第一张 M1 Issue 一次做完。
+Fault injection 不要求在第一张 M1 implementation Issue 中全部完成。
 
 ---
 
-## 9. GSI configuration 策略
+## 12. GSI configuration baseline
 
-### Reference Capture Profile
+### 12.1 Reference Capture Profile
 
-为了首先弄清楚“CS2 实际能给我们什么”，第一份真实 capture 优先采用低 buffer / 低 throttle 的高保真 profile，并请求 observer 场景需要的完整字段，例如：
+第一份真实 reference capture 应优先请求 observer/broadcast 场景所需的高保真字段，包括：
 
 ```text
 provider
@@ -416,63 +651,85 @@ bomb
 allgrenades
 ```
 
-`tournamentdraft` 不作为核心输入。BP 仍由 RivalHub canonical domain 拥有，Broadcast 只负责 presentation playback。
+如果真实 CS2 当前对字段名称或支持情况已有变化，应以实际 capture 结果修正文档与 adapter。
 
-### 生产频率暂不冻结
+`tournamentdraft` 不作为 telemetry core 的必需输入。BP 的 canonical owner 仍然是 RivalHub；Broadcast 只消费 canonical BP 做 presentation playback。
 
-第一版不要在架构里硬编码生产必须是 `0/0`、10 Hz 或 20 Hz。
+### 12.2 Update rate
 
-真实 capture 后再根据：
+M1 Design Baseline 不冻结 production `buffer` / `throttle` 数值。
+
+第一份 reference capture 应偏向高保真、低 buffer / 低 throttle，以测量：
 
 - 实际 update cadence；
+- no-op / sparse frame 比例；
 - payload size；
 - CPU / GC；
-- HUD/Radar 平滑度；
-- 是否出现大量 no-op frame；
+- recorder throughput；
+- radar / HUD 所需有效更新频率。
 
-决定正式赛事 profile。
+正式 production profile 应在获得真实 capture 后单独确定。
 
-也就是说：
-
-> **Reference capture 先追求看清现实；production profile 再追求足够低延迟且稳定。**
+禁止在 runtime core 中硬编码某个 GSI Hz 假设。
 
 ---
 
-## 10. Real GSI Reference Capture Pack
+## 13. Real GSI Reference Capture Pack
 
-一旦最小 recorder 可用，应尽快在真实 Windows + CS2 spectator 环境采集第一套 corpus。
+### 13.1 Platform gate
 
-至少覆盖：
+真实 GSI corpus 必须来自：
+
+```text
+Windows
++ current CS2 build
++ spectator / observer context
++ project GSI config
+```
+
+GitHub-hosted Windows CI 不能替代该验证。
+
+### 13.2 Required scenarios
+
+第一批 reference corpus 至少覆盖：
 
 ```text
 normal round
 kill / damage
 bomb plant / defuse / explode
-grenade / smoke / molotov/inferno
-warmup / freezetime / live / round over
+grenade / smoke / molotov / inferno
+warmup
+freezetime
+live
+round over
 halftime / side switch
 map end / map change
 disconnect / reconnect
 restart（可行时）
 ```
 
-这一步不是“再写一遍 Windows 版本代码”，而是验证以下仍然不能仅靠文档确定的事实：
+### 13.3 Evidence to validate
 
-- CS2 当前真实 payload shape；
-- partial update / collection replacement 语义；
-- spectator-only field 实际可用性；
+真实 capture 用于验证：
+
+- 当前 CS2 payload shape；
+- top-level / nested partial update 行为；
+- collection replacement / deletion 行为；
+- spectator-only field 可用性；
+- `provider.timestamp` 行为；
+- 当前 enum/value corpus；
 - update cadence；
-- provider timestamp 行为；
-- 新/未知 enum；
-- map/round/reconnect 边界行为。
+- payload size / volume；
+- reconnect / restart / map-change 边界序列；
+- recorder throughput 与 drop behavior。
 
-真实 capture 结论如果与本文假设冲突，应修正 adapter/spec，而不是为了保持文档漂亮去兼容错误假设。
+如果真实 evidence 与本文 implementation hypothesis 冲突，应优先修正文档、fixture 与 adapter。
 
 ---
 
-## 11. M1 初始 package graph
+## 14. Initial package graph
 
-第一批真实 dependency 建议为：
+M1 第一批真实 dependency 预计为：
 
 ```text
 packages/core
@@ -483,151 +740,235 @@ apps/companion
 
 packages/core + packages/telemetry-gsi
   ↑
-packages/testkit   (dev/test only for production owners)
+packages/testkit
 ```
 
-更具体地：
+具体职责：
 
 ```text
 core
-  owns normalized telemetry contract
+  normalized telemetry contract
 
 telemetry-gsi → core
-  implements CS2 GSI adapter
+  CS2 GSI adapter
 
 companion → telemetry-gsi + core
-  HTTP ingress + recorder + composition
+  HTTP ingress + production recorder + composition
 
 testkit → telemetry-gsi + core
-  replay / simulator / fault injection
+  replay + simulator + fault injection
 ```
 
-`apps/web` 不消费 Raw GSI；`packages/protocol` 第一阶段也不因为 telemetry implementation 被强行拉进依赖图。
+约束：
 
-### 第一个真实 workspace edge 与 build graph
+- `apps/web` 不依赖 Raw GSI；
+- `packages/protocol` 不因 M1 telemetry 实现被提前引入；
+- production owner 不 runtime-depend on `packages/testkit`；
+- 不通过 TS `paths` 或跨 package `src` import 绕过 workspace dependency。
 
-M0 时 package 之间没有真实 runtime dependency，因此跨 package clean-tree build 尚未被验证。
+---
 
-第一张产生 `telemetry-gsi → core` 的 M1 implementation PR 必须证明：
+## 15. Workspace build graph requirement
+
+M0 阶段 shared package 尚未存在真实 runtime workspace dependency，因此 clean-tree 跨 package build 尚未得到实际验证。
+
+第一张引入：
+
+```text
+telemetry-gsi → core
+```
+
+的 M1 implementation PR 必须证明：
 
 ```text
 fresh clone / clean dist
 pnpm install --frozen-lockfile
+pnpm architecture:check
 pnpm typecheck
+pnpm test
 pnpm build
 ```
 
-可以在真实 workspace dependency 存在时稳定通过。
+在真实 workspace dependency 存在时稳定通过。
 
-如果当前独立 `tsc` + `dist` exports 无法满足，应在该 PR 中以最小方式引入正确的 TypeScript project/build graph；不要通过 `paths` alias 或直接 import 其他 package 的 `src` 绕过问题。
+如果现有独立 `tsc` + `dist` exports 无法满足 clean-tree typecheck/build，应在该实现中根据 TypeScript 当前行为建立最小、明确的 project/build graph。
 
----
-
-## 12. 第一批 M1 工作切分（设计方向，不等于已创建 Issue）
-
-建议顺序：
+禁止使用以下方式绕过：
 
 ```text
-1. Telemetry Contract & Adapter Foundation
-   Core-owned normalized contract
-   + GSI raw parser / partial merge / normalizer
-   + first real workspace edge/build graph
-
-2. GSI Ingress & Production Capture Recorder
-   Companion /gsi
-   + token/limits/timestamps
-   + bounded raw recorder / sanitizer contract
-
-3. Replay / Fixture Runtime
-   testkit capture reader
-   + ReplayClock
-   + step / 1x / Nx
-   + same production adapter
-
-4. Real CS2 Reference Capture Pack
-   Windows + CS2 spectator validation
-   + real corpus
-   + adapter/spec corrections
-
-5. Runtime Skeleton & Debug Projection
-   producer instance / session / map epoch/time primitives
-   + RuntimeState reducer
-   + first RuntimeTransition
-   + basic latest-wins in-process delivery
+compilerOptions.paths
+../../other-package/src
+package src export
 ```
 
-推荐依赖关系：
+Build graph 的具体实现不在本文提前指定，以第一条真实 dependency 的 implementation evidence 为准。
+
+---
+
+## 16. Initial M1 execution decomposition
+
+以下为当前建议的工作切分，不代表 Issue 已创建或字段已经最终冻结。
+
+### 16.1 Telemetry Contract & Adapter Foundation
+
+范围：
+
+- Core-owned telemetry contract；
+- Raw GSI parser / validator；
+- GSI source-state reconstruction；
+- normalization；
+- synthetic fixtures；
+- first real workspace edge / build graph validation。
+
+### 16.2 GSI Ingress & Production Capture Recorder
+
+范围：
+
+- Companion `/gsi` ingress；
+- token / limits；
+- receive clocks；
+- bounded recorder；
+- capture format；
+- sanitizer contract；
+- recorder health / diagnostics。
+
+### 16.3 Replay / Fixture Runtime
+
+范围：
+
+- capture reader；
+- ReplayClock；
+- step / 1x / Nx；
+- production adapter replay；
+- selected HTTP ingress replay。
+
+### 16.4 Real CS2 Reference Capture Pack
+
+范围：
+
+- Windows + CS2 spectator real-environment validation；
+- reference corpus；
+- partial/update/cadence verification；
+- adapter/spec correction based on evidence。
+
+### 16.5 Runtime Skeleton & Debug Projection
+
+在 replay/capture foundation 稳定后进入：
+
+- producer instance/time primitives；
+- session / map epoch skeleton；
+- RuntimeState reducer；
+- first RuntimeTransition；
+- basic latest-wins in-process delivery；
+- Debug projection。
+
+建议依赖关系：
 
 ```text
-#1 Contract / Adapter
-        ↓
-#2 Ingress / Recorder ──► #4 Real Capture
-        ↓                     │
-#3 Replay ◄───────────────────┘
-        ↓
-#5 Runtime Skeleton
+Telemetry Contract / Adapter
+          ↓
+Ingress / Recorder ──► Real Capture
+          ↓                │
+Replay Runtime ◄───────────┘
+          ↓
+Runtime Skeleton
 ```
 
-#2 与 #3 可以在 #1 完成后并行；#4 在 recorder 能工作后尽早执行，不需要等待 M1 全部实现结束。
+---
+
+## 17. Validation model
+
+M1 telemetry work继续遵守 `docs/development-validation.md`。
+
+### Layer A — deterministic
+
+应在 macOS / Linux / Windows CI 中覆盖：
+
+- raw parser；
+- merge semantics；
+- normalization；
+- unknown/unavailable handling；
+- capture reader/writer semantics；
+- ReplayClock；
+- deterministic replay；
+- sanitizer；
+- clean-tree workspace build graph。
+
+### Layer B — local runtime
+
+主要覆盖：
+
+- Fastify GSI endpoint；
+- auth / body limits；
+- recorder integration；
+- local diagnostics；
+- HTTP ingress replay。
+
+### Layer C — real CS2
+
+必须补充：
+
+- real payload；
+- spectator-only behavior；
+- update cadence；
+- partial collection behavior；
+- restart / reconnect / map change；
+- production candidate GSI cfg。
+
+M1 的纯 adapter 实现可以在 Layer C evidence 前进入 PR，但任何声称“已验证当前真实 CS2 行为”的结论必须有真实 capture 支持。
 
 ---
 
-## 13. M1 明确不做什么
+## 18. Frozen decisions
 
-本阶段不要顺手扩张为：
+当前已经冻结：
 
-```text
-完整 HUD / Radar renderer
-RivalHub #610 / #615 uplink
-完整 WebSocket browser protocol
-scene engine
-observer camera control
-HLAE / server-event sidecar
-DAK postmatch integration
-云端 raw GSI history
-通用 event sourcing
-```
-
-M1 的价值是先让“真实 CS2 输入 → 可重复、可验证的本地 runtime 输入”这条链稳定。
-
----
-
-## 14. 当前已冻结 vs 待验证
-
-### 已冻结
-
-- Raw GSI 不进入 Core/Web；
-- Core 拥有 normalized telemetry contract；
-- telemetry-gsi 维护 source-side partial state 并做 normalization；
-- domain transition 属于 Core，不属于 GSI library；
-- unknown 不伪装成 zero/empty；
-- validation 要能容忍未来新增 enum/string；
-- duration/pacing 用 monotonic clock，UTC 只表达时间点；
-- production capture 记录 sanitized raw GSI；
-- production recorder 不属于 testkit；
-- replay 必须走 production telemetry adapter；
-- recorder queue bounded，失败不能拖死 live runtime；
-- production GSI update rate 暂不硬编码。
-
-### 待真实 Windows + CS2 capture 验证
-
-- 当前 CS2 每个 block 的精确 partial/replace 行为；
-- collection deletion 的全部 corner case；
-- spectator-only fields 的实际 shape / cadence；
-- 推荐 production buffer/throttle；
-- unknown/current enum corpus；
-- map restart / reconnect / halftime 等实际边界序列；
-- payload volume 与 recorder throughput。
+- Raw GSI 不泄漏到 Core / Web / RivalHub adapter；
+- Core 拥有 normalized telemetry input contract；
+- `telemetry-gsi` 负责 raw parsing、source reconstruction 与 normalization；
+- RuntimeTransition 由 Core 推导，不由 GSI library 决定；
+- unknown / unavailable 不伪装成 zero / false / empty；
+- parser 必须容忍未来新增 enum/string value；
+- duration / pacing 使用 monotonic clock；
+- UTC wall clock 用于时间点与 evidence；
+- production capture 保存 sanitized accepted raw GSI；
+- production recorder 属于 Companion runtime，而不是 testkit；
+- replay 必须复用 production telemetry adapter；
+- recorder queue 必须 bounded；
+- recorder failure 不得拖死 live telemetry runtime；
+- production GSI update rate 暂不冻结；
+- 第一条真实 workspace dependency 必须验证 clean-tree typecheck/build。
 
 ---
 
-## 15. 参考
+## 19. Open validation questions
 
-设计时主要对照：
+以下内容必须在真实 Windows + CS2 spectator capture 后重新确认：
 
-- Valve / community-maintained Counter-Strike Game State Integration documentation；
-- Eon HUD 的 GSI configuration、raw JSONL recorder 与 replay simulator；
-- 现代 TypeScript CS2 GSI libraries 对 partial state merge / unknown enum / spectator field 的处理；
-- 本仓 ADR-0002 / ADR-0003 与 `docs/development-validation.md`。
+- 当前 CS2 每个 block 的精确 partial update 行为；
+- nested collection 的 replacement / deletion corner case；
+- spectator-only fields 的实际 shape；
+- 当前真实 update cadence；
+- `provider.timestamp` 精度与行为；
+- 当前 enum/value corpus；
+- map restart / reconnect / halftime / side switch / map change 的真实序列；
+- payload volume；
+- recorder throughput；
+- 推荐 production `buffer` / `throttle`；
+- gold/reference corpus 的最小覆盖集合。
 
-第三方项目用于验证现实问题与吸收经验，不作为本仓 Runtime domain model 的 owner。
+这些问题在获得真实 evidence 前，不应通过单元测试中的 synthetic fixture 自行“证明”。
+
+---
+
+## 20. References and authority
+
+本文设计以以下仓库内 authority 为上位约束：
+
+- ADR-0001：项目定位与 canonical authority；
+- ADR-0002：Runtime / Workspace 技术基线；
+- ADR-0003：RuntimeState、identity、time、delivery / backpressure invariant；
+- `docs/architecture.md`：整体 package ownership 与 plane boundary；
+- `docs/development-validation.md`：macOS / CI / Windows + CS2 + OBS 验证模型。
+
+外部 GSI 文档、Eon 等 HUD 实现及现代 CS2 GSI library 仅用于确认 source behavior、工程风险与已有经验，不成为 RivalHub Broadcast domain contract 的 owner。
