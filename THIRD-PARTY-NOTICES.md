@@ -1,6 +1,31 @@
 # Third-Party Notices
 
-当前仓库仍处于初始化阶段，**尚未 vendoring 或正式引入任何第三方运行时代码**。本文件从第一天开始记录计划依赖与参考项目的许可证边界；真正安装 dependency 或复制资产时必须更新为精确版本与许可证文本/链接。
+当前仓库仍处于初始化阶段，尚未 vendoring 或复制任何第三方运行时代码。本文件同时记录已安装的直接 dependency 与计划依赖；真正复制资产或引入第三方代码时必须继续补充精确版本与许可证文本/链接。
+
+## M0 已安装的直接依赖
+
+以下是本次 workspace 初始化实际声明的直接依赖。`@typescript/native` 与 `typescript` 是为同时使用 TypeScript 7 编译器和 TypeScript 6 API 兼容层而设置的 npm alias；这是 TypeScript 7 官方过渡方案。
+
+| 项目 | 精确版本 | 当前用途 | 已知许可证 |
+| --- | --- | --- | --- |
+| `@eslint/js` | 10.0.1 | ESLint flat config 基础规则 | MIT |
+| `@types/node` | 24.13.4 | Node 类型声明 | MIT |
+| `@types/react` / `@types/react-dom` | 19.3.0 | React Web 类型声明 | MIT |
+| `@typescript/native` → `typescript` | 7.0.2 | TypeScript 7 `tsc` 编译/类型检查 | Apache-2.0 |
+| `typescript` → `@typescript/typescript6` | 6.0.2 | `typescript-eslint` 的 TypeScript 6 API 兼容层 | Apache-2.0 |
+| `@vitejs/plugin-react` | 6.1.1 | Vite React transform | MIT |
+| `eslint` | 10.10.0 | JavaScript/TypeScript lint | MIT |
+| `eslint-plugin-react-hooks` | 7.1.1 | React hooks lint rules | MIT |
+| `fastify` | 5.12.4 | Companion local HTTP composition layer | MIT |
+| `prettier` | 3.9.6 | Source/config formatting | MIT |
+| `react` / `react-dom` | 19.3.0 | Web shell presentation | MIT |
+| `tsx` | 4.23.13 | Companion development runner | MIT |
+| `typescript-eslint` | 8.70.0 | TypeScript-aware ESLint parser/rules | MIT |
+| `vite` | 8.3.0 | Web development and production build | MIT |
+| `vitest` | 5.0.0 | Unit/component-level smoke tests | MIT |
+| `zod` | 4.6.2 | Protocol package runtime-schema baseline | MIT |
+
+许可证链接：[MIT](https://opensource.org/license/mit)、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。
 
 | 项目 | 当前用途 | 已知许可证/边界 |
 | --- | --- | --- |
