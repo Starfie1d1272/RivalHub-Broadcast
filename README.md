@@ -78,7 +78,8 @@ TechnicalWarning
 
 - RivalHub Match / Roster / BP / Schedule / Branding 接入；
 - CS2 GSI 接收、标准化和身份匹配；
-- 单一 RuntimeState + Program/Radar/Operator/Debug/uplink consumer projections；
+- 单一 RuntimeState + Program/Radar/Operator/Debug/BroadcastLiveSnapshot consumer projections；
+- RuntimeTransition + transition-time context 派生 ReliableObservation；
 - 高性能 Gameplay HUD；
 - 可配置 Radar：选手编号/头像、自定义 marker、道具、烟火、轨迹、上下层；
 - KDA、ADR、round history 等直播临时统计；
@@ -138,7 +139,7 @@ docs/                   中文产品、架构与决策文档
 fixtures/               可复现测试数据
 ```
 
-`packages/renderer-major` 当前仅是预留目录；在出现第二个真实 renderer consumer 或独立发布需求前，不把它作为必须维护的 library API boundary。
+第一套 Major renderer 直接留在 `apps/web` presentation 内；只有出现第二个真实 renderer consumer 或独立发布需求时再抽独立 package/API boundary。
 
 ## 文档
 
