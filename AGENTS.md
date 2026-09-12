@@ -8,11 +8,12 @@
 2. `docs/product.md`
 3. `docs/architecture.md`
 4. `docs/roadmap.md`
-5. `docs/decisions/`
-6. `CONTRIBUTING.md`
-7. 当前 Issue 与其直接引用的协议/运行文档
+5. `docs/development-validation.md`
+6. `docs/decisions/`
+7. `CONTRIBUTING.md`
+8. 当前 Issue 与其直接引用的协议/运行文档
 
-如果当前 Issue 标记为 implementation-ready / `agent-ready`，其 `Canonical decisions`、Scope、Non-goals、Acceptance criteria 是本次实现的直接执行规格；不得在实现过程中擅自重新设计这些已冻结内容。
+如果当前 Issue 标记为 implementation-ready / `agent-ready`，其 `Canonical decisions`、Scope、Non-goals、Acceptance criteria、platform/validation gate 是本次实现的直接执行规格；不得在实现过程中擅自重新设计这些已冻结内容。
 
 ## 文档语言
 
@@ -64,6 +65,28 @@ BroadcastLiveSnapshot       Broadcast → #615 producer payload
 EphemeralLiveProjection     RivalHub #615 server-side projection
 PublicLiveMatchProjection   公共页面 read model
 ```
+
+## 平台与验收规则
+
+Agent 必须区分：
+
+```text
+Implementation environment
+Automated validation
+Real-environment acceptance gate
+```
+
+不得把“当前没有 Windows/CS2/OBS 环境”解释成平台无关代码无法继续开发，也不得用 mock/CI 伪装成真实生产验收。
+
+如果当前环境无法执行 Issue 要求的真实 Windows/CS2/OBS acceptance：
+
+1. 完成所有可执行的实现、单测、replay 和 CI 工作；
+2. 在 PR 的 Platform validation 中明确标记 `Pending`；
+3. 不虚构或推测真实环境结果；
+4. 如果真实环境证据属于 closing gate，则不得声称 Issue 已完全完成；
+5. 不因为只欠 platform validation 就把其它仍可继续的开发工作错误标记为 blocked。
+
+默认协作模型是 `Feature owner + Platform validator`，不是按操作系统切割完整业务模块。详见 `docs/development-validation.md`。
 
 ## 变更原则
 
