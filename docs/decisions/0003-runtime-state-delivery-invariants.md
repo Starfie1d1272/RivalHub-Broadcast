@@ -3,7 +3,9 @@
 - 状态：**Accepted**
 - 日期：2026-09-12
 - 关联：ADR-0001、ADR-0002、`docs/product.md`、`docs/architecture.md`、RivalHub #610 / #615
-- Supersedes：ADR-0002「决策 6」中“`packages/protocol` 是跨仓 integration contract owner”的过宽表述；ADR-0002 其余技术基线继续有效。
+- Supersedes：ADR-0002「决策 5」中统一 `EventJournal` / 泛化 `Event` 的旧表述，以及「决策 6」中“`packages/protocol` 是跨仓 integration contract owner”的过宽表述；ADR-0002 其余技术基线继续有效。
+
+> 2026-09-12 clarification：本次仅消除 ADR-0002/0003 之间的术语冲突，并明确 ReliableObservation 的派生方式；不改变本 ADR 已接受的 runtime architecture 决策。
 
 ## 背景
 
@@ -20,7 +22,7 @@ ADR-0002 已冻结 Runtime / Workspace 技术栈，但在正式实现 Core 前�
 
 ---
 
-## 1. Core 只有一份 RuntimeState，consumer 使用 projection
+## 1. Core 只有一份 RuntimeState；state projection 与 edge-derived message 分离
 
 Broadcast Core 维护一份内部事实模型：
 
@@ -36,7 +38,7 @@ Normalized Telemetry
 
 `RuntimeState` **不是 wire DTO**，不得直接整份广播给所有 consumer。
 
-Consumer 通过纯 projector / selector 得到自己的模型：
+当前状态类 consumer 通过纯 projector / selector 得到自己的模型：
 
 ```text
 RuntimeState
@@ -44,14 +46,25 @@ RuntimeState
 ├─ RadarFrame
 ├─ OperatorModel
 ├─ DebugModel
-├─ ReliableObservation
 └─ BroadcastLiveSnapshot
+```
+
+可靠边沿消息不是“当前状态快照”的另一种名字。它通常由 transition 与 transition 当时的 context 派生：
+
+```text
+RuntimeTransition
++ RuntimeState / context at transition
+        ↓
+ReliableObservation candidate
+        ↓
+validation / idempotency / outbox
 ```
 
 规则：
 
-- 所有 projection 都可由当前 RuntimeState 与明确的 transient input 重建；
-- projection 不反向成为第二份 domain truth；
+- Program/Radar/Operator/Debug/BroadcastLiveSnapshot projection 可由当前 RuntimeState 与明确 transient input 重建；
+- `ReliableObservation` 必须保留触发它的 transition 与当时必要 evidence/context，不能事后只从新的 current RuntimeState 逆推出已经发生的 edge semantics；
+- projection 与 observation 都不反向成为第二份 domain truth；
 - Radar 高频变化不能迫使 BP、branding、diagnostics 等无关字段一起传输；
 - renderer 不消费 Raw GSI，也不读取 RivalHub API；
 - cloud snapshot 不等于本地 Program model。
@@ -112,7 +125,7 @@ identity / continuity warning
 result candidate
 ```
 
-必须具备足够的 session / epoch / sequence / observedAt / identity / quality 上下文，并满足 retry/idempotency 要求。
+ReliableObservation 通常由 `RuntimeTransition + transition-time RuntimeState/context` 派生，而不是把某一时刻的 current RuntimeState 直接序列化后重命名。必须具备足够的 session / epoch / sequence / observedAt / identity / quality/evidence 上下文，并满足 retry/idempotency 要求。
 
 ### Incident
 
@@ -489,6 +502,7 @@ advanced observer advisory / effects / optional adapters
 
 - Core 不会演化成一个通过 WebSocket 到处发送的 God Object；
 - 高频 Radar/position 不拖累低频 UI；
+- transition-derived ReliableObservation 保留边沿事实与当时 evidence，不依赖事后从 current state 猜历史；
 - reliable observation 可以安全重试，同时不把离线 command 变成危险自动执行；
 - Wrong Match、restart、reconnect、slow consumer 的行为可测试；
 - #610 / #615 与 Broadcast 的 authority/terminology 清晰；
@@ -496,7 +510,7 @@ advanced observer advisory / effects / optional adapters
 
 ### 代价
 
-- 需要显式 projector、identity/session model 与 outbox；
+- 需要显式 projector、transition-derived observation builder、identity/session model 与 outbox；
 - 测试必须覆盖更多故障语义，而不只是 happy path；
 - local protocol 与 RivalHub-facing contract 不再混成一个 `packages/protocol`。
 
