@@ -20,7 +20,8 @@
 - 不直接连接/写入 RivalHub Supabase 表；只走公开 adapter/contract。
 - Raw GSI 只存在 telemetry adapter 内，不泄漏到 Core/Renderer/public protocol。
 - `packages/core` 不依赖 React、HTTP/WebSocket 实现、OBS、RivalHub DB 或具体 GSI parser。
-- Core 只有一份内部 `RuntimeState`；Program/Radar/Operator/Debug/uplink 必须通过 projection 获取 consumer-specific model，不把整个 RuntimeState 当通用 wire payload。
+- Core 只有一份内部 `RuntimeState`；Program/Radar/Operator/Debug/BroadcastLiveSnapshot 通过 projection 获取 consumer-specific model，不把整个 RuntimeState 当通用 wire payload。
+- `ReliableObservation` 不是 current-state projection；它应由 RuntimeTransition + transition-time RuntimeState/context 派生并保留必要 evidence。
 - CompetitionEntry / Steam64 是稳定赛事身份；CT/T 与 observer slot 只是运行时映射。
 - Identity 不得简化为一个 boolean；至少区分 unbound / resolving / matched / degraded / mismatch，并据此 gate capability。
 - 高频 snapshot 必须 latest-wins / bounded；禁止无界排队旧状态。每个 consumer 只允许“正在发送 + 最新 pending”这类常数级 backlog。
