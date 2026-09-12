@@ -7,6 +7,7 @@
 - [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里。
 - [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项。
 - [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、Issue 生命周期与 GitHub Project 组织方式。
+- [`development-validation.md`](development-validation.md)：macOS 主开发、跨平台 CI、Windows + CS2 + OBS 真实验收的职责边界。
 - [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
 - [`decisions/`](decisions/)：Architecture Decision Records。
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md)：Issue-driven / agent-assisted 实施与 PR 交付规范。
