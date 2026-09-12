@@ -110,9 +110,9 @@ packages/testkit
   recorder、replay、simulator、fault injection、fixtures。
 ```
 
-仓库当前存在的 `packages/renderer-major` 只视为预留目录；在出现第二个真实 renderer consumer 或独立发布需求前，不把它当作必须维护的 library API boundary。
+第一套 Major renderer 留在 `apps/web` presentation 内；在出现第二个真实 renderer consumer 或独立发布需求前，不建立独立 renderer package/API boundary。
 
-## 5. RuntimeState 与 Projection
+## 5. RuntimeState、Projection 与 ReliableObservation
 
 Core 只有一份内部事实模型：
 
@@ -126,7 +126,7 @@ Normalized Telemetry
     RuntimeState
 ```
 
-`RuntimeState` 不是 WebSocket payload。Consumer 通过 projector 获得自己的模型：
+`RuntimeState` 不是 WebSocket payload。当前状态类 consumer 通过 projector 获得自己的模型：
 
 ```text
 RuntimeState
@@ -134,11 +134,25 @@ RuntimeState
 ├─ RadarFrame
 ├─ OperatorModel
 ├─ DebugModel
-├─ ReliableObservation
 └─ BroadcastLiveSnapshot
 ```
 
-禁止把一份巨型 `BroadcastState` 高频广播给所有 consumer。
+`ReliableObservation` 属于边沿消息，不等价于 current-state projection：
+
+```text
+RuntimeTransition
++ RuntimeState / context at transition
+        ↓
+ReliableObservation candidate
+        ↓
+validation / idempotency / outbox
+```
+
+因此：
+
+- 禁止把一份巨型 `BroadcastState` 高频广播给所有 consumer；
+- projection 不成为第二份 domain truth；
+- ReliableObservation 必须携带/保留触发 transition 时必要的 evidence/context，不能在事后只从新的 current RuntimeState 猜已经发生的边沿事实。
 
 ## 6. Realtime delivery semantics
 
@@ -188,7 +202,7 @@ Incident
   wrong-match/stale/uplink/slow-consumer 等诊断状态
 ```
 
-只有具备明确 consumer、可靠性和 retention 目的的消息才进入对应持久/重试机制；不建设通用 event-sourcing。
+只有具备明确 consumer、可靠性和 retention 目的的消息才进入对应持久/重试机制；不建设通用 EventJournal/event-sourcing。
 
 ## 7. Session / identity / time invariant
 
