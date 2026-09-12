@@ -31,7 +31,21 @@ pnpm test
 pnpm build
 ```
 
-<!-- Replace/add the exact commands actually run. Include replay/visual/Windows/OBS evidence when required by the Issue. -->
+<!-- Replace/add the exact commands actually run. -->
+
+## Platform validation
+
+- Implementation environment: Cross-platform / macOS-primary / Windows-specific / other
+- Automated validation completed:
+  - [ ] Local deterministic tests
+  - [ ] macOS CI
+  - [ ] Windows CI
+  - [ ] Linux CI
+- Real-environment acceptance required by Issue: Not required / Real Windows / Windows + CS2 / Windows + OBS / Windows + CS2 + OBS
+- Real-environment acceptance status: Not required / Pending / Passed / Failed
+- Evidence / validator:
+
+<!-- Never mark real Windows/CS2/OBS evidence as passed if it was not actually run. If pending evidence is a closing gate, say explicitly that the Issue is not fully accepted yet. -->
 
 ## Runtime / reliability checks
 
@@ -51,4 +65,4 @@ pnpm build
 
 ## Remaining risks / follow-up
 
-<!-- Explicitly list unfinished work and link/create follow-up Issues instead of hiding it in TODOs. -->
+<!-- Explicitly list unfinished work, pending platform acceptance, and link/create follow-up Issues instead of hiding it in TODOs. -->
