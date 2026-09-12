@@ -20,3 +20,4 @@ ADR 用于记录会长期约束仓库的技术/产品架构决策，避免重要
 ## 当前 ADR
 
 - [`0001-project-positioning-and-authority.md`](0001-project-positioning-and-authority.md)：项目定位与权威边界。
+- [`0002-runtime-workspace-technology-baseline.md`](0002-runtime-workspace-technology-baseline.md)：Runtime、TypeScript/ESM、pnpm workspace、Web/server 构建与测试技术基线。
