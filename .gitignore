@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+.pnpm-store/
+
+# Build output
+dist/
+build/
+coverage/
+.vite/
+*.tsbuildinfo
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+
+# Runtime-local data
+runtime-data/
+recordings/
+sessions/
+cache/
+logs/
+*.log
+
+# Large/local CS2 artifacts
+*.dem
+
+# Editors / OS
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test output
+test-results/
+playwright-report/
+blob-report/
+
+# Temporary files
+.tmp/
+tmp/
+temp/
