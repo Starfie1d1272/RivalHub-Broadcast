@@ -1,0 +1,59 @@
+name: Design / architecture task
+description: Research and freeze a decision before implementation becomes agent-ready.
+title: "[Design] "
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem
+      description: What product or engineering uncertainty needs a decision?
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context and constraints
+      description: Current product, architecture, operational and repository constraints.
+    validations:
+      required: true
+
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Required evidence / research
+      description: Code, docs, reference projects, real runtime evidence or external documentation that must be reviewed.
+    validations:
+      required: true
+
+  - type: textarea
+    id: questions
+    attributes:
+      label: Decisions to make
+      description: Enumerate the concrete questions this issue must resolve.
+    validations:
+      required: true
+
+  - type: textarea
+    id: invariants
+    attributes:
+      label: Existing invariants that must not be broken
+      description: Cite relevant ADRs/docs and authority boundaries.
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverable
+    attributes:
+      label: Deliverable
+      description: What should be updated when the design is complete (ADR, docs, implementation-ready issue, etc.)?
+    validations:
+      required: true
+
+  - type: textarea
+    id: exit
+    attributes:
+      label: Exit criteria
+      description: What must be true before follow-up implementation can be marked agent-ready?
+    validations:
+      required: true
