@@ -440,7 +440,13 @@ Tests             Vitest 5 + Playwright 1.63 + testkit replay
 - 初版不引入 Turborepo/Nx；只有真实 CI profiling 证明需要时再增加；
 - Fastify、`ws`、React、具体 GSI parser 都属于 adapter/presentation，不得进入 `packages/core`。
 
-## 17. 当前尚未冻结的事项
+## 17. 可执行依赖护栏
+
+仓库提供 `pnpm architecture:check`，把本文件和 ADR 中已经稳定的 negative invariant 转成可执行契约。它负责检查 shared package 的 `dist`/ESM/declaration exports、workspace `workspace:` protocol、显式 workspace dependency、runtime dependency cycle、TypeScript `paths`，以及 Core、Protocol、Radar、Web、RivalHub 的高置信度 forbidden ownership boundary。
+
+`scripts/architecture/policy.mjs` 是 checker 与 ESLint direct-import fast feedback 共享的机器规则来源；checker 还会解析 static import、re-export、dynamic import、`require` 与 type-only edge。该 guard 不冻结完整 positive dependency matrix，也不替代后续真实 runtime/protocol ADR。发现冲突时应先修正真实 owner 或更新决策，不通过 baseline、known-violation 或 wildcard ignore 压制结果。
+
+## 18. 当前尚未冻结的事项
 
 以下内容仍需要实现 spike 或后续 ADR：
 

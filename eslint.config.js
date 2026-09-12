@@ -2,6 +2,8 @@ import eslint from '@eslint/js';
 import reactHooks from 'eslint-plugin-react-hooks';
 import tseslint from 'typescript-eslint';
 
+import { architectureEslintConfigs } from './scripts/architecture/policy.mjs';
+
 const typeCheckedConfigs = tseslint.configs.recommendedTypeChecked.map((config) => ({
   ...config,
   files: ['**/*.{ts,tsx,mts,cts}'],
@@ -28,4 +30,14 @@ export default tseslint.config(
       ...reactHooks.configs['recommended-latest'].rules,
     },
   },
+  {
+    files: ['scripts/**/*.mjs'],
+    languageOptions: {
+      globals: {
+        console: 'readonly',
+        process: 'readonly',
+      },
+    },
+  },
+  ...architectureEslintConfigs(),
 );
