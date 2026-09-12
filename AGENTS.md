@@ -88,6 +88,8 @@ Real-environment acceptance gate
 
 默认协作模型是 `Feature owner + Platform validator`，不是按操作系统切割完整业务模块。详见 `docs/development-validation.md`。
 
+PR 的自动化代码验证由 `ci-gate` 汇总，PR 标题由独立的 `pr-title` check 验证。GitHub-hosted Windows runner 只属于 automated validation，不等于真实 Windows + CS2/OBS acceptance。
+
 ## 变更原则
 
 - 先复用已有 owner，不建立重复基础设施。

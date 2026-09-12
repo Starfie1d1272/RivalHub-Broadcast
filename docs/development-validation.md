@@ -22,6 +22,8 @@ Production acceptance environment
 
 原则：**开发环境不需要等同生产环境，但生产环境要求必须被单独、明确地验收。**
 
+当前 M0 CI baseline 的自动化代码证据由 `quality`（Linux）、`platform / macOS`、`platform / Windows` 和 `ci-gate` 组成；PR 标题由独立的 `pr-title` check 负责。GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行，不能替代真实 Windows + CS2 + OBS 验收。
+
 不能因为主要开发机是 Mac，就把所有 Windows 相关代码交给另一名开发者；也不能因为 CI 在 Windows 上通过，就认为真实赛事环境已经验收。
 
 ## 2. 四层验证

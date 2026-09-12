@@ -57,6 +57,8 @@ Real-environment acceptance（按需）
 
 具体规则见 `docs/development-validation.md`。
 
+M0 CI baseline 为 PR 和 `main` push 提供 `quality`、`platform / macOS`、`platform / Windows` 与最终 `ci-gate`；PR metadata 由独立的 `pr-title` check 负责。GitHub-hosted Windows runner 是自动化验证环境，不替代真实 Windows + CS2/OBS 验收。
+
 如果 Issue 可以在 Mac 上继续实现和自动验证，只是等待真实 Windows/CS2/OBS 证据，不应把整个任务标成 `blocked`；使用 `needs-windows-validation` 或 Project 的 Platform validation 字段表达 pending gate。
 
 ## Agent-ready
