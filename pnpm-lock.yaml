@@ -162,9 +162,6 @@ catalogs:
       specifier: 4.6.2
       version: 4.6.2
 
-overrides:
-  '@typescript/old': npm:typescript@6.0.2
-
 importers:
 
   .:

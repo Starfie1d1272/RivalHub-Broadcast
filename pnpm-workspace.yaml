@@ -5,9 +5,6 @@ packages:
 allowBuilds:
   esbuild: true
 
-overrides:
-  '@typescript/old': 'npm:typescript@6.0.2'
-
 catalog:
   '@eslint/js': 10.0.1
   '@types/node': 24.13.4
