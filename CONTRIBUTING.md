@@ -10,9 +10,10 @@ RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。
 2. `docs/product.md`
 3. `docs/architecture.md`
 4. `docs/roadmap.md`
-5. `docs/decisions/`
-6. `AGENTS.md`
-7. 当前 Issue 直接引用的专题文档
+5. `docs/development-validation.md`
+6. `docs/decisions/`
+7. `AGENTS.md`
+8. 当前 Issue 直接引用的专题文档
 
 ## 工作单元
 
@@ -28,11 +29,35 @@ RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。
 - Required tests；
 - Acceptance criteria；
 - Validation；
+- Implementation environment；
+- Automated validation；
+- Real-environment acceptance gate；
 - Dependencies；
 - Documentation impact；
 - Handoff requirements。
 
 如果实现过程中发现需要改变已冻结的 authority、runtime invariant、package ownership、security、recovery 或 protocol 语义，应停止扩张实现范围，并把偏差反馈到 Issue/ADR，而不是自行重设计。
+
+## 开发环境与验收环境
+
+本项目不把“在哪里写代码”和“在哪里最终验收”混成一个概念。
+
+默认模型：
+
+```text
+Development
+  macOS / cross-platform
+        ↓
+Automated validation
+  deterministic tests + GitHub Actions macOS/Windows
+        ↓
+Real-environment acceptance（按需）
+  Windows / Windows+CS2 / Windows+OBS / Windows+CS2+OBS
+```
+
+具体规则见 `docs/development-validation.md`。
+
+如果 Issue 可以在 Mac 上继续实现和自动验证，只是等待真实 Windows/CS2/OBS 证据，不应把整个任务标成 `blocked`；使用 `needs-windows-validation` 或 Project 的 Platform validation 字段表达 pending gate。
 
 ## Agent-ready
 
@@ -54,6 +79,13 @@ Agent 不可以未经明确批准：
 - 新增 speculative framework/plugin system；
 - 顺手重构 Issue 范围外的大块代码。
 
+如果某项真实环境验收当前不可执行，Agent 应：
+
+1. 完成所有可在当前环境完成的实现和自动验证；
+2. 不伪造真实 Windows/CS2/OBS 结果；
+3. 在 PR 中明确列出 pending acceptance；
+4. 如果该 acceptance 是 Issue closing gate，则不得声称 Issue 已完全完成。
+
 ## PR 交付标准
 
 PR 必须说明：
@@ -63,8 +95,9 @@ PR 必须说明：
 3. 是否偏离 Issue 的 Canonical decisions；
 4. 关键文件和 ownership 变化；
 5. 实际执行过的验证命令；
-6. replay / visual / Windows / OBS 等非普通单测证据（如适用）；
-7. 剩余风险和后续 Issue。
+6. macOS / Windows CI / real Windows / CS2 / OBS 等平台验证状态；
+7. replay / visual / soak 等非普通单测证据（如适用）；
+8. 剩余风险和后续 Issue。
 
 PR 不应以“CI 绿了”替代业务 acceptance，也不应以 mock/simulator 代替要求中的真实环境验收。
 
@@ -84,6 +117,8 @@ Issue 只有在以下条件都满足时才算完成：
 - Acceptance criteria 可复现通过；
 - 必要测试已加入；
 - architecture guard / typecheck / lint / build 等相关检查通过；
+- Issue 声明的 automated validation 已完成；
+- Issue 声明为 closing gate 的 real-environment acceptance 已完成；
 - 文档没有与实现产生已知冲突；
 - PR 中记录了实际验证证据；
 - 未完成内容已经明确留给后续 Issue，而不是隐藏在 TODO 里。
