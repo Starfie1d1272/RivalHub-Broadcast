@@ -1,7 +1,7 @@
 # 产品需求基线
 
-> 状态：**Draft for review**  
-> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。当前内容来自 RivalHub #613 的需求讨论与参考项目调研，后续以本仓库 ADR 逐项冻结技术决策。
+> 状态：**Baseline**  
+> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。Runtime / Workspace 技术选择见 ADR-0002；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 ADR-0003。
 
 ## 1. 产品定义
 
@@ -16,10 +16,14 @@ RivalHub
   Match / Roster / Schedule / BP / Branding / official result
                     ↓
 Broadcast
-  telemetry / live state / scenes / HUD / radar / provisional stats
+  telemetry / runtime state / scenes / HUD / radar / provisional stats
                     ↓
 Program / OBS
 ```
+
+最重要的产品边界：
+
+> **Broadcast 产生 observation；RivalHub 决定 official truth。**
 
 ## 2. 用户与典型场景
 
@@ -28,7 +32,7 @@ Program / OBS
 当前 Major 的现实流程中，观战/解说端看到的比赛本身已经带约 120 秒 spectator delay。因此：
 
 - Broadcast 按观战端实际看到的时间轴工作；
-- 向 RivalHub 网站投影的 live state 也来自这一路观战端；
+- 向 RivalHub 网站发送的 live snapshot 也来自这一路观战端；
 - **网站不额外再叠加一层固定 120 秒 delay**；
 - 该条件是当前赛事运行假设，不应在 Broadcast Core 中硬编码成固定延迟规则。
 
@@ -101,6 +105,8 @@ Gameplay 是核心 scene，但不是整个产品。
 
 展示字段需要具备配置能力。第一版不要求自由拖拽所有像素，但架构不能把字段、布局和效果硬编码成只能维护一套 HUD。
 
+Renderer 消费 Broadcast 自己的 presentation projection，不直接消费 Raw GSI 或 RivalHub API。
+
 ## 5. Radar
 
 Radar 是一等能力，不是一个附带静态 minimap。
@@ -122,7 +128,9 @@ Radar 是一等能力，不是一个附带静态 minimap。
 
 “已发生的轨迹”与“预测弹道”必须区分。没有地图碰撞/物理依据时，不得把简单速度外推包装成准确投掷预测。
 
-地图坐标标定应优先复用 DAK `@cs2dak/maps` 的既有 owner，而不是维护第二份 calibration 真相；地图图片/游戏资产的许可与来源另行处理。
+Radar 通过 `MapGeometryProvider` 消费地图几何。当前默认 provider 计划复用 DAK `@cs2dak/maps` 的 calibration owner，但 Broadcast 不把 DAK package shape 直接变成自己的 Radar domain contract；地图图片/游戏资产的许可与来源另行处理。
+
+Radar domain 与 renderer 分离：world→radar、floor、marker/utility semantics、interpolation/autozoom math 属于 Radar domain；React/SVG/Canvas/DOM 与 rAF scheduling 属于 Web presentation。
 
 ## 6. 高级实时视觉反馈
 
@@ -134,7 +142,7 @@ Radar 是一等能力，不是一个附带静态 minimap。
 - timeout / technical pause；
 - C4 临近爆炸时的危险程度、生存/死亡预测提示。
 
-这些能力不要求全部进入第一版，但第一版必须提供可扩展 event/capability 架构。
+这些能力不要求全部进入第一版，但第一版必须提供可扩展 capability 与 overlay 架构。
 
 标准 GSI 无法可靠提供所有精确伤害来源，因此：
 
@@ -142,18 +150,18 @@ Radar 是一等能力，不是一个附带静态 minimap。
 - 精确伤害来源需要未来 server game events、HLAE/MIRV 或其他增强 telemetry；
 - UI 必须根据实际 telemetry capability 开启效果，不能伪造精度。
 
-C4 伤害预测也不应在 UI 中写死传统距离公式。Valve 现行 CS2 官方地图已使用地图编译相关的爆炸模拟；未来应通过独立、可版本化的 BombDamageProvider 提供预测。
+C4 伤害预测也不应在 UI 中写死传统距离公式。未来应通过独立、可版本化的 `BombDamageProvider` 提供预测。
 
 ## 7. Halftime
 
-系统应从比赛状态识别半场边界，并建议进入 Halftime scene。
+系统应从稳定后的比赛状态/transition 识别半场边界，并建议进入 Halftime scene，而不是因为单个 partial GSI payload 瞬时切换。
 
 中场页面希望重点展示：
 
 - 上半场比分；
 - 队伍/选手半场统计；
 - 系列赛上下文；
-- 右侧或其他区域显示整体赛程；
+- 整体赛程；
 - 下半场开始后正确完成 CT/T 与 CompetitionEntry 的 side mapping 切换。
 
 CompetitionEntry 是稳定身份，CT/T 只是某一时刻的临时 side；任何 renderer 都不能假定“左队永远是 CT”或“Entry A 永远是某个 side”。
@@ -170,7 +178,7 @@ BO3/BO5 的场间页面至少应支持：
 - 下一图预计/准备状态；
 - 前后赛程上下文。
 
-Map Result 和 InterMap 可以是两个独立 scene，以便先短暂突出本图结果，再进入较长的场间等待页面。
+Map Result 和 InterMap 可以是两个独立 BaseScene，以便先短暂突出本图结果，再进入较长的场间等待页面。
 
 ## 9. Match Result / 赛后
 
@@ -181,21 +189,34 @@ Map Result 和 InterMap 可以是两个独立 scene，以便先短暂突出本�
 - 直播侧可验证的临时统计；
 - 赛后节目收尾信息。
 
-Broadcast 可以向 RivalHub 提交：
+Broadcast 可以向 RivalHub #610 提交：
 
-- observed map-end / series-end 事件；
+- observed map-end / series-end observation；
 - live result candidate；
-- session/identity/quality 信息。
+- session / identity / quality 信息。
 
-Broadcast **不直接覆盖 RivalHub canonical result**。主仓最终采用自动 canonicalize 还是异常时人工审核，由 RivalHub Match Runtime 自己决定；Broadcast 只提供稳定 observation contract。
+Broadcast **不直接覆盖 RivalHub canonical result**。正常高置信 observation 是否自动 canonicalize，以及异常时如何审核/恢复，由 RivalHub Match Runtime 决定；Broadcast 只提供可靠 observation。
 
 比赛结束后，Operator 应能看到或收到后续任务提示，例如 OCR、DAK Demo、VOD/赛后资料等，但 OCR/DAK 本身不进入 Broadcast 实时主循环。
 
 ## 10. RivalHub 网站实时数据
 
-Broadcast 第一版架构应为网站实时能力做好准备，并计划提供低频、经过标准化的 live projection，而不是把 raw GSI 上传生产环境。
+Broadcast 计划向 RivalHub #615 提供低频、标准化、latest-wins 的 `BroadcastLiveSnapshot`，而不是把 raw GSI 上传生产环境。
 
-网站未来可消费：
+语义链路：
+
+```text
+BroadcastLiveSnapshot
+  Broadcast → RivalHub #615 producer payload
+          ↓
+EphemeralLiveProjection
+  RivalHub 服务端维护的当前实时状态
+          ↓
+PublicLiveMatchProjection
+  公共 Match 页面 read model
+```
+
+BroadcastLiveSnapshot 可逐步包含：
 
 - live map；
 - score / round / phase / clock；
@@ -208,15 +229,15 @@ Broadcast 第一版架构应为网站实时能力做好准备，并计划提供�
 原则：
 
 - 本地 HUD 可以按 GSI 频率工作；
-- 云端 projection 应节流、latest-wins；
+- cloud snapshot 应节流、coalesce、latest-wins；
 - 高频 raw GSI 不进入 PostgreSQL 历史表；
-- projection 是 ephemeral observation，不是 official truth；
+- snapshot/projection 是 ephemeral observation，不是 official truth；
 - stale / disconnect / wrong-match 必须可识别；
 - RivalHub 面向公开网页采用 SSE、WebSocket、Realtime 或其他分发方式，不属于 Broadcast Core 的职责。
 
-## 11. Scene 与 Operator
+## 11. Scene、Overlay 与 Operator
 
-当前目标 scene 集合：
+当前 BaseScene 集合：
 
 ```text
 Waiting
@@ -228,15 +249,28 @@ MapResult
 InterMap
 MatchResult
 Break
-TechnicalPause
 Emergency
 ```
 
-Scene engine 应区分：
+临时反馈使用 `OverlayCue`，例如：
 
 ```text
-suggestedScene  系统根据比赛状态给出的建议
-activeScene     当前真正播出的场景
+Clutch
+Ace
+MultiKill
+DamageFeedback
+BombUrgency
+Timeout
+TechnicalWarning
+```
+
+`TechnicalPause` 可以按节目需要实现为 Gameplay overlay，也可以是独立完整画面；不在 Core 中提前锁死唯一视觉实现。
+
+Scene engine 区分：
+
+```text
+suggestedScene  系统根据稳定状态/transition 给出的建议
+activeScene     当前真正播出的 BaseScene
 mode            auto | manual
 ```
 
@@ -247,10 +281,10 @@ Operator 是节目控制者，不是第二个赛事数据库管理员。核心�
 - 当前 Match；
 - production readiness；
 - telemetry / identity / network health；
-- scene；
+- scene / overlay；
 - BP playback；
 - 必要的节目 override；
-- RivalHub uplink 状态；
+- RivalHub uplink / outbox 状态；
 - 异常诊断与恢复。
 
 ## 12. 可靠性与异常
@@ -270,9 +304,23 @@ Operator 是节目控制者，不是第二个赛事数据库管理员。核心�
 - Companion 重启恢复；
 - OBS Browser Source 重连。
 
-Wrong Match 应 fail closed：不能在身份不可信时继续向 RivalHub 上传当前 Match 的 live state 或结果 candidate，也不能自信地把错误队伍品牌显示到另一场比赛上。
+Identity 至少需要表达：
 
-## 13. 本地优先与离线
+```text
+unbound
+resolving
+matched
+degraded
+mismatch
+```
+
+Wrong Match / `mismatch` 必须 fail closed：不能在身份不可信时继续向 RivalHub 上传当前 Match 的 snapshot / reliable observation，也不能自信地把错误队伍品牌显示到另一场比赛上。
+
+Runtime 至少区分 `liveSessionId`、`producerInstanceId`、`mapEpoch` 与单调 `seq`，避免一个模糊 epoch 同时代表进程重启、reconnect、map restart 和切换 Match。
+
+本地 staleness / timeout / interpolation 使用 monotonic clock；跨机器 `observedAt` / `producedAt` / audit 使用 UTC wall clock。
+
+## 13. 本地优先、离线与 Outbox
 
 已经加载过的比赛上下文与节目资产应支持本地缓存。
 
@@ -285,7 +333,19 @@ RivalHub 断网后：
 - canonical/high-impact 操作禁用或明确失败；
 - 恢复连接后先刷新 revision 和重新验证 identity，再恢复 uplink。
 
-危险操作不得在离线时排队、联网后自动补发。
+必须区分：
+
+```text
+Canonical / high-impact command
+→ 离线时不得静默排队、联网后自动执行
+
+ReliableObservation
+→ 可进入 bounded durable outbox
+→ reconnect 后重新校验 session / mapEpoch / revision / identity
+→ 仍有效才 retry
+```
+
+例如 `map_ended` observation 不应因为 3 秒断网永久丢失，但它的 retry 也不等于 Broadcast 离线替 RivalHub 写 canonical result。
 
 ## 14. 测试与可复现性
 
@@ -295,17 +355,21 @@ RivalHub 断网后：
 - replay；
 - simulator；
 - fixture；
-- packet drop/jitter/duplicate/reconnect 测试；
+- packet drop/jitter/duplicate/reorder/reconnect 测试；
+- slow-consumer/backpressure 测试；
+- wrong-match/map-restart 测试；
 - visual regression；
 - 长时间 soak test。
 
-Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许直接伪造 BroadcastState 绕过真正的数据链路。
+Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许直接伪造最终 `RuntimeState` / projection 绕过真正的数据链路。
+
+Snapshot consumer 必须证明 queue/memory 不随运行时间增长；Browser reconnect 获取 current baseline projection 后继续，不重放离线期间全部旧 snapshot。
 
 正式赛事前必须完成真实 Windows + CS2 spectator + OBS Browser Source 的长时间彩排。
 
-## 15. 首版应真正实现的能力
+## 15. V1 产品范围与实施 Gate
 
-当前希望 V1 覆盖：
+V1 的产品目标仍覆盖：
 
 - RivalHub Match 上下文接入；
 - Waiting / Matchup；
@@ -314,17 +378,47 @@ Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许�
 - Radar；
 - grenade / smoke / inferno 基础展示；
 - KDA / ADR / round history 等直播临时统计；
-- Halftime；
-- Map Result；
-- InterMap；
-- Match Result；
+- Halftime / Map Result / InterMap / Match Result；
 - 单一 OBS Browser Source 的 Program；
-- operator / debug surface；
+- Operator / Debug surface；
 - wrong-match diagnostics；
 - offline cache / reconnect / recovery；
 - record/replay/simulator；
-- RivalHub live projection；
-- result candidate。
+- #610 ReliableObservation；
+- #615 BroadcastLiveSnapshot。
+
+实现不要求所有能力同时铺开，按可验证 vertical slice 推进：
+
+```text
+M0 Runtime proof
+GSI → production normalizer → /debug
+raw recorder / replay
+session / clock / transition 基础
+
+M1 Production kernel
+RivalHub manifest
+identity / wrong-match
+basic Gameplay + player/bomb Radar
+reconnect / backpressure
+2h soak
+
+M2 Broadcast workflow
+grenade / smoke / inferno
+provisional stats
+Waiting / Matchup / BP / Halftime / MapResult / InterMap / MatchResult
+
+M3 RivalHub uplink
+#610 ReliableObservation
+#615 BroadcastLiveSnapshot
+pairing / auth / outbox / security hardening
+
+M4 Enhanced telemetry
+exact damage source
+BombDamageProvider
+advanced observer advisory / effects / optional adapters
+```
+
+“不做一次性 MVP”不等于所有功能必须在第一批代码同时完成。
 
 ## 16. 明确预留、但不是当前 V1 完成承诺
 
@@ -342,13 +436,14 @@ Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许�
 - Electron/Tauri desktop shell；
 - 动态第三方 plugin marketplace。
 
-## 17. 与 RivalHub #610 / #452 / DAK 的关系
+## 17. 与 RivalHub Issues / DAK 的关系
 
-当前理解：
+当前 ownership：
 
-- **RivalHub #610**：负责主仓 Match Runtime、canonical lifecycle/result、live ingest/read contract、reconciliation；其具体方案仍可能演进，本仓库不依赖其内部实现。
-- **RivalHub #452**：负责公共 Match 页面最终怎样展示 live projection；Broadcast 不拥有公共站 UI。
-- **RivalHub #613**：本仓库的来源 issue，负责本地 telemetry / Broadcast Runtime / Program。
-- **DAK / RivalHub #268**：负责赛后 Demo evidence 与更高质量统计，不进入 Broadcast 的低延迟实时主循环。
+- **RivalHub #610**：Match Runtime & Operations；负责 ReliableObservation ingest、Match Live Session、canonical lifecycle/result、reconciliation/recovery。Broadcast 不拥有 canonical mutation policy。
+- **RivalHub #615**：Live Match Projection；负责 BroadcastLiveSnapshot ingest、EphemeralLiveProjection、realtime distribution 与 public LIVE read model。
+- **RivalHub #452**：公共 Match 页面基础产品与页面 owner；#615 在其稳定结构上增加 LIVE mode，Broadcast 不拥有公共站 UI。
+- **RivalHub #613**：本项目来源/tracking issue；详细 canonical 产品/架构规格以本仓库文档为准。
+- **DAK / RivalHub #268**：负责赛后 Demo evidence 与更高质量统计，不进入 Broadcast 的低延迟实时主循环；地图 calibration 可通过稳定 provider contract 复用。
 
-最重要的产品边界：**Broadcast 产生 observation；RivalHub 决定 official truth。**
+跨仓库只通过公开 versioned contract 工作，不共享数据库内部结构，也不要求两个仓库共享源码类型。
