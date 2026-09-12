@@ -26,6 +26,29 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: environment
+    attributes:
+      label: Environment
+      description: Where was the defect observed?
+      options:
+        - macOS development
+        - GitHub Actions macOS
+        - GitHub Actions Windows
+        - Real Windows
+        - Windows + CS2
+        - Windows + OBS
+        - Windows + CS2 + OBS
+        - Other / unknown
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment_details
+    attributes:
+      label: Environment details
+      description: OS version, CS2 build, OBS version, Browser Source context, commit SHA, runtime versions, or other relevant details.
+
   - type: textarea
     id: impact
     attributes:
@@ -38,7 +61,7 @@ body:
     id: evidence
     attributes:
       label: Evidence
-      description: Relevant logs, session/epoch information, fixture names, commit SHA, OBS/Windows context, etc.
+      description: Relevant logs, session/epoch information, fixture names, commit SHA, screenshots, capture notes, etc.
 
   - type: textarea
     id: invariants
@@ -50,6 +73,6 @@ body:
     id: validation
     attributes:
       label: Fix acceptance
-      description: What regression test or replay proves the bug is fixed?
+      description: What regression test/replay and, if needed, real-environment evidence proves the bug is fixed?
     validations:
       required: true
