@@ -4,7 +4,7 @@ RivalHub Broadcast 是面向 RivalHub 赛事体系的 **CS2 本地制播运行�
 
 它不是第二套赛事后台，也不只是一个 Gameplay HUD。项目目标是让赛事信息在 RivalHub 中维护一次，然后围绕同一场 Match 完成赛前展示、BP 播放、比赛中 HUD 与 Radar、中场与场间页面、赛后结果展示，以及安全的实时状态回传。
 
-> 当前仓库处于架构与产品基线初始化阶段。产品、authority、Runtime/Workspace 与实时系统核心 invariant 已建立；下一步进入工程骨架与 M0 Runtime proof，而不是继续无边界扩张设计。
+> 当前仓库处于架构与产品基线初始化阶段。产品、authority、Runtime/Workspace 与实时系统核心 invariant 已建立；下一步进入 **M0 — Engineering Foundation**，随后进入 **M1 — Runtime Proof**，而不是继续无边界扩张设计。
 
 ## 产品目标
 
@@ -92,7 +92,7 @@ TechnicalWarning
 - 向 RivalHub #615 提供低频 BroadcastLiveSnapshot；
 - 为 server game events、C4 生存预测、OBS 控制、MulNX/HLAE、Replay、Camera 等高级能力保留 adapter/capability 接缝。
 
-详细产品需求见 [`docs/product.md`](docs/product.md)。
+详细产品需求见 [`docs/product.md`](docs/product.md)。阶段实施计划见 [`docs/roadmap.md`](docs/roadmap.md)。
 
 ## 仓库边界
 
@@ -141,17 +141,17 @@ fixtures/               可复现测试数据
 
 第一套 Major renderer 直接留在 `apps/web` presentation 内；只有出现第二个真实 renderer consumer 或独立发布需求时再抽独立 package/API boundary。
 
-## 文档
+## 文档与实施
 
 - [`docs/product.md`](docs/product.md)：产品需求基线。
 - [`docs/architecture.md`](docs/architecture.md)：已确定的架构边界与待决事项。
+- [`docs/roadmap.md`](docs/roadmap.md)：M0–M5 阶段交付与 Issue/Project 组织方式。
 - [`docs/references.md`](docs/references.md)：参考 HUD / 制播项目的取舍。
 - [`docs/decisions/0001-project-positioning-and-authority.md`](docs/decisions/0001-project-positioning-and-authority.md)：项目定位与 authority。
 - [`docs/decisions/0002-runtime-workspace-technology-baseline.md`](docs/decisions/0002-runtime-workspace-technology-baseline.md)：Runtime / Workspace 技术基线。
 - [`docs/decisions/0003-runtime-state-delivery-invariants.md`](docs/decisions/0003-runtime-state-delivery-invariants.md)：RuntimeState、identity、delivery/backpressure、outbox 与跨仓 contract invariant。
 - [`AGENTS.md`](AGENTS.md)：面向开发 Agent 的仓库工作原则。
-
-## 文档语言
+- [`CONTRIBUTING.md`](CONTRIBUTING.md)：Issue-driven / agent-assisted 开发与 PR 交付规范。
 
 仓库的一手文档默认使用中文。代码标识符、协议字段、第三方项目名与行业术语在更清晰时保留英文。
 
