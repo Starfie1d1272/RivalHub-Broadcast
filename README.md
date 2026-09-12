@@ -157,8 +157,8 @@ fixtures/               可复现测试数据
 
 ## License
 
-RivalHub Broadcast 计划使用 **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**。
+RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**。
 
-当前根 `LICENSE` 仍是简短 notice，GitHub 可能无法自动识别为标准 AGPL-3.0-only；在首个代码实现提交前应以 FSF/SPDX canonical full text 原样替换，不手工改写许可证正文。
+根 `LICENSE` 已按 FSF/SPDX canonical full text 写入完整 AGPL-3.0-only，许可证正文未作项目自定义改写。
 
 第三方依赖与参考项目的许可证边界单独记录在 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。
