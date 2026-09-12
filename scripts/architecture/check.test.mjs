@@ -48,6 +48,78 @@ describe('architecture checker', () => {
     ).toEqual([]);
   });
 
+  it('rejects forbidden runtime manifest dependencies without source imports', () => {
+    const cases = [
+      {
+        manifestPath: 'packages/core/package.json',
+        dependencies: { fastify: '5.0.0' },
+        ruleId: 'ARCH_CORE_BOUNDARY',
+        target: 'fastify',
+      },
+      {
+        manifestPath: 'packages/core/package.json',
+        dependencies: { '@rivalhub-broadcast/rivalhub': 'workspace:*' },
+        ruleId: 'ARCH_CORE_BOUNDARY',
+        target: '@rivalhub-broadcast/rivalhub',
+      },
+      {
+        manifestPath: 'packages/core/package.json',
+        dependencies: { '@rivalhub-broadcast/web': 'workspace:*' },
+        ruleId: 'ARCH_CORE_BOUNDARY',
+        target: '@rivalhub-broadcast/web',
+      },
+      {
+        manifestPath: 'packages/core/package.json',
+        dependencies: { '@rivalhub-broadcast/companion': 'workspace:*' },
+        ruleId: 'ARCH_CORE_BOUNDARY',
+        target: '@rivalhub-broadcast/companion',
+      },
+      {
+        manifestPath: 'packages/protocol/package.json',
+        dependencies: { '@rivalhub-broadcast/core': 'workspace:*' },
+        ruleId: 'ARCH_PROTOCOL_BOUNDARY',
+        target: '@rivalhub-broadcast/core',
+      },
+      {
+        manifestPath: 'packages/radar/package.json',
+        dependencies: { react: '19.0.0' },
+        ruleId: 'ARCH_RADAR_BOUNDARY',
+        target: 'react',
+      },
+      {
+        manifestPath: 'apps/web/package.json',
+        dependencies: { '@rivalhub-broadcast/telemetry-gsi': 'workspace:*' },
+        ruleId: 'ARCH_WEB_BOUNDARY',
+        target: '@rivalhub-broadcast/telemetry-gsi',
+      },
+      {
+        manifestPath: 'packages/rivalhub/package.json',
+        dependencies: { '@supabase/supabase-js': '2.0.0' },
+        ruleId: 'ARCH_RIVALHUB_BOUNDARY',
+        target: '@supabase/supabase-js',
+      },
+    ];
+
+    for (const testCase of cases) {
+      const manifest = packageManifest(testCase.manifestPath);
+      manifest.dependencies = { ...manifest.dependencies, ...testCase.dependencies };
+      expectRule(
+        withFiles({ [testCase.manifestPath]: JSON.stringify(manifest) }),
+        testCase.ruleId,
+        testCase.target,
+      );
+    }
+
+    const devOnlyManifest = packageManifest('packages/core/package.json');
+    devOnlyManifest.devDependencies = {
+      fastify: '5.0.0',
+      '@rivalhub-broadcast/web': 'workspace:*',
+    };
+    expect(withFiles({ 'packages/core/package.json': JSON.stringify(devOnlyManifest) })).toEqual(
+      [],
+    );
+  });
+
   it('checks static, export, dynamic, require, and type-only edges', () => {
     const violations = withFiles({
       'packages/core/src/import-edge-fixture.ts': [
@@ -106,9 +178,30 @@ describe('architecture checker', () => {
     );
   });
 
+  it('rejects Core imports of Web and Companion even with legal workspace declarations', () => {
+    const coreManifest = packageManifest('packages/core/package.json');
+    coreManifest.dependencies = {
+      '@rivalhub-broadcast/web': 'workspace:*',
+      '@rivalhub-broadcast/companion': 'workspace:*',
+    };
+
+    const violations = withFiles({
+      'packages/core/package.json': JSON.stringify(coreManifest),
+      'packages/core/src/web-edge.ts': "import '@rivalhub-broadcast/web';\n",
+      'packages/core/src/companion-edge.ts': "import '@rivalhub-broadcast/companion';\n",
+    });
+
+    expectRule(violations, 'ARCH_CORE_BOUNDARY', '@rivalhub-broadcast/web');
+    expectRule(violations, 'ARCH_CORE_BOUNDARY', '@rivalhub-broadcast/companion');
+  });
+
   it('rejects direct package-source imports and normalizes Windows separators', () => {
+    const coreManifest = packageManifest('packages/core/package.json');
+    coreManifest.exports['./src'] = './dist/index.js';
+
     expectRule(
       withFiles({
+        'packages/core/package.json': JSON.stringify(coreManifest),
         'apps/web/src/deep-import.ts':
           "import { value } from '@rivalhub-broadcast/core/src/index.js';\nvoid value;\n",
       }),
@@ -123,6 +216,24 @@ describe('architecture checker', () => {
       }),
       'ARCH_CROSS_PACKAGE_SOURCE',
       'packages\\radar\\src',
+    );
+  });
+
+  it('rejects non-src relative cross-workspace paths and unexported package subpaths', () => {
+    expectRule(
+      withFiles({
+        'apps/web/src/relative-dist-import.ts': "import '../../../packages/core/dist/index.js';\n",
+      }),
+      'ARCH_CROSS_PACKAGE_SOURCE',
+      'packages/core/dist',
+    );
+
+    expectRule(
+      withFiles({
+        'apps/web/src/unexported-subpath.ts': "import '@rivalhub-broadcast/core/dist/index.js';\n",
+      }),
+      'ARCH_CROSS_PACKAGE_SOURCE',
+      '@rivalhub-broadcast/core/dist',
     );
   });
 

@@ -22,6 +22,8 @@ const BOUNDARY_RULE_IDS = Object.freeze({
   rivalhub: 'ARCH_RIVALHUB_BOUNDARY',
 });
 
+const CONTRACT_WORKSPACE_ROOTS = ['apps', 'packages'];
+const SOURCE_ROOT_NAMES = new Set(['src', 'test', 'tests']);
 const SKIPPED_DIRECTORY_NAMES = new Set([
   '.git',
   '.pnpm-store',
@@ -48,6 +50,7 @@ export function checkArchitecture(options = {}) {
   checkPackageExports(workspaces, report);
   checkTsPathAliases(repository, report);
   checkWorkspaceDependencyDeclarations(workspaces, report);
+  checkManifestBoundaryDependencies(workspaces, report);
 
   const records = loadSourceRecords(repository, workspaces);
   checkImportEdges(records, repository, workspaces, report);
@@ -68,9 +71,7 @@ export function formatArchitectureViolation(violation) {
 function createRepository(rootDir, overlay = undefined) {
   const files = new Map();
 
-  if (existsSync(rootDir)) {
-    collectPhysicalFiles(rootDir, rootDir, files);
-  }
+  if (existsSync(rootDir)) collectContractFiles(rootDir, files);
 
   for (const [path, source] of Object.entries(overlay ?? {})) {
     files.set(normalizeRelativePath(path), source);
@@ -88,19 +89,68 @@ function createRepository(rootDir, overlay = undefined) {
   };
 }
 
-function collectPhysicalFiles(rootDir, directory, files) {
+function collectContractFiles(rootDir, files) {
+  for (const workspaceRoot of CONTRACT_WORKSPACE_ROOTS) {
+    const absoluteRoot = join(rootDir, workspaceRoot);
+    if (!existsSync(absoluteRoot)) continue;
+
+    for (const entry of readdirSync(absoluteRoot, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      collectWorkspaceFiles(rootDir, join(absoluteRoot, entry.name), files);
+    }
+  }
+
+  collectTsConfigFiles(rootDir, rootDir, files);
+}
+
+function collectWorkspaceFiles(rootDir, workspaceDirectory, files) {
+  const manifestPath = join(workspaceDirectory, 'package.json');
+  if (existsSync(manifestPath)) {
+    files.set(
+      normalizeRelativePath(relative(rootDir, manifestPath)),
+      readFileSync(manifestPath, 'utf8'),
+    );
+  }
+
+  for (const sourceRootName of SOURCE_ROOT_NAMES) {
+    const sourceRoot = join(workspaceDirectory, sourceRootName);
+    if (existsSync(sourceRoot)) collectSourceFiles(rootDir, sourceRoot, files);
+  }
+}
+
+function collectSourceFiles(rootDir, directory, files) {
   for (const entry of readdirSync(directory, { withFileTypes: true })) {
     if (entry.isDirectory() && SKIPPED_DIRECTORY_NAMES.has(entry.name)) continue;
 
     const absolutePath = join(directory, entry.name);
     if (entry.isDirectory()) {
-      collectPhysicalFiles(rootDir, absolutePath, files);
+      collectSourceFiles(rootDir, absolutePath, files);
       continue;
     }
 
     if (!entry.isFile()) continue;
     const relativePath = normalizeRelativePath(relative(rootDir, absolutePath));
-    files.set(relativePath, readFileSync(absolutePath, 'utf8'));
+    if (isSourcePath(relativePath) && !relativePath.endsWith('.d.ts')) {
+      files.set(relativePath, readFileSync(absolutePath, 'utf8'));
+    }
+  }
+}
+
+function collectTsConfigFiles(rootDir, directory, files) {
+  for (const entry of readdirSync(directory, { withFileTypes: true })) {
+    if (entry.isDirectory() && SKIPPED_DIRECTORY_NAMES.has(entry.name)) continue;
+
+    const absolutePath = join(directory, entry.name);
+    if (entry.isDirectory()) {
+      collectTsConfigFiles(rootDir, absolutePath, files);
+      continue;
+    }
+
+    if (!entry.isFile() || !/^tsconfig(?:\.[^/]+)?\.json$/.test(entry.name)) continue;
+    files.set(
+      normalizeRelativePath(relative(rootDir, absolutePath)),
+      readFileSync(absolutePath, 'utf8'),
+    );
   }
 }
 
@@ -312,6 +362,31 @@ function checkWorkspaceDependencyDeclarations(workspaces, report) {
   }
 }
 
+function checkManifestBoundaryDependencies(workspaces, report) {
+  for (const info of workspaces.values()) {
+    const policy = PACKAGE_BOUNDARIES[info.name];
+    const ruleId = boundaryRuleIdFor(info.name);
+    if (!policy || !ruleId) continue;
+
+    for (const field of RUNTIME_DEPENDENCY_FIELDS) {
+      const dependencies = info.manifest[field];
+      if (!dependencies || typeof dependencies !== 'object') continue;
+
+      for (const dependency of Object.keys(dependencies)) {
+        const targetName = workspacePackageName(dependency) ?? dependency;
+        if (!matchesBoundaryPolicy(policy, dependency, targetName)) continue;
+
+        report({
+          ruleId,
+          file: info.manifestPath,
+          target: dependency,
+          message: `${policy.message} Remove ${dependency} from ${field}; devDependencies remain available for test/tooling-only use.`,
+        });
+      }
+    }
+  }
+}
+
 function loadSourceRecords(repository, workspaces) {
   const records = new Map();
 
@@ -440,12 +515,17 @@ function checkImportEdges(records, repository, workspaces, report) {
       const workspaceSpecifier = workspacePackageName(edge.specifier);
       const workspaceTarget = workspaceSpecifier ? workspaces.get(workspaceSpecifier) : undefined;
       const resolvedPath = resolveRelativeModule(record.path, edge.specifier, repository);
+      const relativeWorkspaceTarget = relativeWorkspacePackage(
+        record.path,
+        edge.specifier,
+        workspaces,
+      );
       const resolvedWorkspaceTarget = resolvedPath
         ? workspaceForPath(resolvedPath, workspaces)
         : undefined;
-      const target = workspaceTarget ?? resolvedWorkspaceTarget;
+      const target = workspaceTarget ?? relativeWorkspaceTarget ?? resolvedWorkspaceTarget;
 
-      checkCrossPackageSourceImport(record, edge, resolvedPath, target, workspaces, report);
+      checkCrossPackageSourceImport(record, edge, target, workspaces, report);
       checkPackageBoundary(record, edge, resolvedPath, target, report);
 
       if (!target || !record.owner || target.name === record.owner.name) continue;
@@ -476,23 +556,31 @@ function checkImportEdges(records, repository, workspaces, report) {
   }
 }
 
-function checkCrossPackageSourceImport(record, edge, resolvedPath, target, workspaces, report) {
+function checkCrossPackageSourceImport(record, edge, target, workspaces, report) {
   const packageSpecifier = workspacePackageName(edge.specifier);
   const packageTarget = packageSpecifier ? workspaces.get(packageSpecifier) : undefined;
   const normalizedSpecifier = edge.specifier.replaceAll('\\', '/');
-  const packageDeepImport =
-    packageTarget && /\/src(?:\/|$)/.test(normalizedSpecifier.slice(packageSpecifier.length));
-  const relativeTarget = resolvedPath ? workspaceForPath(resolvedPath, workspaces) : undefined;
-  const relativeDeepImport =
-    relativeTarget && isInsideWorkspaceSource(resolvedPath, relativeTarget);
+  const packageSubpath = packageTarget
+    ? normalizedSpecifier.slice(packageSpecifier.length)
+    : undefined;
+  const invalidPackageSubpath =
+    packageTarget &&
+    packageSubpath &&
+    !isPublicWorkspaceSubpath(packageTarget, `.${packageSubpath}`);
+  const relativeTarget = relativeWorkspacePackage(record.path, edge.specifier, workspaces);
+  const relativeCrossWorkspace = relativeTarget && relativeTarget.name !== record.owner.name;
 
-  if ((packageDeepImport || relativeDeepImport) && target && target.name !== record.owner.name) {
+  if (
+    ((invalidPackageSubpath && packageTarget) || relativeCrossWorkspace) &&
+    target &&
+    target.name !== record.owner.name
+  ) {
     report({
       ruleId: 'ARCH_CROSS_PACKAGE_SOURCE',
       file: record.path,
       target: edge.specifier,
       message:
-        "Cross-package imports must use the target package name and public exports; direct access to another package's src directory is forbidden.",
+        'Cross-workspace imports must use the target package name and an actually exported public subpath; relative paths and unexported internal paths are forbidden.',
     });
   }
 }
@@ -503,24 +591,17 @@ function checkPackageBoundary(record, edge, resolvedPath, target, report) {
   const policy = PACKAGE_BOUNDARIES[record.owner.name];
   if (!policy) return;
 
-  const ruleId = BOUNDARY_RULE_IDS[record.owner.name.slice(`${WORKSPACE_PACKAGE_PREFIX.length}`)];
+  const ruleId = boundaryRuleIdFor(record.owner.name);
   if (!ruleId) return;
 
   const normalizedSpecifier = edge.specifier.replaceAll('\\', '/');
   const targetPath = resolvedPath?.replaceAll('\\', '/');
-  const forbiddenWorkspacePackage =
-    target && policy.forbiddenWorkspacePackages.includes(target.name);
   const forbiddenWorkspacePath = policy.forbiddenWorkspacePaths.some(
     (path) =>
       normalizedSpecifier.includes(path.replaceAll('\\', '/')) || targetPath?.startsWith(path),
   );
 
-  if (
-    matchesPolicyTarget(policy, edge.specifier) ||
-    (policy.forbidNodeBuiltins && isNodeBuiltin(edge.specifier)) ||
-    forbiddenWorkspacePackage ||
-    forbiddenWorkspacePath
-  ) {
+  if (matchesBoundaryPolicy(policy, edge.specifier, target?.name) || forbiddenWorkspacePath) {
     report({
       ruleId,
       file: record.path,
@@ -528,6 +609,18 @@ function checkPackageBoundary(record, edge, resolvedPath, target, report) {
       message: policy.message,
     });
   }
+}
+
+function boundaryRuleIdFor(packageName) {
+  return BOUNDARY_RULE_IDS[packageName.slice(`${WORKSPACE_PACKAGE_PREFIX.length}`)];
+}
+
+function matchesBoundaryPolicy(policy, specifier, targetName) {
+  return (
+    matchesPolicyTarget(policy, specifier) ||
+    (policy.forbidNodeBuiltins && isNodeBuiltin(specifier)) ||
+    (targetName && policy.forbiddenWorkspacePackages.includes(targetName))
+  );
 }
 
 function declaresDependency(owner, dependencyName) {
@@ -542,14 +635,22 @@ function declaresDependency(owner, dependencyName) {
 }
 
 function resolveRelativeModule(importerPath, specifier, repository) {
-  if (!specifier.startsWith('.') && !specifier.startsWith('\\')) return undefined;
-
-  const normalizedSpecifier = specifier.replaceAll('\\', '/');
-  const rawTarget = normalizeRelativePath(
-    posix.join(posix.dirname(importerPath), normalizedSpecifier),
-  );
+  const rawTarget = relativeImportPath(importerPath, specifier);
+  if (!rawTarget) return undefined;
   const candidates = moduleCandidates(rawTarget);
   return candidates.find((candidate) => repository.has(candidate));
+}
+
+function relativeWorkspacePackage(importerPath, specifier, workspaces) {
+  const rawTarget = relativeImportPath(importerPath, specifier);
+  return rawTarget ? workspaceForPath(rawTarget, workspaces) : undefined;
+}
+
+function relativeImportPath(importerPath, specifier) {
+  if (!specifier.startsWith('.') && !specifier.startsWith('\\')) return undefined;
+  return normalizeRelativePath(
+    posix.join(posix.dirname(importerPath), specifier.replaceAll('\\', '/')),
+  );
 }
 
 function moduleCandidates(path) {
@@ -580,9 +681,19 @@ function workspaceForPath(path, workspaces) {
     .sort((left, right) => right.dir.length - left.dir.length)[0];
 }
 
-function isInsideWorkspaceSource(path, workspace) {
-  const relativePath = path.slice(`${workspace.dir}/`.length);
-  return relativePath.startsWith('src/');
+function isPublicWorkspaceSubpath(workspace, subpath) {
+  if (subpath === '') return true;
+  if (subpath === './' || subpath === './src' || subpath.startsWith('./src/')) return false;
+
+  const exports = workspace.manifest.exports;
+  if (!exports || typeof exports !== 'object' || Array.isArray(exports)) return false;
+
+  return Object.keys(exports).some((exportKey) => {
+    if (!exportKey.startsWith('./')) return false;
+    if (exportKey === subpath) return true;
+    if (!exportKey.endsWith('/*')) return false;
+    return subpath.startsWith(exportKey.slice(0, -1));
+  });
 }
 
 function checkWorkspaceCycles(workspaces, report) {

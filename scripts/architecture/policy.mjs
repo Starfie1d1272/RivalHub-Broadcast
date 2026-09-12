@@ -41,6 +41,8 @@ export const PACKAGE_BOUNDARIES = Object.freeze({
       '@rivalhub-broadcast/telemetry-gsi',
       '@rivalhub-broadcast/rivalhub',
       '@rivalhub-broadcast/testkit',
+      '@rivalhub-broadcast/web',
+      '@rivalhub-broadcast/companion',
     ],
     forbiddenWorkspacePaths: ['apps/'],
   }),
