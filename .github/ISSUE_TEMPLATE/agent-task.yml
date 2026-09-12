@@ -68,6 +68,50 @@ body:
     validations:
       required: true
 
+  - type: dropdown
+    id: implementation_environment
+    attributes:
+      label: Implementation environment
+      description: Where can this task be implemented? This is separate from its final acceptance environment.
+      options:
+        - Cross-platform / macOS-primary
+        - Windows-specific
+        - Other explicit environment
+    validations:
+      required: true
+
+  - type: checkboxes
+    id: automated_validation
+    attributes:
+      label: Automated validation
+      description: Which automated environments/checks are required by this issue? Select all that apply.
+      options:
+        - label: Local deterministic tests
+        - label: macOS CI
+        - label: Windows CI
+        - label: Linux CI
+
+  - type: dropdown
+    id: real_environment_gate
+    attributes:
+      label: Real-environment acceptance gate
+      description: Production-like evidence required before this issue can be considered fully accepted.
+      options:
+        - Not required
+        - Real Windows
+        - Windows + CS2
+        - Windows + OBS
+        - Windows + CS2 + OBS
+    validations:
+      required: true
+
+  - type: textarea
+    id: platform_notes
+    attributes:
+      label: Platform / validator notes
+      description: Name the expected platform validator, fixture/evidence, or explain why no real-environment gate is needed.
+      placeholder: "Example: implementation on Mac; Windows+CS2 collaborator records real GSI fixture before closure."
+
   - type: textarea
     id: tests
     attributes:
@@ -80,7 +124,7 @@ body:
     id: acceptance
     attributes:
       label: Acceptance criteria
-      description: Reproducible conditions for closing the issue.
+      description: Reproducible conditions for closing the issue, including any required platform gate.
       placeholder: Use checkboxes where useful.
     validations:
       required: true
@@ -118,6 +162,6 @@ body:
     attributes:
       label: Handoff requirements
       description: Any task-specific information the final PR report must include in addition to CONTRIBUTING.md.
-      placeholder: "Report deviations, validation evidence, remaining risks, and follow-up work."
+      placeholder: "Report deviations, validation evidence, pending real-environment acceptance, remaining risks, and follow-up work."
     validations:
       required: true
