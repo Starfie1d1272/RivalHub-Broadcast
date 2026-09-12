@@ -6,8 +6,10 @@
 
 - [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里。
 - [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项。
+- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、Issue 生命周期与 GitHub Project 组织方式。
 - [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
 - [`decisions/`](decisions/)：Architecture Decision Records。
+- [`../CONTRIBUTING.md`](../CONTRIBUTING.md)：Issue-driven / agent-assisted 实施与 PR 交付规范。
 
 当前关键 ADR：
 
@@ -25,4 +27,4 @@
 - `operations.md`：Windows / CS2 / OBS 正式赛事运行手册；
 - `security.md`：pairing、localhost/LAN access、credential scope、Origin/protocol validation 与日志/fixture 敏感信息边界。
 
-文档不是代码完成后的补记。涉及 authority、runtime invariant、协议语义、recovery/security 或高风险运行决策时，应先形成可审阅文档/ADR，再实现。
+文档不是代码完成后的补记。涉及 authority、runtime invariant、协议语义、recovery/security 或高风险运行决策时，应先形成可审阅文档/ADR，再实现；普通实现细节则按 `roadmap.md` 的 just-in-time design freeze 原则推进，避免提前过度设计。
