@@ -101,6 +101,12 @@ PR 必须说明：
 
 PR 不应以“CI 绿了”替代业务 acceptance，也不应以 mock/simulator 代替要求中的真实环境验收。
 
+## Architecture contract
+
+提交前必须运行 `pnpm architecture:check`。它检查 shared package 的 `dist` exports、workspace protocol、显式 workspace dependency、runtime cycle、TypeScript `paths` 以及各 package 的 ownership boundary。
+
+架构 violation 应通过复用现有 owner、调整真实依赖边界或更新对应 ADR 解决；不得新增 baseline、known-violation 或全局 ignore。ESLint 的 direct-import 提示来自同一份 `scripts/architecture/policy.mjs`，但完整 graph 检查以 `architecture:check` 为准。
+
 ## 设计与实现的关系
 
 采用 just-in-time design freeze：

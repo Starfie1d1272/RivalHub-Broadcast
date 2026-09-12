@@ -99,6 +99,13 @@ Real-environment acceptance gate
 - 不为单一 Major renderer 提前设计通用 renderer SDK；出现第二个真实 consumer 再抽象。
 - Issue 范围外发现的问题，优先记录/开后续 Issue；除非当前任务无法正确完成，不顺手扩张实现范围。
 
+## 可执行架构护栏
+
+- `pnpm architecture:check` 是当前 workspace 的权威架构依赖检查；新 workspace dependency 必须显式声明并使用 `workspace:` protocol。
+- 不得跨 package deep-import 其他 package 的 `src/`，也不得通过 TypeScript `paths` 绕过 package `exports`。
+- Core、Protocol、Radar、Web 与 RivalHub 的 forbidden dependency 规则以 `scripts/architecture/policy.mjs` 为机器规则来源；不要通过 baseline、known-violation 或 wildcard ignore 让检查变绿。
+- 如果真实产品需求与架构护栏冲突，先重新审视对应 docs/ADR 并单独更新决策，不在实现中绕过 guard。
+
 ## 测试原则
 
 任何实时链路改动至少考虑：
