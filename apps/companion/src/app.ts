@@ -7,7 +7,7 @@ export interface CompanionAppOptions {
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const app = Fastify({ logger: options.logger ?? false });
 
-  app.get('/health', async () => ({ status: 'ok' }));
+  app.get('/health', () => ({ status: 'ok' }));
 
   return app;
 }

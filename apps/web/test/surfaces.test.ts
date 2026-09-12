@@ -14,7 +14,9 @@ describe('web surface shell', () => {
   it('renders a surface-owned React page element', () => {
     const page = SurfacePage({ surface: surfaceDefinitions[2] });
 
-    expect(page.type).toBe('main');
-    expect(page.props['data-surface']).toBe('debug');
+    expect(page).toMatchObject({
+      type: 'main',
+      props: { 'data-surface': 'debug' },
+    });
   });
 });
