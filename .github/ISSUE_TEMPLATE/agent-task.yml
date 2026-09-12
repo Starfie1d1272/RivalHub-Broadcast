@@ -1,0 +1,123 @@
+name: Agent execution task
+description: Implementation-ready work item for Luna or another coding agent.
+title: "[M?] "
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Use this form only when the task is sufficiently designed to become an executable work item. If major product/architecture decisions are still open, use the Design / architecture task form first.
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Objective
+      description: What real capability exists after this issue is complete?
+      placeholder: Describe the observable outcome, not just files to edit.
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Context
+      description: Why this task exists; relevant milestone, docs, ADRs, or external issues.
+    validations:
+      required: true
+
+  - type: textarea
+    id: decisions
+    attributes:
+      label: Canonical decisions
+      description: Decisions already frozen. The implementing agent must not redesign these unless the issue is sent back for design.
+      placeholder: |
+        - ADR-0002 ...
+        - ADR-0003 ...
+        - Core must not import ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: scope
+    attributes:
+      label: Scope
+      description: Exact work that belongs in this issue.
+    validations:
+      required: true
+
+  - type: textarea
+    id: non_goals
+    attributes:
+      label: Non-goals
+      description: Explicitly exclude tempting adjacent work.
+    validations:
+      required: true
+
+  - type: textarea
+    id: architecture
+    attributes:
+      label: Architecture / ownership
+      description: Packages/apps touched, dependency direction, owners and boundaries.
+    validations:
+      required: true
+
+  - type: textarea
+    id: implementation
+    attributes:
+      label: Implementation plan
+      description: A concrete plan based on the real repository structure. The agent may refine local details but should not change the architecture.
+    validations:
+      required: true
+
+  - type: textarea
+    id: tests
+    attributes:
+      label: Required tests
+      description: Unit/integration/replay/visual/soak/real-environment cases required by this task.
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance criteria
+      description: Reproducible conditions for closing the issue.
+      placeholder: Use checkboxes where useful.
+    validations:
+      required: true
+
+  - type: textarea
+    id: validation
+    attributes:
+      label: Validation
+      description: Commands and evidence expected in the PR handoff.
+      placeholder: |
+        pnpm typecheck
+        pnpm lint
+        pnpm test
+        pnpm build
+    validations:
+      required: true
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: Blocked-by / blocks relationships, including cross-repository issues.
+      placeholder: "Blocked by: ...\nBlocks: ..."
+
+  - type: textarea
+    id: docs
+    attributes:
+      label: Documentation impact
+      description: Docs/ADR/README changes required, or state explicitly that none are expected.
+    validations:
+      required: true
+
+  - type: textarea
+    id: handoff
+    attributes:
+      label: Handoff requirements
+      description: Any task-specific information the final PR report must include in addition to CONTRIBUTING.md.
+      placeholder: "Report deviations, validation evidence, remaining risks, and follow-up work."
+    validations:
+      required: true
