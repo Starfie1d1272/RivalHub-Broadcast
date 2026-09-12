@@ -7,8 +7,12 @@
 1. `README.md`
 2. `docs/product.md`
 3. `docs/architecture.md`
-4. `docs/decisions/`
-5. 与当前任务直接相关的协议/运行文档
+4. `docs/roadmap.md`
+5. `docs/decisions/`
+6. `CONTRIBUTING.md`
+7. 当前 Issue 与其直接引用的协议/运行文档
+
+如果当前 Issue 标记为 implementation-ready / `agent-ready`，其 `Canonical decisions`、Scope、Non-goals、Acceptance criteria 是本次实现的直接执行规格；不得在实现过程中擅自重新设计这些已冻结内容。
 
 ## 文档语言
 
@@ -70,6 +74,7 @@ PublicLiveMatchProjection   公共页面 read model
 - 不为尚未存在的 consumer 提前建设复杂 plugin framework。
 - 不为了“先看到画面”把 GSI shape 直接传到 React 组件。
 - 不为单一 Major renderer 提前设计通用 renderer SDK；出现第二个真实 consumer 再抽象。
+- Issue 范围外发现的问题，优先记录/开后续 Issue；除非当前任务无法正确完成，不顺手扩张实现范围。
 
 ## 测试原则
 
