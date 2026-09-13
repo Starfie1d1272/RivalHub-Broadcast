@@ -5,10 +5,10 @@
 当前文档：
 
 - [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里。
-- [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项。
+- [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项；当前 runtime 模型以 current snapshot + explicit transition 为核心，并区分 Program-safe / Assist-private state 与 source-local continuity。
 - [`telemetry.md`](telemetry.md)：M1 Telemetry / GSI 设计基线，定义 Raw GSI、block-specific source semantics、normalized telemetry、production capture、replay 与真实 CS2 evidence/验证边界。
-- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、Issue 生命周期与 GitHub Project 组织方式。
-- [`development-validation.md`](development-validation.md)：macOS 主开发、跨平台 CI、Windows + CS2 + OBS 真实验收的职责边界。
+- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、RivalHub read/write 集成顺序、Issue 生命周期与 GitHub Project 组织方式。
+- [`development-validation.md`](development-validation.md)：macOS 主开发、跨平台 CI、真实 Windows + CS2/CSTV + OBS 验收与 reference corpus 的职责边界。
 - [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
 - [`decisions/`](decisions/)：Architecture Decision Records。
 - [`../CONTRIBUTING.md`](../CONTRIBUTING.md)：Issue-driven / agent-assisted 实施与 PR 交付规范。
@@ -18,7 +18,7 @@
 - ADR-0001：项目定位与权威边界；
 - ADR-0002：Runtime / Workspace 技术基线；
 - ADR-0003：RuntimeState / projection、session/identity、delivery/backpressure、outbox 与跨仓 contract invariant；
-- ADR-0004：Delayed Program 输出、machine-only Lookahead feed、Observer Assist Overlay 与 Program/OBS/#615 non-leak 边界。
+- ADR-0004：Delayed Program 输出、machine-only Lookahead feed、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界。
 
 文档 authority 关系：
 
@@ -33,10 +33,10 @@ telemetry.md
   单个 GSI source 的 Raw GSI / source semantics / capture / replay evidence
 
 roadmap.md
-  阶段级交付与依赖顺序
+  阶段级交付、RivalHub read/write 接入顺序与依赖
 
 development-validation.md
-  Mac/CI/真实 Windows+CS2+OBS 的验证职责
+  Mac/CI/真实 Windows+CS2/CSTV+OBS 的验证职责
 ```
 
 RivalHub 主仓 #610 / #613 / #615 拥有主站 canonical Match Runtime、Broadcast 跨仓产品边界与 public live projection 的服务端语义；本仓 docs/ADR 拥有 Broadcast 本地 runtime 的具体实现架构。发生冲突时应先重新对齐 authority，而不是在代码中增加兼容性分叉。
@@ -46,8 +46,8 @@ RivalHub 主仓 #610 / #613 / #615 拥有主站 canonical Match Runtime、Broadc
 - `protocol.md`：Broadcast-owned local protocol，以及 RivalHub BroadcastManifest / ReliableObservation / BroadcastLiveSnapshot 的 consumer/producer contract 说明；
 - `scene-engine.md`：BaseScene / OverlayCue、scene policy 与 operator override；
 - `radar.md`：MapGeometryProvider、RadarFrame、utility、interpolation/autozoom、renderer/asset 边界；
-- `testing.md`：record/replay、fault injection、slow consumer、Program/Assist non-leak、visual regression、soak；
-- `operations.md`：Windows / CS2 / OBS 正式赛事运行手册、Program preset 与 Assist Overlay 运行方式；
+- `testing.md`：record/replay、fault injection、slow consumer、source generation、Program/Assist non-leak、visual regression、soak；
+- `operations.md`：Windows / CS2 / CSTV / OBS 正式赛事运行手册、Program preset 与 Assist Overlay 运行方式；
 - `security.md`：pairing、localhost/LAN access、credential scope、Origin/protocol validation 与日志/fixture 敏感信息边界。
 
 RFC 索引与 RFC-0001 由独立 RFC PR 负责；该 PR 合并后再把 `docs/rfcs/` 加入本索引，避免当前 canonical PR 先产生不存在的文档链接。
