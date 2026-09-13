@@ -26,10 +26,13 @@
 - 不直接连接/写入 RivalHub Supabase 表；只走公开 adapter/contract。
 - Raw GSI 只存在 telemetry adapter 内，不泄漏到 Core/Renderer/public protocol。
 - GSI frame 按 current source observation 解释；禁止通用 `deepMerge(previous, current)` / retain-on-omit 作为 source truth。具体 block semantics 以 `docs/telemetry.md` 为准。
-- `packages/core` 不依赖 React、HTTP/WebSocket 实现、OBS、RivalHub DB 或具体 GSI parser。
+- `packages/core` 不依赖 React、HTTP/WebSocket 实现、OBS、RivalHub DB 或具体 GSI/CSTV parser。
 - Core 只有一份内部 `RuntimeState`；Program/Radar/ObserverAssist/Operator/Debug/BroadcastLiveSnapshot 通过 projection 获取 consumer-specific model，不把整个 RuntimeState 当通用 wire payload。
+- “一个 RuntimeState”不等于一个万能平铺对象：Program-safe runtime data 与 Assist-private future/alignment data 必须结构化分区。Program projector / #615 producer 不得依赖“拿到全部 state 后记得别读 future 字段”这种约定式安全。
 - 当前现场角色是**单人解说兼 OB**。不要把同一人的 Program、Assist、Operator 界面误建模成独立 Caster / Director 用户角色。
 - Delayed Program feed 是唯一正式节目时间轴；no-delay Lookahead feed 是 machine-only advisory input，不具备 Program eligibility，也不存在 Lookahead→Program fallback。
+- Program GSI 与 Lookahead parser 是两个独立 ingress；各自 reconnect/restart 必须有 source-local generation/health/sequence 语义。不得把 Companion `producerInstanceId`、Match `mapEpoch` 或一个全局 `seq` 同时拿来表示两条 source 的连接连续性。
+- Lookahead source reconnect/generation change 后，旧 timeline alignment 必须立即失效；重新证明 same match/map/tick relation 后才恢复 Assist cue。
 - Observer Assist 是本机私有显示层，不是第二套节目输出；future fields 不得进入 ProgramProjection、官方 OBS Program preset 或 #615 public live snapshot。
 - 第一阶段 Observer Assist 只要求确定性 future kill cue（countdown、killer→victim、可靠时的 location）；不得把 engagement/story classification、AI ranking 或 auto TAKE 变成基础实现前提。
 - `ReliableObservation` 不是 current-state projection；它应由 RuntimeTransition + transition-time RuntimeState/context 派生并保留必要 evidence。
@@ -74,6 +77,8 @@ Broadcast 的 `packages/rivalhub` 只作为这些公开 contract 的 client/prod
 
 `BroadcastManifest` 只消费制播 whitelist facts，例如 Match identity/status/schedule、CompetitionEntry、MatchRoster/Steam64、canonical BP/map/result、coverage/commentator/stream context、branding/sponsor；不得为了方便下发 email、教育审核材料等无关 PII。
 
+完整节目工作流不能到 M4 才第一次面对真实 RivalHub 数据。M2 应冻结 read-side manifest consumer contract/fixture，M3 应至少用真实 read-only Manifest 跑完整节目；M4 再重点接 pairing/auth、ReliableObservation、BroadcastLiveSnapshot、outbox 与安全硬化。
+
 术语：
 
 ```text
@@ -103,6 +108,8 @@ Real-environment acceptance gate
 5. 不因为只欠 platform validation 就把其它仍可继续的开发工作错误标记为 blocked。
 
 默认协作模型是 `Feature owner + Platform validator`，不是按操作系统切割完整业务模块。详见 `docs/development-validation.md`。
+
+对真实 Windows gate，优先提供可复现的 commit/build 对应 artifact 或标准 start workflow，不让 validator 在目标机临时改代码后再把结果误归因到仓库 revision。
 
 PR 的自动化代码验证由 `ci-gate` 汇总，PR 标题由独立的 `pr-title` check 验证。GitHub-hosted Windows runner 只属于 automated validation，不等于真实 Windows + CS2/OBS acceptance。
 
@@ -139,6 +146,7 @@ PR 的自动化代码验证由 `ci-gate` 汇总，PR 标题由独立的 `pr-titl
 - stale manifest；
 - map/round boundary；
 - map restart / stale epoch；
+- source reconnect / source generation change；
 - outbox retry / stale invalidation；
 - Observer Assist future field → Program non-leak；
 - Lookahead down / Program healthy；
