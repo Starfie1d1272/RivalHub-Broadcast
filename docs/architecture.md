@@ -4,7 +4,9 @@
 
 ## 1. 架构目标
 
-RivalHub Broadcast 是一套 local-first、event-driven、capability-aware 的 CS2 Broadcast Runtime。
+RivalHub Broadcast 是一套 local-first、**snapshot + explicit-transition driven**、capability-aware 的 CS2 Broadcast Runtime。
+
+这里刻意不把系统概括成“所有东西都是 Event”。高频可覆盖状态以 current snapshot 为主；只有 round/map/session 等真正的边沿变化才形成明确 `RuntimeTransition`。这与后文“不要建设万能 EventJournal/event-sourcing”保持一致。
 
 架构优先级按顺序为：
 
@@ -131,20 +133,27 @@ production recorder 属于 Companion/telemetry runtime，不属于 `packages/tes
 
 ## 5. RuntimeState、Projection 与 ReliableObservation
 
-Core 只有一份内部事实模型：
+Core 只有一份内部 runtime aggregate，但“一份 RuntimeState”不等于一个无边界、所有 consumer 都能直接读取的万能对象。
+
+概念上至少区分：
 
 ```text
-Normalized Program Telemetry
-+ RivalHub Context
-+ Accumulators
-+ Identity / Session
-+ Presentation Control
-+ optional Lookahead evidence / alignment health
-        ↓
-    RuntimeState
+RuntimeState
+├─ official / match context
+├─ program-safe runtime slice
+│  ├─ normalized Program telemetry
+│  ├─ accumulators / identity / session
+│  └─ Program presentation control
+├─ assist-private runtime slice
+│  ├─ bounded Lookahead evidence
+│  ├─ timeline alignment health
+│  └─ current/scheduled Assist cue
+└─ operational health / incidents
 ```
 
-`RuntimeState` 不是 WebSocket payload，也不为 Assist 建立第二份 domain truth。当前状态类 consumer 通过 projector 获得自己的模型：
+Core 仍只有一份 domain truth；这些是同一 runtime aggregate 内的结构化 ownership，而不是 `ProgramState` / `CasterState` 等互相竞争的第二套 truth。
+
+当前状态类 consumer 通过 projector 获得自己的模型：
 
 ```text
 RuntimeState
@@ -161,10 +170,11 @@ RuntimeState
 ```text
 ProgramProjection
   允许进入正式节目 / OBS / 观众视野的信息
+  只从 program-safe input 构造
 
 ObserverAssistProjection
   只包含本机解说兼 OB 需要的辅助 cue
-  可包含 no-delay feed 相对 Program 的 future event
+  可以消费 program-safe timing/context + assist-private input
   不作为 ProgramProjection 的超集
 
 OperatorProjection
@@ -174,7 +184,7 @@ DebugProjection
   raw/normalized diagnostics / timing / evidence
 ```
 
-Future fields 不得先进入 ProgramProjection 再靠 CSS、route、窗口层级或 OBS visibility 隐藏。
+Future fields 不得先进入 ProgramProjection 再靠 CSS、route、窗口层级或 OBS visibility 隐藏。Program projector / #615 producer 应尽量通过 narrowed typed input / selector / schema boundary 实现 **safety by construction**，而不是依赖“拿到万能 state 后记得别读某字段”。
 
 `ReliableObservation` 属于边沿消息，不等价于 current-state projection：
 
@@ -219,6 +229,17 @@ No-delay Lookahead feed
 - Perfect `...5 / ...6` 和约 120 秒只是 provider discovery/configuration fact，不进入 Core invariant；
 - wrong-match / map mismatch / alignment unhealthy 时 Assist fail closed；
 - map change / reconnect 后必须重新建立可信 alignment 才恢复 future cue。
+
+两条 ingress 具有独立连接连续性。Program GSI reconnect 和 Lookahead parser reconnect 不应被一个全局 sequence/epoch 模糊掉。每个 source 至少要在 adapter/alignment 层表达：
+
+```text
+sourceRole
+sourceInstance / sourceGeneration
+source-local seq / tick / observedAt
+sourceHealth
+```
+
+source generation 变化时，依赖该 source 的旧 alignment 立即失效；重新证明 same match / map / tick relation 后才能恢复 cue。
 
 ### 第一阶段 Assist
 
@@ -350,11 +371,13 @@ producerInstanceId
 mapEpoch
   一次地图 execution；正式 restart/restore 需要隔离旧 observation 时改变
 
-seq
-  明确 scope 内单调递增
+runtime/uplink seq
+  在明确 producer / protocol scope 内单调递增
 ```
 
-不要用一个模糊 `epoch` 同时代表所有 restart/reconnect 情况。
+不要用一个模糊 `epoch` 同时代表所有 restart/reconnect 情况，也不要让 runtime/uplink `seq` 兼任某个 telemetry ingress 的 source-local sequence。
+
+Program / Lookahead 各自的 connection generation、source-local seq/tick 属于对应 adapter/alignment continuity。单纯 Lookahead parser reconnect 不应推进 Program `mapEpoch`；真正的 map execution restart 才改变 map-level continuity。
 
 本地 timeout/staleness/interpolation 使用 monotonic clock；`observedAt` / `producedAt` / audit/log 使用 UTC wall clock。
 
@@ -512,6 +535,23 @@ branding / sponsor metadata
 ```
 
 只下发制播 whitelist facts，不携带 email、教育材料、内部审核记录等无关 PII。
+
+读路径与写路径分阶段，但不等到 uplink 阶段才第一次验证真实赛事上下文：
+
+```text
+M2
+  冻结 BroadcastManifest consumer schema / validator / same-shape fixture
+
+M3
+  用真实 read-only Manifest + last-known-good cache 跑完整 Program workflow
+
+M4
+  pairing/auth hardening
+  ReliableObservation / BroadcastLiveSnapshot write path
+  outbox / security / re-auth
+```
+
+这样可以在 scene/HUD/Radar 仍可调整时尽早暴露真实 Match/Roster/BP/Branding contract 问题，同时把高风险写路径留到本地 runtime 稳定以后。
 
 术语固定：
 
