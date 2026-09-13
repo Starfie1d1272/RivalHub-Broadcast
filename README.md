@@ -144,6 +144,8 @@ PublicLiveMatchProjection     RivalHub public read model
 
 实现顺序上，`BroadcastManifest` 读侧 contract/fixture 会在本地 Program 工作流阶段提前验证；真正的 pairing/auth、ReliableObservation 与 BroadcastLiveSnapshot uplink 在本地 runtime 稳定后再进入生产写路径。这样既避免重复录入，也不让网络/认证绑架早期核心开发。
 
+M3 内部把 **Program workflow** 与 **Observer Assist** 当成两个独立 vertical slice：共享 Runtime/identity 基础，但 Assist 的 bug、断流或验证延迟不能阻塞正常 Program 主链。
+
 ## 初始目录规划
 
 ```text
