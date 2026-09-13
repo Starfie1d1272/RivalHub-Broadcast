@@ -126,16 +126,34 @@ RFC-0001 可以继续研究更丰富的 cue aggregation、推荐 POV、local rel
 
 ## 决策 4：Program / Assist 在数据和捕获边界上硬隔离
 
-Core 仍只有一份内部 `RuntimeState`。Assist 不成为第二份 domain truth。
+Core 仍只有一份内部 `RuntimeState`。Assist 不成为第二份 domain truth，但“一份 RuntimeState”也不能意味着把所有数据混在同一个无边界对象里。
+
+Runtime 内至少需要结构化区分：
+
+```text
+RuntimeState
+├─ official / match context
+├─ program-safe runtime slice
+│  ├─ normalized Program telemetry
+│  ├─ accumulators / identity / session
+│  └─ Program presentation control
+├─ assist-private runtime slice
+│  ├─ bounded Lookahead evidence
+│  ├─ timeline alignment health
+│  └─ current/scheduled Assist cue
+└─ operational health / incidents
+```
 
 至少区分 consumer projection：
 
 ```text
 ProgramProjection
   正式节目允许显示的信息
+  只从 program-safe input 构造
 
 ObserverAssistProjection
   只包含本机 Assist 所需的未来事件提示
+  可以同时消费 program-safe timing/context 与 assist-private input
   不作为 Program 的超集
 
 OperatorProjection
@@ -144,6 +162,8 @@ OperatorProjection
 DebugProjection
   raw / normalized diagnostics / timing / evidence
 ```
+
+安全原则是 **safety by construction**：Program projector / #615 producer 不应拿到一个必须靠“记得别读某字段”才能安全使用的万能 state view。实现可通过 typed selector / narrowed input / schema boundary 等方式做到；具体 TypeScript symbol 不由本 ADR 锁死。
 
 规则：
 
@@ -189,15 +209,50 @@ observed players
 
 ---
 
+## 决策 7：Program 与 Lookahead 各自拥有 source-local continuity
+
+Program GSI 和 Lookahead headless parser 是两个独立 ingress，它们可能独立 reconnect / restart / lag。不能把一个全局 `seq`、Companion `producerInstanceId` 或 Match `mapEpoch` 当成两个 source 的连接连续性。
+
+每个 telemetry source 至少要能在 adapter/alignment 层表达等价概念：
+
+```text
+sourceRole
+  program | lookahead
+
+sourceInstance / sourceGeneration
+  当前 source consumer/parser 连接世代
+
+source-local seq / tick / observedAt
+  仅在明确 scope 内解释
+
+sourceHealth
+  connecting / healthy / stale / disconnected / mismatch 等
+```
+
+其中：
+
+- `liveSessionId` 仍表示 RivalHub Match ↔ Broadcast producer session；
+- `producerInstanceId` 仍表示 Companion runtime 实例；
+- `mapEpoch` 仍表示一次比赛地图 execution；
+- **Lookahead parser reconnect 不应因为只是连接重建就推进 Program `mapEpoch`**；
+- source reconnect / generation change 必须使现有 timeline alignment 失效，重新证明 same match / map / tick relation 后才能恢复 cue；
+- Runtime / uplink 的 `seq` 与 ingress source-local sequence 不得混为一个含义模糊的编号。
+
+这让比赛事实连续性、进程连续性、地图 execution 连续性与各 telemetry source 的连接连续性保持分责。
+
+---
+
 ## 验证要求
 
 自动验证至少覆盖：
 
 - `ObserverAssistProjection` 的 future fields 不出现在 `ProgramProjection`；
+- Program projector / #615 producer 的输入边界不依赖过滤一个万能 future-aware payload 才安全；
 - #615 producer 不读取 no-delay future state；
 - Lookahead feed down 时 Program 不受影响；
 - Program feed down 时不存在 Lookahead→Program fallback；
 - wrong-match / map mismatch / alignment unhealthy 时 Assist fail closed；
+- Lookahead source generation/reconnect 后旧 alignment 立即失效；
 - timeline reconnect/map change 后重新建立 alignment 才恢复 cue。
 
 真实生产验收至少覆盖：
@@ -232,4 +287,6 @@ Windows + CS2 delayed observer + OBS
 - Delayed Program feed 与 machine-only Lookahead feed 的不对等职责；
 - Observer Assist 作为本地私有 overlay；
 - no Lookahead→Program fallback；
-- future cue 与 Program/#615/OBS 的硬隔离。
+- future cue 与 Program/#615/OBS 的硬隔离；
+- Runtime 内 Program-safe 与 Assist-private 数据结构化分区；
+- Program / Lookahead source-local continuity 与 Match/producer/map continuity 分责。
