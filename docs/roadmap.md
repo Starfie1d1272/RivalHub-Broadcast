@@ -24,6 +24,25 @@ GitHub Project 仅作为跨 Issue/PR 的视图，不成为新的规格来源。
 
 Milestone 标题使用中文以提高项目管理可读性；代码 symbol、package、protocol/schema 字段继续使用适合工程语境的英文。
 
+## 路线设计原则
+
+M0–M5 按“先证明输入与运行时 → 再证明本地节目 → 再补完整工作流与 Assist → 再开放写入/uplink → 最后生产硬化”的顺序推进。
+
+需要特别区分 RivalHub 的**读路径**与**写路径**：
+
+```text
+RivalHub read path
+  BroadcastManifest / Match / Roster / BP / Branding
+  → 是完整节目工作流的基础输入
+  → 必须在 M2/M3 提前验证
+
+RivalHub write/uplink path
+  ReliableObservation / BroadcastLiveSnapshot / auth / outbox
+  → 可以在本地 Program 已稳定后于 M4 正式接入
+```
+
+不能等到 M4 才第一次让完整节目面对真实 RivalHub 数据，否则会把 manifest shape、identity、缓存与 scene 数据需求的跨仓风险推得过晚。
+
 ## Milestones
 
 ### M0 — 工程基础
@@ -60,6 +79,7 @@ M0 不实现真实 GSI domain、HUD、Radar 或 RivalHub uplink。
 - replay clock / replay runner；
 - RuntimeState skeleton；
 - producer/session/map epoch/time primitives；
+- source-local sequence/continuity 的基本语义；
 - basic latest-wins delivery；
 - `/debug` projection；
 - 真实 Windows + CS2 capture → Mac/CI replay acceptance；
@@ -71,11 +91,13 @@ M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在
 
 ### M2 — 本地制播内核
 
-目标：不依赖 RivalHub 在线服务，也能稳定驱动一场本地比赛的基础节目画面。
+目标：不依赖 RivalHub 在线服务，也能稳定驱动一场本地比赛的基础节目画面；同时提前冻结“真实赛事上下文如何进入本地 runtime”的读侧 contract，避免到 M4 才发现跨仓 shape 不合适。
 
 关键能力：
 
-- local match-context fixture；
+- `BroadcastManifest` consumer contract / validator 的第一版；
+- 与该 contract 同 shape 的 local match-context fixture；
+- last-known-good match context/cache seam；
 - identity resolver / Steam64 roster mapping / side mapping；
 - basic Gameplay HUD；
 - player + bomb Radar；
@@ -89,14 +111,22 @@ M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在
 - Windows OBS Browser Source production-path smoke；
 - accelerated long replay / soak。
 
+M2 的 `BroadcastManifest` 不要求此时完成最终 pairing/auth 或所有服务端 API，但 fixture/schema 必须来自真实 #613 consumer 需求，而不是发明一套以后再迁移的临时 MatchContext。
+
 进入主要实现前应补 local `docs/protocol.md`，明确 consumer-specific DTO，而不是一个包含所有字段的通用 payload。
 
 ### M3 — 完整制播工作流 + Observer Assist
 
 目标：从基础 HUD 进化为完整本地赛事节目工作流，并落地当前 Major 真正有价值的最小 Lookahead Assist。
 
+M3 执行上明确分成两个**独立可验收 vertical slice**；二者共享 Runtime/identity 基础，但任何 Assist 故障都不能拖死 Program 主线。
+
+#### M3-A Program workflow
+
 关键能力：
 
+- 使用真实 RivalHub read-only `BroadcastManifest` 跑一场比赛上下文；
+- RivalHub 暂时不可达时可继续使用 last-known-good context；
 - Waiting / Matchup / VetoPlayback；
 - BaseScene + OverlayCue engine；
 - operator auto/manual control；
@@ -104,14 +134,21 @@ M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在
 - provisional KDA / ADR / round history；
 - Halftime / MapResult / InterMap / MatchResult；
 - production-oriented Radar presentation；
+- OBS Program preset 的一键创建 / 校验 / 修复。
+
+#### M3-B Observer Assist
+
+关键能力：
+
 - Perfect dual-GOTV discovery/configuration（provider-specific，不污染 Core）；
 - no-delay headless event parsing；
+- Program / Lookahead 各自独立 source health / generation；
 - no-delay ↔ delayed Program tick/alignment health；
+- source reconnect / generation change 后旧 alignment 立即失效；
 - **基础 future kill cue：countdown + killer → victim + optional reliable location**；
 - topmost / transparent Observer Assist surface，供同一个解说兼 OB 看；
 - Assist future fields 不进入 Program/#615/官方 OBS preset；
-- Lookahead failure 只关闭 Assist，不影响 Program；
-- OBS Program preset 的一键创建 / 校验 / 修复。
+- Lookahead failure 只关闭 Assist，不影响 Program。
 
 进入相关实现前按需要补 `docs/scene-engine.md`、`docs/radar.md` 与 OBS/Assist 运行文档。
 
@@ -127,15 +164,15 @@ M3 的基础完成条件**不包括**：
 
 这些只有在真实比赛使用证明基础 kill cue 需要增强后再排期。
 
-### M4 — RivalHub 集成
+### M4 — RivalHub Uplink、Auth 与生产写路径
 
-目标：通过正式 versioned contract 接入 RivalHub，而不破坏 local-first 与 authority boundary。
+目标：在真实 RivalHub read path 已经被 Program workflow 验证后，通过正式 versioned contract 接入认证、可靠 observation 和 public live uplink，而不破坏 local-first 与 authority boundary。
 
 关键能力：
 
 - browser pairing / scoped producer credential；
-- BroadcastManifest；
-- MatchRoster / Steam64 自动核验；
+- `BroadcastManifest` authenticated refresh / revision / cache hardening；
+- MatchRoster / Steam64 自动核验与真实服务端 context 联调；
 - MatchPreparation / ObservationHealth 边界消费；
 - `ReliableObservation` → RivalHub #610；
 - `match_started / map_started / map_ended / series_ended` 等可靠 observation；
@@ -157,7 +194,7 @@ M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 block
 
 关键能力：
 
-- Windows packaging / launcher；
+- Windows production packaging / launcher；
 - GSI config installation；
 - local cache / recovery checkpoint；
 - structured logs / diagnostics bundle；
@@ -173,6 +210,8 @@ M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 block
 - 完整 BO3/等价长时 rehearsal；
 - 赛前 feature freeze 与 fallback validation。
 
+M5 是**生产硬化**，不是第一次把软件放到 Windows 上。M2/M3 的真实平台 smoke 必须已经通过可复现的 runnable artifact/start workflow 执行；否则最终 packaging 风险会被错误推迟到发布前。
+
 进入发布前应补 `docs/testing.md`、`docs/operations.md` 与 packaging ADR。
 
 ## Platform validation lane
@@ -186,6 +225,8 @@ Deterministic tests
         ↓
 GitHub Actions macOS + Windows（按 Issue 要求）
         ↓
+可复现的 Windows runnable artifact / start workflow
+        ↓
 需要时：Windows + CS2 / OBS validator
         ↓
 Acceptance evidence
@@ -196,6 +237,8 @@ Acceptance evidence
 1. Implementation environment；
 2. Automated validation；
 3. Real-environment acceptance gate。
+
+对需要真实 Windows 验证的功能，validator 应尽量运行明确 commit/build 对应的 artifact 或标准 start workflow，而不是在测试机上临时改代码；这样真实验收结果才能与仓库 revision 对应。
 
 详见 `docs/development-validation.md`。
 
