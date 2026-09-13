@@ -1,7 +1,7 @@
 # 产品需求基线
 
 > 状态：**Baseline**  
-> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。Runtime / Workspace 技术选择见 ADR-0002；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 ADR-0003。
+> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。Runtime / Workspace 技术选择见 ADR-0002；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 ADR-0003；Program / Observer Assist 隔离见 ADR-0004。
 
 ## 1. 产品定义
 
@@ -21,20 +21,63 @@ Broadcast
 Program / OBS
 ```
 
+同时允许一个**只给本机解说兼 OB 看、绝不进入 OBS 的 Observer Assist Overlay**。
+
 最重要的产品边界：
 
 > **Broadcast 产生 observation；RivalHub 决定 official truth。**
 
+> **Observer Assist 是本机辅助显示层，不是第二套节目输出，也不是第二类现场用户。**
+
 ## 2. 用户与典型场景
 
-首要用户是校内赛事的导播/解说制作人员。典型环境为一台 CS2 观战/解说电脑接收比赛画面与 GSI，本地 Broadcast 输出 Program 页面给 OBS；未来允许扩展到观战机与 OBS 机分离的局域网工作方式。
+当前 Major 的真实现场模型是：**单机、单人解说兼 OB**。同一个人在一台 CS2 观战/解说电脑上解说、手动切 POV 和完成现场制播，不区分独立 Caster 与 Director/Operator 岗位。
 
-当前 Major 的现实流程中，观战/解说端看到的比赛本身已经带约 120 秒 spectator delay。因此：
+Perfect 当前实际提供同场成对 GOTV：
 
-- Broadcast 按观战端实际看到的时间轴工作；
-- 向 RivalHub 网站发送的 live snapshot 也来自这一路观战端；
+```text
+No-delay GOTV
+  当前实践例如 endpoint ...5
+  不给人直接观看
+  不进入 OBS
+  只供机器 headless 解析 future event / timeline alignment
+
+Delayed Program GOTV
+  当前实践例如 endpoint ...6
+  约 120 秒 spectator delay
+  CS2 observer 实际连接
+  HUD / Radar / Program 跟随该时间轴
+  OBS 捕获该节目时间轴
+```
+
+因此：
+
+- Broadcast 的正式 Program 按 delayed observer 实际看到的时间轴工作；
+- 向 RivalHub #615 发送的 live snapshot 也来自 Delayed Program timeline；
 - **网站不额外再叠加一层固定 120 秒 delay**；
-- 该条件是当前赛事运行假设，不应在 Broadcast Core 中硬编码成固定延迟规则。
+- `...5 / ...6` 和约 120 秒只是当前 Perfect provider 的 deployment fact / discovery heuristic，不在 Core 中硬编码；
+- no-delay Lookahead feed 不具备 Program eligibility，也不参与 Program fallback。
+
+本地主要 surface：
+
+```text
+/program
+  正式节目 HUD / Radar / scene
+  → OBS Browser Source
+
+/assist（最终 route/desktop 形态由实现 Issue 冻结）
+  本机解说兼 OB 的透明 / click-through 辅助层
+  → 只显示 Assist 信息
+  → 不进入 OBS
+
+/operator
+  同一制作人员需要时使用的 Match/config/health/scene/incident/recovery/OBS/uplink 控制界面
+
+/debug
+  Raw/normalized telemetry、timing、identity、adapter diagnostics
+```
+
+`/operator` 是控制/诊断职责，不代表现场存在另一位“导播用户”。
 
 ## 3. 赛前工作流
 
@@ -43,6 +86,7 @@ Program / OBS
 Operator 选择/连接一场 RivalHub Match 后，应获得至少：
 
 - 当前赛事、阶段、比赛身份；
+- `scheduledAt / startedAt / canonical status`；
 - 双方 CompetitionEntry；
 - MatchRoster 与 Steam64；
 - 队名、简称、Logo、选手昵称与头像；
@@ -50,7 +94,8 @@ Operator 选择/连接一场 RivalHub Match 后，应获得至少：
 - 排期；
 - BP / veto；
 - 当前系列赛地图与官方结果；
-- 解说、直播、品牌与 sponsor 信息（存在时）；
+- coverage / commentator / stream context；
+- 品牌与 sponsor 信息（存在时）；
 - 前一场比赛与后一场比赛的节目上下文。
 
 Broadcast 不再要求 operator 重新建立 Team / Player / Match 数据。
@@ -81,6 +126,44 @@ Broadcast 不再要求 operator 重新建立 Team / Player / Match 数据。
 - 前一场比赛的赛果；
 - 后一场比赛的预计时间与对阵；
 - 后续可扩展 sponsor、公告、主播信息、倒计时等节目内容。
+
+### 3.4 #610 lifecycle 与 preparation / observation
+
+Broadcast/GSI 是可选 observation source，不是 RivalHub Match Runtime 的运行前提。
+
+正常业务中：
+
+```text
+canonical BP 完整保存
+→ 可以成为 #610 的正式 start evidence
+
+trusted Broadcast observation
+→ 可以提交 match_started / map_ended 等 candidate
+→ #610 决定 canonical adoption
+```
+
+如果现实 gameplay 已可信发生，但 RivalHub 仍缺某项 preparation，系统不能因为准备事项缺失而否认已经发生的现实比赛。
+
+`MatchPreparation` 与 `ObservationHealth` 是不同问题，不压成一个 `canStart` boolean。
+
+### 3.5 Steam64 自动核验
+
+Broadcast 应自动比较：
+
+```text
+canonical MatchRoster / active lineup Steam64
+↕
+Observed server players
+```
+
+一致时无需人工逐个确认。
+
+不一致时：
+
+- 明确 missing / unexpected player；
+- identity / roster mapping 进入 mismatch/degraded；
+- 不继续自动采用有身份冲突的 result candidate；
+- 如果现实已经开始，仍保留已发生事实/evidence 供 #610 reconciliation，而不是假装比赛没有开始。
 
 ## 4. Gameplay HUD
 
@@ -132,7 +215,55 @@ Radar 通过 `MapGeometryProvider` 消费地图几何。当前默认 provider �
 
 Radar domain 与 renderer 分离：world→radar、floor、marker/utility semantics、interpolation/autozoom math 属于 Radar domain；React/SVG/Canvas/DOM 与 rAF scheduling 属于 Web presentation。
 
-## 6. 高级实时视觉反馈
+## 6. Observer Assist / Lookahead
+
+Observer Assist 的第一阶段目标非常具体：**利用 no-delay GOTV 已经发生的击杀事实，在 Delayed Program timeline 到达该事件前约 10 秒提示解说兼 OB，帮助其提前手动切 POV。**
+
+最小链路：
+
+```text
+No-delay GOTV
+→ headless parser 观察到 player_death
+→ attacker / victim / event tick / optional reliable location
+
+Delayed Program GOTV
+→ current program tick
+
+Timeline alignment
+→ 计算 kill 距离 Program 还有多久
+
+约 T-10s
+→ 本地 Assist Overlay
+→ countdown + killer → victim + optional location
+
+解说兼 OB
+→ 手动决定切哪个 POV
+```
+
+第一阶段不把以下能力作为完成条件：
+
+- 佯攻 / 主攻识别；
+- engagement/story 聚类；
+- 复杂 importance ranking；
+- AI / physics prediction；
+- full-auto observer / auto TAKE；
+- 第二个 CS2 renderer。
+
+这些能力可以继续在 RFC / future design 中研究，但只有真实使用证明基础 kill cue 不足时才进入主线。
+
+Lookahead future data 必须满足：
+
+- machine-only；
+- wrong-match / map mismatch / alignment unhealthy 时 fail closed；
+- 不进入 ProgramProjection；
+- 不进入官方 OBS Program preset；
+- 不进入 #615 public live projection；
+- no-delay feed 故障只降级 Assist，不影响 Program；
+- Program feed 故障不允许切换到 no-delay feed。
+
+是否未来让 no-delay feed 参与 #610 更早 ReliableObservation，应作为独立 RivalHub-facing contract 决定，不因为数据存在自动扩张职责。
+
+## 7. 高级实时视觉反馈
 
 产品希望长期支持更接近职业赛事的实时反馈，例如：
 
@@ -152,9 +283,9 @@ Radar domain 与 renderer 分离：world→radar、floor、marker/utility semant
 
 C4 伤害预测也不应在 UI 中写死传统距离公式。未来应通过独立、可版本化的 `BombDamageProvider` 提供预测。
 
-## 7. Halftime
+## 8. Halftime
 
-系统应从稳定后的比赛状态/transition 识别半场边界，并建议进入 Halftime scene，而不是因为单个 partial GSI payload 瞬时切换。
+系统应从稳定后的比赛状态/transition 识别半场边界，并建议进入 Halftime scene，而不是因为单个 GSI frame 瞬时切换。
 
 中场页面希望重点展示：
 
@@ -166,7 +297,7 @@ C4 伤害预测也不应在 UI 中写死传统距离公式。未来应通过独�
 
 CompetitionEntry 是稳定身份，CT/T 只是某一时刻的临时 side；任何 renderer 都不能假定“左队永远是 CT”或“Entry A 永远是某个 side”。
 
-## 8. Map Result / Inter-map
+## 9. Map Result / Inter-map
 
 BO3/BO5 的场间页面至少应支持：
 
@@ -180,7 +311,7 @@ BO3/BO5 的场间页面至少应支持：
 
 Map Result 和 InterMap 可以是两个独立 BaseScene，以便先短暂突出本图结果，再进入较长的场间等待页面。
 
-## 9. Match Result / 赛后
+## 10. Match Result / 赛后
 
 系列赛结束后，应进入 Match Result scene，并支持：
 
@@ -191,21 +322,25 @@ Map Result 和 InterMap 可以是两个独立 BaseScene，以便先短暂突出�
 
 Broadcast 可以向 RivalHub #610 提交：
 
-- observed map-end / series-end observation；
+- `match_started / map_started / map_ended / series_ended` 等可靠 observation；
 - live result candidate；
-- session / identity / quality 信息。
+- session / identity / quality / health 信息。
 
 Broadcast **不直接覆盖 RivalHub canonical result**。正常高置信 observation 是否自动 canonicalize，以及异常时如何审核/恢复，由 RivalHub Match Runtime 决定；Broadcast 只提供可靠 observation。
 
+人工路径与自动 observation 最终应由 #610 汇入同一 canonical command/result service；Broadcast 不建立平行赛果流水线。
+
 比赛结束后，Operator 应能看到或收到后续任务提示，例如 OCR、DAK Demo、VOD/赛后资料等，但 OCR/DAK 本身不进入 Broadcast 实时主循环。
 
-## 10. RivalHub 网站实时数据
+## 11. RivalHub 网站实时数据
 
 Broadcast 计划向 RivalHub #615 提供低频、标准化、latest-wins 的 `BroadcastLiveSnapshot`，而不是把 raw GSI 上传生产环境。
 
 语义链路：
 
 ```text
+Delayed Program timeline
+        ↓
 BroadcastLiveSnapshot
   Broadcast → RivalHub #615 producer payload
           ↓
@@ -228,14 +363,15 @@ BroadcastLiveSnapshot 可逐步包含：
 
 原则：
 
-- 本地 HUD 可以按 GSI 频率工作；
+- 本地 HUD 可以按 GSI 实际频率工作；
 - cloud snapshot 应节流、coalesce、latest-wins；
 - 高频 raw GSI 不进入 PostgreSQL 历史表；
 - snapshot/projection 是 ephemeral observation，不是 official truth；
 - stale / disconnect / wrong-match 必须可识别；
+- #615 只跟随 Delayed Program timeline；no-delay future state 不进入公开网页；
 - RivalHub 面向公开网页采用 SSE、WebSocket、Realtime 或其他分发方式，不属于 Broadcast Core 的职责。
 
-## 11. Scene、Overlay 与 Operator
+## 12. Scene、Overlay 与 Operator
 
 当前 BaseScene 集合：
 
@@ -252,7 +388,7 @@ Break
 Emergency
 ```
 
-临时反馈使用 `OverlayCue`，例如：
+临时节目反馈使用 `OverlayCue`，例如：
 
 ```text
 Clutch
@@ -276,7 +412,7 @@ mode            auto | manual
 
 自动逻辑不能强行覆盖 operator 的 manual scene。
 
-Operator 是节目控制者，不是第二个赛事数据库管理员。核心工作应围绕：
+Operator 是同一制作人员使用的节目控制/诊断界面，不代表现场存在第二位导播。核心工作应围绕：
 
 - 当前 Match；
 - production readiness；
@@ -284,10 +420,12 @@ Operator 是节目控制者，不是第二个赛事数据库管理员。核心�
 - scene / overlay；
 - BP playback；
 - 必要的节目 override；
+- Observer Assist / timeline alignment health；
 - RivalHub uplink / outbox 状态；
+- OBS preset / integration；
 - 异常诊断与恢复。
 
-## 12. 可靠性与异常
+## 13. 可靠性与异常
 
 必须从第一版考虑：
 
@@ -302,7 +440,8 @@ Operator 是节目控制者，不是第二个赛事数据库管理员。核心�
 - duplicate / out-of-order transition；
 - renderer 处理不过来导致 backlog；
 - Companion 重启恢复；
-- OBS Browser Source 重连。
+- OBS Browser Source 重连；
+- Lookahead feed / alignment 失效。
 
 Identity 至少需要表达：
 
@@ -314,13 +453,25 @@ degraded
 mismatch
 ```
 
-Wrong Match / `mismatch` 必须 fail closed：不能在身份不可信时继续向 RivalHub 上传当前 Match 的 snapshot / reliable observation，也不能自信地把错误队伍品牌显示到另一场比赛上。
+Wrong Match / `mismatch` 必须 fail closed：不能在身份不可信时继续向 RivalHub 上传错误 Match 的 public snapshot 或自动 result candidate，也不能自信地把错误队伍品牌显示到另一场比赛上；已经发生的 evidence 可以保留给 #610 reconciliation。
+
+Lookahead degradation：
+
+```text
+Lookahead down / unhealthy
+→ Program 继续
+→ Assist 关闭或明确 degraded
+
+Program down
+→ Program 输入故障
+→ 不使用 Lookahead feed 代替
+```
 
 Runtime 至少区分 `liveSessionId`、`producerInstanceId`、`mapEpoch` 与单调 `seq`，避免一个模糊 epoch 同时代表进程重启、reconnect、map restart 和切换 Match。
 
 本地 staleness / timeout / interpolation 使用 monotonic clock；跨机器 `observedAt` / `producedAt` / audit 使用 UTC wall clock。
 
-## 13. 本地优先、离线与 Outbox
+## 14. 本地优先、离线与 Outbox
 
 已经加载过的比赛上下文与节目资产应支持本地缓存。
 
@@ -329,6 +480,7 @@ RivalHub 断网后：
 - Gameplay HUD 继续；
 - Radar 继续；
 - Scene 继续；
+- Observer Assist 在本地输入健康时继续；
 - 本地 provisional stats 继续；
 - canonical/high-impact 操作禁用或明确失败；
 - 恢复连接后先刷新 revision 和重新验证 identity，再恢复 uplink。
@@ -347,17 +499,40 @@ ReliableObservation
 
 例如 `map_ended` observation 不应因为 3 秒断网永久丢失，但它的 retry 也不等于 Broadcast 离线替 RivalHub 写 canonical result。
 
-## 14. 测试与可复现性
+## 15. OBS production integration
+
+OBS control channel 不是 Core 的运行依赖，但“一键创建 / 校验 RivalHub Program preset”是正式 production integration 能力。
+
+官方 preset 至少应表达：
+
+```text
+RivalHub Program Scene
+├─ CS2 Program Capture（Delayed GOTV）
+├─ /program Browser Source
+└─ 其它明确允许播出的 Program assets
+```
+
+规则：
+
+- Observer Assist surface/window 不得进入官方 Program preset；
+- Display Capture 等可能把 topmost Assist Overlay 一起采集的方式必须提示泄漏风险；
+- obs-websocket 可用于初次配置、检测、修复及未来可选 scene control；
+- OBS control channel 断开后，已经建立的 `/program` Browser Source 必须继续工作；
+- 深度 auto-director / 复杂 OBS orchestration 不作为基础 Program output 前提。
+
+## 16. 测试与可复现性
 
 项目必须拥有自己的：
 
-- raw GSI recorder；
+- production raw/sanitized GSI recorder；
 - replay；
 - simulator；
 - fixture；
 - packet drop/jitter/duplicate/reorder/reconnect 测试；
 - slow-consumer/backpressure 测试；
 - wrong-match/map-restart 测试；
+- Program/Assist future-field non-leak 测试；
+- Lookahead alignment/fail-closed 测试；
 - visual regression；
 - 长时间 soak test。
 
@@ -365,11 +540,11 @@ Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许�
 
 Snapshot consumer 必须证明 queue/memory 不随运行时间增长；Browser reconnect 获取 current baseline projection 后继续，不重放离线期间全部旧 snapshot。
 
-正式赛事前必须完成真实 Windows + CS2 spectator + OBS Browser Source 的长时间彩排。
+正式赛事前必须完成真实 Windows + CS2 spectator + OBS 长时间彩排；Observer Assist 进入实现后还要验证 topmost overlay 不会进入正式 Program 输出。
 
-## 15. V1 产品范围与实施 Gate
+## 17. V1 产品范围与实施 Gate
 
-V1 的产品目标仍覆盖：
+V1 的产品目标覆盖：
 
 - RivalHub Match 上下文接入；
 - Waiting / Matchup；
@@ -379,53 +554,29 @@ V1 的产品目标仍覆盖：
 - grenade / smoke / inferno 基础展示；
 - KDA / ADR / round history 等直播临时统计；
 - Halftime / Map Result / InterMap / Match Result；
-- 单一 OBS Browser Source 的 Program；
+- 单一 OBS Program Browser Source；
 - Operator / Debug surface；
-- wrong-match diagnostics；
+- Observer Assist 的最小 future kill cue 与 Program non-leak；
+- wrong-match / roster mismatch diagnostics；
 - offline cache / reconnect / recovery；
 - record/replay/simulator；
 - #610 ReliableObservation；
-- #615 BroadcastLiveSnapshot。
+- #615 BroadcastLiveSnapshot；
+- 官方 OBS Program preset 的创建/校验能力。
 
-实现不要求所有能力同时铺开，按可验证 vertical slice 推进：
-
-```text
-M0 Runtime proof
-GSI → production normalizer → /debug
-raw recorder / replay
-session / clock / transition 基础
-
-M1 Production kernel
-RivalHub manifest
-identity / wrong-match
-basic Gameplay + player/bomb Radar
-reconnect / backpressure
-2h soak
-
-M2 Broadcast workflow
-grenade / smoke / inferno
-provisional stats
-Waiting / Matchup / BP / Halftime / MapResult / InterMap / MatchResult
-
-M3 RivalHub uplink
-#610 ReliableObservation
-#615 BroadcastLiveSnapshot
-pairing / auth / outbox / security hardening
-
-M4 Enhanced telemetry
-exact damage source
-BombDamageProvider
-advanced observer advisory / effects / optional adapters
-```
+阶段划分以 `docs/roadmap.md` 为准。Observer Assist 第一阶段以确定性 kill cue 为完成标准；更复杂的 engagement/story/AI/auto-director 继续作为后续增强。
 
 “不做一次性 MVP”不等于所有功能必须在第一批代码同时完成。
 
-## 16. 明确预留、但不是当前 V1 完成承诺
+## 18. 明确预留、但不是当前 V1 完成承诺
 
 - 精确伤害来源特效；
 - server game-event adapter；
 - baked C4 damage prediction；
-- OBS WebSocket 深度控制；
+- engagement/story classification；
+- AI / model prediction advisory；
+- full-auto observer / auto TAKE；
+- OBS WebSocket 深度 scene orchestration；
 - automatic replay；
 - camera grid / player camera；
 - telestrator；
@@ -436,14 +587,14 @@ advanced observer advisory / effects / optional adapters
 - Electron/Tauri desktop shell；
 - 动态第三方 plugin marketplace。
 
-## 17. 与 RivalHub Issues / DAK 的关系
+## 19. 与 RivalHub Issues / DAK 的关系
 
 当前 ownership：
 
-- **RivalHub #610**：Match Runtime & Operations；负责 ReliableObservation ingest、Match Live Session、canonical lifecycle/result、reconciliation/recovery。Broadcast 不拥有 canonical mutation policy。
-- **RivalHub #615**：Live Match Projection；负责 BroadcastLiveSnapshot ingest、EphemeralLiveProjection、realtime distribution 与 public LIVE read model。
+- **RivalHub #610**：Match Runtime；负责 Match Live Session、canonical lifecycle/result、人工与 observation 汇入同一 canonical service、reconciliation/recovery。Broadcast 不拥有 canonical mutation policy。
+- **RivalHub #615**：Live Match Projection；负责 BroadcastLiveSnapshot ingest、EphemeralLiveProjection、realtime distribution 与 public LIVE read model；只消费 Delayed Program timeline 的公开 snapshot。
 - **RivalHub #452**：公共 Match 页面基础产品与页面 owner；#615 在其稳定结构上增加 LIVE mode，Broadcast 不拥有公共站 UI。
-- **RivalHub #613**：本项目来源/tracking issue；详细 canonical 产品/架构规格以本仓库文档为准。
+- **RivalHub #613**：本项目 tracking/product boundary issue；主仓描述跨仓业务边界，本仓库 docs/ADR 拥有本地 runtime 的具体实现架构。
 - **DAK / RivalHub #268**：负责赛后 Demo evidence 与更高质量统计，不进入 Broadcast 的低延迟实时主循环；地图 calibration 可通过稳定 provider contract 复用。
 
 跨仓库只通过公开 versioned contract 工作，不共享数据库内部结构，也不要求两个仓库共享源码类型。

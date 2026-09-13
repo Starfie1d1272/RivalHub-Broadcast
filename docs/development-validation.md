@@ -34,14 +34,17 @@ Production acceptance environment
 
 - protocol / schema；
 - RuntimeState / projector；
+- Program-safe / Assist-private state partition；
 - identity state machine；
-- session / producer instance / map epoch / seq；
+- liveSession / producer instance / map epoch / runtime seq；
+- source-local generation / sequence / alignment state；
 - accumulator；
 - scene policy；
 - Radar framework-neutral math / geometry；
 - latest-wins backpressure；
 - reliable observation outbox state machine；
 - recorder / replay / simulator；
+- Program / Assist non-leak contract tests；
 - RivalHub contract compatibility。
 
 如果这些模块因为“没有 Windows”而无法开发或单测，优先检查是否错误耦合了平台/adapter。
@@ -53,22 +56,23 @@ Production acceptance environment
 - Fastify Companion；
 - local HTTP / WebSocket；
 - `/operator` / `/program` / `/debug`；
+- Observer Assist 的 browser/debug prototype（若采用）；
 - React HUD / Radar renderer；
 - scene UI；
 - reconnect / baseline snapshot；
 - local cache；
 - OBS Browser Source 基础兼容测试。
 
-macOS OBS 可以用于早期 Browser Source 验证，但不能替代 Windows 生产验收。
+macOS OBS 可以用于早期 Browser Source 验证，但不能替代 Windows 生产验收。透明 topmost/click-through Assist 的真实窗口行为属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 
-### Layer C — Real CS2 validation
+### Layer C — Real CS2 / CSTV validation
 
-需要可运行真实 CS2 的机器。该机器的首要职责是**提供真实输入与验收证据**，不默认成为整个 GSI/runtime 模块的代码 owner。
+需要可运行真实 CS2 或真实 CSTV/GOTV 输入的机器。该机器的首要职责是**提供真实输入与验收证据**，不默认成为整个 telemetry/runtime 模块的代码 owner。
 
-至少覆盖：
+Program GSI 至少覆盖：
 
 - GSI cfg 安装与发现；
-- 真实 payload shape / partial update；
+- 真实 current-observation / block-specific omission semantics；
 - 真实 update cadence；
 - warmup / freezetime / round start / round end；
 - halftime / side switch；
@@ -78,17 +82,30 @@ macOS OBS 可以用于早期 Browser Source 验证，但不能替代 Windows 生
 - spectator / player identity；
 - bomb / grenade / smoke / inferno 等实际字段行为。
 
+Lookahead / CSTV 进入实现后还需覆盖：
+
+- no-delay / delayed 两条输入确属 same match / map；
+- source-local reconnect / generation；
+- tick/effective-gap alignment；
+- map change 后重新建立 alignment；
+- wrong-match / stale source fail closed；
+- kill event lead-time 分布与 cue scheduling。
+
 ### Layer D — Production acceptance
 
 发布候选必须在真实赛事形态完成：
 
 ```text
 Windows 11
-+ CS2 spectator
++ CS2 delayed spectator
 + RivalHub Broadcast Companion
 + Program / Operator
 + OBS Browser Source
 + 实际赛事配置
+
+Observer Assist 启用时再加：
++ no-delay headless Lookahead feed
++ topmost Assist Overlay
 ```
 
 重点验收：
@@ -103,7 +120,11 @@ Windows 11
 - 网络中断 / RivalHub 短暂不可达；
 - wrong match / stale manifest；
 - map restart / stale epoch；
-- fallback / recovery runbook。
+- fallback / recovery runbook；
+- Assist future fields 不进入 Program/#615；
+- official OBS capture 不误录 topmost Assist；
+- Lookahead 故障只降级 Assist；
+- Program 故障不存在 Lookahead→Program fallback。
 
 CI 绿灯不能替代 Layer D。
 
@@ -143,8 +164,10 @@ Linux CI
 Not required
 Real Windows
 Windows + CS2
+Windows + CSTV
 Windows + OBS
 Windows + CS2 + OBS
+Windows + CS2/CSTV + OBS
 ```
 
 表示“Issue/Release 是否仍欠生产环境证据”。
@@ -173,7 +196,7 @@ Windows developer owns all GSI/OBS work
 Issue: GSI normalization
 
 Implementation owner:
-  主开发者 / Luna
+  主开发者 / Agent
 
 Platform validator:
   有 Windows + CS2 环境的协作者
@@ -183,47 +206,60 @@ Evidence:
   + real Windows CS2 capture / acceptance
 ```
 
-只有明显 Windows-specific 的工作（例如 installer、GSI cfg 自动安装、Windows packaging/launcher）适合整块由 Windows contributor 负责。
+只有明显 Windows-specific 的工作（例如 installer、GSI cfg 自动安装、Windows packaging/launcher、topmost/click-through window integration）适合整块由 Windows contributor 负责。
 
-## 5. Real GSI Reference Capture Pack
+真实平台验证应尽量使用**明确 commit/build 对应的可复现 artifact 或标准 start workflow**。不要在 validator 机器上临时修改代码后，再把结果当成仓库某个 revision 的正式验收证据。
 
-一旦最小 recorder 可用，应尽快由 Windows + CS2 环境录制可复现的真实 fixture corpus。
+## 5. Real Telemetry Reference Corpus
 
-建议覆盖：
+第一批真实 Windows + CS2 observer capture 已经取得，并已经用于 `docs/telemetry.md` 的 evidence-backed semantics：包括真实 5v5 Demo observer 数据、本地 spectator/live round 数据以及此前 RoundSense normal-player capture。
+
+后续 reference corpus 的目标不再是“证明 GSI 存在”，而是补齐仍缺的生命周期和故障边界。
+
+优先补充：
 
 ```text
-normal round
-kill / damage
-bomb plant / defuse / explode
-grenades
-smoke / molotov
 halftime / side switch
 map end / map change
 disconnect / reconnect
-restart（可行时）
+restart / restore（可行时）
+长期 soak
 ```
 
-每次 capture 至少记录：
+Lookahead 实现后另建 CSTV/alignment evidence：
+
+```text
+paired no-delay + delayed GOTV
+kill event tick / Program tick
+alignment drift
+source reconnect
+gap loss / recovery
+map change
+```
+
+每次真实 capture 至少记录：
 
 - Windows version；
 - CS2 build/version；
-- GSI cfg；
+- GSI/CSTV configuration；
 - capture timestamp；
 - scenario notes；
-- 是否含敏感 token / account data，进入仓库前必须 scrub。
+- final hash / frame range / completeness；
+- 是否含敏感 token / account data，进入仓库前必须 scrub/anonymize。
 
-真实 capture 的目标是把昂贵、难重复的生产输入转换成可在 Mac/CI 中持续 replay 的测试资产。
+真实 capture 的目标是把昂贵、难重复的生产输入转换成可在 Mac/CI 中持续 replay 的测试资产。原始私人 capture 不等于可直接提交仓库的 fixture。
 
 ## 6. 当前现实约束（2026-09）
 
-当前主要开发环境为 macOS，主 Windows 开发机暂不可用；比赛仍有约二十天准备窗口。
+当前主要开发环境为 macOS，主 Windows 开发机暂不可用；真实 Windows + CS2 输入可以通过协作者机器补充。当前第一批 observer capture 已完成，因此 M1 的 source-semantics 调研不再被 Windows 环境阻塞。
 
-因此当前策略是：
+当前策略：
 
-1. M0、M1 大部分、M2 的平台无关部分继续在 Mac 上推进；
-2. 尽快借用协作者 Windows + CS2 环境完成第一批真实 GSI capture；
-3. CI 建立后尽早加入 Windows runner 进行 build/test/smoke；
-4. 主 Windows 环境恢复后安排一次集中 platform-validation sprint；
-5. 开赛前约 5–7 天进入 feature freeze，以 rehearsal / soak / bugfix / fallback 为主，不再扩张高风险功能。
+1. M1/M2 的平台无关实现继续在 Mac/CI 推进，并持续 replay 已有真实 capture；
+2. 缺失的 halftime / map-change / reconnect 等高价值生命周期证据按实现需要补录，而不是为了“数据更多”无边界采集；
+3. M2/M3 每个需要真实平台 smoke 的 vertical slice 都提供可复现 Windows runnable artifact / 标准 start workflow；
+4. M3 Observer Assist 单独安排 paired GOTV + alignment + OBS non-leak 验收，不把它与 Program 主链故障耦合；
+5. 主 Windows 环境恢复后安排集中 production-validation sprint；
+6. 开赛前约 5–7 天进入 feature freeze，以 rehearsal / soak / bugfix / fallback 为主，不再扩张高风险功能。
 
 这个时间窗口是当前项目计划，不属于长期架构 invariant；实际日期变化时更新 Roadmap / Project，而不需要 ADR。
