@@ -56,17 +56,18 @@ M0 不实现真实 GSI domain、HUD、Radar 或 RivalHub uplink。
 - Raw GSI ingress；
 - GSI parser / adapter 决策；
 - `NormalizedTelemetry`；
-- recorder + fixture format；
+- production recorder + fixture format；
 - replay clock / replay runner；
 - RuntimeState skeleton；
 - producer/session/map epoch/time primitives；
 - basic latest-wins delivery；
 - `/debug` projection；
-- 第一份真实 Windows + CS2 capture → Mac/CI replay acceptance。
+- 真实 Windows + CS2 capture → Mac/CI replay acceptance；
+- 基于真实 capture 的 block-specific GSI semantics。
 
-进入主要实现前应补 `docs/telemetry.md`。
+`docs/telemetry.md` 已作为 evidence-backed M1 baseline；平台无关实现不等待正式 GOTV 或主 Windows 开发机恢复。
 
-M1 的平台无关实现不等待 Windows 环境恢复；真实 CS2 capture / acceptance 通过独立 Windows validation lane 补齐。
+M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在这里实现 CSTV Observer Assist。
 
 ### M2 — 本地制播内核
 
@@ -75,22 +76,24 @@ M1 的平台无关实现不等待 Windows 环境恢复；真实 CS2 capture / ac
 关键能力：
 
 - local match-context fixture；
-- identity resolver / side mapping；
+- identity resolver / Steam64 roster mapping / side mapping；
 - basic Gameplay HUD；
 - player + bomb Radar；
 - local browser realtime transport；
+- ProgramProjection / OperatorProjection / DebugProjection 分离；
+- ObserverAssistProjection 的最小 schema seam，确保 future fields 从 Program 类型层就不可见；
 - reconnect / baseline snapshot；
 - slow-consumer latest-wins backpressure；
-- wrong-match / degraded capability；
+- wrong-match / roster-mismatch / degraded capability；
 - macOS OBS Browser Source early smoke；
 - Windows OBS Browser Source production-path smoke；
 - accelerated long replay / soak。
 
-进入主要实现前应补 local `docs/protocol.md`。
+进入主要实现前应补 local `docs/protocol.md`，明确 consumer-specific DTO，而不是一个包含所有字段的通用 payload。
 
-### M3 — 制播工作流
+### M3 — 完整制播工作流 + Observer Assist
 
-目标：从基础 HUD 进化为完整本地赛事节目工作流。
+目标：从基础 HUD 进化为完整本地赛事节目工作流，并落地当前 Major 真正有价值的最小 Lookahead Assist。
 
 关键能力：
 
@@ -100,9 +103,29 @@ M1 的平台无关实现不等待 Windows 环境恢复；真实 CS2 capture / ac
 - grenade / smoke / inferno Radar；
 - provisional KDA / ADR / round history；
 - Halftime / MapResult / InterMap / MatchResult；
-- production-oriented Radar presentation。
+- production-oriented Radar presentation；
+- Perfect dual-GOTV discovery/configuration（provider-specific，不污染 Core）；
+- no-delay headless event parsing；
+- no-delay ↔ delayed Program tick/alignment health；
+- **基础 future kill cue：countdown + killer → victim + optional reliable location**；
+- topmost / transparent Observer Assist surface，供同一个解说兼 OB 看；
+- Assist future fields 不进入 Program/#615/官方 OBS preset；
+- Lookahead failure 只关闭 Assist，不影响 Program；
+- OBS Program preset 的一键创建 / 校验 / 修复。
 
-进入相关实现前按需要补 `docs/scene-engine.md` 与 `docs/radar.md`。
+进入相关实现前按需要补 `docs/scene-engine.md`、`docs/radar.md` 与 OBS/Assist 运行文档。
+
+M3 的基础完成条件**不包括**：
+
+- 佯攻 / 主攻识别；
+- engagement/story classification；
+- 复杂 importance ranking；
+- AI / model prediction；
+- full-auto observer / auto TAKE；
+- MulNX actuator；
+- 复杂 OBS scene orchestration。
+
+这些只有在真实比赛使用证明基础 kill cue 需要增强后再排期。
 
 ### M4 — RivalHub 集成
 
@@ -112,13 +135,19 @@ M1 的平台无关实现不等待 Windows 环境恢复；真实 CS2 capture / ac
 
 - browser pairing / scoped producer credential；
 - BroadcastManifest；
+- MatchRoster / Steam64 自动核验；
+- MatchPreparation / ObservationHealth 边界消费；
 - `ReliableObservation` → RivalHub #610；
+- `match_started / map_started / map_ended / series_ended` 等可靠 observation；
 - bounded durable observation outbox；
 - `BroadcastLiveSnapshot` → RivalHub #615；
+- #615 只来自 Delayed Program timeline；
 - cloud throttle / coalesce；
 - idempotency / stale session / stale epoch guards；
-- wrong-match fail closed；
+- wrong-match / roster mismatch fail closed；
 - connection/re-auth health。
+
+no-delay Lookahead feed 是否未来成为更早 #610 observation source **不因 M3 已接入而自动成立**；如确有业务价值，必须在本 milestone 的 RivalHub-facing contract 中单独冻结。
 
 M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 blocking design work。
 
@@ -136,6 +165,9 @@ M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 block
 - startup / shutdown / restart recovery；
 - Radar/program assets packaging；
 - real Windows + CS2 spectator + OBS acceptance；
+- Observer Assist topmost/click-through 与 official Program capture non-leak；
+- Lookahead wrong-match / alignment loss / reconnect rehearsal；
+- OBS preset repair 与 obs-websocket unavailable degradation；
 - wall-clock soak；
 - production runbook；
 - 完整 BO3/等价长时 rehearsal；
@@ -167,7 +199,7 @@ Acceptance evidence
 
 详见 `docs/development-validation.md`。
 
-当前 Windows 主开发机暂不可用并不阻塞 M0/M1/M2 的平台无关工作；需要真实 CS2/OBS 的验收项应明确标记为 pending，而不是让整个开发主线停住。
+第一批真实 Windows + CS2 observer capture 已经获得并写入 `docs/telemetry.md` 的 evidence baseline；这不等于 Lookahead CSTV / topmost overlay 已完成生产验收。后者仍需独立真实环境验证。
 
 ## Future / Post-v1
 
@@ -176,14 +208,18 @@ Acceptance evidence
 - exact damage-source telemetry；
 - server game-event adapter；
 - baked C4 damage provider；
-- observer advisory / auto director；
-- OBS WebSocket 深度控制；
+- engagement/story classification；
+- AI / model prediction advisory；
+- full-auto observer / auto TAKE；
+- OBS WebSocket 深度 scene orchestration；
 - replay automation；
 - telestrator；
 - Stream Deck；
 - MulNX / HLAE；
 - renderer SDK / third-party HUD compatibility；
 - plugin marketplace。
+
+注意：**基础 Observer Assist future kill cue** 已进入当前 Major 的 V1/P1 路径；只有更重的叙事理解和自动导播继续属于 Future。
 
 ## Issue 生命周期
 
@@ -262,7 +298,7 @@ Project 名称：`RivalHub Broadcast`
 
 1. `执行`：Board，按 `Backlog / Ready / In Progress / Review / Done`；
 2. `路线图`：按 M0–M5 / Milestone 查看；
-3. `架构与依赖`：筛选 `needs-design`、`blocked`、`type:architecture`，并纳入 RivalHub #610 / #615 等跨仓依赖。
+3. `架构与依赖`：筛选 `needs-design`、`blocked`、`type:architecture`，并纳入 RivalHub #610 / #613 / #615 等跨仓依赖。
 
 建议 Project 增加：
 
