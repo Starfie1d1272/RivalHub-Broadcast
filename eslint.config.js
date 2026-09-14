@@ -31,22 +31,6 @@ export default tseslint.config(
     },
   },
   {
-    files: ['packages/telemetry-gsi/test/**/*.{ts,tsx,mts,cts}'],
-    languageOptions: {
-      parserOptions: {
-        project: './packages/telemetry-gsi/tsconfig.test.json',
-        projectService: false,
-      },
-    },
-    rules: {
-      // The test project imports the package's dist-based Core export before CI builds it.
-      '@typescript-eslint/no-unsafe-assignment': 'off',
-      '@typescript-eslint/no-unsafe-call': 'off',
-      '@typescript-eslint/no-unsafe-member-access': 'off',
-      '@typescript-eslint/no-unsafe-return': 'off',
-    },
-  },
-  {
     files: ['scripts/**/*.mjs'],
     languageOptions: {
       globals: {
