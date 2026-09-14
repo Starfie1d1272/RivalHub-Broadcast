@@ -2,9 +2,7 @@ import type { ObservedVector3 } from './player.js';
 
 export interface ObservedGrenadeFlame {
   readonly sourceFlameId: string;
-  readonly position?: ObservedVector3;
-  readonly lifetimeSeconds?: number;
-  readonly effectSeconds?: number;
+  readonly position: ObservedVector3;
 }
 
 export interface ObservedGrenade {
@@ -14,6 +12,5 @@ export interface ObservedGrenade {
   readonly position?: ObservedVector3;
   readonly velocity?: ObservedVector3;
   readonly lifetimeSeconds?: number;
-  readonly effectSeconds?: number;
   readonly flames?: readonly ObservedGrenadeFlame[];
 }

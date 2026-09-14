@@ -39,8 +39,6 @@ function normalizeWeaponState(value: string): WeaponState | undefined {
       return 'holstered';
     case 'reloading':
       return 'reloading';
-    case 'deploying':
-      return 'deploying';
     case 'unknown':
       return 'unknown';
     default:
@@ -67,6 +65,12 @@ function parsePlayerState(
   const smoked = optionalNumber(record, 'smoked', diagnostics, `${path}.smoked`);
   const burning = optionalNumber(record, 'burning', diagnostics, `${path}.burning`);
   const money = optionalNumber(record, 'money', diagnostics, `${path}.money`);
+  const roundTotalDamage = optionalNumber(
+    record,
+    'round_totaldmg',
+    diagnostics,
+    `${path}.round_totaldmg`,
+  );
   const roundKills = optionalInteger(record, 'round_kills', diagnostics, `${path}.round_kills`);
   const roundKillHeadshots = optionalInteger(
     record,
@@ -85,6 +89,7 @@ function parsePlayerState(
     ...(smoked === undefined ? {} : { smoked }),
     ...(burning === undefined ? {} : { burning }),
     ...(money === undefined ? {} : { money }),
+    ...(roundTotalDamage === undefined ? {} : { roundTotalDamage }),
     ...(roundKills === undefined ? {} : { roundKills }),
     ...(roundKillHeadshots === undefined ? {} : { roundKillHeadshots }),
     ...(equipValue === undefined ? {} : { equipValue }),

@@ -24,16 +24,12 @@ export const SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME = {
     team_ct: {
       name: 'Fixture CT',
       score: 4,
-      score_overtime: 0,
       timeouts_remaining: 1,
-      matches_won_this_phase: 0,
     },
     team_t: {
       name: 'Fixture T',
       score: 3,
-      score_overtime: 0,
       timeouts_remaining: 1,
-      matches_won_this_phase: 0,
     },
   },
   round: {
@@ -43,7 +39,7 @@ export const SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME = {
   },
   phase_countdowns: {
     phase: 'bomb',
-    phase_ends_in: 32.5,
+    phase_ends_in: '32.5',
   },
   player: {
     steamid: 'fixture-player-ct-1',
@@ -119,7 +115,7 @@ export const SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME = {
     state: 'planted',
     player: 'fixture-player-ct-1',
     position: '150.0, 250.0, 32.0',
-    countdown: 28.75,
+    countdown: '28.75',
   },
   grenades: {
     'grenade-2': {
@@ -127,14 +123,9 @@ export const SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME = {
       owner: 'fixture-player-t-2',
       position: '320.0, 120.0, 32.0',
       velocity: '0.0, 0.0, 0.0',
-      lifetime: 4.5,
-      effecttime: 1.75,
+      lifetime: '4.5',
       flames: {
-        'flame-1': {
-          position: '320.0, 120.0, 32.0',
-          lifetime: 4.5,
-          effecttime: 1.75,
-        },
+        'flame-1': '320.0, 120.0, 32.0',
       },
     },
     'grenade-1': {
@@ -142,7 +133,7 @@ export const SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME = {
       owner: 'fixture-player-ct-1',
       position: '110.0, 220.0, 40.0',
       velocity: '10.0, 0.0, -2.0',
-      lifetime: 0.2,
+      lifetime: '0.2',
     },
   },
   // These source hints are intentionally not interpreted by the adapter.

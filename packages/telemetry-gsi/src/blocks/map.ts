@@ -12,10 +12,8 @@ function normalizeMapPhase(value: string): MapPhase | undefined {
     case 'live':
       return 'live';
     case 'intermission':
-    case 'intermission_time':
       return 'intermission';
     case 'gameover':
-    case 'gameover_time':
       return 'gameover';
     default:
       return undefined;
@@ -35,31 +33,17 @@ function parseMapSide(
 
   const name = optionalString(record, 'name', diagnostics, `${path}.name`);
   const score = optionalInteger(record, 'score', diagnostics, `${path}.score`);
-  const scoreOvertime = optionalInteger(
-    record,
-    'score_overtime',
-    diagnostics,
-    `${path}.score_overtime`,
-  );
   const timeoutsRemaining = optionalInteger(
     record,
     'timeouts_remaining',
     diagnostics,
     `${path}.timeouts_remaining`,
   );
-  const matchesWonThisPhase = optionalInteger(
-    record,
-    'matches_won_this_phase',
-    diagnostics,
-    `${path}.matches_won_this_phase`,
-  );
 
   return {
     ...(name === undefined ? {} : { name }),
     ...(score === undefined ? {} : { score }),
-    ...(scoreOvertime === undefined ? {} : { scoreOvertime }),
     ...(timeoutsRemaining === undefined ? {} : { timeoutsRemaining }),
-    ...(matchesWonThisPhase === undefined ? {} : { matchesWonThisPhase }),
   };
 }
 

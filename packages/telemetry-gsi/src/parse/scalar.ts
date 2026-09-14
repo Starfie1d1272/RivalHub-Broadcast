@@ -31,6 +31,28 @@ export function optionalNumber(
   return value;
 }
 
+const DECIMAL_STRING_PATTERN = /^-?(?:\d+(?:\.\d+)?|\.\d+)$/;
+
+export function optionalDecimalString(
+  record: SourceRecord,
+  key: string,
+  diagnostics: DiagnosticCollector,
+  path: string,
+): number | undefined {
+  if (!Object.hasOwn(record, key)) return undefined;
+  const value = record[key];
+  if (typeof value !== 'string' || !DECIMAL_STRING_PATTERN.test(value)) {
+    diagnostics.add('INVALID_FIELD', 'error', path, summarizeScalar(value));
+    return undefined;
+  }
+  const parsed = Number(value);
+  if (!Number.isFinite(parsed)) {
+    diagnostics.add('INVALID_FIELD', 'error', path, summarizeScalar(value));
+    return undefined;
+  }
+  return parsed;
+}
+
 export function optionalInteger(
   record: SourceRecord,
   key: string,

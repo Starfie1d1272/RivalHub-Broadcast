@@ -2,7 +2,7 @@ import type { CountdownPhase, ObservedPhaseCountdown } from '@rivalhub-broadcast
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { optionalEnum } from '../parse/enum.js';
 import { asSourceRecord } from '../parse/record.js';
-import { optionalNumber } from '../parse/scalar.js';
+import { optionalDecimalString } from '../parse/scalar.js';
 import { finishBlock, type ParsedBlock } from './types.js';
 
 function normalizeCountdownPhase(value: string): CountdownPhase | undefined {
@@ -46,7 +46,7 @@ export function parsePhaseCountdown(
     diagnostics,
     `${path}.phase`,
   );
-  const endsInSeconds = optionalNumber(
+  const endsInSeconds = optionalDecimalString(
     record,
     'phase_ends_in',
     diagnostics,

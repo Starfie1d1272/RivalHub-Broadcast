@@ -26,6 +26,17 @@ function parseVector(value: unknown): ObservedVector3 | undefined {
   return vectorFromParts(numbers);
 }
 
+export function parseVectorValue(
+  value: unknown,
+  diagnostics: DiagnosticCollector,
+  path: string,
+): ObservedVector3 | undefined {
+  const vector = parseVector(value);
+  if (vector !== undefined) return vector;
+  diagnostics.add('MALFORMED_VECTOR', 'error', path);
+  return undefined;
+}
+
 export function optionalVector(
   record: SourceRecord,
   key: string,
@@ -33,8 +44,5 @@ export function optionalVector(
   path: string,
 ): ObservedVector3 | undefined {
   if (!Object.hasOwn(record, key)) return undefined;
-  const vector = parseVector(record[key]);
-  if (vector !== undefined) return vector;
-  diagnostics.add('MALFORMED_VECTOR', 'error', path);
-  return undefined;
+  return parseVectorValue(record[key], diagnostics, path);
 }

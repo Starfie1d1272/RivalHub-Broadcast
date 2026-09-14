@@ -2,7 +2,7 @@ import type { BombState, ObservedBomb } from '@rivalhub-broadcast/core/telemetry
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { optionalEnum } from '../parse/enum.js';
 import { asSourceRecord, type SourceRecord } from '../parse/record.js';
-import { optionalNumber } from '../parse/scalar.js';
+import { optionalDecimalString } from '../parse/scalar.js';
 import { optionalVector } from '../parse/vector.js';
 import { finishBlock, type ParsedBlock } from './types.js';
 
@@ -63,7 +63,12 @@ export function parseBomb(
   );
   const position = optionalVector(record, 'position', diagnostics, `${path}.position`);
   const sourcePlayerId = readPlayerId(record, diagnostics, path);
-  const countdownSeconds = optionalNumber(record, 'countdown', diagnostics, `${path}.countdown`);
+  const countdownSeconds = optionalDecimalString(
+    record,
+    'countdown',
+    diagnostics,
+    `${path}.countdown`,
+  );
 
   return finishBlock(diagnostics, start, {
     ...(state === undefined ? {} : { state }),

@@ -6,7 +6,7 @@ export interface ObservedVector3 {
   readonly z: number;
 }
 
-export type WeaponState = 'active' | 'holstered' | 'reloading' | 'deploying' | 'unknown';
+export type WeaponState = 'active' | 'holstered' | 'reloading' | 'unknown';
 
 export interface ObservedPlayerState {
   readonly health?: number;
@@ -17,6 +17,7 @@ export interface ObservedPlayerState {
   readonly smoked?: number;
   readonly burning?: number;
   readonly money?: number;
+  readonly roundTotalDamage?: number;
   readonly roundKills?: number;
   readonly roundKillHeadshots?: number;
   readonly equipValue?: number;

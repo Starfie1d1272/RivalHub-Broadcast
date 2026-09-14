@@ -5,9 +5,7 @@ export type MapPhase = 'warmup' | 'live' | 'intermission' | 'gameover' | 'unknow
 export interface ObservedMapSide {
   readonly name?: string;
   readonly score?: number;
-  readonly scoreOvertime?: number;
   readonly timeoutsRemaining?: number;
-  readonly matchesWonThisPhase?: number;
 }
 
 export interface ObservedMap {

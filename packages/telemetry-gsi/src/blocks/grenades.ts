@@ -1,8 +1,8 @@
 import type { ObservedGrenade, ObservedGrenadeFlame } from '@rivalhub-broadcast/core/telemetry';
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { asSourceRecord, compareSourceKeys, type SourceRecord } from '../parse/record.js';
-import { optionalNumber, optionalString } from '../parse/scalar.js';
-import { optionalVector } from '../parse/vector.js';
+import { optionalDecimalString, optionalString } from '../parse/scalar.js';
+import { optionalVector, parseVectorValue } from '../parse/vector.js';
 import { finishBlock, type ParsedBlock } from './types.js';
 
 function readOwnerSourceId(
@@ -23,20 +23,8 @@ function parseFlame(
   diagnostics: DiagnosticCollector,
   path: string,
 ): ObservedGrenadeFlame | undefined {
-  const record = asSourceRecord(value);
-  if (record === undefined) {
-    diagnostics.add('INVALID_ENTITY', 'error', path);
-    return undefined;
-  }
-  const position = optionalVector(record, 'position', diagnostics, `${path}.position`);
-  const lifetimeSeconds = optionalNumber(record, 'lifetime', diagnostics, `${path}.lifetime`);
-  const effectSeconds = optionalNumber(record, 'effecttime', diagnostics, `${path}.effecttime`);
-  return {
-    sourceFlameId,
-    ...(position === undefined ? {} : { position }),
-    ...(lifetimeSeconds === undefined ? {} : { lifetimeSeconds }),
-    ...(effectSeconds === undefined ? {} : { effectSeconds }),
-  };
+  const position = parseVectorValue(value, diagnostics, path);
+  return position === undefined ? undefined : { sourceFlameId, position };
 }
 
 function parseFlames(
@@ -75,8 +63,12 @@ function parseGrenade(
   const ownerSourceId = readOwnerSourceId(record, diagnostics, path);
   const position = optionalVector(record, 'position', diagnostics, `${path}.position`);
   const velocity = optionalVector(record, 'velocity', diagnostics, `${path}.velocity`);
-  const lifetimeSeconds = optionalNumber(record, 'lifetime', diagnostics, `${path}.lifetime`);
-  const effectSeconds = optionalNumber(record, 'effecttime', diagnostics, `${path}.effecttime`);
+  const lifetimeSeconds = optionalDecimalString(
+    record,
+    'lifetime',
+    diagnostics,
+    `${path}.lifetime`,
+  );
   const flames = Object.hasOwn(record, 'flames')
     ? parseFlames(record.flames, diagnostics, `${path}.flames`)
     : undefined;
@@ -88,7 +80,6 @@ function parseGrenade(
     ...(position === undefined ? {} : { position }),
     ...(velocity === undefined ? {} : { velocity }),
     ...(lifetimeSeconds === undefined ? {} : { lifetimeSeconds }),
-    ...(effectSeconds === undefined ? {} : { effectSeconds }),
     ...(flames === undefined ? {} : { flames }),
   };
 }
