@@ -2,7 +2,7 @@ import type { BombState, ObservedBomb } from '@rivalhub-broadcast/core/telemetry
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { optionalEnum } from '../parse/enum.js';
 import { asSourceRecord, type SourceRecord } from '../parse/record.js';
-import { optionalNumber, optionalString } from '../parse/scalar.js';
+import { optionalNumber } from '../parse/scalar.js';
 import { optionalVector } from '../parse/vector.js';
 import { finishBlock, type ParsedBlock } from './types.js';
 
@@ -29,7 +29,7 @@ function normalizeBombState(value: string): BombState | undefined {
   }
 }
 
-function readCarrierId(
+function readPlayerId(
   record: SourceRecord,
   diagnostics: DiagnosticCollector,
   path: string,
@@ -37,10 +37,6 @@ function readCarrierId(
   if (!Object.hasOwn(record, 'player')) return undefined;
   const value = record.player;
   if (typeof value === 'string') return value;
-  const player = asSourceRecord(value);
-  if (player !== undefined) {
-    return optionalString(player, 'steamid', diagnostics, `${path}.player.steamid`);
-  }
   diagnostics.add('INVALID_FIELD', 'error', `${path}.player`);
   return undefined;
 }
@@ -66,13 +62,13 @@ export function parseBomb(
     `${path}.state`,
   );
   const position = optionalVector(record, 'position', diagnostics, `${path}.position`);
-  const sourceCarrierId = readCarrierId(record, diagnostics, path);
+  const sourcePlayerId = readPlayerId(record, diagnostics, path);
   const countdownSeconds = optionalNumber(record, 'countdown', diagnostics, `${path}.countdown`);
 
   return finishBlock(diagnostics, start, {
     ...(state === undefined ? {} : { state }),
     ...(position === undefined ? {} : { position }),
-    ...(sourceCarrierId === undefined ? {} : { sourceCarrierId }),
+    ...(sourcePlayerId === undefined ? {} : { sourcePlayerId }),
     ...(countdownSeconds === undefined ? {} : { countdownSeconds }),
   });
 }

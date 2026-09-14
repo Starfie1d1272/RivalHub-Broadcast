@@ -13,10 +13,6 @@ function readOwnerSourceId(
   if (!Object.hasOwn(record, 'owner')) return undefined;
   const value = record.owner;
   if (typeof value === 'string') return value;
-  const owner = asSourceRecord(value);
-  if (owner !== undefined) {
-    return optionalString(owner, 'steamid', diagnostics, `${path}.owner.steamid`);
-  }
   diagnostics.add('INVALID_FIELD', 'error', `${path}.owner`);
   return undefined;
 }
@@ -75,9 +71,7 @@ function parseGrenade(
     return undefined;
   }
 
-  const kind = Object.hasOwn(record, 'type')
-    ? optionalString(record, 'type', diagnostics, `${path}.type`)
-    : optionalString(record, 'kind', diagnostics, `${path}.kind`);
+  const kind = optionalString(record, 'type', diagnostics, `${path}.type`);
   const ownerSourceId = readOwnerSourceId(record, diagnostics, path);
   const position = optionalVector(record, 'position', diagnostics, `${path}.position`);
   const velocity = optionalVector(record, 'velocity', diagnostics, `${path}.velocity`);

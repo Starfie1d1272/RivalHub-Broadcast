@@ -19,19 +19,11 @@ function vectorFromParts(parts: readonly unknown[]): ObservedVector3 | undefined
 }
 
 function parseVector(value: unknown): ObservedVector3 | undefined {
-  if (typeof value === 'string') {
-    const tokens = value.split(',').map((token) => token.trim());
-    if (tokens.length !== 3 || tokens.some((token) => token.length === 0)) return undefined;
-    const numbers = tokens.map((token) => Number(token));
-    return vectorFromParts(numbers);
-  }
-
-  if (value !== null && typeof value === 'object' && !Array.isArray(value)) {
-    const record = value as SourceRecord;
-    return vectorFromParts([record.x, record.y, record.z]);
-  }
-
-  return undefined;
+  if (typeof value !== 'string') return undefined;
+  const tokens = value.split(',').map((token) => token.trim());
+  if (tokens.length !== 3 || tokens.some((token) => token.length === 0)) return undefined;
+  const numbers = tokens.map((token) => Number(token));
+  return vectorFromParts(numbers);
 }
 
 export function optionalVector(

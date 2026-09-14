@@ -57,28 +57,15 @@ function parseRoundBomb(
   diagnostics: DiagnosticCollector,
   path: string,
 ): ObservedRoundBomb | undefined {
-  if (typeof value === 'string') {
-    const state = normalizeRoundBombState(value);
-    if (state !== undefined) return { state };
-    diagnostics.add('UNKNOWN_GSI_ENUM', 'warning', path, value);
-    return { state: 'unknown' };
-  }
-
-  const record = asSourceRecord(value);
-  if (record === undefined) {
-    diagnostics.add('UNEXPECTED_BLOCK_SHAPE', 'error', path);
+  if (typeof value !== 'string') {
+    diagnostics.add('INVALID_FIELD', 'error', path);
     return undefined;
   }
 
-  const state = optionalEnum(
-    record,
-    'state',
-    normalizeRoundBombState,
-    'unknown',
-    diagnostics,
-    `${path}.state`,
-  );
-  return state === undefined ? {} : { state };
+  const state = normalizeRoundBombState(value);
+  if (state !== undefined) return { state };
+  diagnostics.add('UNKNOWN_GSI_ENUM', 'warning', path, value);
+  return { state: 'unknown' };
 }
 
 function parseRoundBombField(

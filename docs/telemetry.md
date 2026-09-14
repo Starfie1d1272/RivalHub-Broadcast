@@ -866,6 +866,15 @@ exploded
 
 本地 6v4 队伍分布影响比赛真实性，但不影响本次对 GSI block shape、10-player collection、position、phase 与 bomb lifecycle 的 source-level验证。
 
+### 13.1.1 Fixture evidence levels
+
+`#10` 的测试只提交少量可追溯 excerpt，不提交完整 capture，也不在 adapter 中建设 capture reader 或 sanitizer：
+
+- `packages/telemetry-gsi/test/fixtures/real-derived.ts` 是从 A 的完整文件确定性脱敏得到的单帧 excerpt：`seq=2..2`，保留 source provider timestamp 与 source fields，Steam identity 和 display name 映射为 fixture 值；
+- `packages/telemetry-gsi/test/fixtures/synthetic-evidence-informed.ts` 是根据 C 已记录的 source facts 组成的 synthetic fixture。它带有 capture id 和完整 frames hash 作为 evidence reference，但没有单一 source frame/index/range，因此不能被解释为真实字段共现证据。
+
+B/C 两个完整 ZIP 仍属于 #11 的 capture consumption、sanitization、replay 与 gold-fixture 输入；它们不作为本 Issue 的完整 corpus 提交。
+
 ### 13.2 已经可以冻结的 source facts
 
 当前 evidence 足以冻结：

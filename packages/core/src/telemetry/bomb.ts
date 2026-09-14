@@ -6,6 +6,6 @@ export type BombState =
 export interface ObservedBomb {
   readonly state?: BombState;
   readonly position?: ObservedVector3;
-  readonly sourceCarrierId?: string;
+  readonly sourcePlayerId?: string;
   readonly countdownSeconds?: number;
 }

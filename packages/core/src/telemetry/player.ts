@@ -11,7 +11,6 @@ export type WeaponState = 'active' | 'holstered' | 'reloading' | 'deploying' | '
 export interface ObservedPlayerState {
   readonly health?: number;
   readonly armor?: number;
-  readonly helmet?: boolean;
   readonly hasHelmet?: boolean;
   readonly hasDefuser?: boolean;
   readonly flashed?: number;

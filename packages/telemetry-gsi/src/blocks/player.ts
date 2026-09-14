@@ -61,8 +61,7 @@ function parsePlayerState(
 
   const health = optionalNumber(record, 'health', diagnostics, `${path}.health`);
   const armor = optionalNumber(record, 'armor', diagnostics, `${path}.armor`);
-  const helmet = optionalBoolean(record, 'helmet', diagnostics, `${path}.helmet`);
-  const hasHelmet = optionalBoolean(record, 'has_helmet', diagnostics, `${path}.has_helmet`);
+  const hasHelmet = optionalBoolean(record, 'helmet', diagnostics, `${path}.helmet`);
   const hasDefuser = optionalBoolean(record, 'defusekit', diagnostics, `${path}.defusekit`);
   const flashed = optionalNumber(record, 'flashed', diagnostics, `${path}.flashed`);
   const smoked = optionalNumber(record, 'smoked', diagnostics, `${path}.smoked`);
@@ -80,7 +79,6 @@ function parsePlayerState(
   return {
     ...(health === undefined ? {} : { health }),
     ...(armor === undefined ? {} : { armor }),
-    ...(helmet === undefined ? {} : { helmet }),
     ...(hasHelmet === undefined ? {} : { hasHelmet }),
     ...(hasDefuser === undefined ? {} : { hasDefuser }),
     ...(flashed === undefined ? {} : { flashed }),

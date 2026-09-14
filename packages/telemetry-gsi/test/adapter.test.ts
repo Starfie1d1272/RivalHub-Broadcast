@@ -2,10 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { adaptGsiPayload, MAX_DIAGNOSTICS_PER_FRAME, type GsiDiagnostic } from '../src/index.js';
 import {
-  REAL_DERIVED_OBSERVER_FRAME,
-  REAL_DERIVED_PROVENANCE,
-  REAL_DERIVED_ROUND_AFTER_BOMB_FRAME,
-} from './fixtures/real-derived.js';
+  SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME,
+  SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE,
+  SYNTHETIC_EVIDENCE_INFORMED_ROUND_AFTER_BOMB_FRAME,
+} from './fixtures/synthetic-evidence-informed.js';
+import { REAL_DERIVED_FRAME, REAL_DERIVED_PROVENANCE } from './fixtures/real-derived.js';
 
 const receiveContext = {
   sequence: 17,
@@ -30,8 +31,8 @@ function playerFixture(sourcePlayerId: string) {
 }
 
 describe('adaptGsiPayload', () => {
-  it('normalizes evidence-backed blocks without leaking raw GSI shape or diagnostics into Core', () => {
-    const result = adaptGsiPayload(REAL_DERIVED_OBSERVER_FRAME, receiveContext);
+  it('normalizes a synthetic evidence-informed composition without leaking raw GSI shape', () => {
+    const result = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME, receiveContext);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -70,7 +71,7 @@ describe('adaptGsiPayload', () => {
     expect(result.observation.telemetry.player?.state).toMatchObject({
       health: 100,
       armor: 0,
-      helmet: false,
+      hasHelmet: false,
       hasDefuser: false,
       flashed: 0,
       money: 4200,
@@ -80,6 +81,7 @@ describe('adaptGsiPayload', () => {
     );
     expect(result.observation.telemetry.bomb).toEqual({
       state: 'planted',
+      sourcePlayerId: 'fixture-player-ct-1',
       position: { x: 150, y: 250, z: 32 },
       countdownSeconds: 28.75,
     });
@@ -97,11 +99,65 @@ describe('adaptGsiPayload', () => {
     expect(result.observation.telemetry).not.toHaveProperty('added');
   });
 
-  it('keeps provenance for a sanitized real-derived fixture in tests only', () => {
-    expect(REAL_DERIVED_PROVENANCE).toMatchObject({
+  it('keeps explicit provenance for a synthetic evidence-informed fixture', () => {
+    expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE).toMatchObject({
+      fixtureKind: 'synthetic-evidence-informed',
       sourceCaptureId: '20260913T162802Z-3f41d8df',
+      sourceFrame: 'synthetic composition from documented source facts; no single source frame',
+      sourceFrameSequence: null,
+      sourceFrameRange: null,
     });
-    expect(REAL_DERIVED_PROVENANCE.sourceFramesSha256).toMatch(/^[a-f0-9]{64}$/);
+    expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE.sourceCaptureFramesSha256).toMatch(
+      /^[a-f0-9]{64}$/,
+    );
+    expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE.sanitization).toContain(
+      'not a sanitized raw frame',
+    );
+  });
+
+  it('keeps exact provenance for a sanitized real-derived frame excerpt', () => {
+    expect(REAL_DERIVED_PROVENANCE).toEqual({
+      fixtureKind: 'sanitized-real-derived',
+      sourceCaptureId: 'roundsense-economy-runtime-20260807',
+      sourceCaptureFramesSha256: 'beb711e09b4a9fcb7dca9c1b44cfd1699cecf7ed4a101a74ae69d995529646cb',
+      sourceFrameSequence: 2,
+      sourceFrameRange: 'seq=2..2',
+      sanitization:
+        'steamid -> fixture-player-ct-1; name -> Fixture Real-Derived Player; outer capture envelope omitted; provider timestamp and source fields retained',
+    });
+
+    const result = adaptGsiPayload(REAL_DERIVED_FRAME, receiveContext);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.diagnostics).toEqual({ entries: [], suppressedCount: 0 });
+    expect(result.observation.coverage).toEqual({
+      provider: 'present',
+      map: 'present',
+      round: 'present',
+      phaseCountdowns: 'absent',
+      player: 'present',
+      allPlayers: 'absent',
+      bomb: 'absent',
+      grenades: 'absent',
+    });
+    expect(result.observation.source.providerTimestampSeconds).toBe(1786117842);
+    expect(result.observation.telemetry.map).toMatchObject({
+      name: 'de_mirage',
+      phase: 'live',
+      roundNumber: 0,
+    });
+    expect(result.observation.telemetry.player).toMatchObject({
+      sourcePlayerId: 'fixture-player-ct-1',
+      displayName: 'Fixture Real-Derived Player',
+      side: 'CT',
+      state: { hasHelmet: false },
+      weapons: [
+        { sourceWeaponId: 'weapon_0', name: 'weapon_knife' },
+        { sourceWeaponId: 'weapon_1', name: 'weapon_hkp2000' },
+      ],
+    });
+    expect(result.observation.telemetry).not.toHaveProperty('previously');
   });
 
   it('distinguishes absent blocks from explicitly empty collections', () => {
@@ -142,7 +198,7 @@ describe('adaptGsiPayload', () => {
     expect(result.observation.telemetry.player?.state).toEqual({
       health: 0,
       armor: 0,
-      helmet: false,
+      hasHelmet: false,
       hasDefuser: false,
       money: 0,
       flashed: 0,
@@ -185,10 +241,10 @@ describe('adaptGsiPayload', () => {
   });
 
   it('ignores unknown extra fields and does not use previously or added as normalized truth', () => {
-    const withHints = adaptGsiPayload(REAL_DERIVED_OBSERVER_FRAME, receiveContext);
+    const withHints = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME, receiveContext);
     const withoutHints = adaptGsiPayload(
       {
-        ...REAL_DERIVED_OBSERVER_FRAME,
+        ...SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME,
         previously: undefined,
         added: undefined,
         ignored_future_field: undefined,
@@ -284,6 +340,40 @@ describe('adaptGsiPayload', () => {
     );
   });
 
+  it('rejects unproven alternate raw shapes instead of guessing normalized values', () => {
+    const result = adaptGsiPayload(
+      {
+        player: {
+          steamid: 'player-object-shape',
+          position: { x: 1, y: 2, z: 3 },
+        },
+        round: { bomb: { state: 'planted' } },
+        bomb: { state: 'carried', player: { steamid: 'player-object-shape' } },
+        grenades: {
+          'grenade-object-shape': {
+            kind: 'smoke',
+            owner: { steamid: 'player-object-shape' },
+          },
+        },
+      },
+      receiveContext,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.observation.telemetry.player).toEqual({
+      sourcePlayerId: 'player-object-shape',
+    });
+    expect(result.observation.telemetry.round).toEqual({});
+    expect(result.observation.telemetry.bomb).toEqual({ state: 'carried' });
+    expect(result.observation.telemetry.grenades).toEqual([
+      { sourceEntityId: 'grenade-object-shape' },
+    ]);
+    expect(diagnosticCodes(result)).toEqual(
+      expect.arrayContaining(['MALFORMED_VECTOR', 'INVALID_FIELD']),
+    );
+  });
+
   it('accepts heartbeat/provider-only frames with explicit absent coverage', () => {
     const result = adaptGsiPayload({ provider: { timestamp: 99 } }, receiveContext);
 
@@ -303,8 +393,8 @@ describe('adaptGsiPayload', () => {
   });
 
   it('does not retain a round bomb after a later current frame omits it', () => {
-    const first = adaptGsiPayload(REAL_DERIVED_OBSERVER_FRAME, receiveContext);
-    const second = adaptGsiPayload(REAL_DERIVED_ROUND_AFTER_BOMB_FRAME, {
+    const first = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME, receiveContext);
+    const second = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_ROUND_AFTER_BOMB_FRAME, {
       ...receiveContext,
       sequence: receiveContext.sequence + 1,
     });
