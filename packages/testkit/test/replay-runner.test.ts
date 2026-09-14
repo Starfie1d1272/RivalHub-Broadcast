@@ -4,11 +4,21 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { adaptGsiPayload } from '@rivalhub-broadcast/telemetry-gsi';
 import { replayCapture } from '../src/replay/runner.js';
-import type { ReplayEvent, ReplayScheduler } from '../src/replay/types.js';
+import type { ReplayEvent, ReplayScheduler, ReplayedGsiFrame } from '../src/replay/types.js';
 import { verifyCapture } from '../src/capture/reader.js';
 import { writeCapture, replayPayload, testFrame } from './helpers.js';
+
+type ProductionAdapter = (
+  payload: ReplayedGsiFrame['sourceFrame']['payload'],
+  context: ReplayedGsiFrame['receiveContext'],
+) => ReplayedGsiFrame['result'];
+
+const telemetryGsiPackage = '@rivalhub-broadcast/telemetry-gsi';
+const productionAdapterModule = (await import(telemetryGsiPackage)) as unknown as {
+  readonly adaptGsiPayload: ProductionAdapter;
+};
+const productionAdapter = productionAdapterModule.adaptGsiPayload;
 
 class ManualScheduler implements ReplayScheduler {
   now = 0;
@@ -144,7 +154,7 @@ describe('ReplayClock-backed production adapter replay', () => {
       const { capture, frames } = await captureWithFrames(root, 2);
       const events = frameEvents(await collect(replayCapture(capture, { mode: { kind: 'step' } })));
       for (const event of events) {
-        const expected = adaptGsiPayload(event.sourceFrame.payload, event.receiveContext);
+        const expected = productionAdapter(event.sourceFrame.payload, event.receiveContext);
         expect(event.result).toEqual(expected);
         expect(event.sourceFrame).toEqual(frames[event.captureIndex]);
       }
