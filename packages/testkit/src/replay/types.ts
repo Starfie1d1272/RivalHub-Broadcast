@@ -56,10 +56,4 @@ export interface ReplaySourceGenerationBoundary {
 
 export type ReplayEvent = ReplayedGsiFrame | ReplaySourceGenerationBoundary;
 
-export type ReplayResultDigest = {
-  readonly frameCount: number;
-  readonly boundaryCount: number;
-  readonly digest: string;
-};
-
 export type CaptureForReplay = VerifiedCapture;

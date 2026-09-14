@@ -751,8 +751,8 @@ pnpm testkit:capture:sanitize -- --input <raw-capture-dir> --output fixtures/gsi
 pnpm testkit:capture:replay -- <capture-dir> [--speed N]
 ```
 
-Gold regression 通过 production `adaptGsiPayload()` replay，并同时断言 frame boundary、
-provenance 与 canonical aggregate digest；D capture 仍是后续可选 evidence，不阻塞本 Issue。
+Gold regression 通过 production `adaptGsiPayload()` replay，并断言关键 semantic checkpoint
+与 provenance；D capture 仍是后续可选 evidence，不阻塞本 Issue。
 
 ### 11.4 Fault injection
 

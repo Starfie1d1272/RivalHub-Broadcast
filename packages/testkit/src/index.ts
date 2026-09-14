@@ -16,7 +16,6 @@ export type {
   ReplayEvent,
   ReplayFaultPlanV1,
   ReplayMode,
-  ReplayResultDigest,
   ReplayScheduler,
   ReplaySourceGenerationBoundary,
   ReplayedGsiFrame,

@@ -37,6 +37,21 @@ interface SanitizedPayload {
   readonly futureEvidence: { readonly stableValue: string; readonly stableNumber: number };
 }
 
+interface TeamSides {
+  readonly team_ct: { readonly name: string };
+  readonly team_t: { readonly name: string };
+}
+
+interface SideSwitchSanitizedPayload {
+  readonly map: TeamSides;
+  readonly player: { readonly clan: string };
+  readonly previously: { readonly player: { readonly clan: string } };
+  readonly added: {
+    readonly map: TeamSides;
+    readonly player: { readonly clan: string };
+  };
+}
+
 function sensitivePayload(): Record<string, unknown> {
   return {
     provider: {
@@ -81,6 +96,35 @@ function sensitivePayload(): Record<string, unknown> {
 
 async function temporaryDirectory(): Promise<string> {
   return mkdtemp(join(tmpdir(), 'rivalhub-testkit-sanitizer-'));
+}
+
+function sideSwitchPayload(
+  teamCtName: string,
+  teamTName: string,
+  playerTeam: 'CT' | 'T',
+  teamName: string,
+): Record<string, unknown> {
+  return {
+    provider: { version: '1.0.0' },
+    map: {
+      team_ct: { name: teamCtName },
+      team_t: { name: teamTName },
+      phase: 'live',
+    },
+    player: {
+      name: 'Raw Side Switch Player',
+      clan: teamName,
+      team: playerTeam,
+    },
+    previously: { player: { clan: teamName } },
+    added: {
+      map: {
+        team_ct: { name: teamCtName },
+        team_t: { name: teamTName },
+      },
+      player: { clan: teamName },
+    },
+  };
 }
 
 describe('deterministic capture sanitizer', () => {
@@ -190,6 +234,61 @@ describe('deterministic capture sanitizer', () => {
           lifecycleCoverage: 'partial',
         }),
       ).rejects.toMatchObject({ code: 'INELIGIBLE_GOLD_SOURCE' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps team identity stable when sides switch between frames', async () => {
+    const root = await temporaryDirectory();
+    try {
+      const rawDir = join(root, 'raw');
+      const teamA = 'Side Switch Team A';
+      const teamB = 'Side Switch Team B';
+      await writeCapture(rawDir, [
+        testFrame(1, 1_000, sideSwitchPayload(teamA, teamB, 'CT', teamA)),
+        testFrame(2, 2_000, sideSwitchPayload(teamB, teamA, 'T', teamA)),
+      ]);
+
+      const outputDir = join(root, 'gold');
+      await sanitizeCapture({
+        inputDir: rawDir,
+        outputDir,
+        scenario: 'team-side-switch-regression',
+        lifecycleCoverage: 'partial',
+      });
+
+      const frameLines = (await readFile(join(outputDir, 'frames.jsonl'), 'utf8'))
+        .trim()
+        .split('\n');
+      expect(frameLines).toHaveLength(2);
+      const payloads = frameLines.map(
+        (line) => (JSON.parse(line) as { readonly payload: SideSwitchSanitizedPayload }).payload,
+      );
+      const first = payloads[0];
+      const second = payloads[1];
+      if (first === undefined || second === undefined) {
+        throw new Error('side-switch regression did not produce two payloads');
+      }
+
+      const fixtureTeamA = first.map.team_ct.name;
+      const fixtureTeamB = first.map.team_t.name;
+      expect(fixtureTeamA).toMatch(/^Fixture Team \d{3}$/);
+      expect(fixtureTeamB).toMatch(/^Fixture Team \d{3}$/);
+      expect(fixtureTeamA).not.toBe(fixtureTeamB);
+
+      expect(second.map.team_ct.name).toBe(fixtureTeamB);
+      expect(second.map.team_t.name).toBe(fixtureTeamA);
+      expect(first.player.clan).toBe(fixtureTeamA);
+      expect(first.previously.player.clan).toBe(fixtureTeamA);
+      expect(first.added.player.clan).toBe(fixtureTeamA);
+      expect(second.player.clan).toBe(fixtureTeamA);
+      expect(second.previously.player.clan).toBe(fixtureTeamA);
+      expect(second.added.player.clan).toBe(fixtureTeamA);
+      expect(first.added.map.team_ct.name).toBe(fixtureTeamA);
+      expect(first.added.map.team_t.name).toBe(fixtureTeamB);
+      expect(second.added.map.team_ct.name).toBe(fixtureTeamB);
+      expect(second.added.map.team_t.name).toBe(fixtureTeamA);
     } finally {
       await rm(root, { recursive: true, force: true });
     }

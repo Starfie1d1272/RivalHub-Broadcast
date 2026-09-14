@@ -1,5 +1,4 @@
 import { verifyCapture } from '../capture/reader.js';
-import { digestReplayEvents } from '../replay/digest.js';
 import { replayCapture } from '../replay/runner.js';
 import { failCli, parseFlags, stripPnpmSeparator } from './args.js';
 
@@ -17,12 +16,15 @@ try {
     throw new Error('--speed must be a finite number greater than zero');
   }
   const capture = await verifyCapture(captureDir);
-  const result = await digestReplayEvents(
-    replayCapture(capture, {
-      mode: speed === undefined ? { kind: 'step' } : { kind: 'paced', speed },
-    }),
-  );
-  console.log(JSON.stringify({ captureId: capture.manifest.captureId, ...result }));
+  let frameCount = 0;
+  let boundaryCount = 0;
+  for await (const event of replayCapture(capture, {
+    mode: speed === undefined ? { kind: 'step' } : { kind: 'paced', speed },
+  })) {
+    if (event.kind === 'frame') frameCount += 1;
+    else boundaryCount += 1;
+  }
+  console.log(JSON.stringify({ captureId: capture.manifest.captureId, frameCount, boundaryCount }));
 } catch (error) {
   failCli(error);
 }
