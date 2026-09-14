@@ -871,7 +871,7 @@ exploded
 `#10` 的测试只提交少量可追溯 excerpt，不提交完整 capture，也不在 adapter 中建设 capture reader 或 sanitizer：
 
 - `packages/telemetry-gsi/test/fixtures/real-derived.ts` 是从 A 的完整文件确定性脱敏得到的单帧 excerpt：`seq=2..2`，保留 source provider timestamp 与 source fields，Steam identity 和 display name 映射为 fixture 值；
-- `packages/telemetry-gsi/test/fixtures/real-derived-observer.ts` 包含 B 的 `seq=45..45` observer block excerpt，以及 C 的 `seq=567,580,661,746,775` bomb lifecycle block excerpts；均保留真实 raw numeric/string/vector-string shape（包括 decimal-string timers、grenade lifetime 与 flame vector map），并只对 identity/display name 做确定性映射或省略无关 block；
+- `packages/telemetry-gsi/test/fixtures/real-derived-observer.ts` 包含 B 的 `seq=45..45` observer block excerpt，以及 C 的 `seq=567,580,661,746,775` bomb lifecycle block excerpts 和 `seq=761` observer transition excerpt；均保留真实 raw numeric/string/vector-string shape（包括 decimal-string timers、grenade lifetime 与 flame vector map），并只对 identity/display name 做确定性映射或省略无关 block；
 - `packages/telemetry-gsi/test/fixtures/synthetic-evidence-informed.ts` 是根据 C 已记录的 source facts 组成的 synthetic fixture。它带有 capture id 和完整 frames hash 作为 evidence reference，但没有单一 source frame/index/range，因此不能被解释为真实字段共现证据。
 
 B/C 两个完整 ZIP 仍属于 #11 的 capture consumption、sanitization、replay 与 gold-fixture 输入；#10 只提交上述 block-level excerpts，不提交完整 corpus。

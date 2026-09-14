@@ -706,6 +706,40 @@ export const REAL_DERIVED_C_PROVENANCE = {
     'bomb player ids mapped from source numeric ids to fixture-player-*; provider and source values retained; unrelated blocks omitted',
 } as const;
 
+export const REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE = {
+  fixtureKind: 'sanitized-real-derived',
+  sourceCaptureId: '20260913T162802Z-3f41d8df',
+  sourceCaptureFramesSha256: 'e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218',
+  sourceFrameSequence: 761,
+  sourceFrameRange: 'seq=761..761',
+  sourcePayloadBlocks: ['provider', 'phase_countdowns', 'round', 'player'],
+  sanitization:
+    'player has no steamid; spectarget, position, forward, provider, and source values retained; unrelated blocks omitted',
+} as const;
+
+export const REAL_DERIVED_C_OBSERVER_TRANSITION_FRAME = {
+  provider: {
+    name: 'Counter-Strike: Global Offensive',
+    appid: 730,
+    version: 14181,
+    timestamp: 1789317143,
+  },
+  phase_countdowns: {
+    phase: 'over',
+    phase_ends_in: '3.2',
+  },
+  round: {
+    phase: 'over',
+    win_team: 'T',
+    bomb: 'exploded',
+  },
+  player: {
+    spectarget: '304',
+    position: '-657.3, -755.9, 119.9',
+    forward: '-0.887, -0.462, -0.000',
+  },
+} as const;
+
 export const REAL_DERIVED_C_LIFECYCLE_FRAMES = [
   {
     sequence: 567,

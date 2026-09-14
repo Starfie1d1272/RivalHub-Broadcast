@@ -11,6 +11,8 @@ import {
   REAL_DERIVED_B_FRAME,
   REAL_DERIVED_B_PROVENANCE,
   REAL_DERIVED_C_LIFECYCLE_FRAMES,
+  REAL_DERIVED_C_OBSERVER_TRANSITION_FRAME,
+  REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE,
   REAL_DERIVED_C_PROVENANCE,
 } from './fixtures/real-derived-observer.js';
 
@@ -293,6 +295,42 @@ describe('adaptGsiPayload', () => {
       state: 'carried',
       sourcePlayerId: 'fixture-player-338',
       position: { x: -493, y: -808, z: 148.6 },
+    });
+  });
+
+  it('keeps an exact C observer transition degraded without normalizing a player without steamid', () => {
+    expect(REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE).toEqual({
+      fixtureKind: 'sanitized-real-derived',
+      sourceCaptureId: '20260913T162802Z-3f41d8df',
+      sourceCaptureFramesSha256: 'e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218',
+      sourceFrameSequence: 761,
+      sourceFrameRange: 'seq=761..761',
+      sourcePayloadBlocks: ['provider', 'phase_countdowns', 'round', 'player'],
+      sanitization:
+        'player has no steamid; spectarget, position, forward, provider, and source values retained; unrelated blocks omitted',
+    });
+
+    const result = adaptGsiPayload(REAL_DERIVED_C_OBSERVER_TRANSITION_FRAME, {
+      ...receiveContext,
+      sequence: REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE.sourceFrameSequence,
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.observation.coverage).toMatchObject({
+      round: 'present',
+      phaseCountdowns: 'present',
+      player: 'degraded',
+    });
+    expect(result.observation.telemetry.round).toEqual({
+      phase: 'over',
+      winnerSide: 'T',
+      bomb: { state: 'exploded' },
+    });
+    expect(result.observation.telemetry).not.toHaveProperty('player');
+    expect(result.diagnostics).toEqual({
+      entries: [{ code: 'INVALID_FIELD', severity: 'error', path: '$.player.steamid' }],
+      suppressedCount: 0,
     });
   });
 
