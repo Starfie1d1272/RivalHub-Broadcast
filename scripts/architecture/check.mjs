@@ -18,6 +18,7 @@ const BOUNDARY_RULE_IDS = Object.freeze({
   core: 'ARCH_CORE_BOUNDARY',
   protocol: 'ARCH_PROTOCOL_BOUNDARY',
   radar: 'ARCH_RADAR_BOUNDARY',
+  'telemetry-gsi': 'ARCH_TELEMETRY_GSI_BOUNDARY',
   web: 'ARCH_WEB_BOUNDARY',
   rivalhub: 'ARCH_RIVALHUB_BOUNDARY',
 });
@@ -356,7 +357,7 @@ function checkWorkspaceDependencyDeclarations(workspaces, report) {
         file: info.manifestPath,
         target: '@rivalhub-broadcast/testkit',
         message:
-          'testkit is recorder/replay infrastructure and may be used only as a dev-only test dependency, never by production runtime.',
+          'testkit owns capture consumption, replay, simulation, and fault injection; production capture recorder belongs to the Companion telemetry runtime and testkit may be used only as a dev-only dependency.',
       });
     }
   }
@@ -549,7 +550,7 @@ function checkImportEdges(records, repository, workspaces, report) {
           file: record.path,
           target: target.name,
           message:
-            'Production runtime code may not import testkit; keep recorder/replay/simulator infrastructure in dev-only tests and tooling.',
+            'Production runtime code may not import testkit; keep capture consumption, replay, simulation, and fault-injection infrastructure in dev-only tests and tooling. Production capture recorder belongs to the Companion telemetry runtime.',
         });
       }
     }

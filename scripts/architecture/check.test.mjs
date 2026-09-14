@@ -87,6 +87,18 @@ describe('architecture checker', () => {
         target: 'react',
       },
       {
+        manifestPath: 'packages/telemetry-gsi/package.json',
+        dependencies: { '@rivalhub-broadcast/protocol': 'workspace:*' },
+        ruleId: 'ARCH_TELEMETRY_GSI_BOUNDARY',
+        target: '@rivalhub-broadcast/protocol',
+      },
+      {
+        manifestPath: 'packages/telemetry-gsi/package.json',
+        dependencies: { fastify: '5.0.0' },
+        ruleId: 'ARCH_TELEMETRY_GSI_BOUNDARY',
+        target: 'fastify',
+      },
+      {
         manifestPath: 'apps/web/package.json',
         dependencies: { '@rivalhub-broadcast/telemetry-gsi': 'workspace:*' },
         ruleId: 'ARCH_WEB_BOUNDARY',
@@ -159,6 +171,19 @@ describe('architecture checker', () => {
       withFiles({ 'packages/radar/src/boundary.ts': "import React from 'react';\nvoid React;\n" }),
       'ARCH_RADAR_BOUNDARY',
       'react',
+    );
+    expectRule(
+      withFiles({ 'packages/telemetry-gsi/src/boundary.ts': "import 'node:fs';\n" }),
+      'ARCH_TELEMETRY_GSI_BOUNDARY',
+      'node:fs',
+    );
+    expectRule(
+      withFiles({
+        'packages/telemetry-gsi/src/boundary.ts':
+          "import { value } from '@rivalhub-broadcast/protocol';\nvoid value;\n",
+      }),
+      'ARCH_TELEMETRY_GSI_BOUNDARY',
+      '@rivalhub-broadcast/protocol',
     );
     expectRule(
       withFiles({

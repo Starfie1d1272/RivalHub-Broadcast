@@ -273,6 +273,10 @@ importers:
         version: typescript@7.0.2
 
   packages/telemetry-gsi:
+    dependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@typescript/native':
         specifier: 'catalog:'

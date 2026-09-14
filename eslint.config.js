@@ -11,7 +11,7 @@ const typeCheckedConfigs = tseslint.configs.recommendedTypeChecked.map((config) 
 
 export default tseslint.config(
   {
-    ignores: ['**/.agent-tmp/**', '**/dist/**', '**/node_modules/**'],
+    ignores: ['**/.agent-tmp/**', '**/.tmp/**', '**/dist/**', '**/node_modules/**'],
   },
   eslint.configs.recommended,
   ...typeCheckedConfigs,
