@@ -1,0 +1,51 @@
+export type CaptureSelection =
+  | { readonly kind: 'all' }
+  | {
+      readonly kind: 'sequence-range';
+      readonly firstSequence: number;
+      readonly lastSequence: number;
+    };
+
+export interface GoldCaptureProvenanceV1 {
+  readonly fixtureKind: 'sanitized-real-capture';
+  readonly sourceCaptureId: string;
+  readonly sourceFramesSha256: string;
+  readonly sourceFrameSelection: CaptureSelection;
+  readonly sanitizerVersion: 1;
+  readonly lifecycleCoverage: 'partial' | 'full-match';
+}
+
+export interface CaptureManifestV1 {
+  readonly formatVersion: 1;
+  readonly captureId: string;
+  readonly createdAt: string;
+  readonly platform: string;
+  readonly windowsVersion?: string;
+  readonly cs2Build?: string | number;
+  readonly broadcastCommit: string;
+  readonly scenario: string;
+  readonly notes?: string;
+  readonly gsiConfig: Record<string, unknown>;
+  readonly complete: boolean;
+  readonly frameCount: number;
+  readonly droppedFrames: number;
+  readonly framesSha256?: string;
+  readonly provenance?: GoldCaptureProvenanceV1;
+}
+
+export interface CaptureFrameV1 {
+  readonly version: 1;
+  readonly sequence: number;
+  readonly elapsedUs: number;
+  readonly receivedAt: string;
+  readonly payload: Record<string, unknown>;
+}
+
+export interface VerifiedCapture {
+  readonly directory: string;
+  readonly framesPath: string;
+  readonly manifest: CaptureManifestV1;
+  readonly computedFramesSha256: string;
+  readonly firstElapsedUs: number;
+  readonly lastElapsedUs: number;
+}

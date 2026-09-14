@@ -700,7 +700,61 @@ capture frames
 
 它不是所有 replay test 的默认执行方式。
 
-### 11.3 Fault injection
+### 11.3 Capture V1 / deterministic gold fixture
+
+Issue #11 的 `packages/testkit` 已将 capture consumption、验证、replay 与 fixture
+sanitization 落地为 Node-only tooling。production recorder 仍归属 Companion；testkit
+不进入 production runtime。
+
+Capture V1 的物理格式保持为 `manifest.json` + `frames.jsonl`。reader 对 manifest 中的
+未知字段保持容忍，但只接受 `formatVersion=1`；每条 frame 要求 `version=1`、非负安全整数
+`sequence`、非递减安全整数 `elapsedUs`、以 `Z` 结尾的 RFC3339 UTC `receivedAt`，以及 object
+形状的 `payload`。验证过程按行 streaming 读取 frames，并增量校验 frame count 与
+`framesSha256`；不对整场 capture 执行 `readFile + JSON.parse`。
+
+稳定的 root API 为：
+
+```ts
+readCaptureManifest(captureDir): Promise<CaptureManifestV1>
+verifyCapture(captureDir): Promise<VerifiedCapture>
+iterateCaptureFrames(capture): AsyncIterable<CaptureFrameV1>
+sanitizeCapture(options): Promise<VerifiedCapture>
+replayCapture(capture, options): AsyncIterable<ReplayEvent>
+```
+
+replay 以第一帧 `elapsedUs` 为 virtual zero，step 模式不等待，paced 模式按绝对 deadline
+计算 `speed`；effective receive context 使用 monotonic elapsed 与 UTC `receivedAt`，而
+`sourceFrame` 始终保留原始 evidence。fault selector 使用 0-based 原始 `captureIndex`，
+支持显式 drop、duplicate、adjacent reorder、millisecond-aligned time gap 与 source
+generation boundary；结构性冲突直接拒绝，不引入随机或 chaos DSL。
+
+Sanitizer 采用两遍 streaming strategy：先建立 capture-global identity/name mapping，再以
+canonical JSON 直接递归序列化（object key 使用默认 UTF-16 lexicographic sort，array order
+保持不变）。gold 只保留安全的 GSI `parameters` allowlist 与 source-order `components`，
+移除 auth/token/URI、Steam-like identity、player/observer display name；team display name
+按全局 team identity 映射，CT/T 只保留为 payload path semantics。output 使用 temp directory
+验证后 rename，禁止 in-place 或覆盖已有 fixture。
+
+当前真实 gold corpus：
+
+```text
+fixtures/gsi/gold/observer-demo-warmup/       # B，全量 157 帧
+fixtures/gsi/gold/local-bot-spectator-live/   # C，sequence 540..800，共 261 帧
+```
+
+两者均保留 source capture id、source frames hash、selection、sanitizer version 与
+lifecycle coverage provenance；raw capture 不进入 Git。对应维护命令为：
+
+```text
+pnpm testkit:capture:verify -- <capture-dir>
+pnpm testkit:capture:sanitize -- --input <raw-capture-dir> --output fixtures/gsi/gold/<fixture-id> --scenario <canonical-scenario> --lifecycle-coverage partial|full-match [--sequence-start N --sequence-end M]
+pnpm testkit:capture:replay -- <capture-dir> [--speed N]
+```
+
+Gold regression 通过 production `adaptGsiPayload()` replay，并同时断言 frame boundary、
+provenance 与 canonical aggregate digest；D capture 仍是后续可选 evidence，不阻塞本 Issue。
+
+### 11.4 Fault injection
 
 后续可在同一 capture corpus 上增加：
 
@@ -713,7 +767,8 @@ disconnect
 reconnect
 ```
 
-Fault injection 不要求在第一张 M1 implementation Issue 中全部完成。
+Fault injection 的 V1 最小实现已覆盖 drop、duplicate、adjacent reorder、time gap 与
+source-generation boundary；更复杂的 disconnect/reconnect scenario 仍不属于本 Issue。
 
 ---
 

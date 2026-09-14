@@ -39,5 +39,15 @@ export default tseslint.config(
       },
     },
   },
+  {
+    files: ['packages/testkit/test/**/*.{ts,tsx,mts,cts}'],
+    languageOptions: {
+      parserOptions: {
+        projectService: false,
+        project: './packages/testkit/tsconfig.test.json',
+        tsconfigRootDir: import.meta.dirname,
+      },
+    },
+  },
   ...architectureEslintConfigs(),
 );
