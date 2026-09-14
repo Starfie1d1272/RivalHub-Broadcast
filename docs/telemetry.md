@@ -1113,6 +1113,20 @@ Replay Runtime ◄───────────┘
 Runtime Skeleton
 ```
 
+### 16.6 Issue #13 RuntimeState skeleton evidence
+
+Issue #13 已按上述边界落地为 Core-owned pure reducer（2026-09-15）。本次实现记录以下
+continuity spike 与验证结论：
+
+- 当前 GSI payload 没有可靠的 source-instance / boot-id / generation token；`provider.timestamp`、`provider.version/appid/steamid`、`previously/added`、HTTP/TCP connection 变化、stale 后恢复，以及 round/score/warmup 变化都不能被 Core 用来猜测 source generation。
+- Program source generation 只接受 Companion lifecycle coordinator 显式发出的连续 `+1` control。generation advance 保留旧 `lastAccepted` cursor 以继续校验 producer 范围内的 ingress sequence，但立即清空 `programTelemetry`；旧 generation frame 与未经 control 的 ahead frame 都 fail closed。
+- same-map restart/restore/correction 只通过 `reset-map-execution` 显式表示。有效 reset 将 `mapEpoch` 加一、保留 map name、保留 Program generation 与 receive cursor，并**清空旧 `programTelemetry`**；下一份 accepted telemetry 才能成为新的 map execution baseline，不能把旧 execution snapshot 临时挂在新 epoch 下。reset 不改变 ingress sequence。
+- 第一份带有 present 且非空 `map.name` 的 accepted observation 只建立 `mapEpoch=1`，不产生历史 `map_started`；后续可靠的 map-name change 才自动推进 epoch 并产生唯一 `map_execution_changed`。gameover 只产生 transition，不推进 epoch。
+- freshness 由当前 generation 的 accepted snapshot 与 monotonic receive time 派生；没有当前 baseline（包括 generation advance 或 map reset 之后）为 `awaiting`，超过调用方注入的 `staleAfterMs` 才为 `stale`。#13 不冻结 production timeout 数值，也不保存 timer/stateful `isStale`。
+- V1 transition 只包含 `round_started`、`round_ended`、`map_ended` 与 `map_execution_changed`。duplicate、out-of-order、gap、stale-recovery、generation boundary 与 reset 不跨不确定区间推导旧边沿；gap/stale recovery 仍接受最新 current snapshot。
+
+Core unit tests 与 `packages/testkit` 的 production adapter replay tests 覆盖上述 sequence、generation、map、stale 与 real semantic fixture 边界；#15 仍负责真实 Windows + CS2 的 map-change/disconnect/client-restart qualification。
+
 ---
 
 ## 17. Validation model

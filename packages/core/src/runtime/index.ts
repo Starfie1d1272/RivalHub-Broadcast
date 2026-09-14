@@ -1,9 +1,7 @@
-export {
-  createInitialRuntimeState,
-  getProgramSourceFreshness,
-  reduceRuntime,
-} from './runtime/index.js';
-export type { ProgramSourceFreshness } from './runtime/index.js';
+export { getProgramSourceFreshness } from './freshness.js';
+export type { ProgramSourceFreshness } from './freshness.js';
+export { reduceRuntime } from './reducer.js';
+export { createInitialRuntimeState } from './types.js';
 export type {
   LiveSessionBinding,
   ExplicitMapExecutionChangedTransition,
@@ -30,4 +28,4 @@ export type {
   RuntimeTime,
   RuntimeTransition,
   RuntimeTransitionBase,
-} from './runtime/index.js';
+} from './types.js';

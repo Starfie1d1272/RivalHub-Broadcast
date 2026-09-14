@@ -19,6 +19,7 @@
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*"
   },
   "devDependencies": {
+    "@rivalhub-broadcast/core": "workspace:*",
     "@types/node": "catalog:",
     "@typescript/native": "catalog:"
   }
