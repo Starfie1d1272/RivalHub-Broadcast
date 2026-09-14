@@ -5,14 +5,31 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { replayCapture } from '../src/replay/runner.js';
-import type { ReplayEvent, ReplayScheduler, ReplayedGsiFrame } from '../src/replay/types.js';
+import type { CaptureFrameV1 } from '../src/capture/types.js';
+import type { ReplayEvent, ReplayScheduler } from '../src/replay/types.js';
 import { verifyCapture } from '../src/capture/reader.js';
 import { writeCapture, replayPayload, testFrame } from './helpers.js';
 
+type ReplayReceiveContext = {
+  readonly sequence: number;
+  readonly receivedAt: string;
+  readonly receivedMonotonicMs: number;
+};
+
 type ProductionAdapter = (
-  payload: ReplayedGsiFrame['sourceFrame']['payload'],
-  context: ReplayedGsiFrame['receiveContext'],
-) => ReplayedGsiFrame['result'];
+  payload: Record<string, unknown>,
+  context: ReplayReceiveContext,
+) => unknown;
+
+type TestFrameEvent = {
+  readonly kind: 'frame';
+  readonly captureIndex: number;
+  readonly occurrence: number;
+  readonly scheduledElapsedUs: number;
+  readonly sourceFrame: CaptureFrameV1;
+  readonly receiveContext: ReplayReceiveContext;
+  readonly result: unknown;
+};
 
 const telemetryGsiPackage = '@rivalhub-broadcast/telemetry-gsi';
 const productionAdapterModule = (await import(telemetryGsiPackage)) as unknown as {
@@ -55,8 +72,21 @@ async function collect(events: AsyncIterable<ReplayEvent>): Promise<ReplayEvent[
   return output;
 }
 
-function frameEvents(events: readonly ReplayEvent[]) {
-  return events.filter((event) => event.kind === 'frame');
+function frameEvents(events: readonly ReplayEvent[]): TestFrameEvent[] {
+  const frames: TestFrameEvent[] = [];
+  for (const event of events) {
+    if (event.kind !== 'frame') continue;
+    frames.push({
+      kind: 'frame',
+      captureIndex: event.captureIndex,
+      occurrence: event.occurrence,
+      scheduledElapsedUs: event.scheduledElapsedUs,
+      sourceFrame: event.sourceFrame,
+      receiveContext: event.receiveContext,
+      result: JSON.parse(JSON.stringify(event.result)) as unknown,
+    });
+  }
+  return frames;
 }
 
 describe('ReplayClock-backed production adapter replay', () => {
