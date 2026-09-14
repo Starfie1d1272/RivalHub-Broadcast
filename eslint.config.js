@@ -38,6 +38,12 @@ export default tseslint.config(
         projectService: false,
       },
     },
+    rules: {
+      // The test project imports the package's dist-based Core export before CI builds it.
+      '@typescript-eslint/no-unsafe-call': 'off',
+      '@typescript-eslint/no-unsafe-member-access': 'off',
+      '@typescript-eslint/no-unsafe-return': 'off',
+    },
   },
   {
     files: ['scripts/**/*.mjs'],
