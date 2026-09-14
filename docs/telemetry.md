@@ -174,26 +174,35 @@ Core 拥有 telemetry 进入 domain 的稳定输入 contract。
 
 ```text
 TelemetryObservation
-├─ sequence
-├─ receivedAt
-├─ receivedMonotonic
+├─ receive
+│  ├─ sequence
+│  ├─ receivedAt
+│  └─ receivedMonotonicMs
 ├─ source
 │  ├─ kind
-│  ├─ providerTimestamp?
-│  └─ capabilities
+│  └─ providerTimestamp?
+├─ coverage
 ├─ telemetry
 │  ├─ map
-│  ├─ phase
 │  ├─ round
-│  ├─ sides
-│  ├─ players
-│  ├─ observedPlayer
+│  ├─ phaseCountdowns
+│  ├─ player
+│  ├─ allPlayers
 │  ├─ bomb
 │  └─ grenades
-└─ diagnostics
 ```
 
-以上是语义结构，不是最终 TypeScript schema。字段与类型在第一张 M1 implementation Issue 中根据真实实现进一步收敛。
+`coverage` 只表达当前 frame 对各 source block 的观测状态（`present / absent / degraded`），不等于 ADR-0003 中由连续性、连接健康和 identity 派生的 runtime capability。
+
+GSI-specific diagnostics 不属于 Core-owned `TelemetryObservation`。Adapter 的结果在 contract 上保持并列：
+
+```text
+GsiAdaptResult
+├─ observation: TelemetryObservation
+└─ diagnostics: GsiDiagnosticBatch
+```
+
+以上是语义结构；最终 TypeScript schema 由 #10 实现冻结。Core contract 不出现 Raw GSI 字段、`previously` / `added` 或 GSI diagnostic code。
 
 Core contract 不应出现：
 
@@ -979,7 +988,7 @@ Build graph 的具体实现不在本文提前指定，以第一条真实 depende
 - tolerant Raw GSI parser / validator；
 - block-specific source semantics；
 - normalization；
-- current-vs-previous deterministic comparison boundary；
+- adapter statelessness/determinism boundary；current-vs-previous comparison belongs to downstream Core/runtime；
 - synthetic fixtures；
 - 从真实 captures 派生的 sanitized regression fixtures；
 - first real workspace edge / build graph validation。

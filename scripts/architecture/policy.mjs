@@ -83,6 +83,35 @@ export const PACKAGE_BOUNDARIES = Object.freeze({
       '@rivalhub-broadcast/rivalhub',
     ],
   }),
+  '@rivalhub-broadcast/telemetry-gsi': packageBoundary({
+    message:
+      'Telemetry GSI must remain a pure, replayable, transport-independent source adapter; keep UI, server, storage, RivalHub, Radar, testkit, and Node-only ownership outside the package.',
+    forbidden: [
+      'react',
+      'react-dom',
+      'fastify',
+      'ws',
+      'vite',
+      '@vitejs/',
+      '@supabase/',
+      'zod',
+      'drizzle-orm',
+      'pg',
+      'postgres',
+      'mysql2',
+      'sqlite3',
+      'better-sqlite3',
+    ],
+    forbidNodeBuiltins: true,
+    forbiddenWorkspacePackages: [
+      '@rivalhub-broadcast/protocol',
+      '@rivalhub-broadcast/rivalhub',
+      '@rivalhub-broadcast/radar',
+      '@rivalhub-broadcast/testkit',
+      '@rivalhub-broadcast/web',
+      '@rivalhub-broadcast/companion',
+    ],
+  }),
   '@rivalhub-broadcast/web': packageBoundary({
     message:
       'Web consumes normalized projections; it must not own raw telemetry, RivalHub cloud integration, server transport, or Node-only runtime code.',
