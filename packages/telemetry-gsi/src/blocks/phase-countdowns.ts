@@ -7,6 +7,12 @@ import { finishBlock, type ParsedBlock } from './types.js';
 
 function normalizeCountdownPhase(value: string): CountdownPhase | undefined {
   switch (value.toLowerCase()) {
+    case 'paused':
+      return 'paused';
+    case 'timeout_ct':
+      return 'timeout_ct';
+    case 'timeout_t':
+      return 'timeout_t';
     case 'warmup':
       return 'warmup';
     case 'freezetime':

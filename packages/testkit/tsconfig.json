@@ -2,7 +2,9 @@
   "extends": "../../tsconfig.library.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "types": ["node"]
   },
+  "references": [{ "path": "../telemetry-gsi" }],
   "include": ["src"]
 }

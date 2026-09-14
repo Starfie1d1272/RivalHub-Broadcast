@@ -1,5 +1,14 @@
 export type CountdownPhase =
-  'warmup' | 'freezetime' | 'live' | 'bomb' | 'defuse' | 'over' | 'unknown';
+  | 'paused'
+  | 'timeout_ct'
+  | 'timeout_t'
+  | 'warmup'
+  | 'freezetime'
+  | 'live'
+  | 'bomb'
+  | 'defuse'
+  | 'over'
+  | 'unknown';
 
 export interface ObservedPhaseCountdown {
   readonly phase?: CountdownPhase;
