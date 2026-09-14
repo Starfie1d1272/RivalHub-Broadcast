@@ -5,10 +5,10 @@ import { CliUsageError, parseFlags, stripPnpmSeparator } from '../src/cli/args.j
 describe('testkit CLI argument parsing', () => {
   it('accepts pnpm separator and repeated key/value pairs', () => {
     expect(stripPnpmSeparator(['--', '--input', 'raw'])).toEqual(['--input', 'raw']);
-    expect(parseFlags(['--input', 'raw', '--output', 'gold'])).toEqual(
+    expect(parseFlags(['--input', 'raw', '--output', 'semantic-output'])).toEqual(
       new Map([
         ['input', 'raw'],
-        ['output', 'gold'],
+        ['output', 'semantic-output'],
       ]),
     );
   });

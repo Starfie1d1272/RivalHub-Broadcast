@@ -4,7 +4,7 @@
 >
 > 本文定义 RivalHub Broadcast 在 M1 阶段的 Telemetry / CS2 Game State Integration（GSI）边界、数据语义、capture/replay 约束与真实环境验证要求。本文服从 ADR-0001～0003 中已经接受的 authority、RuntimeState、identity、time 与 delivery invariant。
 >
-> 2026-09 已获得一份 RoundSense normal-player capture 与两份 RivalHub Broadcast Windows observer capture。本文已经把能够被真实数据确认的 source semantics 从“implementation hypothesis”收敛为 evidence-backed baseline；仍未被真实场景覆盖的行为继续明确标记为 open validation question。
+> 2026-09 已获得一份 RoundSense normal-player capture 与多份 RivalHub Broadcast Windows observer capture。本文已经把能够被真实数据确认的 source semantics 从“implementation hypothesis”收敛为 evidence-backed baseline；仍未被真实场景覆盖的行为继续明确标记为 open validation question。
 
 ## 1. 目标与范围
 
@@ -649,7 +649,7 @@ bounded writer queue
 3. capture 标记为 incomplete；
 4. `droppedFrames` 可观测；
 5. 产生明确 diagnostic / incident；
-6. incomplete capture 不得作为 gold/reference fixture。
+6. incomplete capture 不得作为 semantic/reference fixture。
 
 Recorder failure 不应阻塞 live telemetry path。
 
@@ -700,7 +700,7 @@ capture frames
 
 它不是所有 replay test 的默认执行方式。
 
-### 11.3 Capture V1 / deterministic gold fixture
+### 11.3 Capture V1 / deterministic semantic fixture
 
 Issue #11 的 `packages/testkit` 已将 capture consumption、验证、replay 与 fixture
 sanitization 落地为 Node-only tooling。production recorder 仍归属 Companion；testkit
@@ -730,29 +730,45 @@ generation boundary；结构性冲突直接拒绝，不引入随机或 chaos DSL
 
 Sanitizer 采用两遍 streaming strategy：先建立 capture-global identity/name mapping，再以
 canonical JSON 直接递归序列化（object key 使用默认 UTF-16 lexicographic sort，array order
-保持不变）。gold 只保留安全的 GSI `parameters` allowlist 与 source-order `components`，
+保持不变）。fixture 只保留安全的 GSI `parameters` allowlist 与 source-order `components`，
 移除 auth/token/URI、Steam-like identity、player/observer display name；team display name
 按全局 team identity 映射，CT/T 只保留为 payload path semantics。output 使用 temp directory
 验证后 rename，禁止 in-place 或覆盖已有 fixture。
 
-当前真实 gold corpus：
+canonical real-evidence corpus 按被保护的 source semantics 组织，而不是按一次采集批次组织：
 
 ```text
-fixtures/gsi/gold/observer-demo-warmup/       # B，全量 157 帧
-fixtures/gsi/gold/local-bot-spectator-live/   # C，sequence 540..800，共 261 帧
+fixtures/gsi/semantic/observer/rich-live-state/
+fixtures/gsi/semantic/observer/missing-player-identity/
+fixtures/gsi/semantic/warmup/observer/
+fixtures/gsi/semantic/local-bot/numeric-player-id/
+fixtures/gsi/semantic/bomb/dropped/
+fixtures/gsi/semantic/bomb/plant/
+fixtures/gsi/semantic/bomb/defuse/
+fixtures/gsi/semantic/bomb/explode-reset/
+fixtures/gsi/semantic/match/halftime-side-switch/
+fixtures/gsi/semantic/match/regulation-to-overtime/
+fixtures/gsi/semantic/match/overtime-side-switch/
+fixtures/gsi/semantic/match/gameover/
+fixtures/gsi/semantic/match/paused/
+fixtures/gsi/semantic/match/timeout-ct/
+fixtures/gsi/semantic/match/timeout-t/
 ```
 
-两者均保留 source capture id、source frames hash、selection、sanitizer version 与
-lifecycle coverage provenance；raw capture 不进入 Git。对应维护命令为：
+每个 fixture 均保留 source capture id、source frames hash、实际 sequence selection、
+sanitizer version 与 lifecycle coverage provenance；capture id/hash 只用于追溯，
+不作为新的 replay digest 测试机制。完整 raw capture 只作为本地 source evidence，不进入 Git。
+对应维护命令为：
 
 ```text
 pnpm testkit:capture:verify -- <capture-dir>
-pnpm testkit:capture:sanitize -- --input <raw-capture-dir> --output fixtures/gsi/gold/<fixture-id> --scenario <canonical-scenario> --lifecycle-coverage partial|full-match [--sequence-start N --sequence-end M]
+pnpm testkit:capture:sanitize -- --input <raw-capture-dir> --output fixtures/gsi/semantic/<semantic-path> --scenario <canonical-scenario> --lifecycle-coverage partial|full-match [--sequence-start N --sequence-end M]
 pnpm testkit:capture:replay -- <capture-dir> [--speed N]
 ```
 
-Gold regression 通过 production `adaptGsiPayload()` replay，并断言关键 semantic checkpoint
-与 provenance；D capture 仍是后续可选 evidence，不阻塞本 Issue。
+semantic regression 通过 production `adaptGsiPayload()` replay，并只断言关键业务语义与
+provenance；single-frame semantics 使用最小 frame，transition semantics 使用最短合理的
+bounded contiguous range。source capture 的绝对路径不写入 manifest。
 
 ### 11.4 Fault injection
 
@@ -818,7 +834,7 @@ throttle = 0.1 s
 heartbeat = 60 s
 ```
 
-BOT spectator capture 的 payload interval：
+已有 observer source capture 的 payload interval：
 
 ```text
 median ≈ 249 ms
@@ -827,7 +843,8 @@ p95 ≈ 257 ms
 
 即该环境下实际可见 cadence 约为 4 Hz，而不是配置上限对应的 10 Hz。
 
-Demo capture 的典型 interval 同样约 250 ms，但由于播放中断/暂停存在长间隔，因此不用于 p95 production sizing。
+早期 observer source 的典型 interval 同样约 250 ms，但由于播放中断/暂停存在长间隔，
+因此不用于 p95 production sizing。
 
 结论：
 
@@ -843,15 +860,11 @@ Demo capture 的典型 interval 同样约 250 ms，但由于播放中断/暂停�
 
 原始 capture 因包含真实 Steam identity / display name，不直接提交到仓库。文档记录 provenance 与能够复核的摘要；后续进入 Git 的 fixture 必须由原始 evidence deterministic sanitization 派生。
 
-#### A. RoundSense normal-player capture
+#### RoundSense normal-player evidence
 
-```text
-source: cs2-roundsense historical runtime capture
-CS2 provider version: 14174
-frames: 102
-file SHA-256:
-beb711e09b4a9fcb7dca9c1b44cfd1699cecf7ed4a101a74ae69d995529646cb
-```
+这是 normal-player source shape 的独立真实 evidence，保留为
+`packages/telemetry-gsi/test/fixtures/real-derived.ts` 的最小 excerpt；其 source metadata
+仍写在该 fixture 的 provenance 中。
 
 主要确认：
 
@@ -861,75 +874,51 @@ beb711e09b4a9fcb7dca9c1b44cfd1699cecf7ed4a101a74ae69d995529646cb
 - heartbeat frame 可以在没有 domain state change 时出现；
 - record → replay 思路可行。
 
-#### B. RivalHub Broadcast Demo observer capture
+#### Warmup observer evidence
 
-```text
-captureId: 20260913T161643Z-56b6492b
-platform: Windows 11 Pro for Workstations
-CS2 provider version: 14181
-frames: 157
-frames SHA-256:
-519cec4f94f93b2cbc3b34d5e32d60e428039a94b3999d058a56910afcd7c5f9
-```
+完整比赛 source 没有 warmup，因此只保留一个最小 `warmup/observer` representative frame。其 manifest
+保留原始 source capture、hash 与 sequence selection provenance；完整 raw capture 不进入 Git。
 
-Operator note：旧比赛 Demo 在 warmup 结束附近出现 client-side message parse / playback failure，因此 capture 未进入正式 live round。本文不从该 capture 单独推断失败根因。
+- 该 frame 只保护 warmup countdown 与 observer 10-player source shape；
+- 不把 warmup source 的采集批次名称作为长期 fixture 语义。
 
-即使如此，该 capture 已确认：
+#### Local BOT numeric-player-id evidence
 
-- `allplayers` 出现 150 帧；
-- 每个 `allplayers` frame 都是 10 人，且为 5 CT + 5 T；
-- 共 1500 个 player object，全部包含 `name / team / observer_slot / state / weapons / match_stats / position / forward`；
-- `phase_countdowns` 可用；
-- payload root `grenades` 出现 150 帧，其中 50 帧非空；
-- 实际观察到 `frag / firebomb / inferno`，以及 position / velocity / owner / lifetime；inferno 可带 `flames`；
-- root `bomb` 未出现，与本 capture 未进入正式回合一致。
+完整比赛 source 没有 numeric-like source player identifiers，因此只保留一个最小
+`local-bot/numeric-player-id` representative frame。其 manifest 保留原始 source capture、
+hash 与 sequence selection provenance；该 fixture 只保护 source player id 的 numeric-like
+形态及其 normalization，不把 local BOT 采集批次当成长期语义。
 
-#### C. RivalHub Broadcast local BOT spectator capture
+#### Recovered full Ancient match evidence
 
-```text
-captureId: 20260913T162802Z-3f41d8df
-platform: Windows 11 Pro for Workstations
-CS2 provider version: 14181
-frames: 1940
-frames SHA-256:
-e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218
-```
+本地 recovered source capture 是一场完整 Ancient derivative：`0:0 → 12:12 → OT → 14:16 gameover`，
+共 16,382 帧。它只作为本地 source evidence，不提交整场 raw 文件；进入仓库的内容由
+`fixtures/gsi/semantic/` 下的最小 frame/range 派生，并在各自 manifest provenance 中保存
+source capture、`sourceFramesSha256` 与实际 sequence selection。
 
-重要 provenance caveat：capture spike 的 `scenario` 字段当时仍硬编码为 `demo-observer`；根据操作者记录，本次实际场景是**本地 BOT 对局 spectator**。因此 raw manifest 的 scenario metadata 不应被静默当成真实场景标签。
+该 source capture 实际确认并覆盖：
 
-该 capture 已确认：
+- rich observer live state：10 个 `allPlayers`、position/forward、weapons、reloading、
+  `round_totaldmg`、defusekit、frag、inferno 与 flame positions；
+- observer root player 的 identified → missing source identity → identified transition；
+- bomb dropped、planting、planted、defusing、defused、exploded，以及 explode → round over
+  → next freezetime/reset；
+- `paused`、`timeout_ct`、`timeout_t` phase countdown；
+- halftime side switch、regulation 12:12 → overtime、overtime side switch、final round → gameover。
 
-- `allplayers` 出现 1936 帧，每帧仍为 10 人；
-- warmup 初期存在 5 CT + 5 T，正式对局阶段因本地 BOT/队伍切换变为 6 CT + 4 T；
-- 共 19360 个 player object，全部包含 `name / team / observer_slot / state / weapons / match_stats / position / forward`；
-- `round.phase` 覆盖 `freezetime / live / over`；
-- `phase_countdowns.phase` 覆盖 `warmup / freezetime / live / bomb / defuse / over`；
-- root `bomb.state` 实际覆盖：
-
-```text
-carried
-dropped
-planting
-planted
-defusing
-exploded
-```
-
-- `round.bomb` 观察到 `planted / exploded`；
-- `round.win_team` 观察到 `CT / T`；
-- 在 `buffer=0.1 / throttle=0.1` 下，稳定 live 数据典型 cadence 约 4 Hz。
-
-本地 6v4 队伍分布影响比赛真实性，但不影响本次对 GSI block shape、10-player collection、position、phase 与 bomb lifecycle 的 source-level验证。
+其中 single-frame semantics 只保留代表帧，transition semantics 只保留证明前后关系所需的
+最短 bounded contiguous range。provider version 变化不单独形成 fixture。
 
 ### 13.1.1 Fixture evidence levels
 
 `#10` 的测试只提交少量可追溯 excerpt，不提交完整 capture，也不在 adapter 中建设 capture reader 或 sanitizer：
 
-- `packages/telemetry-gsi/test/fixtures/real-derived.ts` 是从 A 的完整文件确定性脱敏得到的单帧 excerpt：`seq=2..2`，保留 source provider timestamp 与 source fields，Steam identity 和 display name 映射为 fixture 值；
-- `packages/telemetry-gsi/test/fixtures/real-derived-observer.ts` 包含 B 的 `seq=45..45` observer block excerpt，以及 C 的 `seq=567,580,661,746,775` bomb lifecycle block excerpts 和 `seq=761` observer transition excerpt；均保留真实 raw numeric/string/vector-string shape（包括 decimal-string timers、grenade lifetime 与 flame vector map），并只对 identity/display name 做确定性映射或省略无关 block；
-- `packages/telemetry-gsi/test/fixtures/synthetic-evidence-informed.ts` 是根据 C 已记录的 source facts 组成的 synthetic fixture。它带有 capture id 和完整 frames hash 作为 evidence reference，但没有单一 source frame/index/range，因此不能被解释为真实字段共现证据。
+- `packages/telemetry-gsi/test/fixtures/real-derived.ts` 保留 normal-player source shape 的单帧 excerpt：`seq=2..2`，source metadata 与 identity sanitization 说明仍在 fixture provenance 中；
+- `fixtures/gsi/semantic/` 是 canonical real-evidence corpus。recovered-match entries 按 observer、bomb、match semantic scenario 命名；warmup 与 numeric local-BOT 仅因完整比赛 source 缺少对应 source shape 而保留；每个 manifest 保存 source capture、`sourceFramesSha256`、实际 selection、sanitizer version 与 lifecycle coverage；
+- `packages/telemetry-gsi/test/fixtures/synthetic-evidence-informed.ts` 仍是 synthetic contract fixture，不代表真实字段共现证据，也不替代 semantic real-evidence corpus。
 
-B/C 两个完整 ZIP 仍属于 #11 的 capture consumption、sanitization、replay 与 gold-fixture 输入；#10 只提交上述 block-level excerpts，不提交完整 corpus。
+完整 raw capture 只用于本地 verify / sanitize / replay；不提交完整 corpus，也不把 capture
+id/hash 提升为新的 replay assertion。
 
 ### 13.2 已经可以冻结的 source facts
 
@@ -940,18 +929,24 @@ B/C 两个完整 ZIP 仍属于 #11 的 capture consumption、sanitization、repl
 - `allplayers` 在已观察 spectator 场景中是完整 10-player current collection；
 - `position / forward` 位于每个 `allplayers` player object 内；
 - cfg `allgrenades` 对应 payload root `grenades`；
+- `phase_countdowns.phase` 的真实 source values 包括 `warmup / freezetime / live / bomb /
+  defuse / over / paused / timeout_ct / timeout_t`；
+- root `bomb.state` 的真实 source values 包括 `carried / dropped / planting / planted /
+  defusing / defused / exploded`；
 - root `bomb`、`round.bomb`、`phase_countdowns` 是不同 source concept，不应合并成一个原始字段；
+- `round.bomb` 与 `round.win_team` 在 round reset 后可以从 current source 中消失；
+- team display name 在 halftime 与 overtime side switch 中保持 identity continuity，CT/T
+  只是当前 side mapping；
+- regulation 12:12、overtime side switch 与 final `gameover` 已有 bounded real evidence；
 - `previously / added` 只作为 hints/diagnostics；
 - domain transitions 仍由 normalized observation + Core state 推导；
 - source cadence 与 render cadence 分离。
 
 ### 13.3 仍未覆盖的真实场景
 
-首轮 corpus 还没有完整覆盖：
+当前 corpus 仍没有完整覆盖：
 
 ```text
-halftime / side switch
-map end / map change
 disconnect / reconnect
 CS2 restart / server restart
 player join / leave collection edge cases
@@ -959,7 +954,7 @@ player join / leave collection edge cases
 正式赛事 GOTV / production observer path
 ```
 
-因此这些边界不得通过当前 3 份 capture 过度外推。
+因此这些边界不得通过当前 semantic fixtures 过度外推。
 
 ---
 
@@ -1081,7 +1076,7 @@ Build graph 的具体实现不在本文提前指定，以第一条真实 depende
 - step / 1x / Nx；
 - production adapter replay；
 - selected HTTP ingress replay；
-- semantic checkpoints / expected observations for gold replays。
+- semantic checkpoints / expected observations for real-evidence replays。
 
 ### 16.4 Real CS2 Reference Corpus Hardening
 
@@ -1090,7 +1085,7 @@ Build graph 的具体实现不在本文提前指定，以第一条真实 depende
 后续范围：
 
 - deterministic sanitization；
-- representative gold fixture selection；
+- representative semantic fixture selection；
 - halftime / reconnect / map-change 等未覆盖 scenario；
 - 正式赛事形态 validation；
 - adapter/spec correction based on new evidence。
@@ -1211,7 +1206,7 @@ CI 绿灯与当前短时 capture 都不能替代 Layer D。
 - 长时 payload volume / recorder throughput / disk sizing；
 - production recorder 的实际 drop/backpressure behavior；
 - 推荐 production `buffer` / `throttle`；
-- gold/reference corpus 的最小覆盖集合；
+- semantic/reference corpus 的最小覆盖集合；
 - 正式赛事 GOTV / observer path 与 Demo / local spectator 是否存在 source-shape 差异。
 
 这些问题在获得对应真实 evidence 前，不应通过 synthetic fixture 自行“证明”。

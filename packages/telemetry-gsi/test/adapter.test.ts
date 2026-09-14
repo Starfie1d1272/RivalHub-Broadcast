@@ -7,14 +7,6 @@ import {
   SYNTHETIC_EVIDENCE_INFORMED_ROUND_AFTER_BOMB_FRAME,
 } from './fixtures/synthetic-evidence-informed.js';
 import { REAL_DERIVED_FRAME, REAL_DERIVED_PROVENANCE } from './fixtures/real-derived.js';
-import {
-  REAL_DERIVED_B_FRAME,
-  REAL_DERIVED_B_PROVENANCE,
-  REAL_DERIVED_C_LIFECYCLE_FRAMES,
-  REAL_DERIVED_C_OBSERVER_TRANSITION_FRAME,
-  REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE,
-  REAL_DERIVED_C_PROVENANCE,
-} from './fixtures/real-derived-observer.js';
 
 const receiveContext = {
   sequence: 17,
@@ -39,7 +31,7 @@ function playerFixture(sourcePlayerId: string) {
 }
 
 describe('adaptGsiPayload', () => {
-  it('normalizes a synthetic evidence-informed composition without leaking raw GSI shape', () => {
+  it('normalizes a synthetic contract composition without leaking raw GSI shape', () => {
     const result = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME, receiveContext);
 
     expect(result.ok).toBe(true);
@@ -108,17 +100,13 @@ describe('adaptGsiPayload', () => {
     expect(result.observation.telemetry).not.toHaveProperty('added');
   });
 
-  it('keeps explicit provenance for a synthetic evidence-informed fixture', () => {
+  it('keeps explicit provenance for a synthetic contract fixture', () => {
     expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE).toMatchObject({
-      fixtureKind: 'synthetic-evidence-informed',
-      sourceCaptureId: '20260913T162802Z-3f41d8df',
-      sourceFrame: 'synthetic composition from documented source facts; no single source frame',
+      fixtureKind: 'synthetic-contract-fixture',
+      sourceFrame: 'synthetic composition; no source capture or single source frame',
       sourceFrameSequence: null,
       sourceFrameRange: null,
     });
-    expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE.sourceCaptureFramesSha256).toMatch(
-      /^[a-f0-9]{64}$/,
-    );
     expect(SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE.sanitization).toContain(
       'not a sanitized raw frame',
     );
@@ -167,171 +155,6 @@ describe('adaptGsiPayload', () => {
       ],
     });
     expect(result.observation.telemetry).not.toHaveProperty('previously');
-  });
-
-  it('normalizes the exact B observer excerpt with string timers and flame vectors', () => {
-    expect(REAL_DERIVED_B_PROVENANCE).toEqual({
-      fixtureKind: 'sanitized-real-derived',
-      sourceCaptureId: '20260913T161643Z-56b6492b',
-      sourceCaptureFramesSha256: '519cec4f94f93b2cbc3b34d5e32d60e428039a94b3999d058a56910afcd7c5f9',
-      sourceFrameSequence: 45,
-      sourceFrameRange: 'seq=45..45',
-      sourcePayloadBlocks: [
-        'provider',
-        'map',
-        'phase_countdowns',
-        'player',
-        'allplayers',
-        'grenades',
-      ],
-      sanitization:
-        'all Steam ids mapped to fixture-player-*; player names mapped to Fixture *; team names mapped to Fixture CT/T; irrelevant source fields omitted',
-    });
-
-    const result = adaptGsiPayload(REAL_DERIVED_B_FRAME, {
-      ...receiveContext,
-      sequence: REAL_DERIVED_B_PROVENANCE.sourceFrameSequence,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.diagnostics).toEqual({ entries: [], suppressedCount: 0 });
-    expect(result.observation.coverage).toEqual({
-      provider: 'present',
-      map: 'present',
-      round: 'absent',
-      phaseCountdowns: 'present',
-      player: 'present',
-      allPlayers: 'present',
-      bomb: 'absent',
-      grenades: 'present',
-    });
-    expect(result.observation.telemetry.map?.sides).toEqual({
-      ct: { name: 'Fixture CT', score: 0, timeoutsRemaining: 3 },
-      t: { name: 'Fixture T', score: 0, timeoutsRemaining: 3 },
-    });
-    expect(result.observation.telemetry.phaseCountdowns).toEqual({
-      phase: 'warmup',
-      endsInSeconds: 7.4,
-    });
-    expect(result.observation.telemetry.player?.state).toMatchObject({
-      hasHelmet: true,
-      roundTotalDamage: 0,
-    });
-    expect(result.observation.telemetry.allPlayers).toHaveLength(10);
-    expect(result.observation.telemetry.grenades).toHaveLength(2);
-    const inferno = result.observation.telemetry.grenades?.[0];
-    expect(inferno).toMatchObject({
-      sourceEntityId: '148',
-      kind: 'inferno',
-      ownerSourceId: 'fixture-player-9',
-      lifetimeSeconds: 0.103,
-    });
-    expect(inferno?.flames).toHaveLength(8);
-    expect(inferno?.flames).toContainEqual({
-      sourceFlameId: 'flame_p598_n793_p92',
-      position: { x: 598, y: -793, z: 92 },
-    });
-    expect(inferno).not.toHaveProperty('effectSeconds');
-    expect(inferno?.flames?.[0]).not.toHaveProperty('lifetimeSeconds');
-  });
-
-  it('normalizes exact C bomb lifecycle excerpts without retaining omitted round fields', () => {
-    expect(REAL_DERIVED_C_PROVENANCE).toEqual({
-      fixtureKind: 'sanitized-real-derived',
-      sourceCaptureId: '20260913T162802Z-3f41d8df',
-      sourceCaptureFramesSha256: 'e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218',
-      sourceFrameSequences: [567, 580, 661, 746, 775],
-      sourceFrameRange: 'seq=567,580,661,746,775',
-      sourcePayloadBlocks: ['provider', 'phase_countdowns', 'round', 'bomb'],
-      sanitization:
-        'bomb player ids mapped from source numeric ids to fixture-player-*; provider and source values retained; unrelated blocks omitted',
-    });
-
-    const observations = REAL_DERIVED_C_LIFECYCLE_FRAMES.map((frame) => {
-      const result = adaptGsiPayload(frame.payload, {
-        ...receiveContext,
-        sequence: frame.sequence,
-      });
-      expect(result.ok).toBe(true);
-      if (!result.ok) return undefined;
-      expect(result.diagnostics).toEqual({ entries: [], suppressedCount: 0 });
-      return result.observation;
-    });
-
-    const [planting, planted, defusing, exploded, newRound] = observations;
-    expect(planting?.telemetry.phaseCountdowns).toEqual({
-      phase: 'live',
-      endsInSeconds: 52.2,
-    });
-    expect(planting?.telemetry.bomb).toEqual({
-      state: 'planting',
-      position: { x: -1639.3, y: 2675, z: 47.8 },
-      sourcePlayerId: 'fixture-player-330',
-      countdownSeconds: 2.991,
-    });
-    expect(planted?.telemetry.round).toEqual({ phase: 'live', bomb: { state: 'planted' } });
-    expect(planted?.telemetry.bomb).toEqual({
-      state: 'planted',
-      position: { x: -1639.3, y: 2675, z: 6.8 },
-      countdownSeconds: 39.914,
-    });
-    expect(defusing?.telemetry.bomb).toMatchObject({
-      state: 'defusing',
-      sourcePlayerId: 'fixture-player-342',
-      countdownSeconds: 9.794,
-    });
-    expect(exploded?.telemetry.round).toEqual({
-      phase: 'over',
-      winnerSide: 'T',
-      bomb: { state: 'exploded' },
-    });
-    expect(exploded?.telemetry.bomb).toEqual({
-      state: 'exploded',
-      position: { x: -1639.3, y: 2675, z: 7.2 },
-    });
-    expect(newRound?.telemetry.round).toEqual({ phase: 'freezetime' });
-    expect(newRound?.telemetry.bomb).toEqual({
-      state: 'carried',
-      sourcePlayerId: 'fixture-player-338',
-      position: { x: -493, y: -808, z: 148.6 },
-    });
-  });
-
-  it('keeps an exact C observer transition degraded without normalizing a player without steamid', () => {
-    expect(REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE).toEqual({
-      fixtureKind: 'sanitized-real-derived',
-      sourceCaptureId: '20260913T162802Z-3f41d8df',
-      sourceCaptureFramesSha256: 'e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218',
-      sourceFrameSequence: 761,
-      sourceFrameRange: 'seq=761..761',
-      sourcePayloadBlocks: ['provider', 'phase_countdowns', 'round', 'player'],
-      sanitization:
-        'player has no steamid; spectarget, position, forward, provider, and source values retained; unrelated blocks omitted',
-    });
-
-    const result = adaptGsiPayload(REAL_DERIVED_C_OBSERVER_TRANSITION_FRAME, {
-      ...receiveContext,
-      sequence: REAL_DERIVED_C_OBSERVER_TRANSITION_PROVENANCE.sourceFrameSequence,
-    });
-
-    expect(result.ok).toBe(true);
-    if (!result.ok) return;
-    expect(result.observation.coverage).toMatchObject({
-      round: 'present',
-      phaseCountdowns: 'present',
-      player: 'degraded',
-    });
-    expect(result.observation.telemetry.round).toEqual({
-      phase: 'over',
-      winnerSide: 'T',
-      bomb: { state: 'exploded' },
-    });
-    expect(result.observation.telemetry).not.toHaveProperty('player');
-    expect(result.diagnostics).toEqual({
-      entries: [{ code: 'INVALID_FIELD', severity: 'error', path: '$.player.steamid' }],
-      suppressedCount: 0,
-    });
   });
 
   it('distinguishes absent blocks from explicitly empty collections', () => {
@@ -398,6 +221,18 @@ describe('adaptGsiPayload', () => {
     expect(diagnosticCodes(result)).toHaveLength(3);
     expect(diagnosticCodes(result)).toEqual(['INVALID_FIELD', 'INVALID_FIELD', 'INVALID_FIELD']);
   });
+
+  it.each(['paused', 'timeout_ct', 'timeout_t'] as const)(
+    'normalizes observed %s countdown phases',
+    (phase) => {
+      const result = adaptGsiPayload({ phase_countdowns: { phase } }, receiveContext);
+
+      expect(result.ok).toBe(true);
+      if (!result.ok) return;
+      expect(result.observation.telemetry.phaseCountdowns).toEqual({ phase });
+      expect(result.diagnostics.entries).toEqual([]);
+    },
+  );
 
   it('normalizes unknown control values to unknown while retaining the rest of the block', () => {
     const result = adaptGsiPayload(

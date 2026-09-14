@@ -128,12 +128,12 @@ function sideSwitchPayload(
 }
 
 describe('deterministic capture sanitizer', () => {
-  it('produces byte-identical gold, preserves evidence, and records provenance', async () => {
+  it('produces byte-identical sanitized output, preserves evidence, and records provenance', async () => {
     const root = await temporaryDirectory();
     try {
       const rawDir = join(root, 'raw');
-      const firstOutput = join(root, 'gold-a');
-      const secondOutput = join(root, 'gold-b');
+      const firstOutput = join(root, 'first-sanitized-output');
+      const secondOutput = join(root, 'second-sanitized-output');
       const frames = [
         testFrame(1, 1_000, sensitivePayload()),
         testFrame(2, 2_000, {
@@ -143,7 +143,7 @@ describe('deterministic capture sanitizer', () => {
       ];
       await writeCapture(rawDir, frames, {
         manifest: {
-          notes: 'raw manifest secret should not enter gold',
+          notes: 'raw manifest secret should not enter sanitized output',
           gsiConfig: {
             parameters: { timeout: 5, buffer: 1, uri: 'https://secret.invalid', future: true },
             components: ['provider', 'map'],
@@ -219,7 +219,7 @@ describe('deterministic capture sanitizer', () => {
     }
   });
 
-  it('rejects incomplete or dropped source captures as gold inputs', async () => {
+  it('rejects incomplete or dropped source captures as sanitized inputs', async () => {
     const root = await temporaryDirectory();
     try {
       const rawDir = join(root, 'raw');
@@ -229,7 +229,7 @@ describe('deterministic capture sanitizer', () => {
       await expect(
         sanitizeCapture({
           inputDir: rawDir,
-          outputDir: join(root, 'gold'),
+          outputDir: join(root, 'sanitized-output'),
           scenario: 'ineligible',
           lifecycleCoverage: 'partial',
         }),
@@ -250,7 +250,7 @@ describe('deterministic capture sanitizer', () => {
         testFrame(2, 2_000, sideSwitchPayload(teamB, teamA, 'T', teamA)),
       ]);
 
-      const outputDir = join(root, 'gold');
+      const outputDir = join(root, 'sanitized-output');
       await sanitizeCapture({
         inputDir: rawDir,
         outputDir,
@@ -307,7 +307,7 @@ describe('deterministic capture sanitizer', () => {
           lifecycleCoverage: 'partial',
         }),
       ).rejects.toMatchObject({ code: 'OUTPUT_PATH_INVALID' });
-      const outputDir = join(root, 'gold');
+      const outputDir = join(root, 'sanitized-output');
       await sanitizeCapture({
         inputDir: rawDir,
         outputDir,

@@ -1,8 +1,6 @@
 export const SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE = {
-  fixtureKind: 'synthetic-evidence-informed',
-  sourceCaptureId: '20260913T162802Z-3f41d8df',
-  sourceCaptureFramesSha256: 'e34505e2626dfa6f0941b8b4ed675dbea38e2ff53e29e3240c36ad7a2673d218',
-  sourceFrame: 'synthetic composition from documented source facts; no single source frame',
+  fixtureKind: 'synthetic-contract-fixture',
+  sourceFrame: 'synthetic composition; no source capture or single source frame',
   sourceFrameSequence: null,
   sourceFrameRange: null,
   sanitization:

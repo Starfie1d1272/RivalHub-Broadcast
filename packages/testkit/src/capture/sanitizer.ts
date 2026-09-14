@@ -383,8 +383,8 @@ function validateSelection(selection: CaptureSelection | undefined): CaptureSele
 }
 
 function sourceSelectionId(sourceCaptureId: string, selection: CaptureSelection): string {
-  if (selection.kind === 'all') return `gold-${sourceCaptureId}-all`;
-  return `gold-${sourceCaptureId}-seq-${selection.firstSequence}-${selection.lastSequence}`;
+  if (selection.kind === 'all') return `sanitized-${sourceCaptureId}-all`;
+  return `sanitized-${sourceCaptureId}-seq-${selection.firstSequence}-${selection.lastSequence}`;
 }
 
 function assertNoLeak(line: string, mappings: NameMappings): void {
@@ -411,7 +411,7 @@ async function writeFrameLine(
   if (!stream.write(line, 'utf8')) await once(stream, 'drain');
 }
 
-async function writeGoldFrames(
+async function writeSanitizedFrames(
   input: VerifiedCapture,
   tempFramesPath: string,
   selection: CaptureSelection,
@@ -454,7 +454,7 @@ async function writeGoldFrames(
   return { count, firstSequence, lastSequence, hash: hash.digest('hex') };
 }
 
-function goldManifest(
+function sanitizedManifest(
   source: CaptureManifestV1,
   sourceFramesSha256: string,
   selection: CaptureSelection,
@@ -511,7 +511,7 @@ export async function sanitizeCapture(options: SanitizeCaptureOptions): Promise<
   if (!input.manifest.complete || input.manifest.droppedFrames !== 0) {
     throw new CaptureFormatError(
       'INELIGIBLE_GOLD_SOURCE',
-      'incomplete or dropped-frame captures cannot be materialized as gold fixtures',
+      'incomplete or dropped-frame captures cannot be materialized as sanitized fixtures',
       { captureId: input.manifest.captureId },
     );
   }
@@ -520,7 +520,7 @@ export async function sanitizeCapture(options: SanitizeCaptureOptions): Promise<
   const tempDir = await mkdtemp(join(dirname(outputDir), '.rivalhub-testkit-'));
   try {
     const tempFramesPath = join(tempDir, 'frames.jsonl');
-    const frameStats = await writeGoldFrames(input, tempFramesPath, selection, mappings);
+    const frameStats = await writeSanitizedFrames(input, tempFramesPath, selection, mappings);
     if (frameStats.count === 0) {
       throw new CaptureFormatError(
         'INVALID_SELECTION',
@@ -537,7 +537,7 @@ export async function sanitizeCapture(options: SanitizeCaptureOptions): Promise<
         `selection ${selection.firstSequence}..${selection.lastSequence} did not match available frame boundaries`,
       );
     }
-    const manifest = goldManifest(
+    const manifest = sanitizedManifest(
       input.manifest,
       input.computedFramesSha256,
       selection,
