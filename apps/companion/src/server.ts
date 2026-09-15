@@ -16,6 +16,11 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
+const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
+const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
+const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
+const qualificationScenarioPath =
+  process.env.QUALIFICATION_SCENARIO_PATH ?? join(captureDir, '..', 'scenario.jsonl');
 const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
 const producerInstanceId = randomUUID();
 
@@ -30,6 +35,14 @@ function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
 
 if (gsiToken === undefined || gsiToken.trim().length === 0) {
   console.error('Companion startup failed: GSI_TOKEN must be set to a non-empty value');
+  process.exitCode = 1;
+} else if (qualificationMode && (qualificationControlToken?.trim().length ?? 0) === 0) {
+  console.error(
+    'Companion startup failed: QUALIFICATION_CONTROL_TOKEN must be set in qualification mode',
+  );
+  process.exitCode = 1;
+} else if (qualificationMode && host !== '127.0.0.1') {
+  console.error('Companion startup failed: qualification mode must listen on loopback 127.0.0.1');
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
@@ -47,7 +60,21 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   }
 
   const programRuntime = createProgramRuntime(producerInstanceId);
-  const app = buildApp({ logger: true, gsiToken, recorder, programRuntime });
+  const app = buildApp({
+    logger: true,
+    gsiToken,
+    recorder,
+    programRuntime,
+    qualificationMode,
+    ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),
+    ...(qualificationMode
+      ? {
+          qualificationRunId,
+          qualificationScenarioPath,
+          onQualificationFinish: () => shutdown('qualification-finish'),
+        }
+      : {}),
+  });
   let shutdownPromise: Promise<void> | undefined;
 
   function shutdown(signal: string): void {

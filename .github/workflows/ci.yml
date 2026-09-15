@@ -92,17 +92,123 @@ jobs:
       - name: Build
         run: pnpm build
 
+  qualification_offline:
+    name: qualification / offline / ${{ matrix.name }}
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            runner: ubuntu-24.04
+          - name: macOS
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run offline qualification
+        run: pnpm qualification:offline
+
+  qualification_windows:
+    name: qualification / Windows bundle
+    if: needs.quality.result == 'success' && needs.platform.result == 'success' && needs.qualification_offline.result == 'success'
+    needs: [quality, platform, qualification_offline]
+    runs-on: windows-2025
+    env:
+      QUALIFICATION_BUILD_ROOT: ${{ runner.temp }}/rivalhub-qualification-build
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build exact-SHA Windows qualification bundle
+        run: pnpm qualification:build -- --output "$env:QUALIFICATION_BUILD_ROOT"
+
+      - name: Extract and smoke-test the portable bundle without CS2
+        shell: pwsh
+        run: |
+          $archive = Get-ChildItem -LiteralPath $env:QUALIFICATION_BUILD_ROOT -Filter '*.zip' -File | Select-Object -First 1
+          if ($null -eq $archive) { throw 'qualification ZIP was not produced' }
+          $extractRoot = Join-Path $env:RUNNER_TEMP 'qualification extracted path'
+          if (Test-Path -LiteralPath $extractRoot) { Remove-Item -LiteralPath $extractRoot -Recurse -Force }
+          Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extractRoot
+          $bundleRoot = Get-ChildItem -LiteralPath $extractRoot -Directory | Select-Object -First 1
+          if ($null -eq $bundleRoot) { throw 'qualification bundle root was not extracted' }
+          $fakeCs2Root = Join-Path $env:RUNNER_TEMP 'CS2 fake root with spaces'
+          New-Item -ItemType Directory -Force -Path (Join-Path $fakeCs2Root 'game\csgo\cfg') | Out-Null
+          Push-Location $bundleRoot.FullName
+          try {
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1 -Cs2Root $fakeCs2Root
+            if ($LASTEXITCODE -ne 0) { throw 'install-gsi.ps1 failed' }
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
+            if ($LASTEXITCODE -ne 0) { throw 'start.ps1 failed' }
+            $install = Get-Content -LiteralPath .\.qualification-local\install.json -Raw | ConvertFrom-Json
+            $run = Get-Content -LiteralPath .\.qualification-local\run.json -Raw | ConvertFrom-Json
+            $headers = @{ 'Content-Type' = 'application/json' }
+            $payload = @{ auth = @{ token = [string]$install.gsiToken }; map = @{ name = 'de_nuke'; phase = 'live' }; round = @{ phase = 'freezetime' } } | ConvertTo-Json -Depth 10 -Compress
+            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/gsi' -Headers $headers -Body $payload | Out-Null
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-a-live
+            if ($LASTEXITCODE -ne 0) { throw 'mark.ps1 demo-a-live failed' }
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-a-stopped
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 cs2-closed
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1 -WaitForStale -TimeoutSeconds 35
+            if ($LASTEXITCODE -ne 0) { throw 'check.ps1 stale polling failed' }
+            $controlHeaders = @{ 'x-qualification-token' = [string]$run.controlToken }
+            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/qualification/next-map-execution' -Headers $controlHeaders | Out-Null
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 cs2-reopened
+            $payload = @{ auth = @{ token = [string]$install.gsiToken }; map = @{ name = 'de_nuke'; phase = 'live' }; round = @{ phase = 'freezetime' } } | ConvertTo-Json -Depth 10 -Compress
+            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/gsi' -Headers $headers -Body $payload | Out-Null
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-b-live
+            if ($LASTEXITCODE -ne 0) { throw 'mark.ps1 demo-b-live failed' }
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
+            if ($LASTEXITCODE -ne 0) { throw 'stop.ps1 failed' }
+          } finally {
+            Pop-Location
+          }
+
+      - name: Upload exact-SHA qualification artifact
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: rivalhub-broadcast-qualification-${{ github.sha }}-win-x64
+          path: ${{ env.QUALIFICATION_BUILD_ROOT }}/*.zip
+          if-no-files-found: error
+
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [quality, platform]
+    needs: [quality, platform, qualification_offline, qualification_windows]
     runs-on: ubuntu-24.04
     steps:
       - name: Fail when a required job did not succeed
-        if: ${{ needs.quality.result != 'success' || needs.platform.result != 'success' }}
+        if: ${{ needs.quality.result != 'success' || needs.platform.result != 'success' || needs.qualification_offline.result != 'success' || needs.qualification_windows.result != 'success' }}
         run: |
-          echo "quality=${{ needs.quality.result }} platform=${{ needs.platform.result }}" >&2
+          echo "quality=${{ needs.quality.result }} platform=${{ needs.platform.result }} qualification_offline=${{ needs.qualification_offline.result }} qualification_windows=${{ needs.qualification_windows.result }}" >&2
           exit 1
 
       - name: Confirm required jobs succeeded
-        run: echo "quality and platform succeeded"
+        run: echo "quality, platform, offline qualification, and Windows bundle smoke succeeded"

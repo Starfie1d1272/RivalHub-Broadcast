@@ -229,6 +229,12 @@ export class DebugEvidenceStore {
     this.currentObservation = observation;
   }
 
+  clearCurrentTelemetry(): void {
+    this.currentRaw = undefined;
+    this.currentObservation = undefined;
+    this.latestGsiDiagnostics = undefined;
+  }
+
   recordGsiDiagnostics(diagnostics: GsiDiagnosticBatch): void {
     this.latestGsiDiagnostics = diagnostics;
   }

@@ -214,6 +214,37 @@ Evidence:
 
 真实平台验证应尽量使用**明确 commit/build 对应的可复现 artifact 或标准 start workflow**。不要在 validator 机器上临时修改代码后，再把结果当成仓库某个 revision 的正式验收证据。
 
+## 4.1 M1 Qualification Bundle
+
+M1 的 Windows + CS2 平台验证使用绑定 exact git SHA 的 portable qualification bundle，不把 source checkout 当作现场主流程。bundle 由 `pnpm qualification:build` 从当前 revision 构建：使用 `pnpm deploy` 生成自包含的 production Companion，并携带与 workspace `engines` 一致的官方 Node 24 Windows x64 runtime。借用的 Windows 机器不需要安装 Git、pnpm 或 Node，也不允许现场改代码。
+
+bundle 的稳定目录契约为：
+
+```text
+rivalhub-broadcast-qualification-<shortSHA>-win-x64/
+  runtime/node.exe
+  app/package.json
+  app/dist/**
+  app/node_modules/**
+  scripts/{install-gsi,start,mark,check,stop}.ps1
+  config/gamestate_integration_rivalhub_broadcast.cfg.template
+  metadata/{artifact.json,SHA256SUMS}
+  evidence/
+  README.txt
+```
+
+现场首选打开 loopback-only 的 `/qualification` 页面完成一次连续的 Demo A → 停止并等待 stale → 开始下一场 → Demo B 流程。页面背后的 qualification-only HTTP/PowerShell seam 负责有限 marker、显式 `ProgramRuntime.resetMapExecution()` 和自动证据采集；该 surface 不属于正式 Operator UI、HUD 或 Program/OBS 输出。`start.ps1` 自动生成并安装 canonical GSI cfg，`stop.ps1` 负责 graceful recorder finalize、脱敏报告和哈希，`qualification.json` 的结果只允许为 `PASS`、`FAIL` 或 `INCONCLUSIVE`。
+
+仓库级验证入口为：
+
+```text
+pnpm qualification:build
+pnpm qualification:offline
+pnpm qualification:verify <evidence-dir-or-zip>
+```
+
+`qualification:offline` 在借用 Windows 机器前运行确定性测试、真实语义 fixture/replay、runtime/recorder/Companion integration 与 bundle structure smoke。Linux/macOS/Windows CI 的对应 job 只证明自动化与 bundle 脚本可执行；CI 上传的 ZIP 必须带 exact SHA，且通过 automated gate 后才能作为真实 validator 的输入。GitHub-hosted Windows smoke 不等于真实 Windows + CS2 acceptance；后者仍须使用该 exact-revision artifact 完成独立的 Layer C/D 现场证据。
+
 ## 5. Real Telemetry Reference Corpus
 
 第一批真实 Windows + CS2 observer capture 已经取得，并已经用于 `docs/telemetry.md` 的 evidence-backed semantics，包括 normal-player、observer、warmup/local-BOT 以及完整比赛生命周期的派生 evidence。

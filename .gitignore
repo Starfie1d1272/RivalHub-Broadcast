@@ -44,3 +44,4 @@ blob-report/
 .tmp/
 tmp/
 temp/
+.agent-tmp/

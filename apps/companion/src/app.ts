@@ -6,6 +6,15 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { DebugEvidenceStore, type DebugRuntimeClock } from './runtime/debug-state.js';
 import type { LatestWinsConsumerHealth } from './runtime/latest-wins.js';
 import { createProgramRuntime, type ProgramRuntime } from './runtime/program-runtime.js';
+import {
+  registerQualificationRoutes,
+  type QualificationControllerOptions,
+} from './qualification/controller.js';
+import {
+  createQualificationEvidenceStore,
+  type QualificationClock,
+  type QualificationEvidenceStore,
+} from './qualification/evidence.js';
 import { createDisabledRecorder, type CaptureRecorder } from './telemetry/capture-recorder.js';
 import {
   GSI_REQUEST_TIMEOUT_MS,
@@ -32,6 +41,13 @@ export interface CompanionAppOptions {
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
   readonly clock?: GsiClock;
+  readonly qualificationMode?: boolean;
+  readonly qualificationControlToken?: string;
+  readonly qualificationRunId?: string;
+  readonly qualificationScenarioPath?: string;
+  readonly qualificationClock?: QualificationClock;
+  readonly qualificationEvidenceStore?: QualificationEvidenceStore;
+  readonly onQualificationFinish?: () => void | Promise<void>;
 }
 
 export interface DeliveryHealthSource {
@@ -48,6 +64,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
+  const qualificationMode = options.qualificationMode ?? false;
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
 
@@ -104,6 +121,47 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         app.log.warn({ code }, 'Companion telemetry path degraded');
       },
     });
+  }
+
+  if (qualificationMode) {
+    const controlToken = options.qualificationControlToken;
+    if (controlToken === undefined || controlToken.trim().length === 0) {
+      throw new Error('qualificationControlToken must be set when qualificationMode is enabled');
+    }
+    const runId = options.qualificationRunId ?? 'local-qualification';
+    const evidence =
+      options.qualificationEvidenceStore ??
+      createQualificationEvidenceStore({
+        runId,
+        ...(options.qualificationScenarioPath === undefined
+          ? {}
+          : { scenarioPath: options.qualificationScenarioPath }),
+        clock: options.qualificationClock ?? {
+          now: () => ({ monotonicMs: performance.now(), utc: new Date().toISOString() }),
+        },
+      });
+    const qualificationOptions: QualificationControllerOptions = {
+      controlToken,
+      runId,
+      evidence,
+      ...(options.qualificationClock === undefined ? {} : { clock: options.qualificationClock }),
+      getDebugResponse: (nowMonotonicMs) =>
+        debugEvidenceStore.getResponse({
+          nowMonotonicMs,
+          recorderHealth: recorder.getHealth(),
+          deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
+        }),
+      programRuntime,
+      recorder,
+      onAcceptedMapReset: () => {
+        debugEvidenceStore.clearCurrentTelemetry();
+        debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
+      },
+      ...(options.onQualificationFinish === undefined
+        ? {}
+        : { onFinish: options.onQualificationFinish }),
+    };
+    registerQualificationRoutes(app, qualificationOptions);
   }
 
   app.addHook('onClose', async () => {
