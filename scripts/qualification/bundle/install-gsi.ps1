@@ -13,7 +13,7 @@ function Resolve-CfgDirectory {
             (Join-Path $resolved 'cfg')
         ) | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -Unique
         if ($candidates.Count -eq 1) { return [string]$candidates[0] }
-        throw "无法从 -Cs2Root 找到唯一的 CS2 cfg 目录，请传入 game\csgo\cfg 或 CS2 安装根目录"
+        throw "Cannot resolve one CS2 cfg directory from -Cs2Root; pass game\csgo\cfg or the CS2 install root"
     }
 
     $steamRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:STEAMROOT) | Where-Object { $_ } | Select-Object -Unique
@@ -28,8 +28,8 @@ function Resolve-CfgDirectory {
     }
     $candidates = $candidates | Select-Object -Unique
     if ($candidates.Count -eq 1) { return [string]$candidates[0] }
-    if ($candidates.Count -eq 0) { throw '未找到 CS2 cfg 目录，请使用 -Cs2Root <path>' }
-    throw "找到多个 CS2 cfg 目录，请使用 -Cs2Root <path> 指定目标（候选数: $($candidates.Count)）"
+    if ($candidates.Count -eq 0) { throw 'No CS2 cfg directory found; pass -Cs2Root <path>' }
+    throw "Multiple CS2 cfg directories found; pass -Cs2Root <path> to select one (candidates: $($candidates.Count))"
 }
 
 $cfgDirectory = Resolve-CfgDirectory -ExplicitRoot $Cs2Root
