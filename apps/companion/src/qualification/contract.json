@@ -4,7 +4,6 @@
   "nodeRuntimeVersion": "v24.21.0",
   "markerKinds": [
     "demo-a-live",
-    "demo-a-stopped",
     "cs2-closed",
     "runtime-stale",
     "next-execution",

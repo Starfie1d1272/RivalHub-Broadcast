@@ -1,6 +1,6 @@
 param(
     [Parameter(Mandatory = $true, Position = 0)]
-    [ValidateSet('demo-a-live', 'demo-a-stopped', 'cs2-closed', 'runtime-stale', 'next-execution', 'cs2-reopened', 'demo-b-live')]
+    [ValidateSet('demo-a-live', 'cs2-closed', 'cs2-reopened', 'demo-b-live')]
     [string]$Marker
 )
 . (Join-Path $PSScriptRoot 'common.ps1')

@@ -57,6 +57,10 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
+function isSafeNonNegativeInteger(value: unknown): value is number {
+  return typeof value === 'number' && Number.isSafeInteger(value) && value >= 0;
+}
+
 function isMarkerKind(value: unknown): value is QualificationMarkerKind {
   return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
 }
@@ -68,11 +72,26 @@ function hasMarker(
   return markers.some((marker) => marker.kind === kind);
 }
 
-function markerIndex(
+function realSilenceToStalePassed(
   markers: readonly QualificationMarker[],
-  kind: QualificationMarkerKind,
-): number {
-  return markers.findIndex((marker) => marker.kind === kind);
+  resetBefore: QualificationMarker | undefined,
+): boolean {
+  const demoALive = markers.find((marker) => marker.kind === 'demo-a-live');
+  const runtimeStale = markers.find((marker) => marker.kind === 'runtime-stale');
+  const cs2Closed = markers.find((marker) => marker.kind === 'cs2-closed');
+  if (demoALive === undefined || runtimeStale === undefined || cs2Closed === undefined)
+    return false;
+  if (
+    runtimeStale.freshness !== 'stale' ||
+    runtimeStale.monotonicMs <= demoALive.monotonicMs ||
+    cs2Closed.monotonicMs <= demoALive.monotonicMs
+  )
+    return false;
+  if (resetBefore === undefined) return true;
+  return (
+    runtimeStale.monotonicMs < resetBefore.monotonicMs &&
+    cs2Closed.monotonicMs < resetBefore.monotonicMs
+  );
 }
 
 function observationIsConsistent(marker: QualificationMarker | undefined): boolean {
@@ -90,10 +109,66 @@ function observationIsConsistent(marker: QualificationMarker | undefined): boole
   );
 }
 
+function observedMapBoundaryPassed(
+  marker: QualificationMarker | undefined,
+  resetAfter: QualificationMarker | undefined,
+  recentTransitions: readonly unknown[],
+): boolean {
+  if (marker === undefined || resetAfter === undefined || marker.observation === null) return false;
+  const observation = marker.observation;
+  return recentTransitions.some((candidate) => {
+    if (
+      !isRecord(candidate) ||
+      candidate.kind !== 'map_execution_changed' ||
+      candidate.reason !== 'observed-map-name-change' ||
+      !isRecord(candidate.at)
+    )
+      return false;
+    const previousMapEpoch = candidate.previousMapEpoch;
+    const mapEpoch = candidate.mapEpoch;
+    const sourceGeneration = candidate.sourceGeneration;
+    const receiveSequence = candidate.receiveSequence;
+    const runtimeSeq = candidate.runtimeSeq;
+    const atMonotonicMs = candidate.at.monotonicMs;
+    const previousMapName = candidate.previousMapName;
+    const mapName = candidate.mapName;
+    if (
+      typeof previousMapEpoch !== 'number' ||
+      typeof mapEpoch !== 'number' ||
+      typeof receiveSequence !== 'number' ||
+      typeof runtimeSeq !== 'number'
+    )
+      return false;
+    return (
+      isSafeNonNegativeInteger(previousMapEpoch) &&
+      isSafeNonNegativeInteger(mapEpoch) &&
+      mapEpoch > previousMapEpoch &&
+      previousMapEpoch === resetAfter.mapEpoch &&
+      mapEpoch === marker.mapEpoch &&
+      candidate.producerInstanceId === marker.producerInstanceId &&
+      sourceGeneration === marker.sourceGeneration &&
+      isSafeNonNegativeInteger(receiveSequence) &&
+      receiveSequence < observation.sequence &&
+      isSafeNonNegativeInteger(runtimeSeq) &&
+      runtimeSeq < marker.runtimeSeq &&
+      typeof atMonotonicMs === 'number' &&
+      Number.isFinite(atMonotonicMs) &&
+      atMonotonicMs > resetAfter.monotonicMs &&
+      atMonotonicMs < observation.receivedMonotonicMs &&
+      typeof previousMapName === 'string' &&
+      typeof mapName === 'string' &&
+      previousMapName.trim().length > 0 &&
+      mapName.trim().length > 0 &&
+      previousMapName.trim() !== mapName.trim()
+    );
+  });
+}
+
 function liveMarkerIsInExecution(
   marker: QualificationMarker | undefined,
   resetBefore: QualificationMarker | undefined,
   resetAfter: QualificationMarker | undefined,
+  recentTransitions: readonly unknown[],
   execution: 'first' | 'second',
 ): boolean {
   if (!observationIsConsistent(marker)) return false;
@@ -112,7 +187,8 @@ function liveMarkerIsInExecution(
     resetAfter !== undefined &&
     marker.monotonicMs > resetAfter.monotonicMs &&
     observation.receivedMonotonicMs > resetAfter.monotonicMs &&
-    marker.mapEpoch === resetAfter.mapEpoch
+    (marker.mapEpoch === resetAfter.mapEpoch ||
+      observedMapBoundaryPassed(marker, resetAfter, recentTransitions))
   );
 }
 
@@ -166,17 +242,21 @@ function evaluateChecks(
     demoALive,
     resetBefore,
     resetAfter,
+    response.recentTransitions,
     'first',
   );
   const demoBRecoveryPassed =
-    liveMarkerIsInExecution(demoBLive, resetBefore, resetAfter, 'second') &&
+    liveMarkerIsInExecution(
+      demoBLive,
+      resetBefore,
+      resetAfter,
+      response.recentTransitions,
+      'second',
+    ) &&
     response.raw.current !== null &&
     response.freshness === 'fresh';
 
-  const hasStoppedSequence =
-    markerIndex(markers, 'demo-a-stopped') >= 0 &&
-    markerIndex(markers, 'cs2-closed') > markerIndex(markers, 'demo-a-stopped') &&
-    markerIndex(markers, 'runtime-stale') > markerIndex(markers, 'cs2-closed');
+  const silenceToStalePassed = realSilenceToStalePassed(markers, resetBefore);
   const checks: Record<string, QualificationCheck> = {
     productionChain: {
       label: '第一场数据进入生产链路',
@@ -187,10 +267,10 @@ function evaluateChecks(
     },
     realSilenceToStale: {
       label: '停止输入后进入 stale',
-      status: hasStoppedSequence ? 'PASS' : 'INCONCLUSIVE',
-      reason: hasStoppedSequence
-        ? 'Companion 在未重启的情况下观察到 stale。'
-        : '等待 stopdemo、关闭 CS2 与 stale 证据。',
+      status: silenceToStalePassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: silenceToStalePassed
+        ? 'Companion 在未重启的情况下观察到 stale，并在下一场 reset 前记录了退出 CS2。'
+        : '等待 Demo A 后自动进入 stale，并在下一场 reset 前确认已退出 CS2。',
     },
     explicitNextExecution: {
       label: '下一场从显式新执行开始',
@@ -234,7 +314,7 @@ function evaluateChecks(
     checkKeys.length !== QUALIFICATION_CHECK_KEYS.length ||
     QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
   ) {
-    throw new Error('qualification check implementation does not match its evidence contract');
+    throw new Error('qualification check 实现与 evidence contract 不一致');
   }
   return checks;
 }
@@ -325,7 +405,7 @@ export function registerQualificationRoutes(
   options: QualificationControllerOptions,
 ): void {
   if (options.controlToken.trim().length === 0) {
-    throw new Error('qualification control token must be non-empty');
+    throw new Error('qualification control token 不能为空');
   }
   const clock = options.clock ?? defaultClock;
   const getDebug = (): DebugRuntimeResponse => options.getDebugResponse(clock.now().monotonicMs);
@@ -375,6 +455,12 @@ export function registerQualificationRoutes(
     if (!isMarkerKind(kind)) {
       return reply.code(400).send({ error: 'invalid_qualification_marker' });
     }
+    if (kind === 'runtime-stale' || kind === 'next-execution') {
+      return reply.code(409).send({
+        error: 'qualification_marker_automatic',
+        message: 'runtime-stale 由系统自动记录；next-execution 请使用“开始下一场”控制。',
+      });
+    }
     try {
       const debug = getDebug();
       const runtime = options.programRuntime.getSnapshot();
@@ -402,9 +488,8 @@ export function registerQualificationRoutes(
     try {
       const debug = getDebug();
       const runtime = options.programRuntime.getSnapshot();
-      await options.evidence.recordMarker('demo-a-stopped', runtime, freshnessFromDebug(debug));
       await options.evidence.recordMarker('cs2-closed', runtime, freshnessFromDebug(debug));
-      return { ok: true, kind: 'stop', message: '第一场已停止，等待页面确认数据停止' };
+      return { ok: true, kind: 'cs2-closed', message: '已记录退出 CS2，等待页面确认数据停止' };
     } catch (error: unknown) {
       return reply
         .code(503)
@@ -477,7 +562,7 @@ export function registerQualificationRoutes(
       result: status.result,
       runId: options.runId,
       finalizationPath: '/qualification/finalization',
-      message: 'qualification evidence is being finalized',
+      message: '正在完成 qualification evidence',
     });
   });
 }
@@ -486,8 +571,6 @@ function markerMessage(kind: QualificationMarkerKind): string {
   switch (kind) {
     case 'demo-a-live':
       return '第一场数据已记录';
-    case 'demo-a-stopped':
-      return '第一场停止已记录';
     case 'cs2-closed':
       return 'CS2 关闭已记录';
     case 'runtime-stale':

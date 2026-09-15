@@ -17,7 +17,7 @@ function runCommand(command, args, cwd) {
     child.once('exit', (code, signal) => {
       if (code === 0) resolvePromise();
       else
-        reject(new Error(`${command} failed with ${signal ?? `exit ${code}`}: ${stderr.trim()}`));
+        reject(new Error(`${command} 执行失败（${signal ?? `退出码 ${code}`}）：${stderr.trim()}`));
     });
   });
 }
@@ -42,7 +42,7 @@ async function extractArchive(archivePath, destination) {
       lastError = error;
     }
   }
-  throw lastError ?? new Error(`cannot extract ${archivePath}`);
+  throw lastError ?? new Error(`无法解压 ${archivePath}`);
 }
 
 async function findEvidenceDirectories(root) {
@@ -71,13 +71,13 @@ async function resolveEvidenceDirectory(input) {
     const candidates = await findEvidenceDirectories(inputPath);
     if (candidates.length !== 1) {
       throw new Error(
-        `expected exactly one evidence directory under ${inputPath}, found ${candidates.length}`,
+        `应在 ${inputPath} 下找到且只能找到一个 evidence 目录，实际找到 ${candidates.length} 个`,
       );
     }
     return { runDir: candidates[0], cleanup: undefined };
   }
   if (!inputStat.isFile() || !inputPath.toLowerCase().endsWith('.zip')) {
-    throw new Error(`input must be an evidence directory or .zip archive: ${inputPath}`);
+    throw new Error(`输入必须是 evidence 目录或 .zip archive：${inputPath}`);
   }
   const extractionRoot = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-verify-'));
   try {
@@ -86,7 +86,7 @@ async function resolveEvidenceDirectory(input) {
     if (candidates.length !== 1) {
       await rm(extractionRoot, { recursive: true, force: true });
       throw new Error(
-        `expected exactly one evidence directory in ${basename(inputPath)}, found ${candidates.length}`,
+        `应在 ${basename(inputPath)} 中找到且只能找到一个 evidence 目录，实际找到 ${candidates.length} 个`,
       );
     }
     return { runDir: candidates[0], cleanup: extractionRoot };
@@ -97,7 +97,7 @@ async function resolveEvidenceDirectory(input) {
 }
 
 async function main(argv) {
-  if (argv.length !== 1) throw new Error('usage: pnpm qualification:verify <evidence-dir-or-zip>');
+  if (argv.length !== 1) throw new Error('用法：pnpm qualification:verify <evidence-dir-or-zip>');
   const resolved = await resolveEvidenceDirectory(argv[0]);
   try {
     const evidence = await readQualificationEvidence(resolved.runDir);

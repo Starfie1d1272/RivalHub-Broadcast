@@ -29,12 +29,12 @@ function loadQualificationContract() {
       lastError = error;
     }
   }
-  throw new Error(`qualification contract is missing: ${String(lastError)}`);
+  throw new Error(`缺少 qualification contract：${String(lastError)}`);
 }
 
 function validateQualificationContract(contract) {
   if (!isRecord(contract) || !Number.isSafeInteger(contract.schemaVersion)) {
-    throw new Error('qualification contract schemaVersion is invalid');
+    throw new Error('qualification contract 的 schemaVersion 无效');
   }
   for (const key of [
     'markerKinds',
@@ -51,7 +51,7 @@ function validateQualificationContract(contract) {
       contract[key].length === 0 ||
       contract[key].some((value) => typeof value !== 'string' || value.length === 0)
     ) {
-      throw new Error(`qualification contract ${key} is invalid`);
+      throw new Error(`qualification contract 的 ${key} 无效`);
     }
   }
   if (
@@ -61,7 +61,7 @@ function validateQualificationContract(contract) {
     typeof contract.resetKind !== 'string' ||
     typeof contract.resetReason !== 'string'
   ) {
-    throw new Error('qualification contract scalar values are invalid');
+    throw new Error('qualification contract 的标量值无效');
   }
   return contract;
 }

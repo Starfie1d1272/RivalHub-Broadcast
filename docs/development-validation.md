@@ -235,7 +235,7 @@ rivalhub-broadcast-qualification-<shortSHA>-win-x64/
   README.txt
 ```
 
-现场首选打开 loopback-only 的 `/qualification` 页面完成一次连续的 Demo A → 停止并等待 stale → 开始下一场 → Demo B 流程。页面背后的 qualification-only HTTP/PowerShell seam 负责有限 marker、显式 `ProgramRuntime.resetMapExecution()` 和自动证据采集；该 surface 不属于正式 Operator UI、HUD 或 Program/OBS 输出。`start.ps1` 自动生成并安装 canonical GSI cfg，并启动外层 `qualification-supervisor.mjs` 管理整个 run lifecycle。页面的“结束测试并导出结果”会先让 Companion graceful shutdown，随后由 supervisor 自动 finalize、verify、恢复原 GSI cfg，并在页面显示 `PASS`、`FAIL` 或 `INCONCLUSIVE` 及报告相对路径；`stop.ps1` 仅作为 supervisor 不可用时的 automation fallback。
+现场首选打开 loopback-only 的 `/qualification` 页面完成一次连续的 Demo A → 在 CS2 中执行 `quit` → 等待机器自动观察到 stale → 页面确认已退出 CS2 → 开始下一场 → 重开 CS2 → Demo B 流程。页面背后的 qualification-only HTTP/PowerShell seam 负责有限 marker、显式 `ProgramRuntime.resetMapExecution()` 和自动证据采集；该 surface 不属于正式 Operator UI、HUD 或 Program/OBS 输出。`start.ps1` 自动生成并安装 canonical GSI cfg，并启动外层 `qualification-supervisor.mjs` 管理整个 run lifecycle。页面的“结束测试并导出结果”会先让 Companion graceful shutdown，随后由 supervisor 自动 finalize、verify、恢复原 GSI cfg，并在页面显示 `PASS`、`FAIL` 或 `INCONCLUSIVE` 及报告相对路径；`stop.ps1` 仅作为 supervisor 不可用时的 automation fallback。人工的 `cs2-closed` 是退出 CS2 的声明，机器的 `runtime-stale` 是 GSI 沉默事实；两者都必须发生在下一场 reset 之前，但不要求人工点击先于 stale。reset 后如果 Core 观察到可靠的非空 map-name change 并推进 map epoch，独立 verifier 会把它作为 Demo B 的合法 execution boundary。
 
 每个 `demo-a-live` / `demo-b-live` marker 都必须携带同一时刻的 accepted observation（sequence、receivedAt、monotonic time、map epoch、runtime sequence、source generation、producer identity 与 freshness）。独立 verifier 会将该 observation 的 sequence/timestamp 与 Capture V1 frame 对应，并分别证明它位于 reset 前或 reset 后的 execution；仅凭 marker 加上 capture 中任意 frame 不能判定 production chain 通过。marker vocabulary、check keys、结果值、schema version 与 pinned Node runtime 位于仓库内的 `apps/companion/src/qualification/contract.json`，runtime evaluation 与 verifier evaluation 保持独立。
 
@@ -251,7 +251,7 @@ pnpm qualification:offline
 pnpm qualification:verify <evidence-dir-or-zip>
 ```
 
-`qualification:offline` 在借用 Windows 机器前运行确定性测试、真实语义 fixture/replay、runtime/recorder/Companion integration 与 bundle structure smoke。Linux/macOS/Windows CI 的对应 job 只证明自动化与 bundle 脚本可执行；CI 上传的 ZIP 必须带 exact SHA，且通过 automated gate 后才能作为真实 validator 的输入。GitHub-hosted Windows smoke 不等于真实 Windows + CS2 acceptance；后者仍须使用该 exact-revision artifact 完成独立的 Layer C/D 现场证据。
+`qualification:offline` 在借用 Windows 机器前运行确定性测试、真实语义 fixture/replay、runtime/recorder/Companion integration 与 bundle structure smoke。Linux/macOS/Windows CI 的对应 job 只证明自动化与 bundle 脚本可执行；PR 的 Windows job 必须 checkout 并上传 PR head SHA 对应的 ZIP，且通过 automated gate 后才能作为真实 validator 的输入。GitHub-hosted Windows smoke 不等于真实 Windows + CS2 acceptance；后者仍须使用该 exact-revision artifact 完成独立的 Layer C/D 现场证据。
 
 ## 5. Real Telemetry Reference Corpus
 

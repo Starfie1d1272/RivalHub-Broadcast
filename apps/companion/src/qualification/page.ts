@@ -95,8 +95,26 @@ button { font: inherit; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 `;
 
+export function qualificationRequestOptions(
+  controlToken: string,
+  method: string,
+  body?: unknown,
+): { method: string; headers: Record<string, string>; body?: string } {
+  const headers: Record<string, string> = {
+    Accept: 'application/json',
+    'x-qualification-token': controlToken,
+  };
+  if (body === undefined) return { method, headers };
+  return {
+    method,
+    headers: { ...headers, 'Content-Type': 'application/json' },
+    body: JSON.stringify(body),
+  };
+}
+
 const PAGE_SCRIPT = (controlToken: string): string => `
 const controlToken = ${JSON.stringify(controlToken).replaceAll('<', '\\u003c')};
+const requestOptions = ${qualificationRequestOptions.toString()};
 const stateLabels = {
   waiting: '等待 CS2',
   receiving: '正在接收比赛数据',
@@ -105,7 +123,7 @@ const stateLabels = {
 };
 const flow = [
   { id: 'a', markers: ['demo-a-live'] },
-  { id: 'stop', markers: ['demo-a-stopped', 'cs2-closed', 'runtime-stale'] },
+  { id: 'stop', markers: ['runtime-stale', 'cs2-closed'] },
   { id: 'next', markers: ['next-execution'] },
   { id: 'b', markers: ['cs2-reopened', 'demo-b-live'] },
 ];
@@ -119,14 +137,6 @@ const buttons = [...document.querySelectorAll('button[data-action]')];
 let finalizationComplete = false;
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
-}
-
-function requestOptions(method, body) {
-  return {
-    method,
-    headers: { Accept: 'application/json', 'Content-Type': 'application/json', 'x-qualification-token': controlToken },
-    ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-  };
 }
 
 async function call(path, method = 'GET', body) {
@@ -158,7 +168,7 @@ function render(data) {
   }
   const receiving = data.state === 'receiving';
   byId('confirm-a').disabled = !receiving || data.markers.includes('demo-a-live');
-  byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('demo-a-stopped') || data.markers.includes('runtime-stale');
+  byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');
   byId('next-execution').disabled = data.result === 'FAIL' || !data.markers.includes('runtime-stale') || !data.markers.includes('cs2-closed') || data.markers.includes('next-execution');
   byId('confirm-reopen').disabled = !data.markers.includes('next-execution') || data.markers.includes('cs2-reopened');
   byId('confirm-b').disabled = !data.markers.includes('cs2-reopened') || !receiving || data.markers.includes('demo-b-live');
@@ -250,13 +260,13 @@ export function qualificationPageHtml(controlToken: string): string {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Qualification · RivalHub Broadcast</title>
+    <title>Qualification 验收 · RivalHub Broadcast</title>
     <style>${PAGE_STYLE}</style>
   </head>
   <body>
     <main class="qualification-shell">
       <header class="qualification-header">
-        <p class="qualification-kicker">RivalHub Broadcast / M1 qualification</p>
+        <p class="qualification-kicker">RivalHub Broadcast / M1 验收</p>
         <h1>让真实比赛<br />自己作证。</h1>
         <p>这个页面只服务一次连续的 Demo 验收：启动 Broadcast，观察数据停止，开始下一场，再确认新的比赛从干净状态恢复。</p>
       </header>
@@ -267,9 +277,9 @@ export function qualificationPageHtml(controlToken: string): string {
         <strong class="qualification-signal__state" id="qualification-state">正在读取状态</strong>
       </section>
 
-      <section class="qualification-flow" aria-label="Qualification workflow">
+      <section class="qualification-flow" aria-label="Qualification 验收流程">
         <article class="qualification-step" data-step="a"><span class="qualification-step__index">01 / 第一场</span><h2>播放 Demo A</h2><p>等页面显示正在接收比赛数据后，确认第一场正常。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
-        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>关闭 CS2</h2><p>执行 stopdemo 并关闭 CS2，页面会自动确认数据已停止。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
+        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>退出 CS2</h2><p>在 CS2 中执行 quit；页面会自动确认数据停止，然后确认已退出 CS2。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="next"><span class="qualification-step__index">03 / 下一场</span><h2>准备下一场</h2><p>点击一次，准备接收下一场比赛。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="b"><span class="qualification-step__index">04 / 第二场</span><h2>播放 Demo B</h2><p>重新打开 CS2，确认第二场没有上一场残留。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
       </section>
@@ -279,7 +289,7 @@ export function qualificationPageHtml(controlToken: string): string {
           <h2>现场操作</h2>
           <div class="qualification-actions">
             <button id="confirm-a" data-action="demo-a-live" data-primary="true">确认第一场数据正常</button>
-            <button id="confirm-stop" data-action="demo-a-stopped">我已 stopdemo 并关闭 CS2</button>
+            <button id="confirm-stop" data-action="cs2-closed">我已退出 CS2</button>
             <button id="next-execution" data-action="next-execution" data-primary="true">开始下一场</button>
             <button id="confirm-reopen" data-action="cs2-reopened">确认 CS2 已重新打开</button>
             <button id="confirm-b" data-action="demo-b-live" data-primary="true">确认第二场数据正常</button>

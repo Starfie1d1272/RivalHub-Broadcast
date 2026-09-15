@@ -177,7 +177,7 @@ production recorder 属于 Companion/telemetry runtime；`testkit` 只消费 cap
 
 仓库的一手文档默认使用中文。长期文档记录稳定产品语义、架构 invariant、evidence-backed source facts 与阶段目标；单个 PR 的临时实现过程、当前机器状态、短期排期和一次性调试记录留在 Issue/PR/Project，不沉淀为长期规范。代码或 contract 改变了文档描述的事实时，同一 PR 必须同步更新相关文档。
 
-## License
+## 许可证
 
 RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**。
 

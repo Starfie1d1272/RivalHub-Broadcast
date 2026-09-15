@@ -21,7 +21,7 @@ function runCommand(command, args) {
     child.once('exit', (code, signal) => {
       if (code === 0) resolvePromise();
       else
-        reject(new Error(`${command} ${args.join(' ')} failed with ${signal ?? `exit ${code}`}`));
+        reject(new Error(`${command} ${args.join(' ')} 执行失败（${signal ?? `退出码 ${code}`}）`));
     });
   });
 }
@@ -30,14 +30,14 @@ async function assertFile(path, label) {
   try {
     await access(path);
   } catch (error) {
-    throw new Error(`qualification offline smoke missing ${label}: ${path}`, { cause: error });
+    throw new Error(`qualification offline smoke 缺少 ${label}：${path}`, { cause: error });
   }
 }
 
 async function assertNoSymlinks(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const path = join(directory, entry.name);
-    if (entry.isSymbolicLink()) throw new Error('qualification bundle contains symlink: ' + path);
+    if (entry.isSymbolicLink()) throw new Error('qualification bundle 包含符号链接：' + path);
     if (entry.isDirectory()) await assertNoSymlinks(path);
   }
 }
@@ -49,7 +49,7 @@ async function assertBundleSmoke(outputRoot) {
   );
   const archive = entries.find((entry) => entry.isFile() && entry.name.endsWith('.zip'));
   if (bundle === undefined || archive === undefined)
-    throw new Error('qualification build did not produce one bundle directory and one ZIP');
+    throw new Error('qualification build 未生成一个 bundle 目录和一个 ZIP');
   const bundleDir = join(outputRoot, bundle.name);
   for (const relativePath of [
     'app/package.json',
@@ -101,7 +101,7 @@ async function assertBundleSmoke(outputRoot) {
     );
   });
   if (artifact.gitSha !== expectedSha)
-    throw new Error('qualification artifact git SHA is not bound to HEAD');
+    throw new Error('qualification artifact 的 git SHA 未绑定到当前 HEAD');
   const contract = JSON.parse(
     await readFile(join(rootDir, 'apps/companion/src/qualification/contract.json'), 'utf8'),
   );
@@ -109,26 +109,35 @@ async function assertBundleSmoke(outputRoot) {
     artifact.platform !== 'win32-x64' ||
     artifact.qualificationSchemaVersion !== contract.schemaVersion ||
     artifact.nodeVersion !== contract.nodeRuntimeVersion ||
-    !contract.resetEvidenceFields?.includes('programTelemetryCleared')
+    !contract.resetEvidenceFields?.includes('programTelemetryCleared') ||
+    !contract.markerKinds?.includes('cs2-closed') ||
+    contract.markerKinds?.includes('demo-a-stopped')
   )
-    throw new Error('qualification artifact metadata is invalid');
+    throw new Error('qualification artifact metadata 无效');
   const deployedPackage = await readFile(join(bundleDir, 'app/package.json'), 'utf8');
   if (deployedPackage.includes('/Users/') || deployedPackage.includes('\\Users\\'))
-    throw new Error('qualification deploy contains a host-specific absolute workspace path');
+    throw new Error('qualification deploy 包含绑定主机的绝对工作区路径');
   const config = await readFile(
     join(bundleDir, 'config/gamestate_integration_rivalhub_broadcast.cfg.template'),
     'utf8',
   );
   if (!config.includes('REPLACE_WITH_GSI_TOKEN'))
-    throw new Error('qualification config template lost its token placeholder');
+    throw new Error('qualification 配置模板缺少 token 占位符');
   const scripts = await readFile(join(bundleDir, 'scripts/start.ps1'), 'utf8');
   const installer = await readFile(join(bundleDir, 'scripts/install-gsi.ps1'), 'utf8');
+  const readme = await readFile(join(bundleDir, 'README.txt'), 'utf8');
   if (
     !scripts.includes('runtime\\node.exe') ||
     !scripts.includes('BROADCAST_COMMIT') ||
-    !installer.includes('libraryfolders.vdf')
+    !scripts.includes('supervisorProcessId') ||
+    !installer.includes('libraryfolders.vdf') ||
+    !installer.includes('GsiEndpointConflictWarning') ||
+    readme.includes('stopdemo') ||
+    readme.includes('This bundle') ||
+    !readme.includes('Windows 现场快速开始') ||
+    !readme.includes('quit')
   )
-    throw new Error('qualification start script is not portable');
+    throw new Error('qualification 启动脚本不满足可移植性检查');
 }
 
 async function main() {

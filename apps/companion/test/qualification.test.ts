@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
+import { Script } from 'node:vm';
 
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -11,6 +12,7 @@ import type {
   CaptureRecorder,
   RecorderHealth,
 } from '../src/telemetry/capture-recorder.js';
+import { qualificationPageHtml, qualificationRequestOptions } from '../src/qualification/page.js';
 
 const GSI_TOKEN = 'qualification-gsi-token';
 const CONTROL_TOKEN = 'qualification-control-token';
@@ -99,6 +101,16 @@ describe('qualification-only Companion surface', () => {
         })
       ).statusCode,
     ).toBe(400);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers: { 'x-qualification-token': CONTROL_TOKEN },
+          payload: { kind: 'runtime-stale' },
+        })
+      ).statusCode,
+    ).toBe(409);
   });
 
   it('hands the final runtime snapshot to the qualification launcher before shutdown', async () => {
@@ -138,13 +150,27 @@ describe('qualification-only Companion surface', () => {
     expect(finishDebug).toMatchObject({ freshness: 'fresh', raw: { current: { sequence: 0 } } });
   });
 
-  it('records the page stop boundary before freshness becomes stale', async () => {
+  it('allows the operator exit confirmation after runtime freshness becomes stale', async () => {
+    let monotonicMs = 100;
     app = buildApp({
       gsiToken: GSI_TOKEN,
       recorder: new FakeRecorder(),
       qualificationMode: true,
       qualificationControlToken: CONTROL_TOKEN,
       qualificationRunId: 'qualification-stop-run',
+      qualificationClock: {
+        now: () => ({
+          monotonicMs,
+          utc: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+        }),
+      },
+      debugClock: { nowMonotonicMs: () => monotonicMs },
+      clock: {
+        now: () => ({
+          receivedAt: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+          receivedMonotonicMs: monotonicMs,
+        }),
+      },
     });
 
     expect(
@@ -164,6 +190,18 @@ describe('qualification-only Companion surface', () => {
       payload: { kind: 'demo-a-live' },
     });
 
+    monotonicMs = 20_101;
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/qualification/status',
+          headers,
+        })
+      ).json(),
+    ).toMatchObject({ freshness: 'stale', markers: ['demo-a-live', 'runtime-stale'] });
+
+    monotonicMs = 20_200;
     const stopped = await app.inject({
       method: 'POST',
       url: '/qualification/stop',
@@ -179,9 +217,108 @@ describe('qualification-only Companion surface', () => {
         })
       ).json(),
     ).toMatchObject({
-      markers: ['demo-a-live', 'demo-a-stopped', 'cs2-closed'],
-      freshness: 'fresh',
+      markers: ['demo-a-live', 'runtime-stale', 'cs2-closed'],
+      freshness: 'stale',
     });
+  });
+
+  it('keeps the page request shape valid for bodyless control POSTs', () => {
+    const emptyRequest = qualificationRequestOptions(CONTROL_TOKEN, 'POST');
+    expect(emptyRequest).toEqual({
+      method: 'POST',
+      headers: {
+        Accept: 'application/json',
+        'x-qualification-token': CONTROL_TOKEN,
+      },
+    });
+    expect(emptyRequest.headers).not.toHaveProperty('Content-Type');
+    expect(emptyRequest).not.toHaveProperty('body');
+
+    const jsonRequest = qualificationRequestOptions(CONTROL_TOKEN, 'POST', {});
+    expect(jsonRequest).toMatchObject({
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        'x-qualification-token': CONTROL_TOKEN,
+      },
+      body: '{}',
+    });
+
+    const page = qualificationPageHtml(CONTROL_TOKEN);
+    expect(page).not.toContain('stopdemo');
+    expect(page).not.toContain('Qualification workflow');
+    expect(page).toContain('<title>Qualification 验收 · RivalHub Broadcast</title>');
+    expect(page).toContain('data-action="cs2-closed">我已退出 CS2</button>');
+    expect(page).toContain(
+      "byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
+    );
+    const script = page.match(/<script>([\s\S]*)<\/script>/)?.[1];
+    expect(script).toBeDefined();
+    expect(() => new Script(script ?? '')).not.toThrow();
+  });
+
+  it('accepts bodyless stop, reset, and finish requests from the browser flow', async () => {
+    let monotonicMs = 100;
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-bodyless-post-run',
+      qualificationClock: {
+        now: () => ({
+          monotonicMs,
+          utc: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+        }),
+      },
+      debugClock: { nowMonotonicMs: () => monotonicMs },
+      clock: {
+        now: () => ({
+          receivedAt: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+          receivedMonotonicMs: monotonicMs,
+        }),
+      },
+    });
+
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/gsi',
+          payload: { auth: { token: GSI_TOKEN }, ...payload() },
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'demo-a-live' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    monotonicMs = 20_101;
+    await app.inject({ method: 'GET', url: '/qualification/status', headers });
+
+    expect(
+      (await app.inject({ method: 'POST', url: '/qualification/stop', headers })).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/next-map-execution',
+          headers,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (await app.inject({ method: 'POST', url: '/qualification/finish', headers })).statusCode,
+    ).toBe(202);
   });
 
   it('records the explicit reset and clears old debug telemetry without changing identity', async () => {
@@ -295,5 +432,109 @@ describe('qualification-only Companion surface', () => {
       }),
     ]);
     expect(markers[2]?.reset?.programTelemetryCleared).toBe(true);
+  });
+
+  it('accepts Demo B after Core observes a real map-name boundary', async () => {
+    let monotonicMs = 100;
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      producerInstanceId: 'qualification-producer',
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-observed-boundary-run',
+      qualificationClock: {
+        now: () => ({
+          monotonicMs,
+          utc: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+        }),
+      },
+      debugClock: { nowMonotonicMs: () => monotonicMs },
+      clock: {
+        now: () => ({
+          receivedAt: new Date(Date.parse('2026-09-15T00:00:00.000Z') + monotonicMs).toISOString(),
+          receivedMonotonicMs: monotonicMs,
+        }),
+      },
+    });
+
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+    const postGsi = async (mapName: string) =>
+      app?.inject({
+        method: 'POST',
+        url: '/gsi',
+        payload: { auth: { token: GSI_TOKEN }, ...payload(mapName) },
+      });
+
+    expect((await postGsi('de_ancient'))?.statusCode).toBe(204);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'demo-a-live' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    monotonicMs = 20_101;
+    await app.inject({ method: 'GET', url: '/qualification/status', headers });
+    expect(
+      (await app.inject({ method: 'POST', url: '/qualification/stop', headers })).statusCode,
+    ).toBe(200);
+
+    monotonicMs = 20_200;
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/next-map-execution',
+          headers,
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'cs2-reopened' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    monotonicMs = 20_300;
+    expect((await postGsi('de_ancient'))?.statusCode).toBe(204);
+    monotonicMs = 20_400;
+    expect((await postGsi('de_dust2'))?.statusCode).toBe(204);
+    monotonicMs = 20_500;
+    expect((await postGsi('de_dust2'))?.statusCode).toBe(204);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'demo-b-live' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/qualification/status',
+      headers,
+    });
+    expect(status.json()).toMatchObject({
+      mapEpoch: 3,
+      checks: {
+        productionChain: { status: 'PASS' },
+        realSilenceToStale: { status: 'PASS' },
+        explicitNextExecution: { status: 'PASS' },
+        demoBRecovery: { status: 'PASS' },
+      },
+    });
   });
 });

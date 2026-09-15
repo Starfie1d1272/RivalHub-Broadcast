@@ -63,7 +63,7 @@ function Resolve-CfgDirectory {
         )
         $candidates = @($candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -Unique)
         if ($candidates.Count -eq 1) { return [string]$candidates[0] }
-        throw "Cannot resolve one CS2 cfg directory from -Cs2Root; pass game\csgo\cfg or the CS2 install root"
+        throw "无法从 -Cs2Root 解析唯一的 CS2 cfg 目录；请传入 game\csgo\cfg 或 CS2 安装根目录"
     }
 
     $steamRoots = @(Get-SteamInstallRoots)
@@ -81,12 +81,13 @@ function Resolve-CfgDirectory {
     }
     $candidates = @($candidates | Select-Object -Unique)
     if ($candidates.Count -eq 1) { return [string]$candidates[0] }
-    if ($candidates.Count -eq 0) { throw 'No CS2 cfg directory found; pass -Cs2Root <path>' }
-    throw "Multiple CS2 cfg directories found; pass -Cs2Root <path> to select one (candidates: $($candidates.Count))"
+    if ($candidates.Count -eq 0) { throw '未找到 CS2 cfg 目录；请传入 -Cs2Root <path>' }
+    throw "找到多个 CS2 cfg 目录；请传入 -Cs2Root <path> 选择一个（候选数：$($candidates.Count)）"
 }
 
 $cfgDirectory = Resolve-CfgDirectory -ExplicitRoot $Cs2Root
 $cfgPath = Join-Path $cfgDirectory 'gamestate_integration_rivalhub_broadcast.cfg'
+Write-GsiEndpointConflictWarning -CfgDirectory $cfgDirectory -CanonicalCfgPath $cfgPath | Out-Null
 New-Item -ItemType Directory -Force -Path $script:QualificationStateRoot | Out-Null
 $backupPath = Join-Path $script:QualificationStateRoot 'gamestate_integration_rivalhub_broadcast.cfg.original'
 $hadExisting = Test-Path -LiteralPath $cfgPath -PathType Leaf
@@ -106,7 +107,8 @@ $cs2ExecutableCandidates = @(
 $cs2ExecutableCandidates = @($cs2ExecutableCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -Unique)
 $cs2Version = 'unknown'
 if ($cs2ExecutableCandidates.Count -gt 0) {
-    $cs2Version = (Get-Item -LiteralPath $cs2ExecutableCandidates[0]).VersionInfo.ProductVersion
+    $reportedVersion = [string](Get-Item -LiteralPath $cs2ExecutableCandidates[0]).VersionInfo.ProductVersion
+    if (-not [string]::IsNullOrWhiteSpace($reportedVersion)) { $cs2Version = $reportedVersion.Trim() }
 }
 
 $fingerprint = (Get-FileHash -LiteralPath $cfgPath -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -122,7 +124,7 @@ $state = [ordered]@{
 }
 Write-JsonFile -Path $script:InstallStatePath -Value $state
 
-Write-Output "GSI config installed: $cfgPath"
-Write-Output "Config fingerprint (SHA-256): $fingerprint"
-Write-Output 'Token generated and stored only in the private qualification state.'
-Write-Output 'Next: run start.ps1.'
+Write-Output "GSI 配置已安装：$cfgPath"
+Write-Output "配置指纹（SHA-256）：$fingerprint"
+Write-Output 'Token 已生成，仅保存在本地 qualification 状态中。'
+Write-Output '下一步：执行 start.ps1。'

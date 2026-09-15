@@ -18,7 +18,7 @@ function Write-Utf8NoBom {
 
 function Read-JsonFile {
     param([Parameter(Mandatory = $true)][string]$Path)
-    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "missing JSON file: $Path" }
+    if (-not (Test-Path -LiteralPath $Path -PathType Leaf)) { throw "缺少 JSON 文件：$Path" }
     return (Get-Content -LiteralPath $Path -Raw -Encoding UTF8 | ConvertFrom-Json)
 }
 
@@ -43,6 +43,41 @@ function Read-InstallState {
 
 function Read-RunState {
     return Read-JsonFile -Path $script:RunStatePath
+}
+
+function Get-GsiEndpointConflicts {
+    param(
+        [Parameter(Mandatory = $true)][string]$CfgDirectory,
+        [Parameter(Mandatory = $true)][string]$CanonicalCfgPath
+    )
+    $uriPattern = '(?im)^\s*"uri"\s+"https?://(?:127\.0\.0\.1|localhost):3000(?:[/?#"]|$)'
+    $canonicalFullPath = $null
+    try { $canonicalFullPath = [System.IO.Path]::GetFullPath($CanonicalCfgPath) } catch { }
+    $conflicts = @()
+    foreach ($file in @(Get-ChildItem -LiteralPath $CfgDirectory -Filter 'gamestate_integration_*.cfg' -File -ErrorAction SilentlyContinue)) {
+        $fileFullPath = $null
+        try { $fileFullPath = [System.IO.Path]::GetFullPath($file.FullName) } catch { }
+        if ($null -ne $canonicalFullPath -and [string]::Equals($fileFullPath, $canonicalFullPath, [System.StringComparison]::OrdinalIgnoreCase)) {
+            continue
+        }
+        try {
+            $contents = Get-Content -LiteralPath $file.FullName -Raw -Encoding UTF8
+            if ([regex]::IsMatch($contents, $uriPattern)) { $conflicts += $file.FullName }
+        } catch { }
+    }
+    return @($conflicts)
+}
+
+function Write-GsiEndpointConflictWarning {
+    param(
+        [Parameter(Mandatory = $true)][string]$CfgDirectory,
+        [Parameter(Mandatory = $true)][string]$CanonicalCfgPath
+    )
+    $conflicts = @(Get-GsiEndpointConflicts -CfgDirectory $CfgDirectory -CanonicalCfgPath $CanonicalCfgPath)
+    if ($conflicts.Count -gt 0) {
+        Write-Warning ('GSI 配置冲突：其他配置也指向 127.0.0.1:3000：' + ($conflicts -join '; '))
+    }
+    return @($conflicts)
 }
 
 function Invoke-QualificationApi {
@@ -85,7 +120,7 @@ function Restore-InstalledGsiConfig {
     $cfgPath = [string]$State.cfgPath
     if ([bool]$State.hadExistingConfig) {
         if ($null -eq $State.backupPath -or -not (Test-Path -LiteralPath $State.backupPath -PathType Leaf)) {
-            throw "cannot restore the original GSI config: backup is missing"
+            throw "无法恢复原 GSI 配置：备份文件不存在"
         }
         Copy-Item -LiteralPath $State.backupPath -Destination $cfgPath -Force
     } elseif (Test-Path -LiteralPath $cfgPath -PathType Leaf) {

@@ -36,7 +36,7 @@ function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
     ...(diagnostic.operation === undefined ? {} : { operation: diagnostic.operation }),
     ...(diagnostic.causeCode === undefined ? {} : { causeCode: diagnostic.causeCode }),
   };
-  console.warn(`Companion capture recorder diagnostic: ${JSON.stringify(fields)}`);
+  console.warn(`Companion capture recorder 诊断：${JSON.stringify(fields)}`);
 }
 
 async function writeFinalRuntime(path: string, response: unknown): Promise<void> {
@@ -48,15 +48,13 @@ async function writeFinalRuntime(path: string, response: unknown): Promise<void>
 }
 
 if (gsiToken === undefined || gsiToken.trim().length === 0) {
-  console.error('Companion startup failed: GSI_TOKEN must be set to a non-empty value');
+  console.error('Companion 启动失败：GSI_TOKEN 必须设置为非空值');
   process.exitCode = 1;
 } else if (qualificationMode && (qualificationControlToken?.trim().length ?? 0) === 0) {
-  console.error(
-    'Companion startup failed: QUALIFICATION_CONTROL_TOKEN must be set in qualification mode',
-  );
+  console.error('Companion 启动失败：qualification 模式下必须设置 QUALIFICATION_CONTROL_TOKEN');
   process.exitCode = 1;
 } else if (qualificationMode && host !== '127.0.0.1') {
-  console.error('Companion startup failed: qualification mode must listen on loopback 127.0.0.1');
+  console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
@@ -70,7 +68,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     });
   } catch (error: unknown) {
     recorder = createDisabledRecorder('recorder_start_failed');
-    console.error(`Companion capture recorder unavailable: ${String(error)}`);
+    console.error(`Companion capture recorder 不可用：${String(error)}`);
   }
 
   const programRuntime = createProgramRuntime(producerInstanceId);
@@ -91,7 +89,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
                 await writeFinalRuntime(qualificationFinalRuntimePath, debug);
               }
             } catch (error: unknown) {
-              console.error(`Qualification final runtime snapshot failed: ${String(error)}`);
+              console.error(`Qualification final runtime snapshot 获取失败：${String(error)}`);
             } finally {
               shutdown('qualification-finish');
             }
@@ -107,7 +105,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       const watchdog = setTimeout(() => {
         if (appClosed && recorder.getHealth().state === 'closed') return;
         console.error(
-          `Companion shutdown watchdog expired after ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS}ms`,
+          `Companion shutdown watchdog 在 ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS}ms 后超时`,
         );
         process.exit(1);
       }, COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS);
@@ -116,9 +114,9 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       try {
         await app.close();
         appClosed = true;
-        app.log.info({ signal }, 'Companion stopped');
+        app.log.info({ signal }, 'Companion 已停止');
       } catch (error: unknown) {
-        app.log.error(error, 'Companion shutdown failed');
+        app.log.error(error, 'Companion 关闭失败');
         process.exitCode = 1;
       } finally {
         if (recorder.getHealth().state === 'closed') clearTimeout(watchdog);
@@ -131,9 +129,9 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 
   try {
     await app.listen({ host, port });
-    app.log.info({ host, port }, 'Companion listening');
+    app.log.info({ host, port }, 'Companion 正在监听');
   } catch (error: unknown) {
-    app.log.error(error, 'Companion startup failed');
+    app.log.error(error, 'Companion 启动失败');
     await app.close();
     process.exitCode = 1;
   }

@@ -23,7 +23,7 @@ export function isSafeNonNegativeInteger(value) {
 
 export function requireString(value, name) {
   if (typeof value !== 'string' || value.length === 0) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', `${name} must be a non-empty string`);
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', `${name} 必须是非空字符串`);
   }
   return value;
 }
@@ -33,16 +33,12 @@ export async function readJson(path, code = 'INVALID_EVIDENCE') {
   try {
     text = await readFile(path, 'utf8');
   } catch (error) {
-    throw new QualificationEvidenceError(code, `cannot read ${path}: ${String(error)}`, error);
+    throw new QualificationEvidenceError(code, `无法读取 ${path}：${String(error)}`, error);
   }
   try {
     return JSON.parse(text);
   } catch (error) {
-    throw new QualificationEvidenceError(
-      code,
-      `${path} is not valid JSON: ${String(error)}`,
-      error,
-    );
+    throw new QualificationEvidenceError(code, `${path} 不是有效 JSON：${String(error)}`, error);
   }
 }
 
@@ -53,7 +49,7 @@ export async function readOptionalJson(path) {
     if (error?.code === 'ENOENT') return undefined;
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      `cannot access ${path}: ${String(error)}`,
+      `无法访问 ${path}：${String(error)}`,
       error,
     );
   }
@@ -63,39 +59,39 @@ export async function readOptionalJson(path) {
 export function assertUtc(value, name) {
   requireString(value, name);
   if (!Number.isFinite(Date.parse(value))) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', `${name} must be a valid timestamp`);
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', `${name} 必须是有效时间戳`);
   }
 }
 
 export function validateArtifact(artifact) {
   if (!isRecord(artifact))
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.json must be an object');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.json 必须是对象');
   if (artifact.schemaVersion !== 1)
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact schema is unsupported');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact schema 不受支持');
   if (artifact.repository !== QUALIFICATION_REPOSITORY)
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'artifact repository is not RivalHub Broadcast',
+      'artifact repository 不是 RivalHub Broadcast',
     );
   requireString(artifact.gitSha, 'artifact.gitSha');
   assertUtc(artifact.buildTimestamp, 'artifact.buildTimestamp');
   if (artifact.platform !== 'win32-x64') {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.platform must be win32-x64');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.platform 必须是 win32-x64');
   }
   if (artifact.nodeVersion !== QUALIFICATION_CONTRACT.nodeRuntimeVersion) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      `artifact.nodeVersion must be the pinned ${QUALIFICATION_CONTRACT.nodeRuntimeVersion}`,
+      `artifact.nodeVersion 必须是固定版本 ${QUALIFICATION_CONTRACT.nodeRuntimeVersion}`,
     );
   }
   if (artifact.qualificationSchemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'artifact qualification schema is unsupported',
+      'artifact qualification schema 不受支持',
     );
   }
   if (artifact.artifactSha256 !== undefined && !SHA256_PATTERN.test(artifact.artifactSha256)) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.artifactSha256 is invalid');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.artifactSha256 无效');
   }
   return artifact;
 }
@@ -103,10 +99,10 @@ export function validateArtifact(artifact) {
 function scanForSecrets(value, path) {
   if (typeof value !== 'string') return;
   if (STEAM_LIKE_ID_PATTERN.test(value)) {
-    throw new QualificationEvidenceError('SECRET_LEAK', `${path} contains a Steam-like identity`);
+    throw new QualificationEvidenceError('SECRET_LEAK', `${path} 包含疑似 Steam 身份标识`);
   }
   if (SECRET_PATTERN.test(path) && value.length > 0) {
-    throw new QualificationEvidenceError('SECRET_LEAK', `${path} contains a secret-bearing value`);
+    throw new QualificationEvidenceError('SECRET_LEAK', `${path} 包含携带 secret 的值`);
   }
 }
 
@@ -154,7 +150,7 @@ export async function verifyHashes(runDir) {
   try {
     await access(hashesPath);
   } catch {
-    throw new QualificationEvidenceError('INVALID_HASHES', `${hashesPath} is missing`);
+    throw new QualificationEvidenceError('INVALID_HASHES', `缺少 ${hashesPath}`);
   }
   const text = await readFile(hashesPath, 'utf8');
   const entries = text.length === 0 ? [] : text.trimEnd().split('\n');
@@ -165,18 +161,15 @@ export async function verifyHashes(runDir) {
   for (const line of entries) {
     const match = /^(?<hash>[a-f0-9]{64})\x20{2}(?<path>.+)$/.exec(line);
     if (match?.groups === undefined)
-      throw new QualificationEvidenceError('INVALID_HASHES', `invalid hash line: ${line}`);
+      throw new QualificationEvidenceError('INVALID_HASHES', `无效的 hash 行：${line}`);
     if (seenPaths.has(match.groups.path)) {
-      throw new QualificationEvidenceError(
-        'INVALID_HASHES',
-        'duplicate hash path: ' + match.groups.path,
-      );
+      throw new QualificationEvidenceError('INVALID_HASHES', 'hash 路径重复：' + match.groups.path);
     }
     seenPaths.add(match.groups.path);
     if (!expectedPaths.has(match.groups.path)) {
       throw new QualificationEvidenceError(
         'INVALID_HASHES',
-        'hash list contains an unexpected path: ' + match.groups.path,
+        'hash 列表包含意外路径：' + match.groups.path,
       );
     }
     const path = resolve(runDir, match.groups.path);
@@ -184,13 +177,13 @@ export async function verifyHashes(runDir) {
     if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
       throw new QualificationEvidenceError(
         'INVALID_HASHES',
-        `hash path escapes evidence root: ${match.groups.path}`,
+        `hash 路径超出 evidence 根目录：${match.groups.path}`,
       );
     }
     if ((await sha256File(path)) !== match.groups.hash) {
       throw new QualificationEvidenceError(
         'HASH_MISMATCH',
-        `hash mismatch for ${match.groups.path}`,
+        `hash 与文件不一致：${match.groups.path}`,
       );
     }
   }
@@ -198,7 +191,7 @@ export async function verifyHashes(runDir) {
     const missing = [...expectedPaths].find((path) => !seenPaths.has(path));
     throw new QualificationEvidenceError(
       'INVALID_HASHES',
-      'hash list is missing ' + (missing ?? 'one or more evidence files'),
+      'hash 列表缺少 ' + (missing ?? '一个或多个 evidence 文件'),
     );
   }
   return entries.length;

@@ -27,11 +27,11 @@ const scriptDir = resolve(dirname(fileURLToPath(import.meta.url)));
 
 function usage() {
   return [
-    'usage: node scripts/qualification/build.mjs [options]',
-    '  --output <directory>       output directory (default: .agent-tmp/qualification-build)',
-    '  --skip-build               reuse existing dist outputs',
-    '  --skip-node-runtime        structure-only smoke bundle; not a validator artifact',
-    '  --allow-dirty               allow uncommitted source while developing locally',
+    '用法：node scripts/qualification/build.mjs [options]',
+    '  --output <directory>       输出目录（默认：.agent-tmp/qualification-build）',
+    '  --skip-build               复用已有 dist 输出',
+    '  --skip-node-runtime        仅做结构 smoke 的 bundle，不是现场验收 artifact',
+    '  --allow-dirty               本地开发时允许存在未提交的源代码变更',
   ].join('\n');
 }
 
@@ -50,15 +50,14 @@ function parseArgs(argv) {
     else if (argument === '--allow-dirty') options.allowDirty = true;
     else if (argument === '--output') {
       const value = argv[index + 1];
-      if (value === undefined || value.startsWith('--'))
-        throw new Error(`missing value for ${argument}`);
+      if (value === undefined || value.startsWith('--')) throw new Error(`参数 ${argument} 缺少值`);
       options.output = resolve(rootDir, value);
       index += 1;
     } else if (argument === '--help' || argument === '-h') {
       console.log(usage());
       process.exit(0);
     } else {
-      throw new Error(`unknown argument: ${argument}\n${usage()}`);
+      throw new Error(`未知参数：${argument}\n${usage()}`);
     }
   }
   return options;
@@ -92,7 +91,7 @@ function runCommand(command, args, options = {}) {
       else
         reject(
           new Error(
-            `${command} ${args.join(' ')} failed with ${signal ?? `exit ${code}`}\n${stderr}`,
+            `${command} ${args.join(' ')} 执行失败（${signal ?? `退出码 ${code}`}）\n${stderr}`,
           ),
         );
     });
@@ -107,22 +106,20 @@ async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
   const status = await commandOutput('git', ['status', '--porcelain']);
   if (status.length > 0)
-    throw new Error(
-      'qualification build requires a clean checkout; use --allow-dirty only for local development',
-    );
+    throw new Error('qualification build 要求工作区干净；仅限本地开发时使用 --allow-dirty');
 }
 
 async function fetchResponse(url) {
   const response = await globalThis.fetch(url);
   if (!response.ok || response.body === null)
-    throw new Error(`download failed: ${url} (${response.status})`);
+    throw new Error(`下载失败：${url}（HTTP ${response.status}）`);
   return response;
 }
 
 function resolveNodeVersion(requested) {
   if (requested !== QUALIFICATION_NODE_VERSION) {
     throw new Error(
-      `Node qualification runtime is pinned to ${QUALIFICATION_NODE_VERSION}; update runtime-config.mjs in a normal PR`,
+      `qualification 使用的 Node runtime 固定为 ${QUALIFICATION_NODE_VERSION}；请通过普通 PR 更新 runtime-config.mjs`,
     );
   }
   return QUALIFICATION_NODE_VERSION;
@@ -141,7 +138,7 @@ async function downloadNodeRuntime(runtimeDir, requestedVersion, temporaryDirect
     );
   const expectedHash = sumLine?.trim().split(/\s+/)[0];
   if (expectedHash === undefined || !/^[a-f0-9]{64}$/.test(expectedHash))
-    throw new Error(`official SHA-256 for ${archiveName} is missing`);
+    throw new Error(`缺少 ${archiveName} 的官方 SHA-256`);
   const archivePath = join(temporaryDirectory, archiveName);
   const archiveResponse = await fetchResponse(`${baseUrl}/${archiveName}`);
   await pipeline(
@@ -150,7 +147,7 @@ async function downloadNodeRuntime(runtimeDir, requestedVersion, temporaryDirect
   );
   const actualHash = await sha256File(archivePath);
   if (actualHash !== expectedHash)
-    throw new Error(`Node runtime SHA-256 mismatch: expected ${expectedHash}, got ${actualHash}`);
+    throw new Error(`Node runtime SHA-256 校验不一致：期望 ${expectedHash}，实际为 ${actualHash}`);
   const extractDir = join(temporaryDirectory, 'node-extract');
   await mkdir(extractDir);
   try {
@@ -259,7 +256,7 @@ async function main() {
   for (const path of [bundleDir, archivePath]) {
     try {
       await access(path);
-      throw new Error(`output already exists: ${path}`);
+      throw new Error(`输出路径已存在：${path}`);
     } catch (error) {
       if (error?.code !== 'ENOENT') throw error;
     }

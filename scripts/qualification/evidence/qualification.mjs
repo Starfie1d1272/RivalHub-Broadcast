@@ -43,7 +43,7 @@ async function readCaptureResults(runDir, markers) {
   for (const captureDir of recorderEntries) {
     if (basename(captureDir).endsWith('.partial')) {
       captureErrors.push(
-        new QualificationEvidenceError('UNFINALIZED_CAPTURE', `${captureDir} is unpublished`),
+        new QualificationEvidenceError('UNFINALIZED_CAPTURE', `${captureDir} 尚未发布`),
       );
       continue;
     }
@@ -60,23 +60,20 @@ export async function readQualificationEvidence(runDir) {
   const resolvedRunDir = resolve(runDir);
   const qualification = await readJson(join(resolvedRunDir, 'qualification.json'));
   if (!isRecord(qualification) || qualification.schemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
-    throw new QualificationEvidenceError(
-      'INVALID_EVIDENCE',
-      'qualification.json schema is unsupported',
-    );
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.json schema 不受支持');
   }
   const runId = requireString(qualification.runId, 'qualification.runId');
   if (!isRecord(qualification.artifact))
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.artifact is missing');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '缺少 qualification.artifact');
   requireString(qualification.artifact.gitSha, 'qualification.artifact.gitSha');
   if (!SHA256_PATTERN.test(qualification.artifact.artifactSha256)) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'qualification.artifact.artifactSha256 is invalid',
+      'qualification.artifact.artifactSha256 无效',
     );
   }
   if (!QUALIFICATION_RESULT_VALUES.has(qualification.result)) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.result is invalid');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.result 无效');
   }
   if (
     !isRecord(qualification.checks) ||
@@ -85,30 +82,27 @@ export async function readQualificationEvidence(runDir) {
       return !isRecord(check) && typeof check !== 'string';
     })
   ) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification checks are incomplete');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification checks 不完整');
   }
   for (const key of QUALIFICATION_CHECK_KEYS) {
     const check = qualification.checks[key];
     const status = typeof check === 'string' ? check : check.status;
     if (!QUALIFICATION_RESULT_VALUES.has(status)) {
-      throw new QualificationEvidenceError(
-        'INVALID_EVIDENCE',
-        `qualification check ${key} is invalid`,
-      );
+      throw new QualificationEvidenceError('INVALID_EVIDENCE', `qualification check ${key} 无效`);
     }
   }
   const artifact = validateArtifact(await readJson(join(resolvedRunDir, 'artifact.json')));
   if (artifact.gitSha !== qualification.artifact.gitSha) {
     throw new QualificationEvidenceError(
       'ARTIFACT_MISMATCH',
-      'qualification and evidence artifact SHA differ',
+      'qualification 与 evidence artifact 的 SHA 不一致',
     );
   }
   const scenario = await readScenario(resolvedRunDir);
   if (scenario.runId !== undefined && scenario.runId !== runId) {
     throw new QualificationEvidenceError(
       'SCENARIO_MISMATCH',
-      'scenario runId differs from qualification runId',
+      'scenario runId 与 qualification runId 不一致',
     );
   }
   scanJsonForSecrets(qualification, '$.qualification');
@@ -116,14 +110,14 @@ export async function readQualificationEvidence(runDir) {
   scenario.markers.forEach((marker, index) => scanJsonForSecrets(marker, `$.scenario[${index}]`));
   const environment = await readJson(join(resolvedRunDir, 'environment.json'));
   if (!isRecord(environment))
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'environment.json must be an object');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'environment.json 必须是对象');
   requireString(environment.runId, 'environment.runId');
   requireString(environment.windowsVersion, 'environment.windowsVersion');
   requireString(environment.cs2Version, 'environment.cs2Version');
   if (environment.runId !== runId) {
     throw new QualificationEvidenceError(
       'EVIDENCE_MISMATCH',
-      'environment runId differs from qualification runId',
+      'environment runId 与 qualification runId 不一致',
     );
   }
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
@@ -158,14 +152,14 @@ export async function readQualificationEvidence(runDir) {
     if (stored !== result.checks[key].status) {
       throw new QualificationEvidenceError(
         'CHECK_MISMATCH',
-        `qualification check ${key} differs from recomputed evidence`,
+        `qualification check ${key} 与重新计算的 evidence 不一致`,
       );
     }
   }
   if (qualification.result !== resultFromChecks(result.checks)) {
     throw new QualificationEvidenceError(
       'CHECK_MISMATCH',
-      'qualification result differs from recomputed evidence',
+      'qualification result 与重新计算的 evidence 不一致',
     );
   }
   await verifyHashes(resolvedRunDir);
@@ -199,7 +193,7 @@ export async function writeQualificationEvidence({
   if (!SHA256_PATTERN.test(artifactSha256)) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'artifact digest must be a lowercase SHA-256 value',
+      'artifact digest 必须是小写 SHA-256 值',
     );
   }
   const qualification = {

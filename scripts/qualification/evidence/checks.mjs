@@ -29,13 +29,90 @@ function finalFresh(finalRuntime) {
   return isRecord(finalRuntime) && finalRuntime.freshness === 'fresh';
 }
 
+function isSafeNonNegativeInteger(value) {
+  return Number.isSafeInteger(value) && value >= 0;
+}
+
+function observedMapBoundaryPassed(finalRuntime, marker, resetAfter) {
+  if (
+    !isRecord(finalRuntime) ||
+    !Array.isArray(finalRuntime.recentTransitions) ||
+    marker === undefined ||
+    marker.observation === null ||
+    resetAfter === undefined
+  )
+    return false;
+  const observation = marker.observation;
+  return finalRuntime.recentTransitions.some((candidate) => {
+    if (
+      !isRecord(candidate) ||
+      candidate.kind !== 'map_execution_changed' ||
+      candidate.reason !== 'observed-map-name-change' ||
+      !isRecord(candidate.at)
+    )
+      return false;
+    const previousMapEpoch = candidate.previousMapEpoch;
+    const mapEpoch = candidate.mapEpoch;
+    const sourceGeneration = candidate.sourceGeneration;
+    const receiveSequence = candidate.receiveSequence;
+    const runtimeSeq = candidate.runtimeSeq;
+    const atMonotonicMs = candidate.at.monotonicMs;
+    const previousMapName = candidate.previousMapName;
+    const mapName = candidate.mapName;
+    return (
+      isSafeNonNegativeInteger(previousMapEpoch) &&
+      isSafeNonNegativeInteger(mapEpoch) &&
+      mapEpoch > previousMapEpoch &&
+      previousMapEpoch === resetAfter.mapEpoch &&
+      mapEpoch === marker.mapEpoch &&
+      candidate.producerInstanceId === marker.producerInstanceId &&
+      sourceGeneration === marker.sourceGeneration &&
+      isSafeNonNegativeInteger(receiveSequence) &&
+      receiveSequence < observation.sequence &&
+      isSafeNonNegativeInteger(runtimeSeq) &&
+      runtimeSeq < marker.runtimeSeq &&
+      typeof atMonotonicMs === 'number' &&
+      Number.isFinite(atMonotonicMs) &&
+      atMonotonicMs > resetAfter.monotonicMs &&
+      atMonotonicMs < observation.receivedMonotonicMs &&
+      typeof previousMapName === 'string' &&
+      typeof mapName === 'string' &&
+      previousMapName.trim().length > 0 &&
+      mapName.trim().length > 0 &&
+      previousMapName.trim() !== mapName.trim()
+    );
+  });
+}
+
+function realSilenceToStalePassed(markers) {
+  const demoALive = markers.find((marker) => marker.kind === 'demo-a-live');
+  const runtimeStale = markers.find((marker) => marker.kind === 'runtime-stale');
+  const cs2Closed = markers.find((marker) => marker.kind === 'cs2-closed');
+  const resetBefore = markers.find(
+    (marker) => marker.kind === 'next-execution' && marker.phase === 'before',
+  );
+  if (demoALive === undefined || runtimeStale === undefined || cs2Closed === undefined)
+    return false;
+  if (
+    runtimeStale.freshness !== 'stale' ||
+    runtimeStale.monotonicMs <= demoALive.monotonicMs ||
+    cs2Closed.monotonicMs <= demoALive.monotonicMs
+  )
+    return false;
+  return (
+    resetBefore === undefined ||
+    (runtimeStale.monotonicMs < resetBefore.monotonicMs &&
+      cs2Closed.monotonicMs < resetBefore.monotonicMs)
+  );
+}
+
 function markerObservationWasCaptured(marker, captureResults) {
   if (marker === undefined || marker.observation === null) return false;
   const key = observationKey(marker.observation);
   return captureResults.some((capture) => capture.matchedObservationKeys?.includes(key));
 }
 
-function liveMarkerCausalityPassed(markers, kind, captureResults, execution) {
+function liveMarkerCausalityPassed(markers, kind, captureResults, finalRuntime, execution) {
   const markerIndexValue = markerIndex(markers, kind);
   if (markerIndexValue === -1) return false;
   const marker = markers[markerIndexValue];
@@ -62,13 +139,14 @@ function liveMarkerCausalityPassed(markers, kind, captureResults, execution) {
     resetAfter !== undefined &&
     markerIndexValue > resetAfterIndex &&
     observation.receivedMonotonicMs > resetAfter.monotonicMs &&
-    marker.mapEpoch === resetAfter.mapEpoch
+    (marker.mapEpoch === resetAfter.mapEpoch ||
+      observedMapBoundaryPassed(finalRuntime, marker, resetAfter))
   );
 }
 
 export function checksFrom({ markers, finalRuntime, captureResults, captureErrors, artifact }) {
   const resetPassed = markerResetPassed(markers);
-  const stopPassed = hasOrderedMarkers(markers, ['demo-a-stopped', 'cs2-closed', 'runtime-stale']);
+  const stopPassed = realSilenceToStalePassed(markers);
   const reopenedBeforeB = hasOrderedMarkers(markers, [
     'next-execution',
     'cs2-reopened',
@@ -83,12 +161,13 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     markers,
     'demo-a-live',
     captureResults,
+    finalRuntime,
     'first',
   );
   const demoBRecoveryPassed =
     reopenedBeforeB &&
     resetPassed &&
-    liveMarkerCausalityPassed(markers, 'demo-b-live', captureResults, 'second') &&
+    liveMarkerCausalityPassed(markers, 'demo-b-live', captureResults, finalRuntime, 'second') &&
     finalFresh(finalRuntime);
   const checks = {
     productionChain: {
@@ -102,8 +181,8 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
       label: '停止输入后进入 stale',
       status: stopPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: stopPassed
-        ? 'stopdemo、CS2 关闭与 stale 按顺序记录。'
-        : '等待 stopdemo、CS2 关闭与 stale 的连续证据。',
+        ? 'Companion 在未重启的情况下观察到 stale，并在下一场 reset 前记录了退出 CS2。'
+        : '等待 Demo A 后自动进入 stale，并在下一场 reset 前确认已退出 CS2。',
     },
     explicitNextExecution: {
       label: '下一场从显式新执行开始',
@@ -117,7 +196,7 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
       status: demoBRecoveryPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: demoBRecoveryPassed
         ? 'Demo B marker 已绑定 reset 后新 execution 的 accepted frame，并恢复 fresh。'
-        : '等待 CS2 重开、reset 后同一 execution 的 Demo B frame 与 fresh final runtime。',
+        : '等待 CS2 重开、reset 后新 execution 的 Demo B frame 与 fresh final runtime。',
     },
     captureIntegrity: {
       label: 'Capture recorder 可安全导出',
@@ -139,7 +218,7 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
   ) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'qualification check implementation does not match its evidence contract',
+      'qualification check 实现与 evidence contract 不一致',
     );
   }
   return checks;

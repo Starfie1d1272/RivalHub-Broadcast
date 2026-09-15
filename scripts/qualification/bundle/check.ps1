@@ -4,7 +4,7 @@ param(
 )
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-if ($TimeoutSeconds -lt 1 -or $TimeoutSeconds -gt 300) { throw 'TimeoutSeconds must be between 1 and 300' }
+if ($TimeoutSeconds -lt 1 -or $TimeoutSeconds -gt 300) { throw 'TimeoutSeconds 必须在 1 到 300 之间' }
 $deadline = (Get-Date).AddSeconds($TimeoutSeconds)
 $status = $null
 do {
@@ -13,24 +13,24 @@ do {
     Start-Sleep -Milliseconds 500
 } while ((Get-Date) -lt $deadline)
 
-if ($WaitForStale -and $status.freshness -ne 'stale') { throw "runtime did not become stale within $TimeoutSeconds seconds" }
-$companion = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { 'RUNNING' } else { 'STOPPED' }
+if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内 runtime 未进入 stale" }
+$companion = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
 $gsi = switch ([string]$status.gsi) {
-    'receiving' { 'RECEIVING' }
-    'silent' { 'SILENT' }
-    default { 'NEVER_SEEN' }
+    'receiving' { '接收中' }
+    'silent' { '已静默' }
+    default { '尚未收到' }
 }
 $freshness = switch ([string]$status.freshness) {
-    'fresh' { 'FRESH' }
-    'stale' { 'STALE' }
-    default { 'AWAITING' }
+    'fresh' { 'fresh' }
+    'stale' { 'stale' }
+    default { '等待中' }
 }
-$recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { 'FAILED' } else { 'OK' }
-Write-Output "Companion: $companion"
-Write-Output "GSI: $gsi"
-Write-Output "Runtime freshness: $freshness"
-Write-Output "Map epoch: $([string]$status.mapEpoch)"
-Write-Output "Recorder: $recorder"
-Write-Output "Last accepted frame age: $([string]$status.lastAcceptedFrameAgeMs) ms"
-Write-Output "Current scenario: $([string]$status.lastMarker)"
-Write-Output "Qualification result: $([string]$status.result)"
+$recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '失败' } else { '正常' }
+Write-Output "Companion：$companion"
+Write-Output "GSI：$gsi"
+Write-Output "Runtime 新鲜度：$freshness"
+Write-Output "Map epoch：$([string]$status.mapEpoch)"
+Write-Output "Recorder 状态：$recorder"
+Write-Output "最近 accepted frame 年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
+Write-Output "当前场景：$([string]$status.lastMarker)"
+Write-Output "Qualification 结果：$([string]$status.result)"

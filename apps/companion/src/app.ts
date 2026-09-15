@@ -119,7 +119,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         debugEvidenceStore.recordRuntimeDiagnostic(code);
         if (emittedRuntimeDiagnostics.has(code)) return;
         emittedRuntimeDiagnostics.add(code);
-        app.log.warn({ code }, 'Companion telemetry path degraded');
+        app.log.warn({ code }, 'Companion telemetry 路径已降级');
       },
     });
   }
@@ -127,7 +127,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   if (qualificationMode) {
     const controlToken = options.qualificationControlToken;
     if (controlToken === undefined || controlToken.trim().length === 0) {
-      throw new Error('qualificationControlToken must be set when qualificationMode is enabled');
+      throw new Error('启用 qualificationMode 时必须设置 qualificationControlToken');
     }
     const runId = options.qualificationRunId ?? 'local-qualification';
     const evidence =

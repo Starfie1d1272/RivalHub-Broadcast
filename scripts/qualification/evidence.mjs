@@ -52,7 +52,7 @@ async function qualificationCli(argv) {
   if (mode === '--verify') {
     const runDir = argv[1];
     if (runDir === undefined || argv.length !== 2)
-      throw new Error('usage: verify-evidence.mjs --verify <evidence-dir>');
+      throw new Error('用法：verify-evidence.mjs --verify <evidence-dir>');
     const result = await readQualificationEvidence(runDir);
     console.log(
       JSON.stringify({
@@ -69,13 +69,13 @@ async function qualificationCli(argv) {
     const runDir = argv[1];
     if (runDir === undefined)
       throw new Error(
-        'usage: verify-evidence.mjs --finish <evidence-dir> [--archive-sha256 <sha256>]',
+        '用法：verify-evidence.mjs --finish <evidence-dir> [--archive-sha256 <sha256>]',
       );
     let archiveSha256;
     if (argv.length === 4 && argv[2] === '--archive-sha256') archiveSha256 = argv[3];
     else if (argv.length !== 2)
       throw new Error(
-        'usage: verify-evidence.mjs --finish <evidence-dir> [--archive-sha256 <sha256>]',
+        '用法：verify-evidence.mjs --finish <evidence-dir> [--archive-sha256 <sha256>]',
       );
     const artifact = await readJson(join(resolve(runDir), 'artifact.json'));
     let environment = {};
@@ -95,7 +95,7 @@ async function qualificationCli(argv) {
     );
     return;
   }
-  throw new Error('usage: verify-evidence.mjs --finish <evidence-dir> | --verify <evidence-dir>');
+  throw new Error('用法：verify-evidence.mjs --finish <evidence-dir> | --verify <evidence-dir>');
 }
 
 if (process.argv[1] !== undefined && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

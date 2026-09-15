@@ -24,7 +24,7 @@ function loadQualificationContract() {
       // Try the next repository or bundle location.
     }
   }
-  throw new Error('qualification contract is missing');
+  throw new Error('缺少 qualification contract');
 }
 
 const QUALIFICATION_RESULT_VALUES = new Set(loadQualificationContract().resultValues);
@@ -64,7 +64,7 @@ function runCommand(command, args, { cwd, logPath }) {
       if (output.length > 0) await appendFile(logPath, output, 'utf8').catch(() => undefined);
       if (code === 0) resolvePromise();
       else
-        reject(new Error(`${command} failed with ${signal ?? `exit ${code}`}\n${stderr.trim()}`));
+        reject(new Error(`${command} 执行失败（${signal ?? `退出码 ${code}`}）\n${stderr.trim()}`));
     });
   });
 }
@@ -148,7 +148,7 @@ function completionPage(completion) {
         ? '环境已恢复'
         : '环境恢复状态待确认';
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qualification result</title></head>
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qualification 结果</title></head>
 <body><main><h1>核心验收：${result}</h1><p>${escapeHtml(verification)}</p><p>${escapeHtml(cleanup)}</p><p>报告：<code>${reportPath}</code></p></main></body></html>`;
 }
 
@@ -210,7 +210,7 @@ async function listenCompletionServer({ port, controlToken, getCompletion }) {
       await new Promise((resolvePromise) => setTimeout(resolvePromise, 250));
     }
   }
-  throw lastError ?? new Error('completion server did not become available');
+  throw lastError ?? new Error('完成状态服务未能启动');
 }
 
 export async function finalizeQualificationRun({
@@ -237,7 +237,7 @@ export function markCleanupFailure(completion) {
   return {
     ...completion,
     cleanup: 'failed',
-    error: 'qualification GSI config restore failed',
+    error: 'qualification GSI 配置恢复失败',
   };
 }
 
@@ -249,10 +249,9 @@ async function restoreGsiConfig(statePath) {
   const state = await readJson(statePath);
   if (state.gsiRestored === true) return;
   const cfgPath = typeof state.cfgPath === 'string' ? state.cfgPath : undefined;
-  if (cfgPath === undefined) throw new Error('qualification cfg path is missing');
+  if (cfgPath === undefined) throw new Error('缺少 qualification cfg 路径');
   if (state.hadExistingConfig === true) {
-    if (typeof state.backupPath !== 'string')
-      throw new Error('qualification cfg backup is missing');
+    if (typeof state.backupPath !== 'string') throw new Error('缺少 qualification cfg 备份');
     await copyFile(state.backupPath, cfgPath);
     await rm(state.backupPath, { force: true });
   } else {
@@ -275,9 +274,9 @@ async function main() {
   const controlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
   const port = Number.parseInt(process.env.PORT ?? '3000', 10);
   if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
-    throw new Error('qualification port is invalid');
+    throw new Error('qualification 端口无效');
   if (controlToken === undefined || controlToken.length === 0)
-    throw new Error('qualification control token is missing');
+    throw new Error('缺少 qualification control token');
 
   const logsDir = join(runDir, 'logs');
   await mkdir(logsDir, { recursive: true });
@@ -322,11 +321,9 @@ async function main() {
       getCompletion: () => completion,
     });
   } catch (error) {
-    await appendFile(
-      supervisorLogPath,
-      `completion server failed: ${String(error)}\n`,
-      'utf8',
-    ).catch(() => undefined);
+    await appendFile(supervisorLogPath, `完成状态服务启动失败：${String(error)}\n`, 'utf8').catch(
+      () => undefined,
+    );
   }
 
   let exitCode = 1;
@@ -346,13 +343,11 @@ async function main() {
       status: 'complete',
       result: 'INCONCLUSIVE',
       verification: 'failed',
-      error: 'qualification evidence finalization failed',
+      error: 'qualification evidence 完成失败',
     };
-    await appendFile(
-      supervisorLogPath,
-      `evidence finalization failed: ${String(error)}\n`,
-      'utf8',
-    ).catch(() => undefined);
+    await appendFile(supervisorLogPath, `evidence 完成失败：${String(error)}\n`, 'utf8').catch(
+      () => undefined,
+    );
   }
 
   try {
@@ -361,11 +356,9 @@ async function main() {
   } catch (error) {
     completion = markCleanupFailure(completion);
     exitCode = 1;
-    await appendFile(
-      supervisorLogPath,
-      `GSI config restore failed: ${String(error)}\n`,
-      'utf8',
-    ).catch(() => undefined);
+    await appendFile(supervisorLogPath, `GSI 配置恢复失败：${String(error)}\n`, 'utf8').catch(
+      () => undefined,
+    );
   }
   await writeJson(finalizationStatePath, completion);
 
@@ -381,7 +374,7 @@ async function main() {
     } catch (error) {
       await appendFile(
         supervisorLogPath,
-        `qualification state cleanup could not be scheduled: ${String(error)}\n`,
+        `qualification 状态清理未能安排：${String(error)}\n`,
         'utf8',
       ).catch(() => undefined);
       exitCode = 1;

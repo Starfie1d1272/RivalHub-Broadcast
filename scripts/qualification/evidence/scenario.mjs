@@ -18,7 +18,7 @@ export function validateObservation(observation, marker, lineNumber) {
   if (!isRecord(observation)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has an invalid accepted observation`,
+      `scenario 第 ${lineNumber} 行的 accepted observation 无效`,
     );
   }
   if (
@@ -27,13 +27,13 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid observation timing`,
+      `scenario 第 ${lineNumber} 行的 observation 时间无效`,
     );
   }
-  assertUtc(observation.receivedAt, `scenario line ${lineNumber}.observation.receivedAt`);
+  assertUtc(observation.receivedAt, `scenario 第 ${lineNumber} 行的 observation.receivedAt`);
   requireString(
     observation.producerInstanceId,
-    `scenario line ${lineNumber}.observation.producerInstanceId`,
+    `scenario 第 ${lineNumber} 行的 observation.producerInstanceId`,
   );
   if (
     !isSafeNonNegativeInteger(observation.mapEpoch) ||
@@ -43,7 +43,7 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid observation counters`,
+      `scenario 第 ${lineNumber} 行的 observation 计数器无效`,
     );
   }
   if (
@@ -56,7 +56,7 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} observation does not match its marker`,
+      `scenario 第 ${lineNumber} 行的 observation 与 marker 不匹配`,
     );
   }
 }
@@ -65,23 +65,23 @@ export function validateMarker(marker, runId, lineNumber) {
   if (!isRecord(marker) || marker.schemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has an unsupported schema`,
+      `scenario 第 ${lineNumber} 行的 schema 不受支持`,
     );
   }
   if (marker.runId !== runId || !QUALIFICATION_MARKER_KINDS.has(marker.kind)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has an invalid run or marker`,
+      `scenario 第 ${lineNumber} 行的 run 或 marker 无效`,
     );
   }
   if (!Number.isFinite(marker.monotonicMs)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid runtime evidence`,
+      `scenario 第 ${lineNumber} 行的 runtime evidence 无效`,
     );
   }
-  requireString(marker.producerInstanceId, `scenario line ${lineNumber}.producerInstanceId`);
-  assertUtc(marker.wallClockAt, `scenario line ${lineNumber}.wallClockAt`);
+  requireString(marker.producerInstanceId, `scenario 第 ${lineNumber} 行的 producerInstanceId`);
+  assertUtc(marker.wallClockAt, `scenario 第 ${lineNumber} 行的 wallClockAt`);
   if (
     !isSafeNonNegativeInteger(marker.mapEpoch) ||
     !isSafeNonNegativeInteger(marker.runtimeSeq) ||
@@ -89,19 +89,19 @@ export function validateMarker(marker, runId, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid counters`,
+      `scenario 第 ${lineNumber} 行的计数器无效`,
     );
   }
   if (!QUALIFICATION_FRESHNESS_VALUES.has(marker.freshness)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid freshness`,
+      `scenario 第 ${lineNumber} 行的 freshness 无效`,
     );
   }
   if (marker.phase !== undefined && !QUALIFICATION_MARKER_PHASES.has(marker.phase)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} has invalid phase`,
+      `scenario 第 ${lineNumber} 行的 phase 无效`,
     );
   }
   if (marker.reset !== undefined) {
@@ -119,21 +119,21 @@ export function validateMarker(marker, runId, lineNumber) {
     ) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `scenario line ${lineNumber} has invalid reset evidence`,
+        `scenario 第 ${lineNumber} 行的 reset evidence 无效`,
       );
     }
   }
   if (!Object.prototype.hasOwnProperty.call(marker, 'observation')) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario line ${lineNumber} is missing accepted observation evidence`,
+      `scenario 第 ${lineNumber} 行缺少 accepted observation evidence`,
     );
   }
   if (marker.observation === null) {
     if (QUALIFICATION_LIVE_MARKER_KINDS.has(marker.kind)) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `scenario line ${lineNumber} live marker has no accepted observation`,
+        `scenario 第 ${lineNumber} 行的 live marker 缺少 accepted observation`,
       );
     }
   } else {
@@ -150,7 +150,7 @@ export async function readScenario(runDir) {
   } catch (error) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `cannot read ${path}: ${String(error)}`,
+      `无法读取 ${path}：${String(error)}`,
       error,
     );
   }
@@ -162,7 +162,7 @@ export async function readScenario(runDir) {
   try {
     firstValue = JSON.parse(first);
   } catch (error) {
-    throw new QualificationEvidenceError('INVALID_SCENARIO', `${path} is not valid JSON`, error);
+    throw new QualificationEvidenceError('INVALID_SCENARIO', `${path} 不是有效 JSON`, error);
   }
   const runId = requireString(firstValue?.runId, 'scenario.runId');
   const markers = [];
@@ -174,7 +174,7 @@ export async function readScenario(runDir) {
     } catch (error) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `${path} line ${index + 1} is not valid JSON`,
+        `${path} 第 ${index + 1} 行不是有效 JSON`,
         error,
       );
     }
@@ -182,7 +182,7 @@ export async function readScenario(runDir) {
     if (previousMonotonicMs !== undefined && marker.monotonicMs < previousMonotonicMs) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `${path} monotonic timestamps are not ordered`,
+        `${path} 的 monotonic 时间戳未按顺序排列`,
       );
     }
     previousMonotonicMs = marker.monotonicMs;

@@ -5,29 +5,31 @@ $state = Read-RunState
 $runDir = [string]$state.runDir
 $finalizationPath = Join-Path $script:QualificationStateRoot 'finalization.json'
 $exitCode = 0
-$supervisorCompleted = $false
+$fallbackOwner = $false
+$fallbackVerificationPassed = $false
+$fallbackCleanupPassed = $true
 try {
     try {
         $finalRuntime = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/debug/runtime' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-runtime.json') -Value $finalRuntime
-    } catch { Write-Output 'Final runtime snapshot unavailable; report will mark the affected check inconclusive.' }
+    } catch { Write-Output '无法获取最终 runtime snapshot；报告会将受影响的 check 标为 INCONCLUSIVE。' }
     try {
         $finalHealth = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-health.json') -Value $finalHealth
-    } catch { Write-Output 'Final health snapshot unavailable.' }
+    } catch { Write-Output '无法获取最终 health snapshot。' }
 
     try {
         $finish = Invoke-QualificationApi -Method POST -Path '/qualification/finish'
         Write-Output ([string]$finish.message)
     } catch {
-        Write-Output 'Qualification finish route was unavailable; sending graceful process termination.'
+        Write-Output 'qualification 完成接口不可用；正在优雅终止 Companion 进程。'
         if (Test-ProcessRunning -ProcessId ([int]$state.processId)) { Stop-Process -Id ([int]$state.processId) }
     }
 
     $deadline = (Get-Date).AddSeconds(45)
     while ((Get-Date) -lt $deadline -and (Test-ProcessRunning -ProcessId ([int]$state.processId))) { Start-Sleep -Milliseconds 250 }
     if (Test-ProcessRunning -ProcessId ([int]$state.processId)) {
-        Write-Error 'Companion did not stop within 45 seconds; forcing termination.'
+        Write-Error 'Companion 在 45 秒内未停止；正在强制终止。'
         Stop-Process -Id ([int]$state.processId) -Force
         $exitCode = 1
     }
@@ -44,40 +46,61 @@ try {
         Start-Sleep -Milliseconds 250
     }
     if ($null -ne $completion) {
-        $supervisorCompleted = $true
-        Write-Output "Qualification result: $([string]$completion.result)"
-        Write-Output "Report: $(Join-Path $script:BundleRoot ([string]$completion.reportPath))"
-        if ([string]$completion.verification -ne 'passed') { $exitCode = 1; throw 'evidence verification failed' }
-        if ([string]$completion.result -ne 'PASS') { $exitCode = 2 }
+        Write-Output "Qualification 结果：$([string]$completion.result)"
+        Write-Output "报告：$(Join-Path $script:BundleRoot ([string]$completion.reportPath))"
+        if ([string]$completion.verification -ne 'passed') { $exitCode = 1; throw 'evidence verification 失败' }
+        if ([string]$completion.cleanup -eq 'failed') {
+            Write-Error 'GSI 配置恢复失败；qualification 本地状态已保留，供诊断使用。'
+            $exitCode = 1
+        } elseif ([string]$completion.result -ne 'PASS') {
+            $exitCode = 2
+        }
     } else {
-        Write-Output 'Qualification supervisor completion was unavailable; running evidence finalization fallback.'
+        $supervisorProcessId = $null
+        if ($state.PSObject.Properties.Name -contains 'supervisorProcessId') {
+            $supervisorProcessId = $state.supervisorProcessId
+        }
+        if ($null -ne $supervisorProcessId -and [int]$supervisorProcessId -gt 0 -and (Test-ProcessRunning -ProcessId ([int]$supervisorProcessId))) {
+            throw "qualification supervisor 仍在运行，不能安全执行 finalization 备用流程。请查看 $finalizationPath 和 supervisor.log"
+        }
+        $fallbackOwner = $true
+        Write-Output 'qualification supervisor 未提供完成状态；正在执行 evidence 完成备用流程。'
         $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
         $evidenceScript = Join-Path $script:BundleRoot 'scripts\verify-evidence.mjs'
         & $nodePath $evidenceScript '--finish' $runDir
-        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence report generation failed' }
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence 报告生成失败' }
         & $nodePath $evidenceScript '--verify' $runDir
-        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence verification failed' }
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence verification 失败' }
 
         $qualification = Read-JsonFile -Path (Join-Path $runDir 'qualification.json')
-        Write-Output "Qualification result: $([string]$qualification.result)"
-        Write-Output "Report: $(Join-Path $runDir 'REPORT.md')"
+        $fallbackVerificationPassed = $true
+        Write-Output "Qualification 结果：$([string]$qualification.result)"
+        Write-Output "报告：$(Join-Path $runDir 'REPORT.md')"
         if ([string]$qualification.result -ne 'PASS') { $exitCode = 2 }
     }
-    if ($supervisorCompleted) {
+    if (-not $fallbackOwner) {
         try { Invoke-QualificationApi -Method POST -Path '/qualification/finalization/ack' | Out-Null } catch { }
     }
 } catch {
     Write-Error $_
     $exitCode = if ($exitCode -eq 0) { 1 } else { $exitCode }
 } finally {
-    if (-not $KeepGsiConfig) {
+    if ($fallbackOwner -and -not $KeepGsiConfig) {
         $currentState = $null
         try { $currentState = Read-RunState } catch { }
         if ($null -ne $currentState -and -not [bool]$currentState.gsiRestored) {
-            try { Restore-InstalledGsiConfig -State $currentState } catch { Write-Error $_; $exitCode = 1 }
+            try {
+                Restore-InstalledGsiConfig -State $currentState
+                $currentState | Add-Member -NotePropertyName gsiRestored -NotePropertyValue $true -Force
+                Write-JsonFile -Path $script:RunStatePath -Value $currentState
+            } catch {
+                Write-Error $_
+                $fallbackCleanupPassed = $false
+                $exitCode = 1
+            }
         }
     }
-    if (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container) {
+    if ($fallbackOwner -and $fallbackVerificationPassed -and $fallbackCleanupPassed -and (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container)) {
         $removed = $false
         for ($attempt = 0; $attempt -lt 40 -and -not $removed; $attempt++) {
             if (-not (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container)) {
@@ -90,10 +113,13 @@ try {
             } catch {
                 if (-not (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container)) {
                     $removed = $true
-                } elseif ($attempt -eq 39) { Write-Error $_; $exitCode = 1 }
+                } elseif ($attempt -eq 39) { Write-Error $_; $fallbackCleanupPassed = $false; $exitCode = 1 }
                 else { Start-Sleep -Milliseconds 250 }
             }
         }
+    }
+    if ($fallbackOwner -and (-not $fallbackVerificationPassed -or -not $fallbackCleanupPassed)) {
+        Write-Output 'Qualification 本地状态已保留，供诊断使用。'
     }
 }
 exit $exitCode

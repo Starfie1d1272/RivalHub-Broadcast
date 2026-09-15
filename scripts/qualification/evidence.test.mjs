@@ -69,9 +69,14 @@ async function createEvidenceRun({
   captureFirstObservation = true,
   captureSecondObservation = true,
   programTelemetryCleared = true,
+  observedMapChange = false,
 } = {}) {
   const runDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-evidence-'));
   const runId = 'qualification-test-run';
+  const demoBSequence = observedMapChange ? 2 : 1;
+  const demoBReceivedMonotonicMs = observedMapChange ? 20_700 : 20_600;
+  const demoBMapEpoch = observedMapChange ? 3 : 2;
+  const demoBRuntimeSeq = observedMapChange ? 4 : 3;
   await mkdir(join(runDir, 'debug'), { recursive: true });
   await mkdir(join(runDir, 'recorder'), { recursive: true });
   await writeFile(join(runDir, 'scenario.jsonl'), '', 'utf8');
@@ -86,7 +91,35 @@ async function createEvidenceRun({
     })}\n`,
     'utf8',
   );
-  await writeFile(join(runDir, 'debug', 'final-runtime.json'), '{"freshness":"fresh"}\n', 'utf8');
+  await writeFile(
+    join(runDir, 'debug', 'final-runtime.json'),
+    `${JSON.stringify({
+      freshness: 'fresh',
+      ...(observedMapChange
+        ? {
+            recentTransitions: [
+              {
+                kind: 'map_execution_changed',
+                reason: 'observed-map-name-change',
+                runtimeSeq: 3,
+                producerInstanceId: 'qualification-producer',
+                mapEpoch: 3,
+                previousMapEpoch: 2,
+                previousMapName: 'de_ancient',
+                mapName: 'de_dust2',
+                sourceGeneration: 0,
+                receiveSequence: 1,
+                at: {
+                  monotonicMs: 20_650,
+                  utc: new Date(Date.parse(BASE_TIME) + 20_650).toISOString(),
+                },
+              },
+            ],
+          }
+        : {}),
+    })}\n`,
+    'utf8',
+  );
 
   const markers = [
     marker(runId, 'demo-a-live', 100, {
@@ -94,11 +127,10 @@ async function createEvidenceRun({
       receivedAt: BASE_TIME,
       receivedMonotonicMs: 100,
     }),
-    marker(runId, 'demo-a-stopped', 200),
-    marker(runId, 'cs2-closed', 300),
     marker(runId, 'runtime-stale', 20_300, { freshness: 'stale' }),
-    marker(runId, 'next-execution', 20_400, { freshness: 'stale', phase: 'before' }),
-    marker(runId, 'next-execution', 20_401, {
+    marker(runId, 'cs2-closed', 20_400, { freshness: 'stale' }),
+    marker(runId, 'next-execution', 20_500, { freshness: 'stale', phase: 'before' }),
+    marker(runId, 'next-execution', 20_501, {
       freshness: 'stale',
       phase: 'after',
       mapEpoch: 2,
@@ -112,15 +144,15 @@ async function createEvidenceRun({
         programTelemetryCleared,
       },
     }),
-    marker(runId, 'cs2-reopened', 20_500, { freshness: 'stale', mapEpoch: 2, runtimeSeq: 2 }),
-    marker(runId, 'demo-b-live', 20_600, {
-      sequence: captureSecondObservation ? 1 : 0,
+    marker(runId, 'cs2-reopened', 20_600, { freshness: 'stale', mapEpoch: 2, runtimeSeq: 2 }),
+    marker(runId, 'demo-b-live', 20_800, {
+      sequence: captureSecondObservation ? demoBSequence : 0,
       receivedAt: captureSecondObservation
-        ? new Date(Date.parse(BASE_TIME) + 20_600).toISOString()
+        ? new Date(Date.parse(BASE_TIME) + demoBReceivedMonotonicMs).toISOString()
         : BASE_TIME,
-      receivedMonotonicMs: captureSecondObservation ? 20_600 : 100,
-      mapEpoch: 2,
-      runtimeSeq: 3,
+      receivedMonotonicMs: captureSecondObservation ? demoBReceivedMonotonicMs : 100,
+      mapEpoch: demoBMapEpoch,
+      runtimeSeq: demoBRuntimeSeq,
     }),
   ];
   await writeFile(
@@ -143,12 +175,25 @@ async function createEvidenceRun({
               },
             ]
           : []),
+        ...(observedMapChange
+          ? [
+              {
+                version: 1,
+                sequence: 1,
+                elapsedUs: 20_650_000,
+                receivedAt: new Date(Date.parse(BASE_TIME) + 20_650).toISOString(),
+                payload: { map: { name: 'de_dust2', phase: 'live' } },
+              },
+            ]
+          : []),
         {
           version: 1,
-          sequence: 1,
-          elapsedUs: 20_600_000,
-          receivedAt: new Date(Date.parse(BASE_TIME) + 20_600).toISOString(),
-          payload: { map: { name: 'de_ancient', phase: 'live' } },
+          sequence: demoBSequence,
+          elapsedUs: demoBReceivedMonotonicMs * 1_000,
+          receivedAt: new Date(Date.parse(BASE_TIME) + demoBReceivedMonotonicMs).toISOString(),
+          payload: {
+            map: { name: observedMapChange ? 'de_dust2' : 'de_ancient', phase: 'live' },
+          },
         },
       ]
         .map((frame) => JSON.stringify(frame))
@@ -167,7 +212,7 @@ async function createEvidenceRun({
         scenario: 'qualification-test',
         gsiConfig: { uri: 'http://127.0.0.1:3000/gsi' },
         complete,
-        frameCount: captureFirstObservation ? 2 : 1,
+        frameCount: frames.trimEnd().split('\n').length,
         droppedFrames: 0,
         framesSha256: createHash('sha256').update(frames, 'utf8').digest('hex'),
       })}\n`,
@@ -200,6 +245,32 @@ describe('qualification evidence verifier', () => {
       expect(await readFile(join(runDir, 'hashes.txt'), 'utf8')).toBe(hashesBefore);
     } finally {
       await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts Demo B after reset when Core observes a real map-name boundary', async () => {
+    const run = await createEvidenceRun({ observedMapChange: true });
+    try {
+      const written = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+        },
+      });
+      expect(written.checks.realSilenceToStale.status).toBe('PASS');
+      expect(written.checks.explicitNextExecution.status).toBe('PASS');
+      expect(written.checks.demoBRecovery.status).toBe('PASS');
+      expect(written.qualification.result).toBe('PASS');
+
+      await expect(readQualificationEvidence(run.runDir)).resolves.toMatchObject({
+        qualification: { result: 'PASS' },
+        checks: { demoBRecovery: { status: 'PASS' } },
+      });
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
     }
   });
 
@@ -308,7 +379,7 @@ describe('qualification evidence verifier', () => {
   });
 
   it('rejects secret-bearing evidence fields', () => {
-    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('secret-bearing');
-    expect(() => scanJsonForSecrets({ player: '76561198000000001' })).toThrow('Steam-like');
+    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('携带 secret');
+    expect(() => scanJsonForSecrets({ player: '76561198000000001' })).toThrow('Steam 身份');
   });
 });

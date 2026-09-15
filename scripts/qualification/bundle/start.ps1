@@ -1,16 +1,17 @@
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $install = Read-InstallState
+Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$install.cfgPath)) -CanonicalCfgPath ([string]$install.cfgPath) | Out-Null
 $artifact = Read-JsonFile -Path (Join-Path $script:BundleRoot 'metadata\artifact.json')
 $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
 $appPath = Join-Path $script:BundleRoot 'app'
-if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'bundled runtime/node.exe is missing' }
-if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw 'bundled Companion dist/server.js is missing' }
+if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'bundle 内缺少 runtime\node.exe' }
+if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw 'bundle 内缺少 Companion dist\server.js' }
 $dependencyPath = Join-Path $appPath 'node_modules\.pnpm\node_modules'
-if (-not (Test-Path -LiteralPath $dependencyPath -PathType Container)) { throw 'bundled dependency store is missing' }
+if (-not (Test-Path -LiteralPath $dependencyPath -PathType Container)) { throw 'bundle 内缺少依赖存储' }
 
 $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
-if ($listeners.Count -gt 0) { throw 'port 3000 is already occupied; stop the other process before starting qualification' }
+if ($listeners.Count -gt 0) { throw '3000 端口已被占用；请先停止其他进程再开始 qualification' }
 
 $runId = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $runDir = Join-Path $script:BundleRoot "evidence\$runId"
@@ -27,11 +28,13 @@ Write-JsonFile -Path (Join-Path $runDir 'cfg\fingerprint.json') -Value ([ordered
 
 $windowsVersion = 'unknown'
 try { $windowsVersion = (Get-CimInstance Win32_OperatingSystem -ErrorAction Stop).Caption } catch { $windowsVersion = $env:OS }
+$cs2Version = [string]$install.cs2Version
+if ([string]::IsNullOrWhiteSpace($cs2Version)) { $cs2Version = 'unknown' }
 Write-JsonFile -Path (Join-Path $runDir 'environment.json') -Value ([ordered]@{
     schemaVersion = 1
     runId = $runId
     windowsVersion = $windowsVersion
-    cs2Version = [string]$install.cs2Version
+    cs2Version = $cs2Version
     startedAt = (Get-Date).ToUniversalTime().ToString('o')
 })
 
@@ -68,7 +71,7 @@ $env:QUALIFICATION_FINALIZATION_PATH = (Join-Path $script:QualificationStateRoot
 $env:NODE_PATH = if ($env:NODE_PATH) { "$dependencyPath;$($env:NODE_PATH)" } else { $dependencyPath }
 
 $supervisorPath = Join-Path $script:BundleRoot 'scripts\qualification-supervisor.mjs'
-if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw 'qualification supervisor script is missing' }
+if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw 'bundle 内缺少 qualification supervisor 脚本' }
 $supervisorLogPath = Join-Path $script:QualificationStateRoot 'supervisor.log'
 $supervisorErrorPath = Join-Path $script:QualificationStateRoot 'supervisor.stderr.log'
 $quotedSupervisorPath = '"' + $supervisorPath.Replace('"', '\"') + '"'
@@ -77,7 +80,7 @@ $supervisor = Start-Process -FilePath $nodePath -ArgumentList @($quotedSuperviso
 $ready = $false
 $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline) {
-    if (-not (Test-ProcessRunning -ProcessId $supervisor.Id)) { throw "Qualification supervisor exited before readiness; see $supervisorErrorPath" }
+    if (-not (Test-ProcessRunning -ProcessId $supervisor.Id)) { throw "qualification supervisor 在服务就绪前退出；请查看 $supervisorErrorPath" }
     try {
         $health = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 2 -ErrorAction Stop
         if ($health.status -eq 'ok') { $ready = $true; break }
@@ -85,10 +88,12 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 250
 }
 $runState = Read-RunState
-if ($null -eq $runState.processId) { throw "Companion PID was not published; see $supervisorErrorPath" }
-if (-not $ready) { throw "Companion readiness timed out after 30 seconds; see $supervisorErrorPath" }
+if ($null -eq $runState.processId) { throw "未记录 Companion PID；请查看 $supervisorErrorPath" }
+if (-not $ready) { throw "等待 Companion 就绪超过 30 秒；请查看 $supervisorErrorPath" }
+$runState | Add-Member -NotePropertyName supervisorProcessId -NotePropertyValue ([int]$supervisor.Id) -Force
+Write-JsonFile -Path $script:RunStatePath -Value $runState
 
-Write-Output "Companion RUNNING (PID $([int]$runState.processId)); supervisor PID $($supervisor.Id)"
-Write-Output 'Open http://127.0.0.1:3000/qualification for the operator page.'
-Write-Output 'The page is the preferred workflow; it finalizes evidence after Companion exits.'
-Write-Output 'check.ps1, mark.ps1, and stop.ps1 remain automation fallbacks.'
+Write-Output "Companion 正在运行（PID $([int]$runState.processId)）；supervisor PID $($supervisor.Id)"
+Write-Output '请打开 http://127.0.0.1:3000/qualification 进入现场操作页面。'
+Write-Output '页面是首选流程；Companion 退出后会完成 evidence。'
+Write-Output 'check.ps1、mark.ps1 和 stop.ps1 仍可作为自动化备用入口。'

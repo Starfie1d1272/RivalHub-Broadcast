@@ -10,31 +10,31 @@ export function renderReport({
   checks,
 }) {
   const lines = [
-    '# RivalHub Broadcast Qualification Report',
+    '# RivalHub Broadcast Qualification 验收报告',
     '',
-    `- Result: **${qualification.result}**`,
-    `- Run ID: \`${qualification.runId}\``,
-    `- Git SHA: \`${artifact.gitSha}\``,
-    `- Node runtime: \`${artifact.nodeVersion}\``,
+    `- 结果：**${qualification.result}**`,
+    `- Run ID：\`${qualification.runId}\``,
+    `- Git SHA：\`${artifact.gitSha}\``,
+    `- Node runtime：\`${artifact.nodeVersion}\``,
     '',
-    '## Checks',
+    '## 验收检查',
     '',
   ];
   for (const check of Object.values(checks))
-    lines.push(`- ${check.label}: **${check.status}** — ${check.reason}`);
+    lines.push(`- ${check.label}：**${check.status}** — ${check.reason}`);
   lines.push(
     '',
-    '## Capture',
+    '## Capture 记录',
     '',
-    `- Published captures: ${captureResults.length}`,
-    `- Capture errors: ${captureErrors.length}`,
+    `- 已发布 capture：${captureResults.length}`,
+    `- Capture 错误：${captureErrors.length}`,
   );
   for (const capture of captureResults)
     lines.push(
-      `- \`${basename(capture.directory)}\`: ${capture.frameCount} frames, ${capture.computedFramesSha256}`,
+      `- \`${basename(capture.directory)}\`：${capture.frameCount} 个 frame，${capture.computedFramesSha256}`,
     );
-  lines.push('', '## Scenario markers', '');
-  if (scenario.markers.length === 0) lines.push('- No markers recorded.');
+  lines.push('', '## 场景 marker', '');
+  if (scenario.markers.length === 0) lines.push('- 未记录 marker。');
   else
     for (const marker of scenario.markers)
       lines.push(
@@ -42,13 +42,13 @@ export function renderReport({
       );
   lines.push(
     '',
-    '## Final runtime',
+    '## 最终 runtime',
     '',
     finalRuntime === undefined
-      ? '- final-runtime.json unavailable'
-      : `- Freshness: **${finalRuntime.freshness ?? 'unknown'}**`,
+      ? '- final-runtime.json 不可用'
+      : `- 数据新鲜度：**${finalRuntime.freshness ?? 'unknown'}**`,
     '',
-    'This report contains no raw GSI token or account identity.',
+    '本报告不包含 raw GSI token 或账户身份信息。',
   );
   return `${lines.join('\n')}\n`;
 }
