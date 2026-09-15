@@ -28,6 +28,30 @@ Milestone 标题使用中文以提高项目管理可读性；代码 symbol、pac
 
 M0–M5 按“先证明输入与运行时 → 再证明本地节目 → 再补完整工作流与 Assist → 再开放写入/uplink → 最后生产硬化”的顺序推进。
 
+产品能力按 ADR-0005 分成三条线，但路线图不据此拆成三套独立项目：
+
+```text
+Shared Runtime Foundation
+  M0 / M1 为主，之后持续硬化
+        │
+        ├─ 赛事与实时数据
+        │    M2 冻结 read-side consumer contract
+        │    M3-A 用真实只读赛事上下文跑完整节目
+        │    M4 接入 ReliableObservation / BroadcastLiveSnapshot / auth / outbox
+        │
+        ├─ 正式节目制播
+        │    M2 建立本地 Gameplay / Radar / projections
+        │    M3-A 完成完整 Program workflow
+        │    M5 完成正式赛事部署与恢复
+        │
+        └─ Observer Assist / Lookahead
+             M1/M2 只保留隔离与 adapter seam
+             M3-B 完成最小确定性 future kill cue
+             M5 完成真实环境 non-leak / recovery 验收
+```
+
+这张映射表达的是产品能力 ownership，不改变 milestone 的依赖顺序，也不要求每条能力拥有独立 package、进程或仓库。
+
 需要特别区分 RivalHub 的**读路径**与**写路径**：
 
 ```text
@@ -42,6 +66,8 @@ RivalHub write/uplink path
 ```
 
 不能等到 M4 才第一次让完整节目面对真实 RivalHub 数据，否则会把 manifest shape、identity、缓存与 scene 数据需求的跨仓风险推得过晚。
+
+同时，`RivalHub-native` 不等于 Shared Runtime / Radar / Lookahead 必须 import RivalHub 内部类型或在线服务。路线实施时优先通过 `packages/rivalhub`、Broadcast-owned contract 与本地 same-shape fixture 保持第一方集成深度和可移植性，而不是为了“通用”提前设计插件系统。
 
 ## Milestones
 
@@ -68,7 +94,7 @@ M0 不实现真实 GSI domain、HUD、Radar 或 RivalHub uplink。
 
 ### M1 — 运行时验证
 
-目标：证明真实 CS2 GSI 可以通过生产数据链稳定进入 Runtime，并被记录、重放和测试。
+目标：证明真实 CS2 GSI 可以通过生产数据链稳定进入 Runtime，并被记录、重放和测试。该阶段主要建立三条产品能力共享的 Runtime Foundation，不为某一条 surface 私有化基础语义。
 
 关键能力：
 
@@ -92,6 +118,8 @@ M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在
 ### M2 — 本地制播内核
 
 目标：不依赖 RivalHub 在线服务，也能稳定驱动一场本地比赛的基础节目画面；同时提前冻结“真实赛事上下文如何进入本地 runtime”的读侧 contract，避免到 M4 才发现跨仓 shape 不合适。
+
+M2 主要推进**正式节目制播**的本地内核，同时为**赛事与实时数据**建立 read-side contract，并为 **Observer Assist** 固定类型隔离 seam。
 
 关键能力：
 
@@ -123,6 +151,8 @@ M3 执行上明确分成两个**独立可验收 vertical slice**；二者共享 
 
 #### M3-A Program workflow
 
+M3-A 是**正式节目制播**能力线的完整 workflow slice，同时通过真实只读 RivalHub context 验证**赛事与实时数据**能力线的 ingress。
+
 关键能力：
 
 - 使用真实 RivalHub read-only `BroadcastManifest` 跑一场比赛上下文；
@@ -137,6 +167,8 @@ M3 执行上明确分成两个**独立可验收 vertical slice**；二者共享 
 - OBS Program preset 的一键创建 / 校验 / 修复。
 
 #### M3-B Observer Assist
+
+M3-B 是 **Observer Assist / Lookahead** 能力线的第一条完整 vertical slice。它仍运行在同一 Runtime Foundation 上，但 acquisition、alignment 和 cue contract 不以 RivalHub Web/domain implementation 作为算法前提。
 
 关键能力：
 
@@ -160,13 +192,16 @@ M3 的基础完成条件**不包括**：
 - AI / model prediction；
 - full-auto observer / auto TAKE；
 - MulNX actuator；
-- 复杂 OBS scene orchestration。
+- 复杂 OBS scene orchestration；
+- 为未来独立产品提前拆分 Lookahead 仓库或建立通用 plugin SDK。
 
 这些只有在真实比赛使用证明基础 kill cue 需要增强后再排期。
 
 ### M4 — RivalHub Uplink、Auth 与生产写路径
 
 目标：在真实 RivalHub read path 已经被 Program workflow 验证后，通过正式 versioned contract 接入认证、可靠 observation 和 public live uplink，而不破坏 local-first 与 authority boundary。
+
+M4 是**赛事与实时数据**能力线从“消费 canonical context”走向“产生标准 live/reliable output”的关键阶段。Broadcast 仍只是 producer；公开网站、SSE/WebSocket/Realtime/REST 或未来第三方数据分发由 RivalHub / 对应云端服务 owner 负责。
 
 关键能力：
 
@@ -190,7 +225,7 @@ M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 block
 
 ### M5 — 生产就绪与赛前验收
 
-目标：从“工程上可运行”变成“真实赛事电脑可以重复部署、长时间运行并安全恢复”。
+目标：从“工程上可运行”变成“真实赛事电脑可以重复部署、长时间运行并安全恢复”。M5 对三条产品能力线做统一生产验收，而不是第一次把任一能力放到真实环境。
 
 关键能力：
 
@@ -260,9 +295,10 @@ Acceptance evidence
 - Stream Deck；
 - MulNX / HLAE；
 - renderer SDK / third-party HUD compatibility；
-- plugin marketplace。
+- plugin marketplace；
+- 独立 Lookahead / live-data 产品仓库或通用 esports adapter framework。
 
-注意：**基础 Observer Assist future kill cue** 已进入当前 Major 的 V1/P1 路径；只有更重的叙事理解和自动导播继续属于 Future。
+注意：**基础 Observer Assist future kill cue** 已进入当前 Major 的 V1/P1 路径；只有更重的叙事理解和自动导播继续属于 Future。未来是否独立 packaging 需要第二个真实 provider/consumer 或明确发行需求证明，不因“可能商业化”自动进入当前 critical path。
 
 ## Issue 生命周期
 
