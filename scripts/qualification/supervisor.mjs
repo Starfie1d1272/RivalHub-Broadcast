@@ -88,6 +88,29 @@ function relativeBundlePath(bundleRoot, path) {
   return relative(bundleRoot, path).replaceAll('\\', '/');
 }
 
+function scheduleStateCleanup(nodePath, stateRoot) {
+  const cleanupSource = `
+import { rm } from 'node:fs/promises';
+const parentPid = Number(process.argv[1]);
+const target = process.argv[2];
+const poll = () => {
+  try {
+    process.kill(parentPid, 0);
+    setTimeout(poll, 250);
+  } catch {
+    void rm(target, { recursive: true, force: true }).finally(() => process.exit(0));
+  }
+};
+poll();
+`;
+  const cleanup = spawn(
+    nodePath,
+    ['--input-type=module', '-e', cleanupSource, String(process.pid), stateRoot],
+    { stdio: 'ignore', detached: true, windowsHide: true },
+  );
+  cleanup.unref();
+}
+
 function tokenMatches(request, expected) {
   const provided = request.headers['x-qualification-token'];
   if (typeof provided !== 'string') return false;
@@ -341,7 +364,16 @@ async function main() {
     clearTimeout(timeout);
   }
   if (completionServer !== undefined && completion.cleanup === 'passed') {
-    await rm(dirname(statePath), { recursive: true, force: true });
+    try {
+      scheduleStateCleanup(nodePath, dirname(statePath));
+    } catch (error) {
+      await appendFile(
+        supervisorLogPath,
+        `qualification state cleanup could not be scheduled: ${String(error)}\n`,
+        'utf8',
+      ).catch(() => undefined);
+      exitCode = 1;
+    }
   }
   process.exitCode = exitCode;
 }
