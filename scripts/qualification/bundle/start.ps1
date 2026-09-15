@@ -15,7 +15,7 @@ $runDir = Join-Path $script:BundleRoot "evidence\$runId"
 foreach ($directory in @($runDir, (Join-Path $runDir 'recorder'), (Join-Path $runDir 'debug'), (Join-Path $runDir 'logs'), (Join-Path $runDir 'cfg'))) {
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
 }
-Write-Utf8NoBom -Path (Join-Path $runDir 'scenario.jsonl') -Content ''
+New-Item -ItemType File -Force -Path (Join-Path $runDir 'scenario.jsonl') | Out-Null
 Copy-Item -LiteralPath (Join-Path $script:BundleRoot 'metadata\artifact.json') -Destination (Join-Path $runDir 'artifact.json') -Force
 Write-JsonFile -Path (Join-Path $runDir 'cfg\fingerprint.json') -Value ([ordered]@{
     schemaVersion = 1
