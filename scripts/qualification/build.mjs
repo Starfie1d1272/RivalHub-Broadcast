@@ -65,7 +65,7 @@ function parseArgs(argv) {
 }
 
 function executable(command) {
-  return process.platform === 'win32' && command === 'pnpm' ? 'pnpm.cmd' : command;
+  return process.platform === 'win32' && command === 'pnpm' ? 'pnpm.exe' : command;
 }
 
 function runCommand(command, args, options = {}) {
