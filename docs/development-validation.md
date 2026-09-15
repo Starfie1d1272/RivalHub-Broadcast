@@ -1,6 +1,6 @@
 # 开发与平台验证模型
 
-> 本文定义 RivalHub Broadcast 在 macOS 主开发、GitHub Actions 自动验证、Windows + CS2 + OBS 生产验收之间的职责边界。它回答“在哪里开发、在哪里自动验证、什么情况下才能真正验收”，而不是替代具体 Issue 的测试规格。
+> 本文定义 RivalHub Broadcast 在日常开发、GitHub Actions 自动验证、Windows + CS2 + OBS 生产验收之间的职责边界。它回答“在哪里开发、在哪里自动验证、什么情况下才能真正验收”，而不是记录当前某台机器是否可用，也不替代具体 Issue 的测试规格。
 
 ## 1. 三类环境
 
@@ -9,11 +9,11 @@
 ```text
 Development environment
 开发环境
-→ 当前主要为 macOS
+→ 允许 macOS / Windows / Linux 上的跨平台开发
 
 Automated validation environment
 自动验证环境
-→ GitHub Actions / CI：macOS、Windows，必要时 Linux
+→ GitHub Actions / CI：按 Issue 要求覆盖 Linux、macOS、Windows
 
 Production acceptance environment
 生产验收环境
@@ -22,9 +22,7 @@ Production acceptance environment
 
 原则：**开发环境不需要等同生产环境，但生产环境要求必须被单独、明确地验收。**
 
-当前 M0 CI baseline 的自动化代码证据由 `quality`（Linux）、`platform / macOS`、`platform / Windows` 和 `ci-gate` 组成；PR 标题由独立的 `pr-title` check 负责。GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行，不能替代真实 Windows + CS2 + OBS 验收。
-
-不能因为主要开发机是 Mac，就把所有 Windows 相关代码交给另一名开发者；也不能因为 CI 在 Windows 上通过，就认为真实赛事环境已经验收。
+GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行，不能替代真实 Windows + CS2 + OBS 验收。不能因为主要开发环境不是 Windows，就把所有 Windows 相关代码交给另一名开发者；也不能因为 CI 在 Windows 上通过，就认为真实赛事环境已经验收。
 
 ## 2. 四层验证
 
@@ -51,7 +49,7 @@ Production acceptance environment
 
 ### Layer B — Browser / local runtime
 
-主要可在 macOS 开发，并由跨平台 CI 补充验证：
+主要由跨平台开发与 CI 验证：
 
 - Fastify Companion；
 - local HTTP / WebSocket；
@@ -63,7 +61,7 @@ Production acceptance environment
 - local cache；
 - OBS Browser Source 基础兼容测试。
 
-macOS OBS 可以用于早期 Browser Source 验证，但不能替代 Windows 生产验收。透明 topmost/click-through Assist 的真实窗口行为属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
+非 Windows 环境可以用于早期 Browser Source 验证，但不能替代 Windows 生产验收。透明 topmost/click-through Assist 的真实窗口行为属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 
 ### Layer C — Real CS2 / CSTV validation
 
@@ -89,7 +87,7 @@ Lookahead / CSTV 进入实现后还需覆盖：
 - tick/effective-gap alignment；
 - map change 后重新建立 alignment；
 - wrong-match / stale source fail closed；
-- kill event lead-time 分布与 cue scheduling。
+- event lead-time 分布与 cue scheduling。
 
 ### Layer D — Production acceptance
 
@@ -135,7 +133,8 @@ CI 绿灯不能替代 Layer D。
 ### Implementation environment
 
 ```text
-Cross-platform / macOS-primary
+Cross-platform
+macOS-primary
 Windows-specific
 Other explicit environment
 ```
@@ -148,10 +147,10 @@ Other explicit environment
 
 ```text
 Local deterministic tests
+Linux CI
 macOS CI
 Windows CI
-macOS + Windows CI
-Linux CI
+Cross-platform CI
 ```
 
 表示“哪些自动化环境必须通过”。
@@ -172,7 +171,7 @@ Windows + CS2/CSTV + OBS
 
 表示“Issue/Release 是否仍欠生产环境证据”。
 
-**能开发**与**能最终验收**是两回事。一个 Issue 可以在 Mac 上实现并进入 PR，同时明确等待 Windows acceptance；但如果该真实环境证据属于本 Issue 的 closing criteria，则在证据补齐前不能伪装成 Done。
+**能开发**与**能最终验收**是两回事。一个 Issue 可以在任意合适开发环境完成实现并进入 PR，同时明确等待 Windows acceptance；但如果该真实环境证据属于本 Issue 的 closing criteria，则在证据补齐前不能伪装成 Done。
 
 ## 4. Windows validation lane 的协作方式
 
@@ -183,12 +182,7 @@ Feature owner
 + Platform validator
 ```
 
-而不是：
-
-```text
-Mac developer owns Core
-Windows developer owns all GSI/OBS work
-```
+而不是按开发机操作系统切割 domain ownership。
 
 示例：
 
@@ -196,7 +190,7 @@ Windows developer owns all GSI/OBS work
 Issue: GSI normalization
 
 Implementation owner:
-  主开发者 / Agent
+  feature owner / Agent
 
 Platform validator:
   有 Windows + CS2 环境的协作者
@@ -212,25 +206,25 @@ Evidence:
 
 ## 5. Real Telemetry Reference Corpus
 
-第一批真实 Windows + CS2 observer capture 已经取得，并已经用于 `docs/telemetry.md` 的 evidence-backed semantics：包括真实 5v5 Demo observer 数据、本地 spectator/live round 数据以及此前 RoundSense normal-player capture。
+第一批真实 Windows + CS2 observer capture 已经取得，并已经用于 `docs/telemetry.md` 的 evidence-backed semantics，包括 normal-player、observer、warmup/local-BOT 以及完整比赛生命周期的派生 evidence。
 
-后续 reference corpus 的目标不再是“证明 GSI 存在”，而是补齐仍缺的生命周期和故障边界。
-
-优先补充：
+后续 reference corpus 的目标不再是“证明 GSI 存在”，而是补齐仍缺的生命周期和故障边界。优先补充：
 
 ```text
-halftime / side switch
 map end / map change
 disconnect / reconnect
-restart / restore（可行时）
+restart / restore（可稳定构造且有增量价值时）
 长期 soak
+production-like observer/GOTV shape（有差异证据时）
 ```
+
+已经由 canonical semantic corpus 充分保护的场景不为了增加样本数量重复录制；新 capture 应服务于明确的 open validation question。
 
 Lookahead 实现后另建 CSTV/alignment evidence：
 
 ```text
-paired no-delay + delayed GOTV
-kill event tick / Program tick
+paired no-delay + delayed source
+event tick / Program tick
 alignment drift
 source reconnect
 gap loss / recovery
@@ -247,19 +241,15 @@ map change
 - final hash / frame range / completeness；
 - 是否含敏感 token / account data，进入仓库前必须 scrub/anonymize。
 
-真实 capture 的目标是把昂贵、难重复的生产输入转换成可在 Mac/CI 中持续 replay 的测试资产。原始私人 capture 不等于可直接提交仓库的 fixture。
+真实 capture 的目标是把昂贵、难重复的生产输入转换成可在开发机/CI 中持续 replay 的测试资产。原始私人 capture 不等于可直接提交仓库的 fixture。
 
-## 6. 当前现实约束（2026-09）
+## 6. 维护原则
 
-当前主要开发环境为 macOS，主 Windows 开发机暂不可用；真实 Windows + CS2 输入可以通过协作者机器补充。当前第一批 observer capture 已完成，因此 M1 的 source-semantics 调研不再被 Windows 环境阻塞。
+本文只保留长期有效的环境分层、acceptance 规则与 evidence 采集原则。以下短期状态不在本文维护：
 
-当前策略：
+- 某台开发机当前是否可用；
+- 某位协作者当前能否提供 Windows/CS2；
+- 某周的录制安排、feature-freeze 日期或 sprint 计划；
+- 已经完成的单次 capture/PR 执行过程。
 
-1. M1/M2 的平台无关实现继续在 Mac/CI 推进，并持续 replay 已有真实 capture；
-2. 缺失的 halftime / map-change / reconnect 等高价值生命周期证据按实现需要补录，而不是为了“数据更多”无边界采集；
-3. M2/M3 每个需要真实平台 smoke 的 vertical slice 都提供可复现 Windows runnable artifact / 标准 start workflow；
-4. M3 Observer Assist 单独安排 paired GOTV + alignment + OBS non-leak 验收，不把它与 Program 主链故障耦合；
-5. 主 Windows 环境恢复后安排集中 production-validation sprint；
-6. 开赛前约 5–7 天进入 feature freeze，以 rehearsal / soak / bugfix / fallback 为主，不再扩张高风险功能。
-
-这个时间窗口是当前项目计划，不属于长期架构 invariant；实际日期变化时更新 Roadmap / Project，而不需要 ADR。
+这些内容放在对应 Milestone、Issue、PR 或 Project。若真实 evidence 改变了 source semantics 或长期 validation requirement，则在产生该变化的同一 PR 中更新本文件或 `docs/telemetry.md`。
