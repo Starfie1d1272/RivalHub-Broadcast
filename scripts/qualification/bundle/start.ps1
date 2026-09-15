@@ -1,4 +1,4 @@
-. (Join-Path $PSScriptRoot 'common.ps1')
+﻿. (Join-Path $PSScriptRoot 'common.ps1')
 
 $install = Read-InstallState
 Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$install.cfgPath)) -CanonicalCfgPath ([string]$install.cfgPath) | Out-Null

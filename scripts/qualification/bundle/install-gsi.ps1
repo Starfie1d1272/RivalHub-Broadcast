@@ -1,4 +1,4 @@
-param([string]$Cs2Root)
+﻿param([string]$Cs2Root)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 function Get-SteamInstallRoots {

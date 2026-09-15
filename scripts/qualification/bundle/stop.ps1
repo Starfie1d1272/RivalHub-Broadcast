@@ -1,4 +1,4 @@
-param([switch]$KeepGsiConfig)
+﻿param([switch]$KeepGsiConfig)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
 $state = Read-RunState

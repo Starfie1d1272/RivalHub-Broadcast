@@ -1,4 +1,4 @@
-param(
+﻿param(
     [Parameter(Mandatory = $true, Position = 0)]
     [ValidateSet('demo-a-live', 'cs2-closed', 'cs2-reopened', 'demo-b-live')]
     [string]$Marker

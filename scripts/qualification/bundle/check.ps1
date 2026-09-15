@@ -1,4 +1,4 @@
-param(
+﻿param(
     [switch]$WaitForStale,
     [int]$TimeoutSeconds = 35
 )
