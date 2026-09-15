@@ -132,11 +132,13 @@ M2 主要推进**正式节目制播**的本地内核，同时为**赛事与实�
 - local browser realtime transport；
 - ProgramProjection / OperatorProjection / DebugProjection 分离；
 - ObserverAssistProjection 的最小 schema seam，确保 future fields 从 Program 类型层就不可见；
+- Program renderer 与 browser/OBS/desktop host 生命周期解耦，不在 renderer 内复制 Runtime/domain；
 - reconnect / baseline snapshot；
 - slow-consumer latest-wins backpressure；
 - wrong-match / roster-mismatch / degraded capability；
 - macOS OBS Browser Source early smoke；
 - Windows OBS Browser Source production-path smoke；
+- Windows 本机 Program Overlay 的早期透明/topmost/click-through smoke（host 技术可后续冻结）；
 - accelerated long replay / soak。
 
 M2 的 `BroadcastManifest` 不要求此时完成最终 pairing/auth 或所有服务端 API，但 fixture/schema 必须来自真实 #613 consumer 需求，而不是发明一套以后再迁移的临时 MatchContext。
@@ -164,6 +166,7 @@ M3-A 是**正式节目制播**能力线的完整 workflow slice，同时通过�
 - provisional KDA / ADR / round history；
 - Halftime / MapResult / InterMap / MatchResult；
 - production-oriented Radar presentation；
+- Program Overlay 与 OBS Program host 对同一 ProgramProjection 的 scene/visual parity 验证；
 - OBS Program preset 的一键创建 / 校验 / 修复。
 
 #### M3-B Observer Assist
@@ -179,6 +182,7 @@ M3-B 是 **Observer Assist / Lookahead** 能力线的第一条完整 vertical sl
 - source reconnect / generation change 后旧 alignment 立即失效；
 - **基础 future kill cue：countdown + killer → victim + optional reliable location**；
 - topmost / transparent Observer Assist surface，供同一个解说兼 OB 看；
+- Assist Overlay 与 Program Overlay 独立，不通过同窗裁剪/隐藏建立安全边界；
 - Assist future fields 不进入 Program/#615/官方 OBS preset；
 - Lookahead failure 只关闭 Assist，不影响 Program。
 
@@ -237,7 +241,9 @@ M4 开始前 `docs/security.md` 与 RivalHub-facing `docs/protocol.md` 是 block
 - startup / shutdown / restart recovery；
 - Radar/program assets packaging；
 - real Windows + CS2 spectator + OBS acceptance；
+- Program Overlay topmost/transparent/click-through、DPI/monitor/window-mode 与 OBS Program host parity；
 - Observer Assist topmost/click-through 与 official Program capture non-leak；
+- 如果支持直接捕获 Program Overlay，则单独验证 capture method、窗口重建、OBS reload 与 non-leak；
 - Lookahead wrong-match / alignment loss / reconnect rehearsal；
 - OBS preset repair 与 obs-websocket unavailable degradation；
 - wall-clock soak；
@@ -277,7 +283,7 @@ Acceptance evidence
 
 详见 `docs/development-validation.md`。
 
-第一批真实 Windows + CS2 observer capture 已经获得并写入 `docs/telemetry.md` 的 evidence baseline；这不等于 Lookahead CSTV / topmost overlay 已完成生产验收。后者仍需独立真实环境验证。
+第一批真实 Windows + CS2 observer capture 已经获得并写入 `docs/telemetry.md` 的 evidence baseline；这不等于 Program/Assist topmost overlay host 已完成生产验收。后者仍需独立真实环境验证。
 
 ## Future / Post-v1
 

@@ -43,6 +43,7 @@ GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行�
 - reliable observation outbox state machine；
 - recorder / replay / simulator；
 - Program / Assist non-leak contract tests；
+- 同一 ProgramProjection 在不同 host instance 下不产生 host-specific domain truth；
 - RivalHub contract compatibility。
 
 如果这些模块因为“没有 Windows”而无法开发或单测，优先检查是否错误耦合了平台/adapter。
@@ -54,14 +55,16 @@ GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行�
 - Fastify Companion；
 - local HTTP / WebSocket；
 - `/operator` / `/program` / `/debug`；
+- Program renderer 的 browser/dev host 与 OBS Browser Source host；
 - Observer Assist 的 browser/debug prototype（若采用）；
 - React HUD / Radar renderer；
 - scene UI；
 - reconnect / baseline snapshot；
 - local cache；
-- OBS Browser Source 基础兼容测试。
+- OBS Browser Source 基础兼容测试；
+- Program renderer 不依赖具体 browser/desktop host 才能表达正确业务语义。
 
-非 Windows 环境可以用于早期 Browser Source 验证，但不能替代 Windows 生产验收。透明 topmost/click-through Assist 的真实窗口行为属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
+非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。任何透明 topmost/click-through 桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 
 ### Layer C — Real CS2 / CSTV validation
 
@@ -97,14 +100,17 @@ Lookahead / CSTV 进入实现后还需覆盖：
 Windows 11
 + CS2 delayed spectator
 + RivalHub Broadcast Companion
++ local Program Overlay
 + Program / Operator
-+ OBS Browser Source
++ official OBS Program host
 + 实际赛事配置
 
 Observer Assist 启用时再加：
 + no-delay headless Lookahead feed
-+ topmost Assist Overlay
++ independent topmost Assist Overlay
 ```
+
+当前首个 official OBS Program host 以 `/program` Browser Source 为基线。如果未来支持直接捕获独立 Program Overlay 或其它 host，该路径必须拥有自己的真实 Windows + OBS 验收证据，不能用 Browser Source 的通过结果替代。
 
 重点验收：
 
@@ -112,7 +118,9 @@ Observer Assist 启用时再加：
 - wall-clock soak；
 - CPU / memory / latency；
 - queue 是否长期增长；
-- OBS source reload；
+- Program Overlay 与 official OBS Program host 在相同 scene/projection 下语义一致；
+- Program Overlay 的透明、topmost、click-through、DPI、多显示器与常见 CS2 窗口模式；
+- OBS source/host reload；
 - Companion restart；
 - CS2 restart；
 - 网络中断 / RivalHub 短暂不可达；
@@ -120,7 +128,9 @@ Observer Assist 启用时再加：
 - map restart / stale epoch；
 - fallback / recovery runbook；
 - Assist future fields 不进入 Program/#615；
+- Program Overlay 与 Assist Overlay 为独立 surface/window；
 - official OBS capture 不误录 topmost Assist；
+- 若 OBS 直接捕获 Program Overlay，则验证 capture method 不会同时带入 Assist 或其它桌面内容；
 - Lookahead 故障只降级 Assist；
 - Program 故障不存在 Lookahead→Program fallback。
 
@@ -200,7 +210,7 @@ Evidence:
   + real Windows CS2 capture / acceptance
 ```
 
-只有明显 Windows-specific 的工作（例如 installer、GSI cfg 自动安装、Windows packaging/launcher、topmost/click-through window integration）适合整块由 Windows contributor 负责。
+只有明显 Windows-specific 的工作（例如 installer、GSI cfg 自动安装、Windows packaging/launcher、Program/Assist topmost/click-through window integration）适合整块由 Windows contributor 负责。
 
 真实平台验证应尽量使用**明确 commit/build 对应的可复现 artifact 或标准 start workflow**。不要在 validator 机器上临时修改代码后，再把结果当成仓库某个 revision 的正式验收证据。
 
