@@ -106,7 +106,7 @@ const stateLabels = {
 const flow = [
   { id: 'a', title: '第一场', text: '播放 Demo A，确认有连续比赛数据。', markers: ['demo-a-live'] },
   { id: 'stop', title: '停止并等待', text: 'stopdemo 后关闭 CS2，等待页面确认数据停止。', markers: ['demo-a-stopped', 'cs2-closed', 'runtime-stale'] },
-  { id: 'next', title: '开始下一场', text: '显式开始新的 map execution。', markers: ['next-execution'] },
+  { id: 'next', title: '开始下一场', text: '清理上一场状态，准备接收下一场比赛。', markers: ['next-execution'] },
   { id: 'b', title: '第二场', text: '重新打开 CS2，播放 Demo B，确认没有上一场残留。', markers: ['cs2-reopened', 'demo-b-live'] },
 ];
 const byId = (id) => document.getElementById(id);
@@ -116,6 +116,7 @@ const message = byId('qualification-message');
 const result = byId('qualification-result');
 const checks = byId('qualification-checks');
 const buttons = [...document.querySelectorAll('button[data-action]')];
+let finalizationComplete = false;
 function escapeHtml(value) {
   return String(value).replace(/[&<>"']/g, (character) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[character]));
 }
@@ -140,6 +141,7 @@ function checkStatus(status) {
 }
 
 function render(data) {
+  if (finalizationComplete) return;
   stateText.textContent = stateLabels[data.state] || '正在读取状态';
   signal.dataset.tone = data.state === 'receiving' || data.state === 'ready' ? 'good' : 'neutral';
   result.textContent = data.result === 'PASS' ? 'PASS' : data.result === 'FAIL' ? 'FAIL' : 'INCONCLUSIVE';
@@ -164,6 +166,7 @@ function render(data) {
 }
 
 async function refresh() {
+  if (finalizationComplete) return;
   try {
     render(await call('/qualification/status'));
   } catch (error) {
@@ -173,13 +176,44 @@ async function refresh() {
   }
 }
 
+function renderFinalization(data) {
+  finalizationComplete = true;
+  stateText.textContent = '测试已完成';
+  signal.dataset.tone = data.result === 'PASS' ? 'good' : 'neutral';
+  result.textContent = data.result === 'PASS' ? 'PASS' : data.result === 'FAIL' ? 'FAIL' : 'INCONCLUSIVE';
+  result.dataset.tone = String(data.result || 'INCONCLUSIVE').toLowerCase();
+  buttons.forEach((button) => { button.disabled = true; });
+  const reportPath = data.reportPath || 'evidence/<runId>/REPORT.md';
+  const verification = data.verification === 'passed' ? '已验证' : '验证未通过，请保留 evidence 供排查';
+  message.textContent = data.result + ' · ' + verification + ' · 报告：' + reportPath;
+}
+
+async function waitForFinalization() {
+  const deadline = Date.now() + 60000;
+  message.textContent = 'Companion 正在完成 recorder；页面会自动显示最终结果。';
+  while (Date.now() < deadline) {
+    try {
+      const data = await call('/qualification/finalization');
+      if (data.status === 'complete') {
+        renderFinalization(data);
+        void call('/qualification/finalization/ack', 'POST').catch(() => {});
+        return;
+      }
+      message.textContent = '正在生成 evidence，请稍候。';
+    } catch {}
+    await new Promise((resolve) => window.setTimeout(resolve, 500));
+  }
+  message.textContent = '等待最终 evidence 超时；请在 bundle 的 evidence 目录检查日志。';
+}
+
 async function act(action, path, method = 'POST', body) {
   buttons.forEach((button) => { button.disabled = true; });
   try {
     const data = await call(path, method, body);
     message.textContent = data.message || '操作已记录';
     if (data.status === 'stopping') {
-      message.textContent = '正在完成 recorder 并导出 evidence，请稍候查看 REPORT.md。';
+      await waitForFinalization();
+      return;
     }
     await refresh();
   } catch (error) {
@@ -195,7 +229,7 @@ byId('confirm-reopen').onclick = () => void act('cs2-reopened', '/qualification/
 byId('confirm-b').onclick = () => void act('demo-b-live', '/qualification/marker', 'POST', { kind: 'demo-b-live' });
 byId('finish').onclick = () => void act('finish', '/qualification/finish');
 void refresh();
-window.setInterval(() => void refresh(), 1000);
+window.setInterval(() => { if (!finalizationComplete) void refresh(); }, 1000);
 `;
 
 export function qualificationPageHtml(controlToken: string): string {

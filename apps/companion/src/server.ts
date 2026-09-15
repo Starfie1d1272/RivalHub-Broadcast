@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
-import { join } from 'node:path';
+import { mkdir, writeFile } from 'node:fs/promises';
+import { dirname, join } from 'node:path';
 
 import { buildApp } from './app.js';
 import { createProgramRuntime } from './runtime/program-runtime.js';
@@ -19,8 +20,13 @@ const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
+const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
 const qualificationScenarioPath =
   process.env.QUALIFICATION_SCENARIO_PATH ?? join(captureDir, '..', 'scenario.jsonl');
+const qualificationFinalRuntimePath =
+  qualificationMode && qualificationEvidenceDir !== undefined
+    ? join(qualificationEvidenceDir, 'debug', 'final-runtime.json')
+    : undefined;
 const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
 const producerInstanceId = randomUUID();
 
@@ -31,6 +37,14 @@ function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
     ...(diagnostic.causeCode === undefined ? {} : { causeCode: diagnostic.causeCode }),
   };
   console.warn(`Companion capture recorder diagnostic: ${JSON.stringify(fields)}`);
+}
+
+async function writeFinalRuntime(path: string, response: unknown): Promise<void> {
+  await mkdir(dirname(path), { recursive: true });
+  await writeFile(path, `${JSON.stringify(response, null, 2)}\n`, {
+    encoding: 'utf8',
+    mode: 0o600,
+  });
 }
 
 if (gsiToken === undefined || gsiToken.trim().length === 0) {
@@ -71,7 +85,17 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       ? {
           qualificationRunId,
           qualificationScenarioPath,
-          onQualificationFinish: () => shutdown('qualification-finish'),
+          onQualificationFinish: async ({ debug }: { readonly debug: unknown }) => {
+            try {
+              if (qualificationFinalRuntimePath !== undefined) {
+                await writeFinalRuntime(qualificationFinalRuntimePath, debug);
+              }
+            } catch (error: unknown) {
+              console.error(`Qualification final runtime snapshot failed: ${String(error)}`);
+            } finally {
+              shutdown('qualification-finish');
+            }
+          },
         }
       : {}),
   });
