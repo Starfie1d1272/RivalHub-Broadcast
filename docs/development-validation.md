@@ -228,6 +228,7 @@ rivalhub-broadcast-qualification-<shortSHA>-win-x64/
   app/node_modules/**
   scripts/{install-gsi,start,mark,check,stop}.ps1
   scripts/{qualification-supervisor.mjs,qualification-contract.json,verify-evidence.mjs}
+  scripts/evidence/{contract,capture,scenario,checks,integrity,report,qualification}.mjs
   config/gamestate_integration_rivalhub_broadcast.cfg.template
   metadata/{artifact.json,SHA256SUMS}
   evidence/
@@ -237,6 +238,8 @@ rivalhub-broadcast-qualification-<shortSHA>-win-x64/
 现场首选打开 loopback-only 的 `/qualification` 页面完成一次连续的 Demo A → 停止并等待 stale → 开始下一场 → Demo B 流程。页面背后的 qualification-only HTTP/PowerShell seam 负责有限 marker、显式 `ProgramRuntime.resetMapExecution()` 和自动证据采集；该 surface 不属于正式 Operator UI、HUD 或 Program/OBS 输出。`start.ps1` 自动生成并安装 canonical GSI cfg，并启动外层 `qualification-supervisor.mjs` 管理整个 run lifecycle。页面的“结束测试并导出结果”会先让 Companion graceful shutdown，随后由 supervisor 自动 finalize、verify、恢复原 GSI cfg，并在页面显示 `PASS`、`FAIL` 或 `INCONCLUSIVE` 及报告相对路径；`stop.ps1` 仅作为 supervisor 不可用时的 automation fallback。
 
 每个 `demo-a-live` / `demo-b-live` marker 都必须携带同一时刻的 accepted observation（sequence、receivedAt、monotonic time、map epoch、runtime sequence、source generation、producer identity 与 freshness）。独立 verifier 会将该 observation 的 sequence/timestamp 与 Capture V1 frame 对应，并分别证明它位于 reset 前或 reset 后的 execution；仅凭 marker 加上 capture 中任意 frame 不能判定 production chain 通过。marker vocabulary、check keys、结果值、schema version 与 pinned Node runtime 位于仓库内的 `apps/companion/src/qualification/contract.json`，runtime evaluation 与 verifier evaluation 保持独立。
+
+`next-execution` 的 after marker 还必须记录 `programTelemetryCleared: true`，由 reset 后真实 RuntimeSnapshot 计算；controller 与 offline verifier 都必须验证该事实，才能把 explicit reset 或 Demo B recovery 判为通过。页面展示的 qualification semantic result 与 GSI 配置恢复状态分开表达；恢复失败不能改写 `qualification.json` 或 `REPORT.md` 中已经冻结的核心验收结果。finalization/verification 失败时保留 `.qualification-local` 供诊断，不自动删除 supervisor 日志。
 
 GSI 安装器会优先读取 Steam `libraryfolders.vdf`（并结合常见注册表安装路径），枚举 library 中的 CS2；`-Cs2Root` 仍是自动发现为零或多个候选时的明确 fallback。portable qualification runtime 当前固定为 contract 中声明的官方 Node Windows x64 版本，升级必须通过普通 PR 修改该配置。
 

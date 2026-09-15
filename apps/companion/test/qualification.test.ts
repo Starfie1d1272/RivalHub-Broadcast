@@ -253,6 +253,7 @@ describe('qualification-only Companion surface', () => {
       previousMapEpoch: 1,
       mapEpoch: 2,
       runtimeSeq: 2,
+      programTelemetryCleared: true,
       disposition: { kind: 'accepted', reason: 'map-execution-reset' },
     });
 
@@ -275,11 +276,24 @@ describe('qualification-only Companion surface', () => {
     const markers = scenario
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { kind: string; phase?: string; mapEpoch: number });
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            kind: string;
+            phase?: string;
+            mapEpoch: number;
+            reset?: { programTelemetryCleared?: boolean };
+          },
+      );
     expect(markers).toEqual([
       expect.objectContaining({ kind: 'runtime-stale' }),
       expect.objectContaining({ kind: 'next-execution', phase: 'before', mapEpoch: 1 }),
-      expect.objectContaining({ kind: 'next-execution', phase: 'after', mapEpoch: 2 }),
+      expect.objectContaining({
+        kind: 'next-execution',
+        phase: 'after',
+        mapEpoch: 2,
+      }),
     ]);
+    expect(markers[2]?.reset?.programTelemetryCleared).toBe(true);
   });
 });

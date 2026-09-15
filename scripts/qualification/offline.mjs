@@ -63,6 +63,13 @@ async function assertBundleSmoke(outputRoot) {
     'scripts/check.ps1',
     'scripts/stop.ps1',
     'scripts/verify-evidence.mjs',
+    'scripts/evidence/contract.mjs',
+    'scripts/evidence/capture.mjs',
+    'scripts/evidence/scenario.mjs',
+    'scripts/evidence/checks.mjs',
+    'scripts/evidence/integrity.mjs',
+    'scripts/evidence/report.mjs',
+    'scripts/evidence/qualification.mjs',
     'scripts/qualification-supervisor.mjs',
     'scripts/qualification-contract.json',
     'config/gamestate_integration_rivalhub_broadcast.cfg.template',
@@ -101,7 +108,8 @@ async function assertBundleSmoke(outputRoot) {
   if (
     artifact.platform !== 'win32-x64' ||
     artifact.qualificationSchemaVersion !== contract.schemaVersion ||
-    artifact.nodeVersion !== contract.nodeRuntimeVersion
+    artifact.nodeVersion !== contract.nodeRuntimeVersion ||
+    !contract.resetEvidenceFields?.includes('programTelemetryCleared')
   )
     throw new Error('qualification artifact metadata is invalid');
   const deployedPackage = await readFile(join(bundleDir, 'app/package.json'), 'utf8');

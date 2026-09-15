@@ -10,16 +10,43 @@ type QualificationContract = {
   readonly schemaVersion: 1;
   readonly maxMarkers: 128;
   readonly nodeRuntimeVersion: `v24.${number}.${number}`;
-  readonly markerKinds: readonly string[];
-  readonly liveMarkerKinds: readonly string[];
-  readonly markerPhases: readonly string[];
-  readonly freshnessValues: readonly string[];
-  readonly resultValues: readonly string[];
-  readonly checkKeys: readonly string[];
-  readonly resetDispositionValues: readonly string[];
+  readonly markerKinds: readonly QualificationMarkerKind[];
+  readonly liveMarkerKinds: readonly QualificationMarkerKind[];
+  readonly markerPhases: readonly QualificationMarkerPhase[];
+  readonly freshnessValues: readonly QualificationFreshness[];
+  readonly resultValues: readonly QualificationResult[];
+  readonly checkKeys: readonly QualificationCheckKey[];
+  readonly resetDispositionValues: readonly QualificationResetDisposition[];
+  readonly resetEvidenceFields: readonly QualificationResetEvidenceField[];
   readonly resetKind: 'map-execution-reset';
   readonly resetReason: 'operator-correction';
 };
+
+export type QualificationMarkerKind =
+  | 'demo-a-live'
+  | 'demo-a-stopped'
+  | 'cs2-closed'
+  | 'runtime-stale'
+  | 'next-execution'
+  | 'cs2-reopened'
+  | 'demo-b-live';
+export type QualificationMarkerPhase = 'before' | 'after';
+export type QualificationFreshness = 'awaiting' | 'fresh' | 'stale';
+export type QualificationResult = 'PASS' | 'FAIL' | 'INCONCLUSIVE';
+export type QualificationCheckKey =
+  | 'productionChain'
+  | 'realSilenceToStale'
+  | 'explicitNextExecution'
+  | 'demoBRecovery'
+  | 'captureIntegrity';
+export type QualificationResetDisposition = 'accepted' | 'ignored';
+export type QualificationResetEvidenceField =
+  | 'disposition'
+  | 'reason'
+  | 'resetReason'
+  | 'previousMapEpoch'
+  | 'mapEpoch'
+  | 'programTelemetryCleared';
 
 const qualificationContract = qualificationContractJson as QualificationContract;
 
@@ -30,12 +57,9 @@ export const QUALIFICATION_LIVE_MARKER_KINDS = qualificationContract.liveMarkerK
 export const QUALIFICATION_FRESHNESS_VALUES = qualificationContract.freshnessValues;
 export const QUALIFICATION_RESULT_VALUES = qualificationContract.resultValues;
 export const QUALIFICATION_CHECK_KEYS = qualificationContract.checkKeys;
+export const QUALIFICATION_RESET_EVIDENCE_FIELDS = qualificationContract.resetEvidenceFields;
 export const QUALIFICATION_RESET_KIND = qualificationContract.resetKind;
 export const QUALIFICATION_RESET_REASON = qualificationContract.resetReason;
-
-export type QualificationMarkerKind = (typeof QUALIFICATION_MARKER_KINDS)[number];
-export type QualificationMarkerPhase = 'before' | 'after';
-export type QualificationFreshness = (typeof QUALIFICATION_FRESHNESS_VALUES)[number];
 
 export interface QualificationClock {
   now(): RuntimeTime;
@@ -47,6 +71,7 @@ export interface QualificationResetEvidence {
   readonly resetReason: 'operator-correction';
   readonly previousMapEpoch: number;
   readonly mapEpoch: number;
+  readonly programTelemetryCleared: boolean;
 }
 
 export interface QualificationAcceptedObservation {
@@ -90,7 +115,7 @@ export interface QualificationEvidenceSnapshot {
 }
 
 function isQualificationMarkerKind(value: unknown): value is QualificationMarkerKind {
-  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.includes(value);
+  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
 }
 
 function assertFiniteRuntimeTime(at: RuntimeTime): void {

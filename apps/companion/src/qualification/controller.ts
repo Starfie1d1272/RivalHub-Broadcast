@@ -58,7 +58,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isMarkerKind(value: unknown): value is QualificationMarkerKind {
-  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.includes(value);
+  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
 }
 
 function hasMarker(
@@ -159,7 +159,8 @@ function evaluateChecks(
     resetAfter.producerInstanceId === resetBefore.producerInstanceId &&
     resetAfter.reset?.disposition === 'accepted' &&
     resetAfter.reset.previousMapEpoch === resetBefore.mapEpoch &&
-    resetAfter.reset.mapEpoch === resetAfter.mapEpoch;
+    resetAfter.reset.mapEpoch === resetAfter.mapEpoch &&
+    resetAfter.reset.programTelemetryCleared === true;
 
   const productionChainPassed = liveMarkerIsInExecution(
     demoALive,
@@ -195,7 +196,7 @@ function evaluateChecks(
       label: '下一场从显式新执行开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? '显式 reset 已增加 map epoch，并保持 producer/source generation。'
+        ? '显式 reset 已增加 map epoch，并清理上一场 Program telemetry。'
         : '等待一次成功的“开始下一场”控制。',
     },
     demoBRecovery: {
@@ -432,6 +433,7 @@ export function registerQualificationRoutes(
       resetReason: RESET_REASON,
       previousMapEpoch: beforeEpoch,
       mapEpoch: after.current.map.epoch,
+      programTelemetryCleared: after.current.programTelemetry === undefined,
     };
     await options.evidence.recordMarker('next-execution', after, freshnessFromDebug(getDebug()), {
       phase: 'after',
@@ -446,6 +448,7 @@ export function registerQualificationRoutes(
       previousMapEpoch: beforeEpoch,
       mapEpoch: after.current.map.epoch,
       runtimeSeq: after.current.runtimeSeq,
+      programTelemetryCleared: reset.programTelemetryCleared,
       disposition: result.disposition,
     };
     return reply.code(result.disposition.kind === 'accepted' ? 200 : 409).send(body);

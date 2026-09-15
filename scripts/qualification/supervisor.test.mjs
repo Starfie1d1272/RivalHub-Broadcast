@@ -5,7 +5,11 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { readQualificationEvidence } from './evidence.mjs';
-import { finalizeQualificationRun } from './supervisor.mjs';
+import {
+  finalizeQualificationRun,
+  markCleanupFailure,
+  shouldCleanupQualificationState,
+} from './supervisor.mjs';
 
 const BASE_TIME = '2026-09-15T00:00:00.000Z';
 
@@ -67,5 +71,26 @@ describe('qualification supervisor finalization', () => {
       await rm(runDir, { recursive: true, force: true });
       await rm(logDir, { recursive: true, force: true });
     }
+  });
+
+  it('keeps cleanup failure separate from the verified qualification result', () => {
+    const completion = {
+      result: 'PASS',
+      verification: 'passed',
+      cleanup: 'pending',
+      reportPath: 'evidence/run/REPORT.md',
+      qualificationPath: 'evidence/run/qualification.json',
+    };
+
+    expect(markCleanupFailure(completion)).toMatchObject({
+      result: 'PASS',
+      verification: 'passed',
+      cleanup: 'failed',
+    });
+    expect(shouldCleanupQualificationState({ ...completion, cleanup: 'failed' })).toBe(false);
+    expect(shouldCleanupQualificationState({ ...completion, cleanup: 'passed' })).toBe(true);
+    expect(
+      shouldCleanupQualificationState({ ...completion, verification: 'failed', cleanup: 'passed' }),
+    ).toBe(false);
   });
 });

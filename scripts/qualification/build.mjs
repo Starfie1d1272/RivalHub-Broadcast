@@ -306,6 +306,9 @@ async function main() {
       );
     }
     await cp(join(scriptDir, 'evidence.mjs'), join(stagingDir, 'scripts', 'verify-evidence.mjs'));
+    await cp(join(scriptDir, 'evidence'), join(stagingDir, 'scripts', 'evidence'), {
+      recursive: true,
+    });
     await cp(
       join(scriptDir, 'supervisor.mjs'),
       join(stagingDir, 'scripts', 'qualification-supervisor.mjs'),

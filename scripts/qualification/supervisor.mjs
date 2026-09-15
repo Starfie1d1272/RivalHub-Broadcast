@@ -140,12 +140,16 @@ function completionPage(completion) {
   const result = escapeHtml(completion.result ?? 'INCONCLUSIVE');
   const reportPath = escapeHtml(completion.reportPath ?? 'evidence/<runId>/REPORT.md');
   const verification =
-    completion.verification === 'passed'
-      ? 'Evidence verification passed'
-      : 'Evidence verification failed';
+    completion.verification === 'passed' ? '核心验收证据已验证' : '核心验收证据验证失败';
+  const cleanup =
+    completion.cleanup === 'failed'
+      ? '环境恢复失败，请人工检查 GSI 配置'
+      : completion.cleanup === 'passed'
+        ? '环境已恢复'
+        : '环境恢复状态待确认';
   return `<!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qualification result</title></head>
-<body><main><h1>Qualification result: ${result}</h1><p>${escapeHtml(verification)}</p><p>Report: <code>${reportPath}</code></p></main></body></html>`;
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qualification result</title></head>
+<body><main><h1>核心验收：${result}</h1><p>${escapeHtml(verification)}</p><p>${escapeHtml(cleanup)}</p><p>报告：<code>${reportPath}</code></p></main></body></html>`;
 }
 
 async function listenCompletionServer({ port, controlToken, getCompletion }) {
@@ -229,6 +233,18 @@ export async function finalizeQualificationRun({
   };
 }
 
+export function markCleanupFailure(completion) {
+  return {
+    ...completion,
+    cleanup: 'failed',
+    error: 'qualification GSI config restore failed',
+  };
+}
+
+export function shouldCleanupQualificationState(completion) {
+  return completion.verification === 'passed' && completion.cleanup === 'passed';
+}
+
 async function restoreGsiConfig(statePath) {
   const state = await readJson(statePath);
   if (state.gsiRestored === true) return;
@@ -290,7 +306,9 @@ async function main() {
     runId: typeof runState.runId === 'string' ? runState.runId : 'unknown',
     result: 'INCONCLUSIVE',
     verification: 'pending',
+    cleanup: 'pending',
     reportPath,
+    diagnosticsPath: relativeBundlePath(bundleRoot, supervisorLogPath),
   };
   await writeJson(finalizationStatePath, completion);
 
@@ -341,13 +359,7 @@ async function main() {
     await restoreGsiConfig(statePath);
     completion = { ...completion, cleanup: 'passed' };
   } catch (error) {
-    completion = {
-      ...completion,
-      result: completion.result === 'PASS' ? 'FAIL' : completion.result,
-      verification: 'failed',
-      cleanup: 'failed',
-      error: 'qualification GSI config restore failed',
-    };
+    completion = markCleanupFailure(completion);
     exitCode = 1;
     await appendFile(
       supervisorLogPath,
@@ -363,7 +375,7 @@ async function main() {
     await closed;
     clearTimeout(timeout);
   }
-  if (completionServer !== undefined && completion.cleanup === 'passed') {
+  if (completionServer !== undefined && shouldCleanupQualificationState(completion)) {
     try {
       scheduleStateCleanup(nodePath, dirname(statePath));
     } catch (error) {

@@ -23,6 +23,14 @@
     "captureIntegrity"
   ],
   "resetDispositionValues": ["accepted", "ignored"],
+  "resetEvidenceFields": [
+    "disposition",
+    "reason",
+    "resetReason",
+    "previousMapEpoch",
+    "mapEpoch",
+    "programTelemetryCleared"
+  ],
   "resetKind": "map-execution-reset",
   "resetReason": "operator-correction"
 }

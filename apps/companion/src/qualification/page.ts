@@ -104,10 +104,10 @@ const stateLabels = {
   ready: '可以导出结果',
 };
 const flow = [
-  { id: 'a', title: '第一场', text: '播放 Demo A，确认有连续比赛数据。', markers: ['demo-a-live'] },
-  { id: 'stop', title: '停止并等待', text: 'stopdemo 后关闭 CS2，等待页面确认数据停止。', markers: ['demo-a-stopped', 'cs2-closed', 'runtime-stale'] },
-  { id: 'next', title: '开始下一场', text: '清理上一场状态，准备接收下一场比赛。', markers: ['next-execution'] },
-  { id: 'b', title: '第二场', text: '重新打开 CS2，播放 Demo B，确认没有上一场残留。', markers: ['cs2-reopened', 'demo-b-live'] },
+  { id: 'a', markers: ['demo-a-live'] },
+  { id: 'stop', markers: ['demo-a-stopped', 'cs2-closed', 'runtime-stale'] },
+  { id: 'next', markers: ['next-execution'] },
+  { id: 'b', markers: ['cs2-reopened', 'demo-b-live'] },
 ];
 const byId = (id) => document.getElementById(id);
 const stateText = byId('qualification-state');
@@ -179,13 +179,24 @@ async function refresh() {
 function renderFinalization(data) {
   finalizationComplete = true;
   stateText.textContent = '测试已完成';
-  signal.dataset.tone = data.result === 'PASS' ? 'good' : 'neutral';
+  signal.dataset.tone =
+    data.result === 'PASS' && data.verification === 'passed' && data.cleanup !== 'failed'
+      ? 'good'
+      : 'neutral';
   result.textContent = data.result === 'PASS' ? 'PASS' : data.result === 'FAIL' ? 'FAIL' : 'INCONCLUSIVE';
   result.dataset.tone = String(data.result || 'INCONCLUSIVE').toLowerCase();
   buttons.forEach((button) => { button.disabled = true; });
   const reportPath = data.reportPath || 'evidence/<runId>/REPORT.md';
-  const verification = data.verification === 'passed' ? '已验证' : '验证未通过，请保留 evidence 供排查';
-  message.textContent = data.result + ' · ' + verification + ' · 报告：' + reportPath;
+  const verification = data.verification === 'passed' ? '核心验收已验证' : '核心验收验证未通过';
+  const cleanup = data.cleanup === 'failed'
+    ? '环境恢复失败，请人工检查 GSI 配置'
+    : data.cleanup === 'passed'
+      ? '环境已恢复'
+      : '环境恢复状态待确认';
+  const diagnostics = data.verification === 'passed' || !data.diagnosticsPath
+    ? ''
+    : '诊断日志：' + data.diagnosticsPath;
+  message.textContent = '核心验收：' + data.result + ' · ' + verification + ' · ' + cleanup + ' · 报告：' + reportPath + (diagnostics ? ' · ' + diagnostics : '');
 }
 
 async function waitForFinalization() {
@@ -206,7 +217,7 @@ async function waitForFinalization() {
   message.textContent = '等待最终 evidence 超时；请在 bundle 的 evidence 目录检查日志。';
 }
 
-async function act(action, path, method = 'POST', body) {
+async function act(path, method = 'POST', body) {
   buttons.forEach((button) => { button.disabled = true; });
   try {
     const data = await call(path, method, body);
@@ -222,12 +233,12 @@ async function act(action, path, method = 'POST', body) {
   }
 }
 
-byId('confirm-a').onclick = () => void act('demo-a-live', '/qualification/marker', 'POST', { kind: 'demo-a-live' });
-byId('confirm-stop').onclick = () => void act('stop', '/qualification/stop');
-byId('next-execution').onclick = () => void act('next-execution', '/qualification/next-map-execution');
-byId('confirm-reopen').onclick = () => void act('cs2-reopened', '/qualification/marker', 'POST', { kind: 'cs2-reopened' });
-byId('confirm-b').onclick = () => void act('demo-b-live', '/qualification/marker', 'POST', { kind: 'demo-b-live' });
-byId('finish').onclick = () => void act('finish', '/qualification/finish');
+byId('confirm-a').onclick = () => void act('/qualification/marker', 'POST', { kind: 'demo-a-live' });
+byId('confirm-stop').onclick = () => void act('/qualification/stop');
+byId('next-execution').onclick = () => void act('/qualification/next-map-execution');
+byId('confirm-reopen').onclick = () => void act('/qualification/marker', 'POST', { kind: 'cs2-reopened' });
+byId('confirm-b').onclick = () => void act('/qualification/marker', 'POST', { kind: 'demo-b-live' });
+byId('finish').onclick = () => void act('/qualification/finish');
 void refresh();
 window.setInterval(() => { if (!finalizationComplete) void refresh(); }, 1000);
 `;
@@ -259,7 +270,7 @@ export function qualificationPageHtml(controlToken: string): string {
       <section class="qualification-flow" aria-label="Qualification workflow">
         <article class="qualification-step" data-step="a"><span class="qualification-step__index">01 / 第一场</span><h2>播放 Demo A</h2><p>等页面显示正在接收比赛数据后，确认第一场正常。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>关闭 CS2</h2><p>执行 stopdemo 并关闭 CS2，页面会自动确认数据已停止。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
-        <article class="qualification-step" data-step="next"><span class="qualification-step__index">03 / 新执行</span><h2>开始下一场</h2><p>点击一次，建立新的比赛执行边界。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
+        <article class="qualification-step" data-step="next"><span class="qualification-step__index">03 / 下一场</span><h2>准备下一场</h2><p>点击一次，准备接收下一场比赛。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="b"><span class="qualification-step__index">04 / 第二场</span><h2>播放 Demo B</h2><p>重新打开 CS2，确认第二场没有上一场残留。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
       </section>
 
@@ -274,7 +285,7 @@ export function qualificationPageHtml(controlToken: string): string {
             <button id="confirm-b" data-action="demo-b-live" data-primary="true">确认第二场数据正常</button>
             <button id="finish" data-action="finish">结束测试并导出结果</button>
           </div>
-          <p class="qualification-message" id="qualification-message" aria-live="polite">页面会自动轮询状态；内部 epoch、generation 与 recorder 证据会写入报告。</p>
+          <p class="qualification-message" id="qualification-message" aria-live="polite">页面会自动记录验收所需信息并生成报告。</p>
         </article>
         <article class="qualification-panel">
           <h2>本次结果 <span id="qualification-result">INCONCLUSIVE</span></h2>

@@ -68,6 +68,7 @@ async function createEvidenceRun({
   withCapture = true,
   captureFirstObservation = true,
   captureSecondObservation = true,
+  programTelemetryCleared = true,
 } = {}) {
   const runDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-evidence-'));
   const runId = 'qualification-test-run';
@@ -108,6 +109,7 @@ async function createEvidenceRun({
         resetReason: 'operator-correction',
         previousMapEpoch: 1,
         mapEpoch: 2,
+        programTelemetryCleared,
       },
     }),
     marker(runId, 'cs2-reopened', 20_500, { freshness: 'stale', mapEpoch: 2, runtimeSeq: 2 }),
@@ -236,6 +238,26 @@ describe('qualification evidence verifier', () => {
         },
       });
       expect(written.checks.productionChain.status).toBe('PASS');
+      expect(written.checks.demoBRecovery.status).toBe('INCONCLUSIVE');
+      expect(written.qualification.result).toBe('INCONCLUSIVE');
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not pass the reset when the previous Program telemetry was retained', async () => {
+    const run = await createEvidenceRun({ programTelemetryCleared: false });
+    try {
+      const written = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+        },
+      });
+      expect(written.checks.explicitNextExecution.status).toBe('INCONCLUSIVE');
       expect(written.checks.demoBRecovery.status).toBe('INCONCLUSIVE');
       expect(written.qualification.result).toBe('INCONCLUSIVE');
     } finally {
