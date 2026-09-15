@@ -191,6 +191,17 @@ jobs:
             Pop-Location
           }
 
+      - name: Show Companion diagnostics on smoke failure
+        if: ${{ failure() }}
+        shell: pwsh
+        run: |
+          $logs = @(Get-ChildItem -LiteralPath $env:QUALIFICATION_BUILD_ROOT -Recurse -File -Include 'companion.log', 'companion.stderr.log' -ErrorAction SilentlyContinue)
+          if ($logs.Count -eq 0) { Write-Output 'No Companion logs were produced.'; exit 0 }
+          foreach ($log in $logs) {
+            Write-Output "--- $($log.FullName)"
+            Get-Content -LiteralPath $log.FullName
+          }
+
       - name: Upload exact-SHA qualification artifact
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
