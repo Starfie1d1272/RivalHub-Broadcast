@@ -32,7 +32,7 @@ describe('Companion CSTV debug projection', () => {
       options = nextOptions;
       return {
         sync: null,
-        tailTick: 0,
+        tailTick: 42,
         start: () => {
           nextOptions.onSync({
             protocol: 5,

@@ -38,33 +38,60 @@ class FakeScheduler implements CstvScheduler {
 interface FakeSession {
   readonly options: CstvParserSessionFactoryOptions;
   resolveRun(result: CstvSessionRunResult): void;
+  rejectRun(error?: Error): void;
+  setTailTick(tick: number): void;
 }
 
-function createFakeParserFactory(sessions: FakeSession[]): CstvParserSessionFactory {
+interface FakeSessionPlan {
+  readonly start?: 'ready' | 'throw' | 'cancelled';
+  readonly emitSync?: boolean;
+}
+
+function createFakeParserFactory(
+  sessions: FakeSession[],
+  planForSession: (index: number) => FakeSessionPlan = () => ({
+    start: 'ready',
+    emitSync: true,
+  }),
+): CstvParserSessionFactory {
   return (options) => {
+    const plan = planForSession(sessions.length);
     let resolveRun: ((result: CstvSessionRunResult) => void) | undefined;
+    let rejectRun: ((error: Error) => void) | undefined;
     let stopped = false;
+    let tailTick = 0;
     const session: FakeSession = {
       options,
       resolveRun: (result) => resolveRun?.(result),
+      rejectRun: (error = new Error('fake run failure')) => rejectRun?.(error),
+      setTailTick: (tick) => {
+        tailTick = tick;
+      },
     };
     sessions.push(session);
     return {
       sync: null,
-      tailTick: 0,
+      get tailTick() {
+        return tailTick;
+      },
       start: () => {
-        options.onSync({
-          protocol: 5,
-          tick: 10,
-          ticksPerSecond: 64,
-          fragment: 1,
-          signupFragment: 1,
-        });
+        if (plan.start === 'throw') return Promise.reject(new Error('fake start failure'));
+        if (plan.start === 'cancelled') return Promise.resolve({ status: 'cancelled' as const });
+        if (plan.emitSync !== false) {
+          options.onSync({
+            protocol: 5,
+            tick: 10,
+            ticksPerSecond: 64,
+            fragment: 1,
+            signupFragment: 1,
+          });
+        }
         return Promise.resolve({ status: 'ready' as const });
       },
       run: () =>
-        new Promise<CstvSessionRunResult>((resolve) => {
+        new Promise<CstvSessionRunResult>((resolve, reject) => {
           resolveRun = resolve;
+          rejectRun = reject;
           if (stopped) resolve({ status: 'cancelled' });
         }),
       stop: () => {
@@ -100,8 +127,12 @@ describe('CSTV source manager', () => {
       state: 'reconnecting',
       generation: 0,
       reconnectAttempt: 1,
-      lastErrorCode: 'session-run-failed',
+      lastErrorCode: 'session-timeout',
+      lastTerminalStatus: 'timeout',
     });
+    expect(manager.getRecentDiagnostics()).toEqual([
+      { code: 'session-timeout', status: 'timeout' },
+    ]);
     expect(scheduler.delays).toEqual([1000]);
 
     scheduler.runNext();
@@ -111,6 +142,109 @@ describe('CSTV source manager', () => {
     await flush();
     expect(manager.getHealth()).toMatchObject({ state: 'ended', generation: 1 });
     expect(scheduler.delays).toEqual([1000]);
+    await manager.stop();
+  });
+
+  it('uses bounded backoff for pre-sync start failures and resets after a successful sync', async () => {
+    const sessions: FakeSession[] = [];
+    const scheduler = new FakeScheduler();
+    const expectedDelays = [1_000, 2_000, 4_000, 8_000, 10_000, 10_000];
+    const manager = createCstvSourceManager({
+      role: 'program',
+      url: 'https://example.test/program/',
+      parserSessionFactory: createFakeParserFactory(sessions, (index) =>
+        index < expectedDelays.length
+          ? { start: 'throw', emitSync: false }
+          : { start: 'ready', emitSync: true },
+      ),
+      scheduler,
+    });
+
+    manager.start();
+    await flush();
+    for (let index = 0; index < expectedDelays.length; index += 1) {
+      expect(sessions[index]?.options.generation).toBe(index);
+      expect(manager.getHealth()).toMatchObject({
+        state: 'reconnecting',
+        generation: index,
+        reconnectAttempt: index + 1,
+        lastErrorCode: 'session-start-failed',
+        lastTerminalStatus: 'failed',
+      });
+      expect(scheduler.delays[index]).toBe(expectedDelays[index]);
+      scheduler.runNext();
+      await flush();
+    }
+
+    expect(sessions[expectedDelays.length]?.options.generation).toBe(expectedDelays.length);
+    expect(manager.getHealth()).toMatchObject({
+      state: 'live',
+      generation: expectedDelays.length,
+      reconnectAttempt: 0,
+    });
+    expect(manager.getRecentDiagnostics()).toHaveLength(expectedDelays.length);
+    expect(
+      manager.getRecentDiagnostics().every(({ code }) => code === 'session-start-failed'),
+    ).toBe(true);
+
+    sessions[expectedDelays.length]?.resolveRun({ status: 'timeout' });
+    await flush();
+    expect(manager.getHealth()).toMatchObject({
+      state: 'reconnecting',
+      generation: expectedDelays.length,
+      reconnectAttempt: 1,
+      lastErrorCode: 'session-timeout',
+      lastTerminalStatus: 'timeout',
+    });
+    expect(scheduler.delays).toEqual([...expectedDelays, 1_000]);
+
+    scheduler.runNext();
+    await flush();
+    expect(sessions[expectedDelays.length + 1]?.options.generation).toBe(expectedDelays.length + 1);
+    sessions[expectedDelays.length + 1]?.resolveRun({ status: 'complete' });
+    await flush();
+    expect(manager.getHealth()).toMatchObject({
+      state: 'ended',
+      generation: expectedDelays.length + 1,
+      lastTerminalStatus: 'complete',
+    });
+    await manager.stop();
+  });
+
+  it('keeps parser lifecycle diagnostics single-owned across start, run, and cancellation', async () => {
+    const sessions: FakeSession[] = [];
+    const scheduler = new FakeScheduler();
+    const manager = createCstvSourceManager({
+      role: 'program',
+      url: 'https://example.test/program/',
+      parserSessionFactory: createFakeParserFactory(sessions),
+      scheduler,
+    });
+
+    manager.start();
+    await flush();
+    sessions[0]?.rejectRun();
+    await flush();
+    expect(manager.getHealth()).toMatchObject({
+      state: 'reconnecting',
+      lastErrorCode: 'session-run-failed',
+      lastTerminalStatus: 'failed',
+    });
+    expect(manager.getRecentDiagnostics()).toEqual([{ code: 'session-run-failed' }]);
+
+    scheduler.runNext();
+    await flush();
+    sessions[1]?.resolveRun({ status: 'cancelled' });
+    await flush();
+    expect(manager.getHealth()).toMatchObject({
+      state: 'reconnecting',
+      lastErrorCode: 'session-cancelled',
+      lastTerminalStatus: 'cancelled',
+    });
+    expect(manager.getRecentDiagnostics()).toEqual([
+      { code: 'session-run-failed' },
+      { code: 'session-cancelled', status: 'cancelled' },
+    ]);
     await manager.stop();
   });
 
@@ -153,7 +287,12 @@ describe('CSTV source manager', () => {
     manager.start();
     await flush();
     const options = sessions[0]?.options;
-    if (options === undefined) throw new Error('fake parser session was not created');
+    const session = sessions[0];
+    if (options === undefined || session === undefined)
+      throw new Error('fake parser session was not created');
+    session.setTailTick(4096);
+    expect(manager.getHealth()).toMatchObject({ state: 'live', tailTick: 4096 });
+    expect(manager.getHealth()).not.toHaveProperty('lastEventTick');
     for (let index = 0; index < CSTV_RECENT_GAME_EVENTS_MAX + 6; index += 1) {
       options.onEvent(
         'weapon_fire',
@@ -176,7 +315,8 @@ describe('CSTV source manager', () => {
     expect(snapshot.health).toMatchObject({
       state: 'live',
       lastEventSequence: CSTV_RECENT_GAME_EVENTS_MAX + 5,
-      tailTick: CSTV_RECENT_GAME_EVENTS_MAX + 5,
+      lastEventTick: CSTV_RECENT_GAME_EVENTS_MAX + 5,
+      tailTick: 4096,
     });
     await manager.stop();
   });

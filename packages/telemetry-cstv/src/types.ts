@@ -48,6 +48,7 @@ export type CstvDiagnosticCode =
   | 'sync-sink-failed'
   | 'session-start-failed'
   | 'session-run-failed'
+  | 'session-timeout'
   | 'session-cancelled';
 
 /** Diagnostic metadata is deliberately bounded and never carries raw parser errors or URLs. */

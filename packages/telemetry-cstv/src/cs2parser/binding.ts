@@ -3,6 +3,7 @@ import { DemoReader, EntityMode, HttpBroadcastReader } from 'cs2parser';
 import { normalizeCstvSync } from '../normalize/sync.js';
 import { SUPPORTED_CSTV_GAME_EVENT_NAMES } from '../types.js';
 import type {
+  CstvGameEventName,
   CstvParserSession,
   CstvParserSessionFactoryOptions,
   CstvSessionRunResult,
@@ -10,9 +11,12 @@ import type {
   CstvSyncMetadata,
 } from '../types.js';
 
-type UntypedGameEvents = {
-  on(eventName: string, listener: (event: unknown) => void): unknown;
-};
+type Cs2ParserGameEventName = Parameters<DemoReader['gameEvents']['on']>[0];
+type CstvGameEventNameCompatibility =
+  Exclude<CstvGameEventName, Cs2ParserGameEventName> extends never ? true : never;
+
+const cstvGameEventNameCompatibility: CstvGameEventNameCompatibility = true;
+void cstvGameEventNameCompatibility;
 
 function startResult(status: CstvSessionStartResult['status']): CstvSessionStartResult {
   if (status === 'ready') return { status: 'ready' };
@@ -46,7 +50,7 @@ export function createCs2ParserSession(
     options.onSync(nextSync);
   });
 
-  const gameEvents = parser.gameEvents as unknown as UntypedGameEvents;
+  const gameEvents = parser.gameEvents;
   for (const eventName of SUPPORTED_CSTV_GAME_EVENT_NAMES) {
     gameEvents.on(eventName, (event) => {
       options.onEvent(eventName, event, parser.currentTick);

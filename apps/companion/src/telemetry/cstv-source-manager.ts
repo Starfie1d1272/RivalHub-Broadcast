@@ -8,6 +8,7 @@ import {
   type CstvDiagnosticCode,
   type CstvObservationClock,
   type CstvParserSessionFactory,
+  type CstvSessionTerminalStatus,
   type CstvSyncMetadata,
 } from '@rivalhub-broadcast/telemetry-cstv';
 
@@ -25,9 +26,11 @@ export interface CstvSourceHealth {
   readonly reconnectAttempt: number;
   readonly lastSync?: CstvSyncMetadata;
   readonly tailTick?: number;
+  readonly lastEventTick?: number;
   readonly lastEventSequence?: number;
   readonly lastEventObservedAt?: string;
   readonly lastErrorCode?: CstvDiagnosticCode;
+  readonly lastTerminalStatus?: CstvSessionTerminalStatus;
 }
 
 export interface CstvSourceSnapshot {
@@ -109,9 +112,11 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   private reconnectAttempt = 0;
   private lastSync: CstvSyncMetadata | undefined;
   private tailTick: number | undefined;
+  private lastEventTick: number | undefined;
   private lastEventSequence: number | undefined;
   private lastEventObservedAt: string | undefined;
   private lastErrorCode: CstvDiagnosticCode | undefined;
+  private lastTerminalStatus: CstvSessionTerminalStatus | undefined;
   private started = false;
   private stopRequested = false;
 
@@ -152,6 +157,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   }
 
   getHealth(): CstvSourceHealth {
+    this.refreshTailTick();
     return {
       role: this.role,
       state: this.state,
@@ -159,6 +165,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
       reconnectAttempt: this.reconnectAttempt,
       ...(this.lastSync === undefined ? {} : { lastSync: { ...this.lastSync } }),
       ...(this.tailTick === undefined ? {} : { tailTick: this.tailTick }),
+      ...(this.lastEventTick === undefined ? {} : { lastEventTick: this.lastEventTick }),
       ...(this.lastEventSequence === undefined
         ? {}
         : { lastEventSequence: this.lastEventSequence }),
@@ -166,6 +173,9 @@ class DefaultCstvSourceManager implements CstvSourceManager {
         ? {}
         : { lastEventObservedAt: this.lastEventObservedAt }),
       ...(this.lastErrorCode === undefined ? {} : { lastErrorCode: this.lastErrorCode }),
+      ...(this.lastTerminalStatus === undefined
+        ? {}
+        : { lastTerminalStatus: this.lastTerminalStatus }),
     };
   }
 
@@ -192,8 +202,11 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.generation = generation;
     this.lastSync = undefined;
     this.tailTick = undefined;
+    this.lastEventTick = undefined;
     this.lastEventSequence = undefined;
     this.lastEventObservedAt = undefined;
+    this.lastErrorCode = undefined;
+    this.lastTerminalStatus = undefined;
     this.state = 'connecting';
 
     let attempt: Promise<void>;
@@ -213,6 +226,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
       this.activeSession = session;
       attempt = this.runAttempt(generation, session);
     } catch {
+      this.lastTerminalStatus = 'failed';
       this.recordDiagnostic({ code: 'session-start-failed' });
       this.scheduleReconnect('session-start-failed');
       return;
@@ -229,6 +243,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     generation: number,
     session: ReturnType<typeof createCstvLiveSession>,
   ): Promise<void> {
+    let phase: 'start' | 'run' = 'start';
     try {
       const started = await session.start();
       if (!this.isCurrent(generation, session)) return;
@@ -238,14 +253,17 @@ class DefaultCstvSourceManager implements CstvSourceManager {
       }
 
       this.state = 'live';
+      phase = 'run';
       const result = await session.run();
       if (!this.isCurrent(generation, session)) return;
       this.handleTerminal(generation, session, result.status);
     } catch {
       if (!this.isCurrent(generation, session)) return;
       session.stop();
-      this.recordDiagnostic({ code: 'session-run-failed' });
-      this.scheduleReconnect('session-run-failed');
+      this.lastTerminalStatus = 'failed';
+      this.scheduleReconnect(
+        this.lastErrorCode ?? (phase === 'start' ? 'session-start-failed' : 'session-run-failed'),
+      );
     }
   }
 
@@ -261,13 +279,12 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.lastSync = sync;
     this.reconnectAttempt = 0;
     this.lastErrorCode = undefined;
-    this.state = 'live';
   }
 
   private handleObservation(generation: number, observation: GameEventObservation): void {
     if (!this.isCurrentGeneration(generation)) return;
     appendBounded(this.recentGameEvents, observation, CSTV_RECENT_GAME_EVENTS_MAX);
-    this.tailTick = observation.cursor.tick;
+    this.lastEventTick = observation.cursor.tick;
     this.lastEventSequence = observation.cursor.sequence;
     this.lastEventObservedAt = observation.cursor.observedAt;
   }
@@ -292,14 +309,22 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     status: 'complete' | 'timeout' | 'cancelled',
   ): void {
     if (!this.isCurrent(generation, session)) return;
+    this.refreshTailTick();
+    this.lastTerminalStatus = status;
     if (status === 'complete') {
       this.state = 'ended';
       return;
     }
-    const code: CstvDiagnosticCode =
-      status === 'cancelled' ? 'session-cancelled' : 'session-run-failed';
-    this.recordDiagnostic({ code, status });
-    this.scheduleReconnect(code);
+    if (status === 'timeout') {
+      this.recordDiagnostic({ code: 'session-timeout', status });
+      this.scheduleReconnect('session-timeout');
+      return;
+    }
+    this.scheduleReconnect('session-cancelled');
+  }
+
+  private refreshTailTick(): void {
+    if (this.activeSession !== undefined) this.tailTick = this.activeSession.tailTick;
   }
 
   private scheduleReconnect(code: CstvDiagnosticCode): void {
