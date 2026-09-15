@@ -10,7 +10,7 @@ if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType
 $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
 if ($listeners.Count -gt 0) { throw 'port 3000 is already occupied; stop the other process before starting qualification' }
 
-$runId = "$(Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ')-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
+$runId = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $runDir = Join-Path $script:BundleRoot "evidence\$runId"
 foreach ($directory in @($runDir, (Join-Path $runDir 'recorder'), (Join-Path $runDir 'debug'), (Join-Path $runDir 'logs'), (Join-Path $runDir 'cfg'))) {
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
