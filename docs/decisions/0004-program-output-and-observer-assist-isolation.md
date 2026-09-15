@@ -40,10 +40,11 @@ Delayed Program GOTV
 同一个人：
 
 - 看 CS2 延迟节目画面；
+- 看与正式 Program 同一 `ProgramProjection` 驱动的本机 Program HUD / Radar Overlay；
 - 解说；
 - 手动切 POV；
 - 需要时打开 Operator 配置/诊断；
-- 可以看到本机 Observer Assist Overlay。
+- 可以看到独立的本机 Observer Assist Overlay。
 
 因此本仓**不要求**存在独立 `/caster` surface，也不建立 `CasterProjection` 作为长期业务角色模型。
 
@@ -59,8 +60,10 @@ Delayed Program GOTV
 Delayed Program feed
   → CS2 renderer
   → Runtime 的正式节目时间轴
-  → /program
-  → OBS
+  → ProgramProjection
+  → Program renderer
+       ├─ 本机透明 Program Overlay（制作人员可见）
+       └─ 官方 OBS Program host（Browser Source 为基线实现）
   → #615 BroadcastLiveSnapshot
 
 No-delay Lookahead feed
@@ -173,6 +176,45 @@ DebugProjection
 - #615 只从 Delayed Program timeline 生成 public live snapshot；
 - Assist 以透明置顶窗口实现时，必须在真实 Windows + OBS 验收中证明不会被官方 capture 路径误录。
 
+### Clarification（2026-09-15）：Projection、Renderer 与 Host 分层
+
+这一澄清不改变上述 Program/Assist 安全决策，只把此前隐含的 presentation boundary 写清楚：
+
+```text
+Projection
+  决定该 consumer 被允许看到什么数据
+        ↓
+Renderer
+  决定如何把该 projection 画成 HUD / Radar / scene / cue
+        ↓
+Host
+  决定 renderer 运行在哪里以及如何被人或 OBS 消费
+```
+
+因此：
+
+```text
+ProgramProjection
+  → Program renderer
+      ├─ browser/dev host
+      ├─ OBS Browser Source host
+      └─ local transparent/topmost/click-through Program Overlay host
+
+ObserverAssistProjection
+  → Assist renderer
+      ├─ browser/debug prototype（可选）
+      └─ local transparent/topmost/click-through Assist Overlay host
+```
+
+约束：
+
+- 同一 Program renderer 可以同时运行多个 instance，分别给制作人员和 OBS 使用；这些 instance 不拥有第二份 RuntimeState，也不重新解释 Program truth；
+- Program Overlay 与 Assist Overlay 必须是独立 surface/window，不能把 future cue 与 Program HUD 混在一个窗口后再依赖 OBS crop/visibility 隐藏；
+- Program/Assist 的安全性由 projection/schema 保证，OBS 捕获哪个 host 只是第二道部署级防线；
+- OBS Browser Source 是当前首个、明确验收的 Program host，但不是 `ProgramProjection` 的唯一合法承载方式；
+- 直接捕获独立 Program Overlay、桌面 WebView 或其它 host 只有在完成真实 Windows + OBS 验收后才能成为正式 deployment path；
+- 本 ADR 不冻结 Electron、Tauri、WebView2 或其它桌面宿主技术，完整 packaging 继续由后续 ADR/Issue 决定。
+
 ---
 
 ## 决策 5：Lookahead feed 不自动扩张为 #610 canonical source
@@ -248,6 +290,7 @@ sourceHealth
 
 - `ObserverAssistProjection` 的 future fields 不出现在 `ProgramProjection`；
 - Program projector / #615 producer 的输入边界不依赖过滤一个万能 future-aware payload 才安全；
+- 同一 `ProgramProjection` 驱动不同 Program host 时不产生 host-specific domain truth；
 - #615 producer 不读取 no-delay future state；
 - Lookahead feed down 时 Program 不受影响；
 - Program feed down 时不存在 Lookahead→Program fallback；
@@ -259,12 +302,15 @@ sourceHealth
 
 ```text
 Windows + CS2 delayed observer + OBS
++ local Program Overlay
 + no-delay headless lookahead feed
-+ topmost Assist Overlay
++ independent topmost Assist Overlay
 ```
 
 并验证：
 
+- 制作人员看到的 Program Overlay 与官方 OBS Program host 在相同 projection/scene 下语义一致；
+- Program Overlay 的透明/topmost/click-through、DPI 与窗口模式满足实际制作；
 - Assist overlay 不进入官方 OBS Program output；
 - kill cue lead time 稳定可用；
 - CPU / memory / network 不影响 CS2/OBS 稳定性；
@@ -290,3 +336,5 @@ Windows + CS2 delayed observer + OBS
 - future cue 与 Program/#615/OBS 的硬隔离；
 - Runtime 内 Program-safe 与 Assist-private 数据结构化分区；
 - Program / Lookahead source-local continuity 与 Match/producer/map continuity 分责。
+
+2026-09-15 clarification 进一步明确：Program 与 Assist 的 projection 安全边界独立于具体 browser/desktop/OBS host；Program 可以有多个 host instance，而 Program Overlay 与 Assist Overlay 必须物理独立并继续保持 projection-level non-leak。
