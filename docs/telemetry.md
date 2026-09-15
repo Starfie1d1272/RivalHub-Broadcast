@@ -248,7 +248,7 @@ Core 不反向依赖 `packages/telemetry-gsi`。
 - 通过 `HttpBroadcastReader` 消费 `/sync → /start → /full → /delta`；
 - 固定使用 `EntityMode.ALL` 与 parser 默认 retry/throttle policy，fragment parse error 采用 abort；
 - 将 `cs2parser@2.5.0` 的 supported combat/bomb events 立即复制为 Core-owned `GameEventObservation`；
-- 只在内部 binding 接触第三方 parser 类型，禁止 raw parser object、SteamID/display name 或 parser exception 穿透公共 contract；
+- 只在内部 binding 接触第三方 parser 类型，禁止 raw third-party Player、raw event 或 parser exception 穿透公共 contract；必要的 scalar source identity（例如 `sourcePlayerId`、`displayName`）可以作为规范化 observation 字段进入 Core，debug projection 仍必须按既有规则脱敏；
 - 为 `program` 与 `lookahead` 分别保留 generation、sequence、tick、health、reconnect 与 bounded debug evidence。
 
 该 package 不修改 `RuntimeState`、不合成 `RuntimeTransition`，也不拥有 production recorder、Lookahead alignment、HUD/Radar 或第二套 event journal。CSTV source 故障不得阻断 GSI/ProgramRuntime；Lookahead 永远不能 fallback 为 Program input。
