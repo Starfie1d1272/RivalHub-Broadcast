@@ -15,6 +15,12 @@ export const RUNTIME_DEPENDENCY_FIELDS = [
   'peerDependencies',
 ];
 
+export const CSTV_PARSER_PACKAGE = 'cs2parser';
+export const CSTV_PARSER_OWNER = '@rivalhub-broadcast/telemetry-cstv';
+
+export const CSTV_PARSER_OWNERSHIP_MESSAGE =
+  'cs2parser is owned exclusively by packages/telemetry-cstv; keep its direct dependency and imports inside that source adapter.';
+
 const nodeBuiltinNames = new Set(builtinModules);
 
 const packageBoundary = ({
@@ -244,6 +250,10 @@ export function architectureEslintConfigs() {
 
     for (const target of policy.forbiddenWorkspacePackages) {
       paths.push({ name: target, message: policy.message });
+    }
+
+    if (packageName !== CSTV_PARSER_OWNER) {
+      paths.push({ name: CSTV_PARSER_PACKAGE, message: CSTV_PARSER_OWNERSHIP_MESSAGE });
     }
 
     return {
