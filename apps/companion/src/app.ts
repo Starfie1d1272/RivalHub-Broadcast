@@ -18,6 +18,10 @@ import {
 } from './qualification/evidence.js';
 import { createDisabledRecorder, type CaptureRecorder } from './telemetry/capture-recorder.js';
 import {
+  createCstvSourceManagers,
+  type CstvSourceManagers,
+} from './telemetry/cstv-source-manager.js';
+import {
   GSI_REQUEST_TIMEOUT_MS,
   registerGsiIngress,
   type AcceptedRawSink,
@@ -38,6 +42,7 @@ export interface CompanionAppOptions {
   readonly debugEvidenceStore?: DebugEvidenceStore;
   readonly debugClock?: DebugRuntimeClock;
   readonly deliveryConsumers?: readonly DeliveryHealthSource[];
+  readonly cstvSources?: CstvSourceManagers;
   readonly onAcceptedRaw?: AcceptedRawSink;
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
@@ -65,6 +70,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
+  const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
   const qualificationMode = options.qualificationMode ?? false;
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
@@ -78,9 +84,17 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     const recorderHealth = recorder.getHealth();
     const recorderDegraded =
       recorderHealth.state === 'degraded' || recorderHealth.state === 'failed';
+    const cstvHealth = {
+      program: cstvSources.program.getHealth(),
+      lookahead: cstvSources.lookahead.getHealth(),
+    };
+    const cstvDegraded = [cstvHealth.program, cstvHealth.lookahead].some(
+      (health) => health.state === 'reconnecting' || health.state === 'failed',
+    );
     return {
-      status: runtimeDegraded || recorderDegraded ? 'degraded' : 'ok',
+      status: runtimeDegraded || recorderDegraded || cstvDegraded ? 'degraded' : 'ok',
       recorder: recorderHealth,
+      cstv: cstvHealth,
     };
   });
 
@@ -89,6 +103,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       nowMonotonicMs: debugClock.nowMonotonicMs(),
       recorderHealth: recorder.getHealth(),
       deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
+      cstvSources: {
+        program: cstvSources.program.getSnapshot(),
+        lookahead: cstvSources.lookahead.getSnapshot(),
+      },
     }),
   );
 
@@ -151,6 +169,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
           nowMonotonicMs,
           recorderHealth: recorder.getHealth(),
           deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
+          cstvSources: {
+            program: cstvSources.program.getSnapshot(),
+            lookahead: cstvSources.lookahead.getSnapshot(),
+          },
         }),
       programRuntime,
       recorder,
@@ -166,7 +188,11 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   }
 
   app.addHook('onClose', async () => {
-    await Promise.all(deliveryConsumers.map((consumer) => consumer.close()));
+    await Promise.all([
+      cstvSources.program.stop(),
+      cstvSources.lookahead.stop(),
+      ...deliveryConsumers.map((consumer) => consumer.close()),
+    ]);
     await recorder.finalize();
   });
 

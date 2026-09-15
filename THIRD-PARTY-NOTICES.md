@@ -24,6 +24,7 @@
 | `vite` | 8.3.0 | Web development and production build | MIT |
 | `vitest` | 5.0.0 | Unit/component-level smoke tests | MIT |
 | `zod` | 4.6.2 | Protocol package runtime-schema baseline | MIT |
+| `cs2parser` | 2.5.0 | `packages/telemetry-cstv` Live CSTV `/sync`/fragment reader and game-event source | GPL-3.0；仅通过内部 binding 使用，未复制代码；upstream `osztenkurden/cs2parser@74b2238b22d8a0e221be7c2d609083c93d312c7e` |
 
 许可证链接：[MIT](https://opensource.org/license/mit)、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)。
 

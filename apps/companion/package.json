@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@rivalhub-broadcast/core": "workspace:*",
+    "@rivalhub-broadcast/telemetry-cstv": "workspace:*",
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*",
     "fastify": "catalog:"
   },

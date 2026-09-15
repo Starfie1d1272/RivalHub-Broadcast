@@ -149,6 +149,12 @@ packages/telemetry-gsi
   Raw GSI 类型不得泄漏出该 package。
   source-specific block semantics 以 docs/telemetry.md 为准。
 
+packages/telemetry-cstv
+  Live CSTV `/sync` → `/start` → `/full` → `/delta` adapter。
+  这是唯一允许直接接触 `cs2parser` 的 package；只向 Core 输出 parser-neutral `GameEventObservation`。
+  Program 与 Lookahead 使用独立 source role、generation、sequence 与健康语义，不把 Lookahead 作为 Program fallback。
+  `cs2parser` 的第三方类型与 raw event object 不得越过本 package 的 binding/normalizer。
+
 packages/rivalhub
   RivalHub 第一方 adapter：BroadcastManifest consumer、pairing/auth、#610 ReliableObservation、#615 BroadcastLiveSnapshot uplink。
   只能通过主仓公开 versioned contract 工作，不直连 RivalHub/Supabase 表；不得反向拥有 Core / Radar / Lookahead domain contract。

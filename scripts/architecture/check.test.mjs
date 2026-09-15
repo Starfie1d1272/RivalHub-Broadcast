@@ -99,6 +99,12 @@ describe('architecture checker', () => {
         target: 'fastify',
       },
       {
+        manifestPath: 'packages/telemetry-cstv/package.json',
+        dependencies: { '@rivalhub-broadcast/companion': 'workspace:*' },
+        ruleId: 'ARCH_TELEMETRY_CSTV_BOUNDARY',
+        target: '@rivalhub-broadcast/companion',
+      },
+      {
         manifestPath: 'apps/web/package.json',
         dependencies: { '@rivalhub-broadcast/telemetry-gsi': 'workspace:*' },
         ruleId: 'ARCH_WEB_BOUNDARY',
@@ -176,6 +182,27 @@ describe('architecture checker', () => {
       withFiles({ 'packages/telemetry-gsi/src/boundary.ts': "import 'node:fs';\n" }),
       'ARCH_TELEMETRY_GSI_BOUNDARY',
       'node:fs',
+    );
+    expectRule(
+      withFiles({
+        'packages/core/src/cstv-edge.ts':
+          "import { create } from '@rivalhub-broadcast/telemetry-cstv';\nvoid create;\n",
+      }),
+      'ARCH_CORE_BOUNDARY',
+      '@rivalhub-broadcast/telemetry-cstv',
+    );
+    expectRule(
+      withFiles({ 'packages/telemetry-cstv/src/boundary.ts': "import 'node:fs';\n" }),
+      'ARCH_TELEMETRY_CSTV_BOUNDARY',
+      'node:fs',
+    );
+    expectRule(
+      withFiles({
+        'packages/telemetry-cstv/src/boundary.ts':
+          "import { adapt } from '@rivalhub-broadcast/telemetry-gsi';\nvoid adapt;\n",
+      }),
+      'ARCH_TELEMETRY_CSTV_BOUNDARY',
+      '@rivalhub-broadcast/telemetry-gsi',
     );
     expectRule(
       withFiles({

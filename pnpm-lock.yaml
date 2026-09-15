@@ -125,6 +125,9 @@ catalogs:
     '@vitejs/plugin-react':
       specifier: 6.1.1
       version: 6.1.1
+    cs2parser:
+      specifier: 2.5.0
+      version: 2.5.0
     eslint:
       specifier: 10.10.0
       version: 10.10.0
@@ -205,6 +208,9 @@ importers:
       '@rivalhub-broadcast/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rivalhub-broadcast/telemetry-cstv':
+        specifier: workspace:*
+        version: link:../../packages/telemetry-cstv
       '@rivalhub-broadcast/telemetry-gsi':
         specifier: workspace:*
         version: link:../../packages/telemetry-gsi
@@ -282,6 +288,19 @@ importers:
         version: typescript@7.0.2
 
   packages/rivalhub:
+    devDependencies:
+      '@typescript/native':
+        specifier: 'catalog:'
+        version: typescript@7.0.2
+
+  packages/telemetry-cstv:
+    dependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../core
+      cs2parser:
+        specifier: 'catalog:'
+        version: 2.5.0
     devDependencies:
       '@typescript/native':
         specifier: 'catalog:'
@@ -384,6 +403,9 @@ packages:
   '@babel/types@7.29.8':
     resolution: {integrity: sha512-Vj1jF3cPfxg7OAfoI7QnVKLoILlm2JF9pnVHrX8qx7AHMiYWT+NDAA7jChlNgRS4WTLc/fD1lXLmPixluj+3Gg==}
     engines: {node: '>=6.9.0'}
+
+  '@bufbuild/protobuf@2.15.0':
+    resolution: {integrity: sha512-DAheWUkVr/SJTWCc+lg9dhY0eN4SaWlf4+bG1KzHeXbnqt0AfB/NX0Z+VunGlM1ki1B4zVvye27MpKh/svySUA==}
 
   '@cacheable/memory@2.2.0':
     resolution: {integrity: sha512-CTLKqLItRCEixEAewD3/j9DB3/o96gpTPD4eJ1v+DGOlxZRZncRQkGYqqnAGCscYd6RNeXfGeiuCphsPtqyIfQ==}
@@ -1101,6 +1123,10 @@ packages:
   cross-spawn@7.0.6:
     resolution: {integrity: sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==}
     engines: {node: '>= 8'}
+
+  cs2parser@2.5.0:
+    resolution: {integrity: sha512-kfvZp9fKVtp+pSwGkymQwZjt9ID121V53xBX8F+zYosCaVjrPotQXqwZJHWT1aSL6E6pKi8pE8+ZqkJc7JgRGQ==}
+    engines: {node: '>=22.0.0'}
 
   cssstyle@4.6.0:
     resolution: {integrity: sha512-2z+rWdzbbSZv6/rhtvzvqeZQHrBaqgogqt85sqFNbabZOuFbCVFb8kPeEtZjiKkbrm395irpNKiYeFeLiQnFPg==}
@@ -2022,6 +2048,8 @@ snapshots:
       '@babel/helper-string-parser': 7.29.7
       '@babel/helper-validator-identifier': 7.29.7
 
+  '@bufbuild/protobuf@2.15.0': {}
+
   '@cacheable/memory@2.2.0':
     dependencies:
       '@cacheable/utils': 2.5.0
@@ -2553,6 +2581,10 @@ snapshots:
       path-key: 3.1.1
       shebang-command: 2.0.0
       which: 2.0.2
+
+  cs2parser@2.5.0:
+    dependencies:
+      '@bufbuild/protobuf': 2.15.0
 
   cssstyle@4.6.0:
     dependencies:

@@ -19,6 +19,7 @@ const BOUNDARY_RULE_IDS = Object.freeze({
   protocol: 'ARCH_PROTOCOL_BOUNDARY',
   radar: 'ARCH_RADAR_BOUNDARY',
   'telemetry-gsi': 'ARCH_TELEMETRY_GSI_BOUNDARY',
+  'telemetry-cstv': 'ARCH_TELEMETRY_CSTV_BOUNDARY',
   web: 'ARCH_WEB_BOUNDARY',
   rivalhub: 'ARCH_RIVALHUB_BOUNDARY',
 });
