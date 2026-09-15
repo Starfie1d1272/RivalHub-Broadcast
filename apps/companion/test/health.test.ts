@@ -33,6 +33,20 @@ describe('Companion health endpoint', () => {
         incomplete: true,
         lastErrorCode: 'recorder_not_configured',
       },
+      cstv: {
+        program: {
+          role: 'program',
+          state: 'disabled',
+          generation: 0,
+          reconnectAttempt: 0,
+        },
+        lookahead: {
+          role: 'lookahead',
+          state: 'disabled',
+          generation: 0,
+          reconnectAttempt: 0,
+        },
+      },
     });
   });
 });

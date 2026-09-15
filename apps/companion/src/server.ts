@@ -10,6 +10,11 @@ import {
   type CaptureRecorder,
   type RecorderDiagnostic,
 } from './telemetry/capture-recorder.js';
+import {
+  createCstvSourceManagers,
+  parseCstvSourceUrl,
+  type CstvSourceManagers,
+} from './telemetry/cstv-source-manager.js';
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
@@ -29,6 +34,20 @@ const qualificationFinalRuntimePath =
     : undefined;
 const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
 const producerInstanceId = randomUUID();
+
+let cstvSourceConfig: CstvSourceManagers | undefined;
+let cstvSourceConfigError: string | undefined;
+try {
+  const programUrl = parseCstvSourceUrl(process.env.PROGRAM_CSTV_URL, 'PROGRAM_CSTV_URL');
+  const lookaheadUrl = parseCstvSourceUrl(process.env.LOOKAHEAD_CSTV_URL, 'LOOKAHEAD_CSTV_URL');
+  cstvSourceConfig = createCstvSourceManagers({
+    ...(programUrl === undefined ? {} : { programUrl }),
+    ...(lookaheadUrl === undefined ? {} : { lookaheadUrl }),
+  });
+} catch (error: unknown) {
+  cstvSourceConfigError =
+    error instanceof Error ? error.message : 'CSTV source configuration invalid';
+}
 
 function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
   const fields = {
@@ -56,6 +75,9 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 } else if (qualificationMode && host !== '127.0.0.1') {
   console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
   process.exitCode = 1;
+} else if (cstvSourceConfigError !== undefined) {
+  console.error(`Companion 启动失败：${cstvSourceConfigError}`);
+  process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
 
@@ -77,6 +99,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     gsiToken,
     recorder,
     programRuntime,
+    ...(cstvSourceConfig === undefined ? {} : { cstvSources: cstvSourceConfig }),
     qualificationMode,
     ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),
     ...(qualificationMode
@@ -129,6 +152,8 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 
   try {
     await app.listen({ host, port });
+    cstvSourceConfig?.program.start();
+    cstvSourceConfig?.lookahead.start();
     app.log.info({ host, port }, 'Companion 正在监听');
   } catch (error: unknown) {
     app.log.error(error, 'Companion 启动失败');

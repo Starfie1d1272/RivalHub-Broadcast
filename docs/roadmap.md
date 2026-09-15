@@ -115,6 +115,19 @@ M0 不实现真实 GSI domain、HUD、Radar 或 RivalHub uplink。
 
 M1 只需为未来 Lookahead input 保留干净 adapter/capability seam，不在这里实现 CSTV Observer Assist。
 
+### M1.5 — Live CSTV GameEvent foundation
+
+目标：在不改变 GSI-owned `RuntimeState` 与 ProgramRuntime 的前提下，建立可复用的 Live CSTV GameEvent ingress foundation。
+
+Issue #26 的范围冻结为：
+
+- `cs2parser@2.5.0` 的内部 binding 与 parser-neutral Core `GameEventObservation` contract；
+- Program / Lookahead 独立 source manager、generation、sequence、health、timeout/reconnect 与 bounded debug evidence；
+- combat/bomb event normalization、privacy redaction、probe CLI 与 clean-tree workspace validation；
+- 不实现 HUD/Radar、Lookahead alignment、GSI generation/mapEpoch mutation、RuntimeTransition synthesis、第二套 recorder 或真实 Perfect relay qualification。
+
+真实 Windows + CS2/CSTV/OBS acceptance 仍按 platform gate 单独记录，不能由本地 mock 或 CI 代替。
+
 ### M2 — 本地制播内核
 
 目标：不依赖 RivalHub 在线服务，也能稳定驱动一场本地比赛的基础节目画面；同时提前冻结“真实赛事上下文如何进入本地 runtime”的读侧 contract，避免到 M4 才发现跨仓 shape 不合适。

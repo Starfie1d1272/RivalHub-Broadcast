@@ -1,8 +1,8 @@
-# Telemetry / GSI 设计基线
+# Telemetry / GSI / CSTV 设计基线
 
-> 状态：**M1 Design Baseline + real-capture evidence**。
+> 状态：**M1 Design Baseline + M1.5 CSTV GameEvent foundation + real-capture evidence**。
 >
-> 本文定义 RivalHub Broadcast 在 M1 阶段的 Telemetry / CS2 Game State Integration（GSI）边界、数据语义、capture/replay 约束与真实环境验证要求。本文服从 ADR-0001～0003 中已经接受的 authority、RuntimeState、identity、time 与 delivery invariant。
+> 本文定义 RivalHub Broadcast 在 M1/M1.5 阶段的 Telemetry / CS2 Game State Integration（GSI）与 Live CSTV event 边界、数据语义、capture/replay 约束与真实环境验证要求。本文服从 ADR-0001～0003 中已经接受的 authority、RuntimeState、identity、time 与 delivery invariant。
 >
 > 2026-09 已获得一份 RoundSense normal-player capture 与多份 RivalHub Broadcast Windows observer capture。本文已经把能够被真实数据确认的 source semantics 从“implementation hypothesis”收敛为 evidence-backed baseline；仍未被真实场景覆盖的行为继续明确标记为 open validation question。
 
@@ -241,7 +241,19 @@ packages/core
 
 Core 不反向依赖 `packages/telemetry-gsi`。
 
-### 4.3 `apps/companion`
+### 4.3 `packages/telemetry-cstv`
+
+负责 M1.5 的 Live CSTV GameEvent foundation：
+
+- 通过 `HttpBroadcastReader` 消费 `/sync → /start → /full → /delta`；
+- 固定使用 `EntityMode.ALL` 与 parser 默认 retry/throttle policy，fragment parse error 采用 abort；
+- 将 `cs2parser@2.5.0` 的 supported combat/bomb events 立即复制为 Core-owned `GameEventObservation`；
+- 只在内部 binding 接触第三方 parser 类型，禁止 raw third-party Player、raw event 或 parser exception 穿透公共 contract；必要的 scalar source identity（例如 `sourcePlayerId`、`displayName`）可以作为规范化 observation 字段进入 Core，debug projection 仍必须按既有规则脱敏；
+- 为 `program` 与 `lookahead` 分别保留 generation、sequence、tick、health、reconnect 与 bounded debug evidence。
+
+该 package 不修改 `RuntimeState`、不合成 `RuntimeTransition`，也不拥有 production recorder、Lookahead alignment、HUD/Radar 或第二套 event journal。CSTV source 故障不得阻断 GSI/ProgramRuntime；Lookahead 永远不能 fallback 为 Program input。
+
+### 4.4 `apps/companion`
 
 负责：
 
@@ -251,9 +263,10 @@ Core 不反向依赖 `packages/telemetry-gsi`。
 - request receive timestamps；
 - production capture recorder；
 - telemetry-gsi 与 Core 的 composition；
+- telemetry-cstv 两个 source role 的 composition、health 与 bounded debug projection；
 - telemetry ingress health / diagnostics 的 process-level owner。
 
-### 4.4 `packages/testkit`
+### 4.5 `packages/testkit`
 
 负责：
 
@@ -1049,6 +1062,12 @@ packages/telemetry-gsi
   ↑
 apps/companion
 
+packages/core
+  ↑
+packages/telemetry-cstv
+  ↑
+apps/companion
+
 packages/core + packages/telemetry-gsi
   ↑
 packages/testkit
@@ -1063,8 +1082,11 @@ core
 telemetry-gsi → core
   CS2 GSI parser + block-specific adapter
 
-companion → telemetry-gsi + core
-  HTTP ingress + production recorder + composition
+telemetry-cstv → core
+  Live CSTV parser binding + GameEvent normalization
+
+companion → telemetry-gsi + telemetry-cstv + core
+  HTTP ingress + production recorder + dual-source composition
 
 testkit → telemetry-gsi + core
   replay + simulator + fault injection
@@ -1073,6 +1095,7 @@ testkit → telemetry-gsi + core
 约束：
 
 - `apps/web` 不依赖 Raw GSI；
+- `packages/telemetry-cstv` 是唯一直接依赖 `cs2parser` 的 workspace package；
 - `packages/protocol` 不因 M1 telemetry 实现被提前引入；
 - production owner 不 runtime-depend on `packages/testkit`；
 - 不通过 TS `paths` 或跨 package `src` import 绕过 workspace dependency。
@@ -1289,6 +1312,7 @@ CI 绿灯与当前短时 capture 都不能替代 Layer D。
 - GSI source cadence 与 renderer cadence 分离，Radar/visual motion 需要 interpolation；
 - production GSI `buffer=0` / `throttle=0`，`heartbeat=10` 已冻结；
 - 第一条真实 workspace dependency 必须验证 clean-tree typecheck/build。
+- M1.5 的 CSTV parser 真实 Perfect relay qualification 仍是 deferred platform gate；CI/synthetic replay 不得伪称为真实 relay evidence。
 
 ---
 

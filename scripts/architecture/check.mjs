@@ -5,6 +5,9 @@ import ts from 'typescript';
 
 import {
   ARCHITECTURE_SOURCE_EXTENSIONS,
+  CSTV_PARSER_OWNER,
+  CSTV_PARSER_PACKAGE,
+  CSTV_PARSER_OWNERSHIP_MESSAGE,
   PACKAGE_BOUNDARIES,
   RUNTIME_DEPENDENCY_FIELDS,
   WORKSPACE_DEPENDENCY_FIELDS,
@@ -19,6 +22,7 @@ const BOUNDARY_RULE_IDS = Object.freeze({
   protocol: 'ARCH_PROTOCOL_BOUNDARY',
   radar: 'ARCH_RADAR_BOUNDARY',
   'telemetry-gsi': 'ARCH_TELEMETRY_GSI_BOUNDARY',
+  'telemetry-cstv': 'ARCH_TELEMETRY_CSTV_BOUNDARY',
   web: 'ARCH_WEB_BOUNDARY',
   rivalhub: 'ARCH_RIVALHUB_BOUNDARY',
 });
@@ -52,9 +56,11 @@ export function checkArchitecture(options = {}) {
   checkTsPathAliases(repository, report);
   checkWorkspaceDependencyDeclarations(workspaces, report);
   checkManifestBoundaryDependencies(workspaces, report);
+  checkCstvParserManifestOwnership(workspaces, report);
 
   const records = loadSourceRecords(repository, workspaces);
   checkImportEdges(records, repository, workspaces, report);
+  checkCstvParserImportOwnership(records, report);
   checkWorkspaceCycles(workspaces, report);
 
   return violations.sort((left, right) => {
@@ -388,6 +394,25 @@ function checkManifestBoundaryDependencies(workspaces, report) {
   }
 }
 
+function checkCstvParserManifestOwnership(workspaces, report) {
+  for (const info of workspaces.values()) {
+    if (info.name === CSTV_PARSER_OWNER) continue;
+
+    for (const field of WORKSPACE_DEPENDENCY_FIELDS) {
+      const dependencies = info.manifest[field];
+      if (!dependencies || typeof dependencies !== 'object') continue;
+      if (!Object.hasOwn(dependencies, CSTV_PARSER_PACKAGE)) continue;
+
+      report({
+        ruleId: 'ARCH_CSTV_PARSER_OWNERSHIP',
+        file: info.manifestPath,
+        target: CSTV_PARSER_PACKAGE,
+        message: `${CSTV_PARSER_OWNERSHIP_MESSAGE} Remove it from ${field}.`,
+      });
+    }
+  }
+}
+
 function loadSourceRecords(repository, workspaces) {
   const records = new Map();
 
@@ -555,6 +580,28 @@ function checkImportEdges(records, repository, workspaces, report) {
       }
     }
   }
+}
+
+function checkCstvParserImportOwnership(records, report) {
+  for (const record of records.values()) {
+    if (record.owner.name === CSTV_PARSER_OWNER) continue;
+
+    for (const edge of record.allEdges) {
+      if (!isCstvParserSpecifier(edge.specifier)) continue;
+
+      report({
+        ruleId: 'ARCH_CSTV_PARSER_OWNERSHIP',
+        file: record.path,
+        target: edge.specifier,
+        message: CSTV_PARSER_OWNERSHIP_MESSAGE,
+      });
+    }
+  }
+}
+
+function isCstvParserSpecifier(specifier) {
+  const normalized = specifier.replaceAll('\\', '/');
+  return normalized === CSTV_PARSER_PACKAGE || normalized.startsWith(`${CSTV_PARSER_PACKAGE}/`);
 }
 
 function checkCrossPackageSourceImport(record, edge, target, workspaces, report) {

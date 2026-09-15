@@ -15,6 +15,12 @@ export const RUNTIME_DEPENDENCY_FIELDS = [
   'peerDependencies',
 ];
 
+export const CSTV_PARSER_PACKAGE = 'cs2parser';
+export const CSTV_PARSER_OWNER = '@rivalhub-broadcast/telemetry-cstv';
+
+export const CSTV_PARSER_OWNERSHIP_MESSAGE =
+  'cs2parser is owned exclusively by packages/telemetry-cstv; keep its direct dependency and imports inside that source adapter.';
+
 const nodeBuiltinNames = new Set(builtinModules);
 
 const packageBoundary = ({
@@ -39,6 +45,7 @@ export const PACKAGE_BOUNDARIES = Object.freeze({
     forbidNodeBuiltins: true,
     forbiddenWorkspacePackages: [
       '@rivalhub-broadcast/telemetry-gsi',
+      '@rivalhub-broadcast/telemetry-cstv',
       '@rivalhub-broadcast/rivalhub',
       '@rivalhub-broadcast/testkit',
       '@rivalhub-broadcast/web',
@@ -105,6 +112,36 @@ export const PACKAGE_BOUNDARIES = Object.freeze({
     forbidNodeBuiltins: true,
     forbiddenWorkspacePackages: [
       '@rivalhub-broadcast/protocol',
+      '@rivalhub-broadcast/rivalhub',
+      '@rivalhub-broadcast/radar',
+      '@rivalhub-broadcast/testkit',
+      '@rivalhub-broadcast/web',
+      '@rivalhub-broadcast/companion',
+    ],
+  }),
+  '@rivalhub-broadcast/telemetry-cstv': packageBoundary({
+    message:
+      'Telemetry CSTV must remain a pure, replayable source adapter; keep UI, server, storage, RivalHub, Radar, GSI, testkit, and Node-only ownership outside the package.',
+    forbidden: [
+      'react',
+      'react-dom',
+      'fastify',
+      'ws',
+      'vite',
+      '@vitejs/',
+      '@supabase/',
+      'zod',
+      'drizzle-orm',
+      'pg',
+      'postgres',
+      'mysql2',
+      'sqlite3',
+      'better-sqlite3',
+    ],
+    forbidNodeBuiltins: true,
+    forbiddenWorkspacePackages: [
+      '@rivalhub-broadcast/protocol',
+      '@rivalhub-broadcast/telemetry-gsi',
       '@rivalhub-broadcast/rivalhub',
       '@rivalhub-broadcast/radar',
       '@rivalhub-broadcast/testkit',
@@ -213,6 +250,10 @@ export function architectureEslintConfigs() {
 
     for (const target of policy.forbiddenWorkspacePackages) {
       paths.push({ name: target, message: policy.message });
+    }
+
+    if (packageName !== CSTV_PARSER_OWNER) {
+      paths.push({ name: CSTV_PARSER_PACKAGE, message: CSTV_PARSER_OWNERSHIP_MESSAGE });
     }
 
     return {

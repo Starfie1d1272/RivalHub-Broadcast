@@ -11,6 +11,7 @@ import type { LatestWinsConsumerHealth } from './latest-wins.js';
 import type { ProgramRuntimeSnapshot } from './program-runtime.js';
 import type { RecorderHealth } from '../telemetry/capture-recorder.js';
 import type { GsiDiagnosticBatch } from '@rivalhub-broadcast/telemetry-gsi';
+import type { CstvSourceSnapshot } from '../telemetry/cstv-source-manager.js';
 
 export const DEBUG_RECENT_TRANSITIONS_MAX = 32;
 export const DEBUG_RECENT_DIAGNOSTICS_MAX = 32;
@@ -30,6 +31,10 @@ export interface DebugRuntimeResponseOptions {
   readonly nowMonotonicMs: number;
   readonly recorderHealth: RecorderHealth;
   readonly deliveryHealth: readonly LatestWinsConsumerHealth[];
+  readonly cstvSources?: {
+    readonly program: CstvSourceSnapshot;
+    readonly lookahead: CstvSourceSnapshot;
+  };
 }
 
 export interface DebugRuntimeClock {
@@ -58,6 +63,18 @@ export interface DebugRuntimeResponse {
   readonly recentTransitions: readonly unknown[];
   readonly latestGsiDiagnostics: GsiDiagnosticBatch | null;
   readonly recentRuntimeDiagnostics: readonly CompanionRuntimeDiagnostic[];
+  readonly cstvSources: {
+    readonly program: CstvSourceSnapshot['health'];
+    readonly lookahead: CstvSourceSnapshot['health'];
+  };
+  readonly recentGameEvents: {
+    readonly program: readonly unknown[];
+    readonly lookahead: readonly unknown[];
+  };
+  readonly diagnostics: {
+    readonly program: readonly unknown[];
+    readonly lookahead: readonly unknown[];
+  };
   readonly recorderHealth: RecorderHealth;
   readonly deliveryHealth: readonly LatestWinsConsumerHealth[];
 }
@@ -76,6 +93,8 @@ const identityKeys = new Set([
   'xuid',
   'playerid',
   'userid',
+  'sourceuserid',
+  'sourcepawnid',
 ]);
 
 type RedactionContext = 'none' | 'player-object';
@@ -255,6 +274,30 @@ export class DebugEvidenceStore {
   }
 
   getResponse(options: DebugRuntimeResponseOptions): DebugRuntimeResponse {
+    const cstvSources =
+      options.cstvSources ??
+      ({
+        program: {
+          health: {
+            role: 'program' as const,
+            state: 'disabled' as const,
+            generation: 0,
+            reconnectAttempt: 0,
+          },
+          recentGameEvents: [],
+          recentDiagnostics: [],
+        },
+        lookahead: {
+          health: {
+            role: 'lookahead' as const,
+            state: 'disabled' as const,
+            generation: 0,
+            reconnectAttempt: 0,
+          },
+          recentGameEvents: [],
+          recentDiagnostics: [],
+        },
+      } satisfies NonNullable<DebugRuntimeResponseOptions['cstvSources']>);
     const runtime = this.currentRuntime;
     const raw = this.currentRaw;
     const redactedRaw =
@@ -294,6 +337,18 @@ export class DebugEvidenceStore {
           ? null
           : redactDiagnosticBatch(this.latestGsiDiagnostics),
       recentRuntimeDiagnostics: redactRuntimeDiagnostics(this.recentRuntimeDiagnostics),
+      cstvSources: {
+        program: { ...cstvSources.program.health },
+        lookahead: { ...cstvSources.lookahead.health },
+      },
+      recentGameEvents: {
+        program: redactDebugValue(cstvSources.program.recentGameEvents) as readonly unknown[],
+        lookahead: redactDebugValue(cstvSources.lookahead.recentGameEvents) as readonly unknown[],
+      },
+      diagnostics: {
+        program: redactDebugValue(cstvSources.program.recentDiagnostics) as readonly unknown[],
+        lookahead: redactDebugValue(cstvSources.lookahead.recentDiagnostics) as readonly unknown[],
+      },
       recorderHealth: { ...options.recorderHealth },
       deliveryHealth: options.deliveryHealth.map((health) => ({ ...health })),
     };
