@@ -1,33 +1,4 @@
-export {
-  createInitialRuntimeState,
-  getProgramSourceFreshness,
-  reduceRuntime,
-} from './runtime/index.js';
-export type { ProgramSourceFreshness } from './runtime/index.js';
-export type {
-  LiveSessionBinding,
-  ExplicitMapExecutionChangedTransition,
-  MapEndedTransition,
-  MapExecutionChangeReason,
-  MapExecutionChangedTransition,
-  MapExecutionChangedTransitionBase,
-  ObservedMapExecutionChangedTransition,
-  ProgramTelemetryTransitionBase,
-  RoundEndedTransition,
-  RoundStartedTransition,
-  RuntimeAcceptedDisposition,
-  RuntimeContinuityPolicy,
-  RuntimeDisposition,
-  RuntimeIgnoredDisposition,
-  RuntimeIgnoredReason,
-  RuntimeInput,
-  RuntimeMapState,
-  RuntimeProgramSourceState,
-  RuntimeReceiveCursor,
-  RuntimeReduceResult,
-  RuntimeSequenceRange,
-  RuntimeState,
-  RuntimeTime,
-  RuntimeTransition,
-  RuntimeTransitionBase,
-} from './runtime/index.js';
+/**
+ * Runtime and telemetry contracts are exposed through their explicit subpaths.
+ */
+export {};

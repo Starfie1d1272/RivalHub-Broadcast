@@ -4,7 +4,7 @@ import {
   createInitialRuntimeState,
   getProgramSourceFreshness,
   reduceRuntime,
-} from '../src/index.js';
+} from '../src/runtime/index.js';
 import { observation, telemetryInput, TEST_POLICY } from './helpers.js';
 
 describe('Program source freshness', () => {
@@ -20,6 +20,15 @@ describe('Program source freshness', () => {
     expect(getProgramSourceFreshness(state, 200, TEST_POLICY)).toBe('fresh');
     expect(getProgramSourceFreshness(state, 201, TEST_POLICY)).toBe('stale');
     expect(getProgramSourceFreshness(state, 10_000, TEST_POLICY)).toBe('stale');
+  });
+
+  it('fails fast when the selector clock moves behind the accepted receive time', () => {
+    const initial = createInitialRuntimeState('producer-1');
+    const state = reduceRuntime(initial, telemetryInput(0, observation(1, 100)), TEST_POLICY).state;
+
+    expect(() => getProgramSourceFreshness(state, 99, TEST_POLICY)).toThrow(
+      'nowMonotonicMs must not precede the program source receive monotonic time',
+    );
   });
 
   it('ignores UTC jumps when monotonic order is unchanged', () => {

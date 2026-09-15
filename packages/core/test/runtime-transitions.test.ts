@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 
-import { createInitialRuntimeState, reduceRuntime, type RuntimeState } from '../src/index.js';
+import {
+  createInitialRuntimeState,
+  reduceRuntime,
+  type RuntimeState,
+} from '../src/runtime/index.js';
 import { observation, telemetryInput, TEST_POLICY } from './helpers.js';
 
 function apply(
@@ -17,6 +21,21 @@ function apply(
 }
 
 describe('RuntimeTransition derivation', () => {
+  it('does not emit round transitions while map execution is not established', () => {
+    let state = createInitialRuntimeState('producer-1');
+    state = apply(state, 1, 0, {
+      mapCoverage: 'absent',
+      roundPhase: 'freezetime',
+    }).state;
+    const result = apply(state, 2, 10, {
+      mapCoverage: 'absent',
+      roundPhase: 'live',
+    });
+
+    expect(result.state.map).toEqual({ epoch: 0 });
+    expect(result.transitions).toEqual([]);
+  });
+
   it('emits round_started only for contiguous freezetime to live evidence', () => {
     let state = createInitialRuntimeState('producer-1', { kind: 'bound', liveSessionId: 'live-1' });
     state = apply(state, 1, 0, { roundPhase: 'freezetime', roundNumber: 1 }).state;

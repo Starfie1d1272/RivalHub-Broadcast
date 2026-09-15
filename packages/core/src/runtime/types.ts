@@ -9,20 +9,20 @@ export interface RuntimeTime {
 export type LiveSessionBinding =
   { readonly kind: 'unbound' } | { readonly kind: 'bound'; readonly liveSessionId: string };
 
-export interface RuntimeReceiveCursor {
+interface RuntimeReceiveCursor {
   readonly generation: number;
   readonly sequence: number;
   readonly receivedAt: string;
   readonly receivedMonotonicMs: number;
 }
 
-export interface RuntimeProgramSourceState {
+interface RuntimeProgramSourceState {
   readonly kind: 'cs2-gsi';
   readonly generation: number;
   readonly lastAccepted?: RuntimeReceiveCursor;
 }
 
-export interface RuntimeMapState {
+interface RuntimeMapState {
   readonly epoch: number;
   readonly name?: string;
 }
@@ -40,6 +40,8 @@ export interface RuntimeContinuityPolicy {
   readonly staleAfterMs: number;
 }
 
+export type MapExecutionResetReason = 'same-map-restart' | 'restore' | 'operator-correction';
+
 export type RuntimeInput =
   | {
       readonly kind: 'program-telemetry';
@@ -53,7 +55,7 @@ export type RuntimeInput =
     }
   | {
       readonly kind: 'reset-map-execution';
-      readonly reason: 'same-map-restart' | 'restore' | 'operator-correction';
+      readonly reason: MapExecutionResetReason;
       readonly at: RuntimeTime;
     };
 
@@ -85,8 +87,6 @@ export interface MapEndedTransition extends ProgramTelemetryTransitionBase {
   readonly kind: 'map_ended';
 }
 
-export type MapExecutionChangeReason = 'observed-map-name-change' | 'explicit-reset';
-
 export interface MapExecutionChangedTransitionBase extends RuntimeTransitionBase {
   readonly kind: 'map_execution_changed';
   readonly previousMapEpoch: number;
@@ -102,6 +102,7 @@ export interface ObservedMapExecutionChangedTransition extends MapExecutionChang
 
 export interface ExplicitMapExecutionChangedTransition extends MapExecutionChangedTransitionBase {
   readonly reason: 'explicit-reset';
+  readonly resetReason: MapExecutionResetReason;
 }
 
 export type MapExecutionChangedTransition =
@@ -113,12 +114,12 @@ export type RuntimeTransition =
   | MapEndedTransition
   | MapExecutionChangedTransition;
 
-export interface RuntimeSequenceRange {
+interface RuntimeSequenceRange {
   readonly from: number;
   readonly to: number;
 }
 
-export type RuntimeAcceptedDisposition =
+type RuntimeAcceptedDisposition =
   | {
       readonly kind: 'accepted';
       readonly reason: 'baseline' | 'contiguous' | 'gap-resync' | 'stale-recovery';
@@ -127,7 +128,7 @@ export type RuntimeAcceptedDisposition =
   | { readonly kind: 'accepted'; readonly reason: 'source-generation-advanced' }
   | { readonly kind: 'accepted'; readonly reason: 'map-execution-reset' };
 
-export type RuntimeIgnoredReason =
+type RuntimeIgnoredReason =
   | 'duplicate'
   | 'out-of-order'
   | 'non-monotonic-time'
@@ -136,7 +137,7 @@ export type RuntimeIgnoredReason =
   | 'invalid-generation-advance'
   | 'map-not-established';
 
-export interface RuntimeIgnoredDisposition {
+interface RuntimeIgnoredDisposition {
   readonly kind: 'ignored';
   readonly reason: RuntimeIgnoredReason;
 }

@@ -930,9 +930,9 @@ id/hash 提升为新的 replay assertion。
 - `position / forward` 位于每个 `allplayers` player object 内；
 - cfg `allgrenades` 对应 payload root `grenades`；
 - `phase_countdowns.phase` 的真实 source values 包括 `warmup / freezetime / live / bomb /
-  defuse / over / paused / timeout_ct / timeout_t`；
+defuse / over / paused / timeout_ct / timeout_t`；
 - root `bomb.state` 的真实 source values 包括 `carried / dropped / planting / planted /
-  defusing / defused / exploded`；
+defusing / defused / exploded`；
 - root `bomb`、`round.bomb`、`phase_countdowns` 是不同 source concept，不应合并成一个原始字段；
 - `round.bomb` 与 `round.win_team` 在 round reset 后可以从 current source 中消失；
 - team display name 在 halftime 与 overtime side switch 中保持 identity continuity，CT/T
@@ -1122,8 +1122,11 @@ continuity spike 与验证结论：
 - Program source generation 只接受 Companion lifecycle coordinator 显式发出的连续 `+1` control。generation advance 保留旧 `lastAccepted` cursor 以继续校验 producer 范围内的 ingress sequence，但立即清空 `programTelemetry`；旧 generation frame 与未经 control 的 ahead frame 都 fail closed。
 - same-map restart/restore/correction 只通过 `reset-map-execution` 显式表示。有效 reset 将 `mapEpoch` 加一、保留 map name、保留 Program generation 与 receive cursor，并**清空旧 `programTelemetry`**；下一份 accepted telemetry 才能成为新的 map execution baseline，不能把旧 execution snapshot 临时挂在新 epoch 下。reset 不改变 ingress sequence。
 - 第一份带有 present 且非空 `map.name` 的 accepted observation 只建立 `mapEpoch=1`，不产生历史 `map_started`；后续可靠的 map-name change 才自动推进 epoch 并产生唯一 `map_execution_changed`。gameover 只产生 transition，不推进 epoch。
-- freshness 由当前 generation 的 accepted snapshot 与 monotonic receive time 派生；没有当前 baseline（包括 generation advance 或 map reset 之后）为 `awaiting`，超过调用方注入的 `staleAfterMs` 才为 `stale`。#13 不冻结 production timeout 数值，也不保存 timer/stateful `isStale`。
+- reset 产生的 `map_execution_changed` 保留输入的 `resetReason`（`same-map-restart`、`restore` 或 `operator-correction`），不丢失已经由 control 明确提供的 provenance。
+- freshness 由当前 generation 的 accepted snapshot 与 monotonic receive time 派生；没有当前 baseline（包括 generation advance 或 map reset 之后）为 `awaiting`，超过调用方注入的 `staleAfterMs` 才为 `stale`；selector clock 早于 receive cursor 时直接 fail-fast。#13 不冻结 production timeout 数值，也不保存 timer/stateful `isStale`。
 - V1 transition 只包含 `round_started`、`round_ended`、`map_ended` 与 `map_execution_changed`。duplicate、out-of-order、gap、stale-recovery、generation boundary 与 reset 不跨不确定区间推导旧边沿；gap/stale recovery 仍接受最新 current snapshot。
+- round/map-scoped transition 只有在前后 state 属于同一个已建立的 `mapEpoch > 0` 时才有资格产生；epoch `0` 的 round evidence 只更新 current snapshot，不产生 transition。
+- Runtime consumer 通过 `@rivalhub-broadcast/core/runtime` 使用收口后的 API；package root 不重复 re-export runtime implementation shape。
 
 Core unit tests 与 `packages/testkit` 的 production adapter replay tests 覆盖上述 sequence、generation、map、stale 与 real semantic fixture 边界；#15 仍负责真实 Windows + CS2 的 map-change/disconnect/client-restart qualification。
 

@@ -1,4 +1,4 @@
-import type { RuntimeContinuityPolicy, RuntimeInput, RuntimeTime } from '../src/index.js';
+import type { RuntimeContinuityPolicy, RuntimeInput, RuntimeTime } from '../src/runtime/index.js';
 import type { MapPhase, SourceSide, TelemetryObservation } from '../src/telemetry/index.js';
 
 export const TEST_POLICY: RuntimeContinuityPolicy = { staleAfterMs: 100 };

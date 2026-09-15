@@ -5,7 +5,7 @@ import {
   getProgramSourceFreshness,
   reduceRuntime,
   type RuntimeState,
-} from '../src/index.js';
+} from '../src/runtime/index.js';
 import { observation, telemetryInput, TEST_AT, TEST_POLICY } from './helpers.js';
 
 function reduceTelemetry(
@@ -61,6 +61,19 @@ describe('RuntimeState reducer', () => {
     });
   });
 
+  it('does not mutate the previous state or input on an accepted reduction', () => {
+    const state = createInitialRuntimeState('producer-1');
+    const input = telemetryInput(0, observation(1, 0, { roundPhase: 'freezetime' }));
+    const stateBefore = structuredClone(state);
+    const inputBefore = structuredClone(input);
+
+    const result = reduceRuntime(state, input, TEST_POLICY);
+
+    expect(state).toEqual(stateBefore);
+    expect(input).toEqual(inputBefore);
+    expect(result.state).not.toBe(state);
+  });
+
   it('replaces omitted source blocks instead of retaining the previous frame', () => {
     let state = createInitialRuntimeState('producer-1');
     const first = observation(1, 0, { roundPhase: 'live' });
@@ -86,6 +99,7 @@ describe('RuntimeState reducer', () => {
 
       expect(result.disposition).toEqual({ kind: 'ignored', reason });
       expect(result.state).toBe(before);
+      expect(result.state.runtimeSeq).toBe(before.runtimeSeq);
       expect(result.transitions).toEqual([]);
     },
   );
@@ -166,6 +180,33 @@ describe('RuntimeState reducer', () => {
     });
   });
 
+  it('starts a completely fresh runtime when the producer instance restarts', () => {
+    let previous = createInitialRuntimeState('producer-1', {
+      kind: 'bound',
+      liveSessionId: 'live-1',
+    });
+    previous = reduceTelemetry(previous, 42, 100, { roundPhase: 'live' }).state;
+
+    const restarted = createInitialRuntimeState('producer-2', {
+      kind: 'bound',
+      liveSessionId: 'live-1',
+    });
+
+    expect(restarted).toEqual({
+      producerInstanceId: 'producer-2',
+      liveSession: { kind: 'bound', liveSessionId: 'live-1' },
+      runtimeSeq: 0,
+      programSource: { kind: 'cs2-gsi', generation: 0 },
+      map: { epoch: 0 },
+    });
+    expect(restarted).not.toEqual(previous);
+
+    const first = reduceTelemetry(restarted, 42, 0, { roundPhase: 'freezetime' });
+    expect(first.disposition).toEqual({ kind: 'accepted', reason: 'baseline' });
+    expect(first.state.producerInstanceId).toBe('producer-2');
+    expect(first.state.map).toEqual({ epoch: 1, name: 'de_mirage' });
+  });
+
   it('does not reset the global receive sequence when the source generation advances', () => {
     let state = createInitialRuntimeState('producer-1');
     state = reduceTelemetry(state, 10, 0).state;
@@ -194,6 +235,28 @@ describe('RuntimeState reducer', () => {
 
     expect(result.disposition).toEqual({ kind: 'ignored', reason: 'map-not-established' });
     expect(result.state).toBe(initial);
+  });
+
+  it('rejects non-finite monotonic times on explicit controls', () => {
+    const invalidAt = { ...TEST_AT, monotonicMs: Number.NaN };
+    const initial = createInitialRuntimeState('producer-1');
+
+    expect(() =>
+      reduceRuntime(
+        initial,
+        { kind: 'advance-program-source-generation', nextGeneration: 1, at: invalidAt },
+        TEST_POLICY,
+      ),
+    ).toThrow('RuntimeTime.monotonicMs must be a finite number');
+
+    const established = reduceTelemetry(initial, 1, 0).state;
+    expect(() =>
+      reduceRuntime(
+        established,
+        { kind: 'reset-map-execution', reason: 'restore', at: invalidAt },
+        TEST_POLICY,
+      ),
+    ).toThrow('RuntimeTime.monotonicMs must be a finite number');
   });
 
   it('valid reset clears programTelemetry and makes the next frame a new execution baseline', () => {
@@ -230,6 +293,7 @@ describe('RuntimeState reducer', () => {
         previousMapName: 'de_mirage',
         mapName: 'de_mirage',
         reason: 'explicit-reset',
+        resetReason: 'same-map-restart',
         runtimeSeq: 3,
       }),
     ]);

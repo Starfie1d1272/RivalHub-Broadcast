@@ -19,6 +19,11 @@ export function getProgramSourceFreshness(
   }
 
   const cursor = state.programSource.lastAccepted;
+  if (cursor !== undefined && nowMonotonicMs < cursor.receivedMonotonicMs) {
+    throw new RangeError(
+      'nowMonotonicMs must not precede the program source receive monotonic time',
+    );
+  }
   if (
     state.programTelemetry === undefined ||
     cursor === undefined ||

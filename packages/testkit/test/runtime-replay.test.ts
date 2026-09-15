@@ -9,7 +9,7 @@ import {
   type RuntimeDisposition,
   type RuntimeState,
   type RuntimeTransition,
-} from '@rivalhub-broadcast/core';
+} from '@rivalhub-broadcast/core/runtime';
 import { describe, expect, it } from 'vitest';
 
 import { verifyCapture } from '../src/capture/reader.js';
@@ -28,6 +28,7 @@ interface RuntimeReplayResult {
 async function replayRuntime(
   captureDir: string,
   faultPlan?: ReplayFaultPlanV1,
+  policy: RuntimeContinuityPolicy = REPLAY_POLICY,
 ): Promise<RuntimeReplayResult> {
   const capture = await verifyCapture(captureDir);
   let state = createInitialRuntimeState('replay-producer');
@@ -39,7 +40,7 @@ async function replayRuntime(
     mode: { kind: 'step' },
     ...(faultPlan === undefined ? {} : { faultPlan }),
   })) {
-    const result = reduceReplayEvent(state, event, sourceGeneration, REPLAY_POLICY);
+    const result = reduceReplayEvent(state, event, sourceGeneration, policy);
     state = result.state;
     dispositions.push(result.disposition);
     transitions.push(...result.transitions);
@@ -130,12 +131,43 @@ describe('Core RuntimeState through production adapter replay', () => {
     expect(replay.transitions.filter(({ kind }) => kind === 'map_execution_changed')).toEqual([]);
   });
 
+  it('replays the real overtime side-switch fixture without a map transition', async () => {
+    const replay = await replayRuntime(
+      resolve(process.cwd(), 'fixtures/gsi/semantic/match/overtime-side-switch'),
+    );
+
+    expect(replay.state.map).toEqual({ epoch: 1, name: 'de_ancient' });
+    expect(replay.transitions.filter(({ kind }) => kind === 'map_execution_changed')).toEqual([]);
+  });
+
   it('replays the same semantic capture deterministically', async () => {
     const capturePath = resolve(process.cwd(), 'fixtures/gsi/semantic/match/gameover');
     const first = await replayRuntime(capturePath);
     const second = await replayRuntime(capturePath);
 
     expect(second).toEqual(first);
+  });
+
+  it('replays the same inputs, replay clock, and explicit controls deterministically', async () => {
+    const root = await temporaryDirectory();
+    try {
+      await writeCapture(root, [
+        testFrame(1, 1_000, runtimePayload('live', 'freezetime')),
+        testFrame(2, 2_000, runtimePayload('live', 'live')),
+        testFrame(3, 3_000, runtimePayload('live', 'over')),
+      ]);
+      const faultPlan = {
+        timeGap: [{ afterCaptureIndex: 0, gapUs: 101_000 }],
+        sourceGenerationBoundary: [{ beforeCaptureIndex: 2 }],
+      } as const;
+
+      const first = await replayRuntime(root, faultPlan);
+      const second = await replayRuntime(root, faultPlan);
+
+      expect(second).toEqual(first);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it('uses the replay source-generation boundary as an explicit Core control', async () => {
@@ -186,6 +218,29 @@ describe('Core RuntimeState through production adapter replay', () => {
         },
       ]);
       expect(replay.state.programTelemetry?.receive.sequence).toBe(3);
+      expect(replay.transitions).toEqual([]);
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('routes a replay time gap beyond staleAfterMs through stale recovery', async () => {
+    const root = await temporaryDirectory();
+    try {
+      await writeCapture(root, [
+        testFrame(1, 1_000, runtimePayload('live', 'freezetime')),
+        testFrame(2, 2_000, runtimePayload('live', 'live')),
+      ]);
+      const replay = await replayRuntime(
+        root,
+        { timeGap: [{ afterCaptureIndex: 0, gapUs: 101_000 }] },
+        { staleAfterMs: 100 },
+      );
+
+      expect(replay.dispositions).toEqual([
+        { kind: 'accepted', reason: 'baseline' },
+        { kind: 'accepted', reason: 'stale-recovery' },
+      ]);
       expect(replay.transitions).toEqual([]);
     } finally {
       await rm(root, { recursive: true, force: true });
