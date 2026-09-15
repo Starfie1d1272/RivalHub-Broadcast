@@ -179,7 +179,7 @@ jobs:
             & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1 -WaitForStale -TimeoutSeconds 35
             if ($LASTEXITCODE -ne 0) { throw 'check.ps1 stale polling failed' }
             $controlHeaders = @{ 'x-qualification-token' = [string]$run.controlToken }
-            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/qualification/next-map-execution' -Headers $controlHeaders | Out-Null
+            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/qualification/next-map-execution' -Headers $controlHeaders -ContentType 'application/json' -Body '{}' | Out-Null
             & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 cs2-reopened
             $payload = @{ auth = @{ token = [string]$install.gsiToken }; map = @{ name = 'de_nuke'; phase = 'live' }; round = @{ phase = 'freezetime' } } | ConvertTo-Json -Depth 10 -Compress
             Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/gsi' -Headers $headers -Body $payload | Out-Null

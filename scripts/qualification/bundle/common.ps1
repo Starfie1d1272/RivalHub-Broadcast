@@ -62,6 +62,9 @@ function Invoke-QualificationApi {
     if ($null -ne $Body) {
         $request.ContentType = 'application/json'
         $request.Body = ($Body | ConvertTo-Json -Depth 10 -Compress)
+    } elseif ($Method -eq 'POST') {
+        $request.ContentType = 'application/json'
+        $request.Body = '{}'
     }
     return Invoke-RestMethod @request
 }
