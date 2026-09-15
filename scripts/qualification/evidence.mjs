@@ -1,31 +1,40 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { createReadStream } from 'node:fs';
+import { createReadStream, readFileSync } from 'node:fs';
 import { access, readdir, readFile, writeFile } from 'node:fs/promises';
-import { basename, isAbsolute, join, relative, resolve } from 'node:path';
+import { basename, dirname, isAbsolute, join, relative, resolve } from 'node:path';
 import { TextDecoder } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
-export const QUALIFICATION_SCHEMA_VERSION = 1;
+const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
+
+function loadQualificationContract() {
+  const candidates = [
+    join(MODULE_DIR, 'qualification-contract.json'),
+    resolve(MODULE_DIR, '../../apps/companion/src/qualification/contract.json'),
+  ];
+  for (const path of candidates) {
+    try {
+      return JSON.parse(readFileSync(path, 'utf8'));
+    } catch {
+      // Try the next repository or bundle location.
+    }
+  }
+  throw new Error('qualification contract is missing');
+}
+
+const QUALIFICATION_CONTRACT = loadQualificationContract();
+
+export const QUALIFICATION_SCHEMA_VERSION = QUALIFICATION_CONTRACT.schemaVersion;
 export const QUALIFICATION_REPOSITORY = 'Starfie1d1272/RivalHub-Broadcast';
 
-export const QUALIFICATION_MARKER_KINDS = new Set([
-  'demo-a-live',
-  'demo-a-stopped',
-  'cs2-closed',
-  'runtime-stale',
-  'next-execution',
-  'cs2-reopened',
-  'demo-b-live',
-]);
-
-const CHECK_KEYS = [
-  'productionChain',
-  'realSilenceToStale',
-  'explicitNextExecution',
-  'demoBRecovery',
-  'captureIntegrity',
-];
+export const QUALIFICATION_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.markerKinds);
+const QUALIFICATION_LIVE_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.liveMarkerKinds);
+const QUALIFICATION_FRESHNESS_VALUES = new Set(QUALIFICATION_CONTRACT.freshnessValues);
+const QUALIFICATION_RESULT_VALUES = new Set(QUALIFICATION_CONTRACT.resultValues);
+const QUALIFICATION_MARKER_PHASES = new Set(QUALIFICATION_CONTRACT.markerPhases);
+const QUALIFICATION_RESET_DISPOSITIONS = new Set(QUALIFICATION_CONTRACT.resetDispositionValues);
+const CHECK_KEYS = QUALIFICATION_CONTRACT.checkKeys;
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const STEAM_LIKE_ID_PATTERN = /\b\d{17}\b/;
 const SECRET_PATTERN = /(?:token|password|secret|authorization|bearer)/i;
@@ -213,7 +222,18 @@ async function* streamLines(path, hash) {
   }
 }
 
-export async function verifyCaptureDirectory(captureDir) {
+function observationKey(observation) {
+  return `${observation.sequence}\0${observation.receivedAt}`;
+}
+
+function liveObservationReferences(markers) {
+  return markers
+    .filter((marker) => QUALIFICATION_LIVE_MARKER_KINDS.has(marker.kind))
+    .map((marker) => marker.observation)
+    .filter((observation) => observation !== null);
+}
+
+export async function verifyCaptureDirectory(captureDir, observationReferences = []) {
   if (basename(captureDir).endsWith('.partial')) {
     throw new QualificationEvidenceError('UNFINALIZED_CAPTURE', `${captureDir} is unpublished`);
   }
@@ -231,6 +251,10 @@ export async function verifyCaptureDirectory(captureDir) {
   let count = 0;
   let previousSequence;
   let previousElapsedUs;
+  const referenceKeys = new Set(
+    observationReferences.map((observation) => observationKey(observation)),
+  );
+  const matchedObservationKeys = new Set();
   for await (const record of streamLines(framesPath, hash)) {
     const frame = parseCaptureFrame(record.line, record.lineNumber, captureDir);
     if (previousSequence !== undefined && frame.sequence <= previousSequence) {
@@ -247,6 +271,8 @@ export async function verifyCaptureDirectory(captureDir) {
     }
     previousSequence = frame.sequence;
     previousElapsedUs = frame.elapsedUs;
+    const key = `${frame.sequence}\0${frame.receivedAt}`;
+    if (referenceKeys.has(key)) matchedObservationKeys.add(key);
     count += 1;
   }
   if (count !== manifest.frameCount) {
@@ -267,6 +293,7 @@ export async function verifyCaptureDirectory(captureDir) {
     manifest,
     computedFramesSha256,
     frameCount: count,
+    matchedObservationKeys: [...matchedObservationKeys].sort(),
   };
 }
 
@@ -294,10 +321,10 @@ function validateArtifact(artifact) {
   if (artifact.platform !== 'win32-x64') {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.platform must be win32-x64');
   }
-  if (typeof artifact.nodeVersion !== 'string' || !/^v24\.\d+\.\d+$/.test(artifact.nodeVersion)) {
+  if (artifact.nodeVersion !== QUALIFICATION_CONTRACT.nodeRuntimeVersion) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'artifact.nodeVersion must be an exact Node 24 version',
+      `artifact.nodeVersion must be the pinned ${QUALIFICATION_CONTRACT.nodeRuntimeVersion}`,
     );
   }
   if (artifact.qualificationSchemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
@@ -310,6 +337,53 @@ function validateArtifact(artifact) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.artifactSha256 is invalid');
   }
   return artifact;
+}
+
+function validateObservation(observation, marker, lineNumber) {
+  if (!isRecord(observation)) {
+    throw new QualificationEvidenceError(
+      'INVALID_SCENARIO',
+      `scenario line ${lineNumber} has an invalid accepted observation`,
+    );
+  }
+  if (
+    !isSafeNonNegativeInteger(observation.sequence) ||
+    !Number.isFinite(observation.receivedMonotonicMs)
+  ) {
+    throw new QualificationEvidenceError(
+      'INVALID_SCENARIO',
+      `scenario line ${lineNumber} has invalid observation timing`,
+    );
+  }
+  assertUtc(observation.receivedAt, `scenario line ${lineNumber}.observation.receivedAt`);
+  requireString(
+    observation.producerInstanceId,
+    `scenario line ${lineNumber}.observation.producerInstanceId`,
+  );
+  if (
+    !isSafeNonNegativeInteger(observation.mapEpoch) ||
+    !isSafeNonNegativeInteger(observation.runtimeSeq) ||
+    !isSafeNonNegativeInteger(observation.sourceGeneration) ||
+    !QUALIFICATION_FRESHNESS_VALUES.has(observation.freshness)
+  ) {
+    throw new QualificationEvidenceError(
+      'INVALID_SCENARIO',
+      `scenario line ${lineNumber} has invalid observation counters`,
+    );
+  }
+  if (
+    observation.receivedMonotonicMs > marker.monotonicMs ||
+    observation.producerInstanceId !== marker.producerInstanceId ||
+    observation.sourceGeneration !== marker.sourceGeneration ||
+    observation.mapEpoch !== marker.mapEpoch ||
+    observation.runtimeSeq !== marker.runtimeSeq ||
+    observation.freshness !== marker.freshness
+  ) {
+    throw new QualificationEvidenceError(
+      'INVALID_SCENARIO',
+      `scenario line ${lineNumber} observation does not match its marker`,
+    );
+  }
 }
 
 function validateMarker(marker, runId, lineNumber) {
@@ -325,12 +399,13 @@ function validateMarker(marker, runId, lineNumber) {
       `scenario line ${lineNumber} has an invalid run or marker`,
     );
   }
-  if (!Number.isFinite(marker.monotonicMs) || typeof marker.producerInstanceId !== 'string') {
+  if (!Number.isFinite(marker.monotonicMs)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
       `scenario line ${lineNumber} has invalid runtime evidence`,
     );
   }
+  requireString(marker.producerInstanceId, `scenario line ${lineNumber}.producerInstanceId`);
   assertUtc(marker.wallClockAt, `scenario line ${lineNumber}.wallClockAt`);
   if (
     !isSafeNonNegativeInteger(marker.mapEpoch) ||
@@ -342,13 +417,13 @@ function validateMarker(marker, runId, lineNumber) {
       `scenario line ${lineNumber} has invalid counters`,
     );
   }
-  if (!['awaiting', 'fresh', 'stale'].includes(marker.freshness)) {
+  if (!QUALIFICATION_FRESHNESS_VALUES.has(marker.freshness)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
       `scenario line ${lineNumber} has invalid freshness`,
     );
   }
-  if (marker.phase !== undefined && marker.phase !== 'before' && marker.phase !== 'after') {
+  if (marker.phase !== undefined && !QUALIFICATION_MARKER_PHASES.has(marker.phase)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
       `scenario line ${lineNumber} has invalid phase`,
@@ -357,9 +432,9 @@ function validateMarker(marker, runId, lineNumber) {
   if (marker.reset !== undefined) {
     if (
       !isRecord(marker.reset) ||
-      !['accepted', 'ignored'].includes(marker.reset.disposition) ||
-      marker.reset.reason !== 'map-execution-reset' ||
-      marker.reset.resetReason !== 'operator-correction' ||
+      !QUALIFICATION_RESET_DISPOSITIONS.has(marker.reset.disposition) ||
+      marker.reset.reason !== QUALIFICATION_CONTRACT.resetKind ||
+      marker.reset.resetReason !== QUALIFICATION_CONTRACT.resetReason ||
       !isSafeNonNegativeInteger(marker.reset.previousMapEpoch) ||
       !isSafeNonNegativeInteger(marker.reset.mapEpoch)
     ) {
@@ -368,6 +443,22 @@ function validateMarker(marker, runId, lineNumber) {
         `scenario line ${lineNumber} has invalid reset evidence`,
       );
     }
+  }
+  if (!Object.prototype.hasOwnProperty.call(marker, 'observation')) {
+    throw new QualificationEvidenceError(
+      'INVALID_SCENARIO',
+      `scenario line ${lineNumber} is missing accepted observation evidence`,
+    );
+  }
+  if (marker.observation === null) {
+    if (QUALIFICATION_LIVE_MARKER_KINDS.has(marker.kind)) {
+      throw new QualificationEvidenceError(
+        'INVALID_SCENARIO',
+        `scenario line ${lineNumber} live marker has no accepted observation`,
+      );
+    }
+  } else {
+    validateObservation(marker.observation, marker, lineNumber);
   }
   return marker;
 }
@@ -463,8 +554,44 @@ function finalFresh(finalRuntime) {
   return isRecord(finalRuntime) && finalRuntime.freshness === 'fresh';
 }
 
+function markerObservationWasCaptured(marker, captureResults) {
+  if (marker === undefined || marker.observation === null) return false;
+  const key = observationKey(marker.observation);
+  return captureResults.some((capture) => capture.matchedObservationKeys?.includes(key));
+}
+
+function liveMarkerCausalityPassed(markers, kind, captureResults, execution) {
+  const markerIndexValue = markerIndex(markers, kind);
+  if (markerIndexValue === -1) return false;
+  const marker = markers[markerIndexValue];
+  if (!markerObservationWasCaptured(marker, captureResults)) return false;
+  const observation = marker.observation;
+  if (observation === null) return false;
+
+  const resetBeforeIndex = markers.findIndex(
+    (candidate) => candidate.kind === 'next-execution' && candidate.phase === 'before',
+  );
+  const resetAfterIndex = markers.findIndex(
+    (candidate) => candidate.kind === 'next-execution' && candidate.phase === 'after',
+  );
+  if (execution === 'first') {
+    const resetBefore = resetBeforeIndex === -1 ? undefined : markers[resetBeforeIndex];
+    return (
+      resetBefore === undefined ||
+      (markerIndexValue < resetBeforeIndex &&
+        observation.receivedMonotonicMs < resetBefore.monotonicMs)
+    );
+  }
+  const resetAfter = resetAfterIndex === -1 ? undefined : markers[resetAfterIndex];
+  return (
+    resetAfter !== undefined &&
+    markerIndexValue > resetAfterIndex &&
+    observation.receivedMonotonicMs > resetAfter.monotonicMs &&
+    marker.mapEpoch === resetAfter.mapEpoch
+  );
+}
+
 function checksFrom({ markers, finalRuntime, captureResults, captureErrors, artifact }) {
-  const hasAcceptedFrame = captureResults.some((capture) => capture.frameCount > 0);
   const resetPassed = markerResetPassed(markers);
   const stopPassed = hasOrderedMarkers(markers, ['demo-a-stopped', 'cs2-closed', 'runtime-stale']);
   const reopenedBeforeB = hasOrderedMarkers(markers, [
@@ -480,12 +607,12 @@ function checksFrom({ markers, finalRuntime, captureResults, captureErrors, arti
   const checks = {
     productionChain: {
       label: '第一场数据进入生产链路',
-      status:
-        markerIndex(markers, 'demo-a-live') !== -1 && hasAcceptedFrame ? 'PASS' : 'INCONCLUSIVE',
-      reason:
-        markerIndex(markers, 'demo-a-live') !== -1 && hasAcceptedFrame
-          ? 'Demo A marker 与 accepted Capture V1 frame 均存在。'
-          : '缺少 Demo A marker 或 accepted frame。',
+      status: liveMarkerCausalityPassed(markers, 'demo-a-live', captureResults, 'first')
+        ? 'PASS'
+        : 'INCONCLUSIVE',
+      reason: liveMarkerCausalityPassed(markers, 'demo-a-live', captureResults, 'first')
+        ? 'Demo A marker 已绑定 reset 前同一 execution 的 accepted Capture V1 frame。'
+        : '缺少与 Demo A marker 同一 execution、同一 sequence/timestamp 的 Capture V1 frame。',
     },
     realSilenceToStale: {
       label: '停止输入后进入 stale',
@@ -503,11 +630,20 @@ function checksFrom({ markers, finalRuntime, captureResults, captureErrors, arti
     },
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
-      status: reopenedBeforeB && resetPassed && finalFresh(finalRuntime) ? 'PASS' : 'INCONCLUSIVE',
+      status:
+        reopenedBeforeB &&
+        resetPassed &&
+        liveMarkerCausalityPassed(markers, 'demo-b-live', captureResults, 'second') &&
+        finalFresh(finalRuntime)
+          ? 'PASS'
+          : 'INCONCLUSIVE',
       reason:
-        reopenedBeforeB && resetPassed && finalFresh(finalRuntime)
-          ? 'Demo B 在新 execution 中恢复 fresh。'
-          : '等待 CS2 重开、Demo B marker 与 fresh final runtime。',
+        reopenedBeforeB &&
+        resetPassed &&
+        liveMarkerCausalityPassed(markers, 'demo-b-live', captureResults, 'second') &&
+        finalFresh(finalRuntime)
+          ? 'Demo B marker 已绑定 reset 后新 execution 的 accepted frame，并恢复 fresh。'
+          : '等待 CS2 重开、reset 后同一 execution 的 Demo B frame 与 fresh final runtime。',
     },
     captureIntegrity: {
       label: 'Capture recorder 可安全导出',
@@ -638,7 +774,7 @@ export async function readQualificationEvidence(runDir) {
       'qualification.artifact.artifactSha256 is invalid',
     );
   }
-  if (!['PASS', 'FAIL', 'INCONCLUSIVE'].includes(qualification.result)) {
+  if (!QUALIFICATION_RESULT_VALUES.has(qualification.result)) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.result is invalid');
   }
   if (
@@ -653,7 +789,7 @@ export async function readQualificationEvidence(runDir) {
   for (const key of CHECK_KEYS) {
     const check = qualification.checks[key];
     const status = typeof check === 'string' ? check : check.status;
-    if (!['PASS', 'FAIL', 'INCONCLUSIVE'].includes(status)) {
+    if (!QUALIFICATION_RESULT_VALUES.has(status)) {
       throw new QualificationEvidenceError(
         'INVALID_EVIDENCE',
         `qualification check ${key} is invalid`,
@@ -696,6 +832,7 @@ export async function readQualificationEvidence(runDir) {
   const recorderEntries = await immediateDirectories(recorderDir);
   const captureResults = [];
   const captureErrors = [];
+  const observationReferences = liveObservationReferences(scenario.markers);
   for (const captureDir of recorderEntries) {
     if (basename(captureDir).endsWith('.partial')) {
       captureErrors.push(
@@ -704,7 +841,7 @@ export async function readQualificationEvidence(runDir) {
       continue;
     }
     try {
-      captureResults.push(await verifyCaptureDirectory(captureDir));
+      captureResults.push(await verifyCaptureDirectory(captureDir, observationReferences));
     } catch (error) {
       captureErrors.push(error);
     }
@@ -762,6 +899,7 @@ export async function writeQualificationEvidence({
   const recorderEntries = await immediateDirectories(recorderDir);
   const captureResults = [];
   const captureErrors = [];
+  const observationReferences = liveObservationReferences(scenario.markers);
   for (const captureDir of recorderEntries) {
     if (basename(captureDir).endsWith('.partial')) {
       captureErrors.push(
@@ -770,7 +908,7 @@ export async function writeQualificationEvidence({
       continue;
     }
     try {
-      captureResults.push(await verifyCaptureDirectory(captureDir));
+      captureResults.push(await verifyCaptureDirectory(captureDir, observationReferences));
     } catch (error) {
       captureErrors.push(error);
     }

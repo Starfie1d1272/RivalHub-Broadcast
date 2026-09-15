@@ -21,13 +21,17 @@ function artifact() {
     gitSha: '293f97a000000000000000000000000000000000',
     buildTimestamp: BASE_TIME,
     platform: 'win32-x64',
-    nodeVersion: 'v24.8.0',
+    nodeVersion: 'v24.21.0',
     qualificationSchemaVersion: 1,
     artifactSha256: ARTIFACT_DIGEST,
   };
 }
 
 function marker(runId, kind, monotonicMs, options = {}) {
+  const mapEpoch = options.mapEpoch ?? 1;
+  const runtimeSeq = options.runtimeSeq ?? 1;
+  const freshness = options.freshness ?? 'fresh';
+  const receivedMonotonicMs = options.receivedMonotonicMs ?? monotonicMs;
   return {
     schemaVersion: 1,
     runId,
@@ -35,16 +39,36 @@ function marker(runId, kind, monotonicMs, options = {}) {
     monotonicMs,
     wallClockAt: new Date(Date.parse(BASE_TIME) + monotonicMs).toISOString(),
     producerInstanceId: 'qualification-producer',
-    mapEpoch: options.mapEpoch ?? 1,
-    runtimeSeq: options.runtimeSeq ?? 1,
+    mapEpoch,
+    runtimeSeq,
     sourceGeneration: 0,
-    freshness: options.freshness ?? 'fresh',
+    freshness,
+    observation:
+      options.observation === null
+        ? null
+        : {
+            sequence: options.sequence ?? 0,
+            receivedAt:
+              options.receivedAt ??
+              new Date(Date.parse(BASE_TIME) + receivedMonotonicMs).toISOString(),
+            receivedMonotonicMs,
+            producerInstanceId: 'qualification-producer',
+            sourceGeneration: 0,
+            mapEpoch,
+            runtimeSeq,
+            freshness,
+          },
     ...(options.phase === undefined ? {} : { phase: options.phase }),
     ...(options.reset === undefined ? {} : { reset: options.reset }),
   };
 }
 
-async function createEvidenceRun({ complete = true, withCapture = true } = {}) {
+async function createEvidenceRun({
+  complete = true,
+  withCapture = true,
+  captureFirstObservation = true,
+  captureSecondObservation = true,
+} = {}) {
   const runDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-evidence-'));
   const runId = 'qualification-test-run';
   await mkdir(join(runDir, 'debug'), { recursive: true });
@@ -64,7 +88,11 @@ async function createEvidenceRun({ complete = true, withCapture = true } = {}) {
   await writeFile(join(runDir, 'debug', 'final-runtime.json'), '{"freshness":"fresh"}\n', 'utf8');
 
   const markers = [
-    marker(runId, 'demo-a-live', 100),
+    marker(runId, 'demo-a-live', 100, {
+      sequence: captureFirstObservation ? 0 : 99,
+      receivedAt: BASE_TIME,
+      receivedMonotonicMs: 100,
+    }),
     marker(runId, 'demo-a-stopped', 200),
     marker(runId, 'cs2-closed', 300),
     marker(runId, 'runtime-stale', 20_300, { freshness: 'stale' }),
@@ -83,7 +111,15 @@ async function createEvidenceRun({ complete = true, withCapture = true } = {}) {
       },
     }),
     marker(runId, 'cs2-reopened', 20_500, { freshness: 'stale', mapEpoch: 2, runtimeSeq: 2 }),
-    marker(runId, 'demo-b-live', 20_600, { mapEpoch: 2, runtimeSeq: 3 }),
+    marker(runId, 'demo-b-live', 20_600, {
+      sequence: captureSecondObservation ? 1 : 0,
+      receivedAt: captureSecondObservation
+        ? new Date(Date.parse(BASE_TIME) + 20_600).toISOString()
+        : BASE_TIME,
+      receivedMonotonicMs: captureSecondObservation ? 20_600 : 100,
+      mapEpoch: 2,
+      runtimeSeq: 3,
+    }),
   ];
   await writeFile(
     join(runDir, 'scenario.jsonl'),
@@ -92,13 +128,29 @@ async function createEvidenceRun({ complete = true, withCapture = true } = {}) {
   );
 
   if (withCapture) {
-    const frames = `${JSON.stringify({
-      version: 1,
-      sequence: 0,
-      elapsedUs: 0,
-      receivedAt: BASE_TIME,
-      payload: { map: { name: 'de_ancient', phase: 'live' } },
-    })}\n`;
+    const frames =
+      [
+        ...(captureFirstObservation
+          ? [
+              {
+                version: 1,
+                sequence: 0,
+                elapsedUs: 0,
+                receivedAt: BASE_TIME,
+                payload: { map: { name: 'de_ancient', phase: 'live' } },
+              },
+            ]
+          : []),
+        {
+          version: 1,
+          sequence: 1,
+          elapsedUs: 20_600_000,
+          receivedAt: new Date(Date.parse(BASE_TIME) + 20_600).toISOString(),
+          payload: { map: { name: 'de_ancient', phase: 'live' } },
+        },
+      ]
+        .map((frame) => JSON.stringify(frame))
+        .join('\n') + '\n';
     const captureDir = join(runDir, 'recorder', 'capture-1');
     await mkdir(captureDir, { recursive: true });
     await writeFile(join(captureDir, 'frames.jsonl'), frames, 'utf8');
@@ -113,7 +165,7 @@ async function createEvidenceRun({ complete = true, withCapture = true } = {}) {
         scenario: 'qualification-test',
         gsiConfig: { uri: 'http://127.0.0.1:3000/gsi' },
         complete,
-        frameCount: 1,
+        frameCount: captureFirstObservation ? 2 : 1,
         droppedFrames: 0,
         framesSha256: createHash('sha256').update(frames, 'utf8').digest('hex'),
       })}\n`,
@@ -146,6 +198,48 @@ describe('qualification evidence verifier', () => {
       expect(await readFile(join(runDir, 'hashes.txt'), 'utf8')).toBe(hashesBefore);
     } finally {
       await rm(runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not infer Demo A production evidence from a later Demo B frame', async () => {
+    const run = await createEvidenceRun({ captureFirstObservation: false });
+    try {
+      const written = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+        },
+      });
+      expect(written.checks.productionChain.status).toBe('INCONCLUSIVE');
+      expect(written.qualification.result).toBe('INCONCLUSIVE');
+      await expect(readQualificationEvidence(run.runDir)).resolves.toMatchObject({
+        checks: { productionChain: { status: 'INCONCLUSIVE' } },
+      });
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
+    }
+  });
+
+  it('does not infer Demo B recovery from a pre-reset observation', async () => {
+    const run = await createEvidenceRun({ captureSecondObservation: false });
+    try {
+      const written = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+        },
+      });
+      expect(written.checks.productionChain.status).toBe('PASS');
+      expect(written.checks.demoBRecovery.status).toBe('INCONCLUSIVE');
+      expect(written.qualification.result).toBe('INCONCLUSIVE');
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
     }
   });
 

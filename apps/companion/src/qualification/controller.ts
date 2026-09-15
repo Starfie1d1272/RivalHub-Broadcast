@@ -5,13 +5,19 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { MapExecutionResetReason, RuntimeTime } from '@rivalhub-broadcast/core/runtime';
 
 import type { DebugRuntimeResponse } from '../runtime/debug-state.js';
-import type { ProgramRuntime } from '../runtime/program-runtime.js';
+import type { ProgramRuntime, ProgramRuntimeSnapshot } from '../runtime/program-runtime.js';
 import type { RecorderHealth } from '../telemetry/capture-recorder.js';
 import {
+  QUALIFICATION_CHECK_KEYS,
+  QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
+  QUALIFICATION_RESET_KIND,
+  QUALIFICATION_RESET_REASON,
+  QUALIFICATION_SCHEMA_VERSION,
   type QualificationClock,
   type QualificationEvidenceStore,
   type QualificationFreshness,
+  type QualificationMarker,
   type QualificationMarkerKind,
   type QualificationResetEvidence,
 } from './evidence.js';
@@ -26,7 +32,13 @@ export interface QualificationControllerOptions {
   readonly programRuntime: ProgramRuntime;
   readonly recorder: { getHealth(): RecorderHealth };
   readonly onAcceptedMapReset?: () => void;
-  readonly onFinish?: () => void | Promise<void>;
+  readonly onFinish?: (input: QualificationFinishInput) => void | Promise<void>;
+}
+
+export interface QualificationFinishInput {
+  readonly debug: DebugRuntimeResponse;
+  readonly runtime: ProgramRuntimeSnapshot;
+  readonly recorderHealth: RecorderHealth;
 }
 
 interface QualificationCheck {
@@ -35,7 +47,7 @@ interface QualificationCheck {
   readonly reason: string;
 }
 
-const RESET_REASON = 'operator-correction' as const satisfies MapExecutionResetReason;
+const RESET_REASON = QUALIFICATION_RESET_REASON satisfies MapExecutionResetReason;
 
 const defaultClock: QualificationClock = {
   now: () => ({ monotonicMs: performance.now(), utc: new Date().toISOString() }),
@@ -46,9 +58,7 @@ function isRecord(value: unknown): value is Record<string, unknown> {
 }
 
 function isMarkerKind(value: unknown): value is QualificationMarkerKind {
-  return (
-    typeof value === 'string' && (QUALIFICATION_MARKER_KINDS as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.includes(value);
 }
 
 function hasMarker(
@@ -59,10 +69,51 @@ function hasMarker(
 }
 
 function markerIndex(
-  markers: readonly { readonly kind: QualificationMarkerKind }[],
+  markers: readonly QualificationMarker[],
   kind: QualificationMarkerKind,
 ): number {
   return markers.findIndex((marker) => marker.kind === kind);
+}
+
+function observationIsConsistent(marker: QualificationMarker | undefined): boolean {
+  if (marker === undefined || marker.observation === null || marker.freshness !== 'fresh')
+    return false;
+  const observation = marker.observation;
+  return (
+    observation.sequence >= 0 &&
+    observation.receivedMonotonicMs <= marker.monotonicMs &&
+    observation.producerInstanceId === marker.producerInstanceId &&
+    observation.sourceGeneration === marker.sourceGeneration &&
+    observation.mapEpoch === marker.mapEpoch &&
+    observation.runtimeSeq === marker.runtimeSeq &&
+    observation.freshness === marker.freshness
+  );
+}
+
+function liveMarkerIsInExecution(
+  marker: QualificationMarker | undefined,
+  resetBefore: QualificationMarker | undefined,
+  resetAfter: QualificationMarker | undefined,
+  execution: 'first' | 'second',
+): boolean {
+  if (!observationIsConsistent(marker)) return false;
+  if (marker === undefined) return false;
+  const observation = marker.observation;
+  if (observation === null) return false;
+  if (execution === 'first') {
+    return (
+      marker.mapEpoch > 0 &&
+      (resetBefore === undefined ||
+        (marker.monotonicMs < resetBefore.monotonicMs &&
+          observation.receivedMonotonicMs < resetBefore.monotonicMs))
+    );
+  }
+  return (
+    resetAfter !== undefined &&
+    marker.monotonicMs > resetAfter.monotonicMs &&
+    observation.receivedMonotonicMs > resetAfter.monotonicMs &&
+    marker.mapEpoch === resetAfter.mapEpoch
+  );
 }
 
 function freshnessFromDebug(response: DebugRuntimeResponse): QualificationFreshness {
@@ -92,6 +143,8 @@ function evaluateChecks(
   recorderHealth: RecorderHealth,
 ): Record<string, QualificationCheck> {
   const markers = snapshot.markers;
+  const demoALive = markers.find((marker) => marker.kind === 'demo-a-live');
+  const demoBLive = markers.find((marker) => marker.kind === 'demo-b-live');
   const resetBefore = markers.find(
     (marker) => marker.kind === 'next-execution' && marker.phase === 'before',
   );
@@ -108,6 +161,17 @@ function evaluateChecks(
     resetAfter.reset.previousMapEpoch === resetBefore.mapEpoch &&
     resetAfter.reset.mapEpoch === resetAfter.mapEpoch;
 
+  const productionChainPassed = liveMarkerIsInExecution(
+    demoALive,
+    resetBefore,
+    resetAfter,
+    'first',
+  );
+  const demoBRecoveryPassed =
+    liveMarkerIsInExecution(demoBLive, resetBefore, resetAfter, 'second') &&
+    response.raw.current !== null &&
+    response.freshness === 'fresh';
+
   const hasStoppedSequence =
     markerIndex(markers, 'demo-a-stopped') >= 0 &&
     markerIndex(markers, 'cs2-closed') > markerIndex(markers, 'demo-a-stopped') &&
@@ -115,14 +179,10 @@ function evaluateChecks(
   const checks: Record<string, QualificationCheck> = {
     productionChain: {
       label: '第一场数据进入生产链路',
-      status:
-        hasMarker(markers, 'demo-a-live') && response.raw.current !== null
-          ? 'PASS'
-          : 'INCONCLUSIVE',
-      reason:
-        hasMarker(markers, 'demo-a-live') && response.raw.current !== null
-          ? '已确认 Demo A 且收到 accepted raw frame。'
-          : '等待 Demo A marker 与 accepted raw frame。',
+      status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: productionChainPassed
+        ? 'Demo A marker 已绑定第一场 execution 内的 fresh accepted observation。'
+        : '等待第一场 execution 内与 Capture 可对应的 fresh accepted observation。',
     },
     realSilenceToStale: {
       label: '停止输入后进入 stale',
@@ -141,19 +201,13 @@ function evaluateChecks(
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
       status:
-        hasMarker(markers, 'cs2-reopened') &&
-        hasMarker(markers, 'demo-b-live') &&
-        response.freshness === 'fresh' &&
-        resetPassed
+        hasMarker(markers, 'cs2-reopened') && resetPassed && demoBRecoveryPassed
           ? 'PASS'
           : 'INCONCLUSIVE',
       reason:
-        hasMarker(markers, 'cs2-reopened') &&
-        hasMarker(markers, 'demo-b-live') &&
-        response.freshness === 'fresh' &&
-        resetPassed
-          ? 'Demo B 已在新 execution 中恢复 fresh。'
-          : '等待 CS2 重开、Demo B 数据与 fresh recovery。',
+        hasMarker(markers, 'cs2-reopened') && resetPassed && demoBRecoveryPassed
+          ? 'Demo B marker 已绑定 reset 后新 execution 的 fresh observation。'
+          : '等待 CS2 重开、reset 后的 fresh Demo B observation 与 recovery。',
     },
     captureIntegrity: {
       label: 'Capture recorder 可安全导出',
@@ -174,6 +228,13 @@ function evaluateChecks(
             : '等待 graceful shutdown 完成 recorder finalize。',
     },
   };
+  const checkKeys = Object.keys(checks);
+  if (
+    checkKeys.length !== QUALIFICATION_CHECK_KEYS.length ||
+    QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
+  ) {
+    throw new Error('qualification check implementation does not match its evidence contract');
+  }
   return checks;
 }
 
@@ -216,7 +277,7 @@ function boundedStatus(
         ? 'silent'
         : 'receiving';
   return {
-    schemaVersion: 1,
+    schemaVersion: QUALIFICATION_SCHEMA_VERSION,
     runId,
     state,
     gsi,
@@ -316,6 +377,15 @@ export function registerQualificationRoutes(
     try {
       const debug = getDebug();
       const runtime = options.programRuntime.getSnapshot();
+      if (
+        QUALIFICATION_LIVE_MARKER_KINDS.includes(kind) &&
+        (debug.freshness !== 'fresh' || runtime.current.programSource.lastAccepted === undefined)
+      ) {
+        return reply.code(409).send({
+          error: 'qualification_observation_required',
+          message: '请先等待页面显示正在接收比赛数据，再记录这一场。',
+        });
+      }
       await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug));
       return { ok: true, kind, message: markerMessage(kind) };
     } catch (error: unknown) {
@@ -358,7 +428,7 @@ export function registerQualificationRoutes(
     const after = options.programRuntime.getSnapshot();
     const reset: QualificationResetEvidence = {
       disposition: result.disposition.kind,
-      reason: 'map-execution-reset',
+      reason: QUALIFICATION_RESET_KIND,
       resetReason: RESET_REASON,
       previousMapEpoch: beforeEpoch,
       mapEpoch: after.current.map.epoch,
@@ -387,16 +457,23 @@ export function registerQualificationRoutes(
       return;
     }
     const status = await getStatus();
+    const finishDebug = getDebug();
+    const finishRuntime = options.programRuntime.getSnapshot();
+    const finishInput: QualificationFinishInput = {
+      debug: finishDebug,
+      runtime: finishRuntime,
+      recorderHealth: options.recorder.getHealth(),
+    };
     setImmediate(() => {
-      try {
-        void options.onFinish?.();
-      } catch {
+      void Promise.resolve(options.onFinish?.(finishInput)).catch(() => {
         // Shutdown is independently guarded by the process-level watchdog.
-      }
+      });
     });
     return reply.code(202).send({
       status: 'stopping',
       result: status.result,
+      runId: options.runId,
+      finalizationPath: '/qualification/finalization',
       message: 'qualification evidence is being finalized',
     });
   });
@@ -419,4 +496,5 @@ function markerMessage(kind: QualificationMarkerKind): string {
     case 'demo-b-live':
       return '第二场数据已记录';
   }
+  return '操作已记录';
 }

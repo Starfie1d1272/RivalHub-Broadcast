@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "maxMarkers": 128,
+  "nodeRuntimeVersion": "v24.21.0",
+  "markerKinds": [
+    "demo-a-live",
+    "demo-a-stopped",
+    "cs2-closed",
+    "runtime-stale",
+    "next-execution",
+    "cs2-reopened",
+    "demo-b-live"
+  ],
+  "liveMarkerKinds": ["demo-a-live", "demo-b-live"],
+  "markerPhases": ["before", "after"],
+  "freshnessValues": ["awaiting", "fresh", "stale"],
+  "resultValues": ["PASS", "FAIL", "INCONCLUSIVE"],
+  "checkKeys": [
+    "productionChain",
+    "realSilenceToStale",
+    "explicitNextExecution",
+    "demoBRecovery",
+    "captureIntegrity"
+  ],
+  "resetDispositionValues": ["accepted", "ignored"],
+  "resetKind": "map-execution-reset",
+  "resetReason": "operator-correction"
+}

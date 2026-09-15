@@ -9,6 +9,7 @@ import { createProgramRuntime, type ProgramRuntime } from './runtime/program-run
 import {
   registerQualificationRoutes,
   type QualificationControllerOptions,
+  type QualificationFinishInput,
 } from './qualification/controller.js';
 import {
   createQualificationEvidenceStore,
@@ -47,7 +48,7 @@ export interface CompanionAppOptions {
   readonly qualificationScenarioPath?: string;
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
-  readonly onQualificationFinish?: () => void | Promise<void>;
+  readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
 }
 
 export interface DeliveryHealthSource {

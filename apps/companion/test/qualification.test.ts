@@ -101,6 +101,43 @@ describe('qualification-only Companion surface', () => {
     ).toBe(400);
   });
 
+  it('hands the final runtime snapshot to the qualification launcher before shutdown', async () => {
+    let finishDebug: unknown;
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-finish-run',
+      onQualificationFinish: ({ debug }) => {
+        finishDebug = debug;
+      },
+    });
+
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/gsi',
+          payload: { auth: { token: GSI_TOKEN }, ...payload() },
+        })
+      ).statusCode,
+    ).toBe(204);
+    const response = await app.inject({
+      method: 'POST',
+      url: '/qualification/finish',
+      headers: { 'x-qualification-token': CONTROL_TOKEN },
+    });
+    expect(response.statusCode).toBe(202);
+    expect(response.json()).toMatchObject({
+      status: 'stopping',
+      finalizationPath: '/qualification/finalization',
+    });
+
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(finishDebug).toMatchObject({ freshness: 'fresh', raw: { current: { sequence: 0 } } });
+  });
+
   it('records the page stop boundary before freshness becomes stale', async () => {
     app = buildApp({
       gsiToken: GSI_TOKEN,

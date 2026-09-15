@@ -4,23 +4,38 @@ import { dirname } from 'node:path';
 import type { RuntimeTime } from '@rivalhub-broadcast/core/runtime';
 
 import type { ProgramRuntimeSnapshot } from '../runtime/program-runtime.js';
+import qualificationContractJson from './contract.json' with { type: 'json' };
 
-export const QUALIFICATION_SCHEMA_VERSION = 1 as const;
-export const QUALIFICATION_MAX_MARKERS = 128;
+type QualificationContract = {
+  readonly schemaVersion: 1;
+  readonly maxMarkers: 128;
+  readonly nodeRuntimeVersion: `v24.${number}.${number}`;
+  readonly markerKinds: readonly string[];
+  readonly liveMarkerKinds: readonly string[];
+  readonly markerPhases: readonly string[];
+  readonly freshnessValues: readonly string[];
+  readonly resultValues: readonly string[];
+  readonly checkKeys: readonly string[];
+  readonly resetDispositionValues: readonly string[];
+  readonly resetKind: 'map-execution-reset';
+  readonly resetReason: 'operator-correction';
+};
 
-export const QUALIFICATION_MARKER_KINDS = [
-  'demo-a-live',
-  'demo-a-stopped',
-  'cs2-closed',
-  'runtime-stale',
-  'next-execution',
-  'cs2-reopened',
-  'demo-b-live',
-] as const;
+const qualificationContract = qualificationContractJson as QualificationContract;
+
+export const QUALIFICATION_SCHEMA_VERSION = qualificationContract.schemaVersion;
+export const QUALIFICATION_MAX_MARKERS = qualificationContract.maxMarkers;
+export const QUALIFICATION_MARKER_KINDS = qualificationContract.markerKinds;
+export const QUALIFICATION_LIVE_MARKER_KINDS = qualificationContract.liveMarkerKinds;
+export const QUALIFICATION_FRESHNESS_VALUES = qualificationContract.freshnessValues;
+export const QUALIFICATION_RESULT_VALUES = qualificationContract.resultValues;
+export const QUALIFICATION_CHECK_KEYS = qualificationContract.checkKeys;
+export const QUALIFICATION_RESET_KIND = qualificationContract.resetKind;
+export const QUALIFICATION_RESET_REASON = qualificationContract.resetReason;
 
 export type QualificationMarkerKind = (typeof QUALIFICATION_MARKER_KINDS)[number];
 export type QualificationMarkerPhase = 'before' | 'after';
-export type QualificationFreshness = 'awaiting' | 'fresh' | 'stale';
+export type QualificationFreshness = (typeof QUALIFICATION_FRESHNESS_VALUES)[number];
 
 export interface QualificationClock {
   now(): RuntimeTime;
@@ -34,8 +49,19 @@ export interface QualificationResetEvidence {
   readonly mapEpoch: number;
 }
 
+export interface QualificationAcceptedObservation {
+  readonly sequence: number;
+  readonly receivedAt: string;
+  readonly receivedMonotonicMs: number;
+  readonly producerInstanceId: string;
+  readonly sourceGeneration: number;
+  readonly mapEpoch: number;
+  readonly runtimeSeq: number;
+  readonly freshness: QualificationFreshness;
+}
+
 export interface QualificationMarker {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: typeof QUALIFICATION_SCHEMA_VERSION;
   readonly runId: string;
   readonly kind: QualificationMarkerKind;
   readonly monotonicMs: number;
@@ -45,6 +71,7 @@ export interface QualificationMarker {
   readonly runtimeSeq: number;
   readonly sourceGeneration: number;
   readonly freshness: QualificationFreshness;
+  readonly observation: QualificationAcceptedObservation | null;
   readonly phase?: QualificationMarkerPhase;
   readonly reset?: QualificationResetEvidence;
 }
@@ -63,9 +90,7 @@ export interface QualificationEvidenceSnapshot {
 }
 
 function isQualificationMarkerKind(value: unknown): value is QualificationMarkerKind {
-  return (
-    typeof value === 'string' && (QUALIFICATION_MARKER_KINDS as readonly string[]).includes(value)
-  );
+  return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.includes(value);
 }
 
 function assertFiniteRuntimeTime(at: RuntimeTime): void {
@@ -75,6 +100,24 @@ function assertFiniteRuntimeTime(at: RuntimeTime): void {
   if (typeof at.utc !== 'string' || at.utc.length === 0) {
     throw new RangeError('qualification clock must return a non-empty UTC timestamp');
   }
+}
+
+function acceptedObservationFrom(
+  snapshot: ProgramRuntimeSnapshot,
+  freshness: QualificationFreshness,
+): QualificationAcceptedObservation | null {
+  const accepted = snapshot.current.programSource.lastAccepted;
+  if (accepted === undefined) return null;
+  return {
+    sequence: accepted.sequence,
+    receivedAt: accepted.receivedAt,
+    receivedMonotonicMs: accepted.receivedMonotonicMs,
+    producerInstanceId: snapshot.producerInstanceId,
+    sourceGeneration: snapshot.current.programSource.generation,
+    mapEpoch: snapshot.current.map.epoch,
+    runtimeSeq: snapshot.current.runtimeSeq,
+    freshness,
+  };
 }
 
 export class QualificationEvidenceStore {
@@ -119,6 +162,13 @@ export class QualificationEvidenceStore {
     }
     const at = this.clock.now();
     assertFiniteRuntimeTime(at);
+    const observation = acceptedObservationFrom(snapshot, freshness);
+    if (
+      QUALIFICATION_LIVE_MARKER_KINDS.includes(kind) &&
+      (freshness !== 'fresh' || observation === null)
+    ) {
+      throw new Error(`${kind} requires a fresh accepted observation`);
+    }
     const marker: QualificationMarker = {
       schemaVersion: QUALIFICATION_SCHEMA_VERSION,
       runId: this.runId,
@@ -130,6 +180,7 @@ export class QualificationEvidenceStore {
       runtimeSeq: snapshot.current.runtimeSeq,
       sourceGeneration: snapshot.current.programSource.generation,
       freshness,
+      observation,
       ...(options.phase === undefined ? {} : { phase: options.phase }),
       ...(options.reset === undefined ? {} : { reset: options.reset }),
     };
