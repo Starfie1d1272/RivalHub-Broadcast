@@ -3,7 +3,9 @@ param([switch]$KeepGsiConfig)
 
 $state = Read-RunState
 $runDir = [string]$state.runDir
+$finalizationPath = Join-Path $script:QualificationStateRoot 'finalization.json'
 $exitCode = 0
+$supervisorCompleted = $false
 try {
     try {
         $finalRuntime = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/debug/runtime' -TimeoutSec 3 -ErrorAction Stop
@@ -30,23 +32,50 @@ try {
         $exitCode = 1
     }
 
-    $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
-    $evidenceScript = Join-Path $script:BundleRoot 'scripts\verify-evidence.mjs'
-    & $nodePath $evidenceScript '--finish' $runDir
-    if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence report generation failed' }
-    & $nodePath $evidenceScript '--verify' $runDir
-    if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence verification failed' }
+    $completion = $null
+    $completionDeadline = (Get-Date).AddSeconds(45)
+    while ((Get-Date) -lt $completionDeadline) {
+        if (Test-Path -LiteralPath $finalizationPath -PathType Leaf) {
+            try {
+                $candidate = Read-JsonFile -Path $finalizationPath
+                if ([string]$candidate.status -eq 'complete') { $completion = $candidate; break }
+            } catch { }
+        }
+        Start-Sleep -Milliseconds 250
+    }
+    if ($null -ne $completion) {
+        $supervisorCompleted = $true
+        Write-Output "Qualification result: $([string]$completion.result)"
+        Write-Output "Report: $(Join-Path $script:BundleRoot ([string]$completion.reportPath))"
+        if ([string]$completion.verification -ne 'passed') { $exitCode = 1; throw 'evidence verification failed' }
+        if ([string]$completion.result -ne 'PASS') { $exitCode = 2 }
+    } else {
+        Write-Output 'Qualification supervisor completion was unavailable; running evidence finalization fallback.'
+        $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
+        $evidenceScript = Join-Path $script:BundleRoot 'scripts\verify-evidence.mjs'
+        & $nodePath $evidenceScript '--finish' $runDir
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence report generation failed' }
+        & $nodePath $evidenceScript '--verify' $runDir
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence verification failed' }
 
-    $qualification = Read-JsonFile -Path (Join-Path $runDir 'qualification.json')
-    Write-Output "Qualification result: $([string]$qualification.result)"
-    Write-Output "Report: $(Join-Path $runDir 'REPORT.md')"
-    if ([string]$qualification.result -ne 'PASS') { $exitCode = 2 }
+        $qualification = Read-JsonFile -Path (Join-Path $runDir 'qualification.json')
+        Write-Output "Qualification result: $([string]$qualification.result)"
+        Write-Output "Report: $(Join-Path $runDir 'REPORT.md')"
+        if ([string]$qualification.result -ne 'PASS') { $exitCode = 2 }
+    }
+    if ($supervisorCompleted) {
+        try { Invoke-QualificationApi -Method POST -Path '/qualification/finalization/ack' | Out-Null } catch { }
+    }
 } catch {
     Write-Error $_
     $exitCode = if ($exitCode -eq 0) { 1 } else { $exitCode }
 } finally {
     if (-not $KeepGsiConfig) {
-        try { Restore-InstalledGsiConfig -State $state } catch { Write-Error $_; $exitCode = 1 }
+        $currentState = $null
+        try { $currentState = Read-RunState } catch { }
+        if ($null -ne $currentState -and -not [bool]$currentState.gsiRestored) {
+            try { Restore-InstalledGsiConfig -State $currentState } catch { Write-Error $_; $exitCode = 1 }
+        }
     }
     if (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container) {
         Remove-Item -LiteralPath $script:QualificationStateRoot -Recurse -Force

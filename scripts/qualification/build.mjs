@@ -17,9 +17,11 @@ import { pipeline } from 'node:stream/promises';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
+import qualificationContract from '../../apps/companion/src/qualification/contract.json' with { type: 'json' };
+import { QUALIFICATION_NODE_VERSION } from './runtime-config.mjs';
+
 const REPOSITORY = 'Starfie1d1272/RivalHub-Broadcast';
-const QUALIFICATION_SCHEMA_VERSION = 1;
-const NODE_MAJOR = 24;
+const QUALIFICATION_SCHEMA_VERSION = qualificationContract.schemaVersion;
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const scriptDir = resolve(dirname(fileURLToPath(import.meta.url)));
 
@@ -27,7 +29,6 @@ function usage() {
   return [
     'usage: node scripts/qualification/build.mjs [options]',
     '  --output <directory>       output directory (default: .agent-tmp/qualification-build)',
-    '  --node-version <v24.x.y>  exact official Windows Node runtime version',
     '  --skip-build               reuse existing dist outputs',
     '  --skip-node-runtime        structure-only smoke bundle; not a validator artifact',
     '  --allow-dirty               allow uncommitted source while developing locally',
@@ -37,7 +38,7 @@ function usage() {
 function parseArgs(argv) {
   const options = {
     output: join(rootDir, '.agent-tmp', 'qualification-build'),
-    nodeVersion: process.env.QUALIFICATION_NODE_VERSION,
+    nodeVersion: QUALIFICATION_NODE_VERSION,
     skipBuild: false,
     skipNodeRuntime: false,
     allowDirty: false,
@@ -47,12 +48,11 @@ function parseArgs(argv) {
     if (argument === '--skip-build') options.skipBuild = true;
     else if (argument === '--skip-node-runtime') options.skipNodeRuntime = true;
     else if (argument === '--allow-dirty') options.allowDirty = true;
-    else if (argument === '--output' || argument === '--node-version') {
+    else if (argument === '--output') {
       const value = argv[index + 1];
       if (value === undefined || value.startsWith('--'))
         throw new Error(`missing value for ${argument}`);
-      if (argument === '--output') options.output = resolve(rootDir, value);
-      else options.nodeVersion = value;
+      options.output = resolve(rootDir, value);
       index += 1;
     } else if (argument === '--help' || argument === '-h') {
       console.log(usage());
@@ -119,24 +119,13 @@ async function fetchResponse(url) {
   return response;
 }
 
-async function resolveNodeVersion(requested) {
-  if (requested !== undefined) {
-    const normalized = requested.startsWith('v') ? requested : `v${requested}`;
-    if (!/^v24\.\d+\.\d+$/.test(normalized))
-      throw new Error(`Node qualification runtime must be an exact v24.x.y version: ${requested}`);
-    return normalized;
+function resolveNodeVersion(requested) {
+  if (requested !== QUALIFICATION_NODE_VERSION) {
+    throw new Error(
+      `Node qualification runtime is pinned to ${QUALIFICATION_NODE_VERSION}; update runtime-config.mjs in a normal PR`,
+    );
   }
-  const response = await fetchResponse('https://nodejs.org/dist/index.json');
-  const releases = await response.json();
-  const release = releases.find(
-    (entry) =>
-      typeof entry?.version === 'string' &&
-      entry.version.startsWith(`v${NODE_MAJOR}.`) &&
-      entry.lts,
-  );
-  if (release?.version === undefined)
-    throw new Error('could not resolve a stable Node 24 release from nodejs.org');
-  return release.version;
+  return QUALIFICATION_NODE_VERSION;
 }
 
 async function downloadNodeRuntime(runtimeDir, requestedVersion, temporaryDirectory) {
@@ -300,7 +289,7 @@ async function main() {
     await cp(deployedAppDir, appDir, { recursive: true, dereference: true });
     await rm(deployedAppDir, { recursive: true, force: true });
     const nodeVersion = options.skipNodeRuntime
-      ? `v${NODE_MAJOR}.x.x-smoke-only`
+      ? QUALIFICATION_NODE_VERSION
       : await downloadNodeRuntime(join(stagingDir, 'runtime'), options.nodeVersion, downloadDir);
     for (const name of [
       'common.ps1',
@@ -317,6 +306,14 @@ async function main() {
       );
     }
     await cp(join(scriptDir, 'evidence.mjs'), join(stagingDir, 'scripts', 'verify-evidence.mjs'));
+    await cp(
+      join(scriptDir, 'supervisor.mjs'),
+      join(stagingDir, 'scripts', 'qualification-supervisor.mjs'),
+    );
+    await cp(
+      join(rootDir, 'apps', 'companion', 'src', 'qualification', 'contract.json'),
+      join(stagingDir, 'scripts', 'qualification-contract.json'),
+    );
     await cp(
       join(rootDir, 'config', 'gamestate_integration_rivalhub_broadcast.cfg.example'),
       join(stagingDir, 'config', 'gamestate_integration_rivalhub_broadcast.cfg.template'),

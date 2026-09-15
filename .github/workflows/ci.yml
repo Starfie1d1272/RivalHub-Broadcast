@@ -158,11 +158,25 @@ jobs:
           Expand-Archive -LiteralPath $archive.FullName -DestinationPath $extractRoot
           $bundleRoot = Get-ChildItem -LiteralPath $extractRoot -Directory | Select-Object -First 1
           if ($null -eq $bundleRoot) { throw 'qualification bundle root was not extracted' }
-          $fakeCs2Root = Join-Path $env:RUNNER_TEMP 'CS2 fake root with spaces'
-          New-Item -ItemType Directory -Force -Path (Join-Path $fakeCs2Root 'game\csgo\cfg') | Out-Null
+          $fakeSteamRoot = Join-Path $env:RUNNER_TEMP 'Steam root with spaces'
+          $fakeSteamLibrary = Join-Path $env:RUNNER_TEMP 'CS2 library with spaces'
+          New-Item -ItemType Directory -Force -Path (Join-Path $fakeSteamRoot 'steamapps') | Out-Null
+          New-Item -ItemType Directory -Force -Path (Join-Path $fakeSteamLibrary 'steamapps\common\Counter-Strike 2\game\csgo\cfg') | Out-Null
+          $escapedLibraryPath = $fakeSteamLibrary.Replace('\', '\\')
+          $libraryVdf = @(
+            '"libraryfolders"'
+            '{'
+            '    "1"'
+            '    {'
+            ('        "path" "' + $escapedLibraryPath + '"')
+            '    }'
+            '}'
+          ) -join [Environment]::NewLine
+          Set-Content -LiteralPath (Join-Path $fakeSteamRoot 'steamapps\libraryfolders.vdf') -Value $libraryVdf -Encoding ASCII
+          $env:STEAMROOT = $fakeSteamRoot
           Push-Location $bundleRoot.FullName
           try {
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1 -Cs2Root $fakeCs2Root
+            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1
             if ($LASTEXITCODE -ne 0) { throw 'install-gsi.ps1 failed' }
             & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
             if ($LASTEXITCODE -ne 0) { throw 'start.ps1 failed' }
@@ -196,7 +210,7 @@ jobs:
         shell: pwsh
         run: |
           $extractedRoot = Join-Path $env:RUNNER_TEMP 'qualification extracted path'
-          $logs = @(Get-ChildItem -LiteralPath $extractedRoot -Recurse -File -Include 'companion.log', 'companion.stderr.log' -ErrorAction SilentlyContinue)
+          $logs = @(Get-ChildItem -LiteralPath $extractedRoot -Recurse -File -Include 'companion.log', 'companion.stderr.log', 'supervisor.log', 'supervisor.stderr.log' -ErrorAction SilentlyContinue)
           if ($logs.Count -eq 0) { Write-Output 'No Companion logs were produced.'; exit 0 }
           foreach ($log in $logs) {
             Write-Output "--- $($log.FullName)"

@@ -1,6 +1,55 @@
 param([string]$Cs2Root)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
+function Get-SteamInstallRoots {
+    $roots = @()
+    foreach ($baseRoot in @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:STEAMROOT)) {
+        if (-not $baseRoot) { continue }
+        $roots += [string]$baseRoot
+        $roots += Join-Path ([string]$baseRoot) 'Steam'
+    }
+    foreach ($registryPath in @(
+        'HKCU:\Software\Valve\Steam',
+        'HKLM:\SOFTWARE\Valve\Steam',
+        'HKLM:\SOFTWARE\WOW6432Node\Valve\Steam'
+    )) {
+        try {
+            $properties = Get-ItemProperty -LiteralPath $registryPath -ErrorAction Stop
+            foreach ($propertyName in @('InstallPath', 'SteamPath')) {
+                $value = $properties.$propertyName
+                if ($value) { $roots += [string]$value }
+            }
+        } catch { }
+    }
+    return @($roots | Where-Object { $_ } | ForEach-Object { [string]$_ } | Select-Object -Unique)
+}
+
+function Convert-VdfPath {
+    param([Parameter(Mandatory = $true)][string]$Value)
+    return $Value.Replace('\\', '\').Replace('\"', '"')
+}
+
+function Get-SteamLibraryRoots {
+    param([Parameter(Mandatory = $true)][string]$SteamRoot)
+    $libraries = @($SteamRoot)
+    $metadataPath = Join-Path $SteamRoot 'steamapps\libraryfolders.vdf'
+    if (Test-Path -LiteralPath $metadataPath -PathType Leaf) {
+        try {
+            $metadata = Get-Content -LiteralPath $metadataPath -Raw -Encoding UTF8
+            foreach ($pattern in @(
+                '(?im)^\s*"path"\s+"(?<path>(?:\\.|[^"])*)"',
+                '(?im)^\s*"\d+"\s+"(?<path>(?:\\.|[^"])*)"'
+            )) {
+                foreach ($match in [regex]::Matches($metadata, $pattern)) {
+                    $path = Convert-VdfPath -Value $match.Groups['path'].Value
+                    if ($path -and (Test-Path -LiteralPath $path -PathType Container)) { $libraries += $path }
+                }
+            }
+        } catch { }
+    }
+    return @($libraries | Where-Object { $_ } | Select-Object -Unique)
+}
+
 function Resolve-CfgDirectory {
     param([string]$ExplicitRoot)
     if ($ExplicitRoot) {
@@ -17,12 +66,15 @@ function Resolve-CfgDirectory {
         throw "Cannot resolve one CS2 cfg directory from -Cs2Root; pass game\csgo\cfg or the CS2 install root"
     }
 
-    $steamRoots = @($env:ProgramFiles, ${env:ProgramFiles(x86)}, $env:STEAMROOT) | Where-Object { $_ } | Select-Object -Unique
+    $steamRoots = @(Get-SteamInstallRoots)
+    $libraryRoots = @()
+    foreach ($steamRoot in $steamRoots) { $libraryRoots += @(Get-SteamLibraryRoots -SteamRoot $steamRoot) }
+    $libraryRoots = @($libraryRoots | Where-Object { $_ } | Select-Object -Unique)
     $candidates = @()
-    foreach ($steamRoot in $steamRoots) {
+    foreach ($libraryRoot in $libraryRoots) {
         foreach ($product in @('Counter-Strike 2', 'Counter-Strike Global Offensive')) {
             foreach ($relative in @('game\csgo\cfg', 'csgo\cfg')) {
-                $candidate = Join-Path $steamRoot "Steam\steamapps\common\$product\$relative"
+                $candidate = Join-Path $libraryRoot "steamapps\common\$product\$relative"
                 if (Test-Path -LiteralPath $candidate -PathType Container) { $candidates += $candidate }
             }
         }

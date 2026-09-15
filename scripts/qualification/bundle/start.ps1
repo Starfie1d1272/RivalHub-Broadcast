@@ -59,26 +59,36 @@ $env:QUALIFICATION_CONTROL_TOKEN = $controlToken
 $env:QUALIFICATION_RUN_ID = $runId
 $env:QUALIFICATION_SCENARIO_PATH = (Join-Path $runDir 'scenario.jsonl')
 $env:QUALIFICATION_EVIDENCE_DIR = $runDir
+$env:QUALIFICATION_BUNDLE_ROOT = $script:BundleRoot
+$env:QUALIFICATION_APP_ROOT = $appPath
+$env:QUALIFICATION_NODE_PATH = $nodePath
+$env:QUALIFICATION_RUN_DIR = $runDir
+$env:QUALIFICATION_RUN_STATE_PATH = $script:RunStatePath
+$env:QUALIFICATION_FINALIZATION_PATH = (Join-Path $script:QualificationStateRoot 'finalization.json')
 $env:NODE_PATH = if ($env:NODE_PATH) { "$dependencyPath;$($env:NODE_PATH)" } else { $dependencyPath }
 
-$stdoutPath = Join-Path $runDir 'logs\companion.log'
-$stderrPath = Join-Path $runDir 'logs\companion.stderr.log'
-$process = Start-Process -FilePath $nodePath -ArgumentList @('dist/server.js') -WorkingDirectory $appPath -RedirectStandardOutput $stdoutPath -RedirectStandardError $stderrPath -WindowStyle Hidden -PassThru
-$runState.processId = $process.Id
-Write-JsonFile -Path $script:RunStatePath -Value $runState
+$supervisorPath = Join-Path $script:BundleRoot 'scripts\qualification-supervisor.mjs'
+if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw 'qualification supervisor script is missing' }
+$supervisorLogPath = Join-Path $script:QualificationStateRoot 'supervisor.log'
+$supervisorErrorPath = Join-Path $script:QualificationStateRoot 'supervisor.stderr.log'
+$quotedSupervisorPath = '"' + $supervisorPath.Replace('"', '\"') + '"'
+$supervisor = Start-Process -FilePath $nodePath -ArgumentList @($quotedSupervisorPath) -WorkingDirectory $script:BundleRoot -RedirectStandardOutput $supervisorLogPath -RedirectStandardError $supervisorErrorPath -WindowStyle Hidden -PassThru
 
 $ready = $false
 $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline) {
-    if (-not (Test-ProcessRunning -ProcessId $process.Id)) { throw "Companion exited before readiness; see $stderrPath" }
+    if (-not (Test-ProcessRunning -ProcessId $supervisor.Id)) { throw "Qualification supervisor exited before readiness; see $supervisorErrorPath" }
     try {
         $health = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 2 -ErrorAction Stop
         if ($health.status -eq 'ok') { $ready = $true; break }
     } catch { }
     Start-Sleep -Milliseconds 250
 }
-if (-not $ready) { throw "Companion readiness timed out after 30 seconds; see $stderrPath" }
+$runState = Read-RunState
+if ($null -eq $runState.processId) { throw "Companion PID was not published; see $supervisorErrorPath" }
+if (-not $ready) { throw "Companion readiness timed out after 30 seconds; see $supervisorErrorPath" }
 
-Write-Output "Companion RUNNING (PID $($process.Id))"
+Write-Output "Companion RUNNING (PID $([int]$runState.processId)); supervisor PID $($supervisor.Id)"
 Write-Output 'Open http://127.0.0.1:3000/qualification for the operator page.'
-Write-Output 'The page is the preferred workflow; check.ps1 and mark.ps1 remain automation fallbacks.'
+Write-Output 'The page is the preferred workflow; it finalizes evidence after Companion exits.'
+Write-Output 'check.ps1, mark.ps1, and stop.ps1 remain automation fallbacks.'

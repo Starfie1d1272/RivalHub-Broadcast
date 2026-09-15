@@ -63,6 +63,8 @@ async function assertBundleSmoke(outputRoot) {
     'scripts/check.ps1',
     'scripts/stop.ps1',
     'scripts/verify-evidence.mjs',
+    'scripts/qualification-supervisor.mjs',
+    'scripts/qualification-contract.json',
     'config/gamestate_integration_rivalhub_broadcast.cfg.template',
     'metadata/artifact.json',
     'metadata/SHA256SUMS',
@@ -93,7 +95,14 @@ async function assertBundleSmoke(outputRoot) {
   });
   if (artifact.gitSha !== expectedSha)
     throw new Error('qualification artifact git SHA is not bound to HEAD');
-  if (artifact.platform !== 'win32-x64' || artifact.qualificationSchemaVersion !== 1)
+  const contract = JSON.parse(
+    await readFile(join(rootDir, 'apps/companion/src/qualification/contract.json'), 'utf8'),
+  );
+  if (
+    artifact.platform !== 'win32-x64' ||
+    artifact.qualificationSchemaVersion !== contract.schemaVersion ||
+    artifact.nodeVersion !== contract.nodeRuntimeVersion
+  )
     throw new Error('qualification artifact metadata is invalid');
   const deployedPackage = await readFile(join(bundleDir, 'app/package.json'), 'utf8');
   if (deployedPackage.includes('/Users/') || deployedPackage.includes('\\Users\\'))
@@ -105,7 +114,12 @@ async function assertBundleSmoke(outputRoot) {
   if (!config.includes('REPLACE_WITH_GSI_TOKEN'))
     throw new Error('qualification config template lost its token placeholder');
   const scripts = await readFile(join(bundleDir, 'scripts/start.ps1'), 'utf8');
-  if (!scripts.includes('runtime\\node.exe') || !scripts.includes('BROADCAST_COMMIT'))
+  const installer = await readFile(join(bundleDir, 'scripts/install-gsi.ps1'), 'utf8');
+  if (
+    !scripts.includes('runtime\\node.exe') ||
+    !scripts.includes('BROADCAST_COMMIT') ||
+    !installer.includes('libraryfolders.vdf')
+  )
     throw new Error('qualification start script is not portable');
 }
 
