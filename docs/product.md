@@ -1,29 +1,63 @@
 # 产品需求基线
 
 > 状态：**Baseline**  
-> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。Runtime / Workspace 技术选择见 ADR-0002；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 ADR-0003；Program / Observer Assist 隔离见 ADR-0004。
+> 本文优先记录“产品要做到什么”，不预先锁死 WebSocket 拓扑、桌面壳、具体框架 API 等实现细节。Runtime / Workspace 技术选择见 ADR-0002；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 ADR-0003；Program / Observer Assist 隔离见 ADR-0004；三条产品能力线、RivalHub 第一方集成与可移植性边界见 ADR-0005。
 
 ## 1. 产品定义
 
-RivalHub Broadcast 是一套围绕 RivalHub Match 工作的 **CS2 本地赛事制播运行时**。
+RivalHub Broadcast 是一套 **以 RivalHub 为第一方赛事集成、local-first 的 CS2 赛事制播运行时**。它不是单独一张 HUD，也不是第二套赛事数据库，而是在同一套 Shared Runtime Foundation 上承载三条产品能力线：
 
-目标不是建立通用 Team/Player/Match 数据库，也不是单独做一张 HUD；目标是把一场比赛从赛前等待、BP 展示、正式比赛、中场、场间到赛后展示连接成同一条节目工作流，并尽量避免重复录入赛事信息。
+```text
+Shared Runtime Foundation
+  telemetry / continuity / identity / RuntimeState / replay / delivery
+                    │
+        ┌───────────┼───────────┐
+        ▼           ▼           ▼
+赛事与实时数据    正式节目制播    Observer Assist / Lookahead
+Tournament &      Program       private future cue
+Live Data         Production
+```
 
-正常使用中，赛事事实在 RivalHub 维护一次：
+### 1.1 赛事与实时数据
+
+这条能力线负责把赛事 canonical context 与直播现场 observation 接起来，形成双向但不混淆 authority 的数据闭环：
 
 ```text
 RivalHub
   Match / Roster / Schedule / BP / Branding / official result
                     ↓
 Broadcast
-  telemetry / runtime state / scenes / HUD / radar / provisional stats
+  identity / runtime observation / live snapshot / reliable boundary evidence
                     ↓
-Program / OBS
+RivalHub
+  canonical reconciliation / public live projection / downstream distribution
 ```
 
-同时允许一个**只给本机解说兼 OB 看、绝不进入 OBS 的 Observer Assist Overlay**。
+目标不是让 operator 在本地重新建立 Team / Player / Match，而是直接消费已经维护好的赛事、队伍、选手、Logo、Steam64、BP、BO、赛程和品牌信息；直播产生的比分、地图、选手状态、Radar、临时统计和关键 boundary observation 再通过版本化 contract 返回 RivalHub。
 
-最重要的产品边界：
+`BroadcastLiveSnapshot` 可以成为 RivalHub 实时 Match 页面以及未来其它明确数据消费者的标准 producer input，但 Broadcast Companion 本身不演化成公网数据平台。公共 API、SSE、WebSocket 或其它云端分发方式由 RivalHub / 对应服务 owner 决定。
+
+### 1.2 正式节目制播
+
+这条能力线负责观众真正看到的 Program：从赛前 Waiting / Matchup / BP，到 Gameplay HUD / Radar，再到 Halftime、Map Result、InterMap、Match Result 和 OBS 输出。
+
+Gameplay HUD 是核心 scene，但不是整个产品。产品目标是把整场比赛的节目工作流连接起来，并尽量避免赛事资料、BP、比分、Roster 和品牌信息在赛事网站、本地 HUD 与 OBS 之间重复录入。
+
+### 1.3 Observer Assist / Lookahead
+
+这条能力线只服务本机解说兼 OB。它利用与 Delayed Program 不同的 Lookahead timeline，在事件真正进入 Program 之前生成确定性的 future cue，帮助人提前准备切 POV。
+
+Observer Assist 不是第二套 Program，不拥有官方输出资格；任何 future information 都不能进入 Program、#615 public live projection 或官方 OBS Program capture。
+
+### 1.4 三条能力线共享底座，但不是三个独立系统
+
+三条能力线共享 telemetry、source continuity、identity、RuntimeState、capture/replay、health/capability 和 bounded delivery 等基础设施，通过各自 projection / adapter / contract 消费同一运行时真相。
+
+因此当前产品形态保持一个仓库、一套 Runtime 和一条 Major-first 实施路线，不因为未来可能独立分发某项能力而提前拆仓库或建设通用插件框架。
+
+RivalHub 是当前默认、最完整的赛事集成，也是 official truth owner；但 `packages/core`、Radar、telemetry adapter 与 Lookahead alignment/cue scheduling 不应依赖 RivalHub 内部类型或在线实现。RivalHub-specific 数据通过公开 contract 和 adapter 注入。
+
+最重要的产品边界仍然是：
 
 > **Broadcast 产生 observation；RivalHub 决定 official truth。**
 
@@ -332,13 +366,17 @@ Broadcast **不直接覆盖 RivalHub canonical result**。正常高置信 observ
 
 比赛结束后，Operator 应能看到或收到后续任务提示，例如 OCR、DAK Demo、VOD/赛后资料等，但 OCR/DAK 本身不进入 Broadcast 实时主循环。
 
-## 11. RivalHub 网站实时数据
+## 11. 赛事与实时数据闭环
 
-Broadcast 计划向 RivalHub #615 提供低频、标准化、latest-wins 的 `BroadcastLiveSnapshot`，而不是把 raw GSI 上传生产环境。
+Broadcast 计划向 RivalHub #615 提供低频、标准化、latest-wins 的 `BroadcastLiveSnapshot`，而不是把 raw GSI 上传生产环境。这是“赛事与实时数据”能力线的 live egress 主路径，同时与第 3 节的 RivalHub context ingress 形成闭环。
 
 语义链路：
 
 ```text
+RivalHub canonical tournament context
+        ↓
+Broadcast Runtime
+        ↑
 Delayed Program timeline
         ↓
 BroadcastLiveSnapshot
@@ -349,6 +387,8 @@ EphemeralLiveProjection
           ↓
 PublicLiveMatchProjection
   公共 Match 页面 read model
+          ↓
+RivalHub-owned realtime / API consumers
 ```
 
 BroadcastLiveSnapshot 可逐步包含：
@@ -369,7 +409,8 @@ BroadcastLiveSnapshot 可逐步包含：
 - snapshot/projection 是 ephemeral observation，不是 official truth；
 - stale / disconnect / wrong-match 必须可识别；
 - #615 只跟随 Delayed Program timeline；no-delay future state 不进入公开网页；
-- RivalHub 面向公开网页采用 SSE、WebSocket、Realtime 或其他分发方式，不属于 Broadcast Core 的职责。
+- RivalHub 面向公开网页或其它明确数据消费者采用 SSE、WebSocket、Realtime、REST 或其他分发方式，不属于 Broadcast Core 的职责；
+- Broadcast 不因“对外数据”能力而直接暴露 Companion 为公网数据服务。
 
 ## 12. Scene、Overlay 与 Operator
 
@@ -544,9 +585,18 @@ Snapshot consumer 必须证明 queue/memory 不随运行时间增长；Browser r
 
 ## 17. V1 产品范围与实施 Gate
 
-V1 的产品目标覆盖：
+V1 的产品目标覆盖三条能力线，但共享同一 Runtime Foundation，不要求三个独立部署单元。
+
+**赛事与实时数据：**
 
 - RivalHub Match 上下文接入；
+- wrong-match / roster mismatch diagnostics；
+- offline cache / reconnect / recovery；
+- #610 ReliableObservation；
+- #615 BroadcastLiveSnapshot。
+
+**正式节目制播：**
+
 - Waiting / Matchup；
 - BP playback；
 - Gameplay HUD；
@@ -556,13 +606,20 @@ V1 的产品目标覆盖：
 - Halftime / Map Result / InterMap / Match Result；
 - 单一 OBS Program Browser Source；
 - Operator / Debug surface；
-- Observer Assist 的最小 future kill cue 与 Program non-leak；
-- wrong-match / roster mismatch diagnostics；
-- offline cache / reconnect / recovery；
-- record/replay/simulator；
-- #610 ReliableObservation；
-- #615 BroadcastLiveSnapshot；
 - 官方 OBS Program preset 的创建/校验能力。
+
+**Observer Assist / Lookahead：**
+
+- Observer Assist 的最小 future kill cue 与 Program non-leak；
+- Lookahead alignment/fail-closed；
+- Assist surface 的真实环境 non-leak 验收。
+
+**共享 Runtime Foundation：**
+
+- record/replay/simulator；
+- continuity / identity / capability / health；
+- bounded delivery / backpressure；
+- consumer-specific projections。
 
 阶段划分以 `docs/roadmap.md` 为准。Observer Assist 第一阶段以确定性 kill cue 为完成标准；更复杂的 engagement/story/AI/auto-director 继续作为后续增强。
 
