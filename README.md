@@ -40,8 +40,8 @@ OCR / DAK / 管理员异常处理
 No-delay Lookahead source
 → headless event parser
 → timeline alignment
-→ future cue
-→ private Observer Assist
+→ future kill cue
+→ private Observer Assist Overlay
 → 解说兼 OB 手动切 POV
 ```
 
@@ -84,7 +84,7 @@ Timeout
 TechnicalWarning
 ```
 
-BP/Veto 的官方数据来自 RivalHub；Broadcast 只负责把已经完成的 BP 作为节目时间线播放，不建立第二套实时 veto domain。Observer Assist cue 不属于 Program OverlayCue；它是私有辅助输出，不能进入 Program scene graph。
+`TechnicalPause` 可以根据实际节目设计成为 Gameplay overlay 或独立完整画面。BP/Veto 的官方数据来自 RivalHub；Broadcast 只负责把已经完成的 BP 作为节目时间线播放，不建立第二套实时 veto domain。Observer Assist cue 不属于 Program OverlayCue；它是私有辅助输出，不能进入 Program scene graph。
 
 ## 关键能力方向
 
@@ -95,16 +95,18 @@ BP/Veto 的官方数据来自 RivalHub；Broadcast 只负责把已经完成的 B
 - RuntimeTransition + transition-time context 派生 ReliableObservation；
 - 高频 current snapshot latest-wins + 明确 boundary transition，而不是万能 EventJournal；
 - Program / Lookahead 独立 source continuity + timeline alignment；
-- Gameplay HUD、Radar 与直播临时统计；
+- 高性能 Gameplay HUD；
+- 可配置 Radar：选手编号/头像、自定义 marker、道具、烟火、轨迹、上下层；
+- KDA、ADR、round history 等直播临时统计；
 - scene suggestion + operator 手动控制；
 - 中场、场间、赛后数据页面；
-- 基础 Observer Assist：未来事件 countdown + actor→target + 可可靠获得的位置；
+- 基础 Observer Assist：未来击杀 countdown + killer→victim + 可可靠获得的位置；
 - wrong-match、断流、重连、离线 cache 与恢复；
 - latest-wins backpressure、ReliableObservation outbox；
 - record/replay fixture、fault injection、slow-consumer test、长时间 soak test；
 - 向 RivalHub #610 提供 ReliableObservation；
 - 向 RivalHub #615 提供低频 BroadcastLiveSnapshot；
-- 为增强 telemetry、OBS 深度控制、Replay、Camera 等高级能力保留 adapter/capability 接缝。
+- 为 server game events、C4 生存预测、OBS 深度控制、MulNX/HLAE、Replay、Camera 等高级能力保留 adapter/capability 接缝。
 
 详细产品需求见 [`docs/product.md`](docs/product.md)。阶段实施计划见 [`docs/roadmap.md`](docs/roadmap.md)。开发与平台验收边界见 [`docs/development-validation.md`](docs/development-validation.md)。
 
@@ -163,7 +165,7 @@ production recorder 属于 Companion/telemetry runtime；`testkit` 只消费 cap
 - [`docs/architecture.md`](docs/architecture.md)：已确定的架构边界与待决事项。
 - [`docs/telemetry.md`](docs/telemetry.md)：基于真实 capture 的 GSI/source semantics、capture/replay 设计基线。
 - [`docs/roadmap.md`](docs/roadmap.md)：M0–M5 阶段交付与 Issue/Project 组织方式。
-- [`docs/development-validation.md`](docs/development-validation.md)：开发、跨平台自动验证与真实 Windows + CS2/CSTV + OBS 验收模型。
+- [`docs/development-validation.md`](docs/development-validation.md)：开发、跨平台自动验证与 Windows + CS2/CSTV + OBS 真实验收模型。
 - [`docs/references.md`](docs/references.md)：参考 HUD / 制播项目的取舍。
 - [`docs/decisions/0001-project-positioning-and-authority.md`](docs/decisions/0001-project-positioning-and-authority.md)：项目定位与 authority。
 - [`docs/decisions/0002-runtime-workspace-technology-baseline.md`](docs/decisions/0002-runtime-workspace-technology-baseline.md)：Runtime / Workspace 技术基线。
