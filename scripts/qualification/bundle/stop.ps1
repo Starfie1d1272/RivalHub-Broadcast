@@ -80,11 +80,17 @@ try {
     if (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container) {
         $removed = $false
         for ($attempt = 0; $attempt -lt 40 -and -not $removed; $attempt++) {
+            if (-not (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container)) {
+                $removed = $true
+                break
+            }
             try {
                 Remove-Item -LiteralPath $script:QualificationStateRoot -Recurse -Force -ErrorAction Stop
                 $removed = $true
             } catch {
-                if ($attempt -eq 39) { Write-Error $_; $exitCode = 1 }
+                if (-not (Test-Path -LiteralPath $script:QualificationStateRoot -PathType Container)) {
+                    $removed = $true
+                } elseif ($attempt -eq 39) { Write-Error $_; $exitCode = 1 }
                 else { Start-Sleep -Milliseconds 250 }
             }
         }
