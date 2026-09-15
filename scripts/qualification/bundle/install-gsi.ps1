@@ -11,7 +11,8 @@ function Resolve-CfgDirectory {
             (Join-Path $resolved 'game\csgo\cfg'),
             (Join-Path $resolved 'csgo\cfg'),
             (Join-Path $resolved 'cfg')
-        ) | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -Unique
+        )
+        $candidates = @($candidates | Where-Object { Test-Path -LiteralPath $_ -PathType Container } | Select-Object -Unique)
         if ($candidates.Count -eq 1) { return [string]$candidates[0] }
         throw "Cannot resolve one CS2 cfg directory from -Cs2Root; pass game\csgo\cfg or the CS2 install root"
     }
@@ -26,7 +27,7 @@ function Resolve-CfgDirectory {
             }
         }
     }
-    $candidates = $candidates | Select-Object -Unique
+    $candidates = @($candidates | Select-Object -Unique)
     if ($candidates.Count -eq 1) { return [string]$candidates[0] }
     if ($candidates.Count -eq 0) { throw 'No CS2 cfg directory found; pass -Cs2Root <path>' }
     throw "Multiple CS2 cfg directories found; pass -Cs2Root <path> to select one (candidates: $($candidates.Count))"
@@ -49,7 +50,8 @@ $cs2RootForVersion = Split-Path (Split-Path (Split-Path $cfgDirectory -Parent) -
 $cs2ExecutableCandidates = @(
     (Join-Path $cs2RootForVersion 'game\bin\win64\cs2.exe'),
     (Join-Path (Split-Path $cfgDirectory -Parent) 'bin\win64\cs2.exe')
-) | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -Unique
+)
+$cs2ExecutableCandidates = @($cs2ExecutableCandidates | Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } | Select-Object -Unique)
 $cs2Version = 'unknown'
 if ($cs2ExecutableCandidates.Count -gt 0) {
     $cs2Version = (Get-Item -LiteralPath $cs2ExecutableCandidates[0]).VersionInfo.ProductVersion
