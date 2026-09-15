@@ -288,6 +288,9 @@ importers:
         specifier: workspace:*
         version: link:../telemetry-gsi
     devDependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../core
       '@types/node':
         specifier: 'catalog:'
         version: 24.13.4
