@@ -162,6 +162,12 @@ RuntimeState / RuntimeTransition / identity / accumulators
 
 Production capture 与 runtime processing 共享同一个 accepted raw input，但 recorder 不得成为 telemetry processing 的前置阻塞条件。
 
+Companion 的稳定 composition seam 是：ingress 将一次 authenticated frame 交给
+`CaptureRecorder.tryRecord(input)`，recorder 自己负责 Capture V1 编码与 admission；adapter
+只将 Core-owned `TelemetryObservation` 交给 runtime，并将 `GsiDiagnosticBatch` 交给
+Companion diagnostics owner，两个 contract 不合并。两个 callback 都是同步本机 handoff；
+不得在其中执行 I/O 或返回 Promise。
+
 ---
 
 ## 4. Package ownership
@@ -570,10 +576,19 @@ Capture 不是官方比赛历史，也不是长期 telemetry data warehouse。
 初始格式：
 
 ```text
-captures/<capture-id>/
+<capture-id>.partial/
+└─ frames.jsonl
+
+# graceful finalization only
+<capture-id>/
 ├─ manifest.json
 └─ frames.jsonl
 ```
+
+production capture 默认写入 `CAPTURE_DIR`，未设置时使用
+`<cwd>/recordings/gsi`。任何 `.partial` 目录都表示 live 或未安全完成的 capture，
+无论是否已经写入 `manifest.json`，都不得被当作 published/completed Capture V1；
+testkit 的 `verifyCapture()` 会明确拒绝这类路径。
 
 `manifest.json` 至少表达：
 
@@ -591,7 +606,11 @@ gsiConfig
 complete
 frameCount
 droppedFrames
+framesSha256
 ```
+
+`complete=true` 只表示 recorder 没有已知 drop、writer、finalize 或 publish degradation，
+不表示 capture 覆盖完整比赛 lifecycle。
 
 每条 `frames.jsonl` record 至少表达：
 
@@ -618,7 +637,7 @@ receivedAt
 写入 capture 时必须永久移除：
 
 ```text
-auth.token
+top-level auth（包括 auth.token）
 ```
 
 进入仓库的 fixture/reference corpus 还必须执行 deterministic sanitization，至少覆盖：
@@ -639,8 +658,16 @@ Recorder 不能通过无限内存队列保证“绝不丢 frame”。
 Production recorder 要求：
 
 ```text
-bounded writer queue
+single async writer
+bounded in-memory admission
+RECORDER_MAX_PENDING_FRAMES = 128
+RECORDER_MAX_PENDING_BYTES = 2 MiB
 ```
+
+`pendingFrames/pendingBytes` 同时包含 active in-flight write 与 queued buffers。若当前
+frame 会使任一上限超出，采用 `drop-newest`：不入队、`droppedFrames++`、capture
+永久 `complete=false`，但 live telemetry 继续处理。writer 恢复后可以接受后续 frame，
+因此 persisted sequence gap 是合法且可验证的。
 
 当磁盘或 writer 无法跟上 ingress 时：
 
@@ -651,7 +678,32 @@ bounded writer queue
 5. 产生明确 diagnostic / incident；
 6. incomplete capture 不得作为 semantic/reference fixture。
 
-Recorder failure 不应阻塞 live telemetry path。
+Recorder failure 不应阻塞 live telemetry path。writer 只允许串行写同一个
+`FileHandle`；只有整条 JSONL line 确认成功后才增加 `frameCount`、推进 confirmed
+offset 并更新 `framesSha256`。short write 必须继续写完当前 line；无法安全 finalize 时
+保留 `.partial`。
+
+recorder graceful shutdown 最多 drain 10 秒。queued-only timeout 会丢弃剩余 queued frame
+并在安全时发布 `complete=false` 的 final capture；若 active OS write 仍 unresolved，则
+不与它并发 truncate/manifest/rename，继续保留 `.partial`。这是 recorder 层 deadline。
+Companion composition root 在收到 `SIGINT`/`SIGTERM` 时另行启动 30 秒的 whole-shutdown
+`unref()` hard watchdog，覆盖 Fastify in-flight request drain、recorder drain、truncate/
+sync/close、manifest flush 与 rename；只有整个 shutdown envelope 仍未完成时才
+`process.exit(1)`。上述保证是 process/application-failure-safe publication，不是涵盖突然
+断电与 parent-directory fsync 的 database-grade transactional durability。
+
+### 10.5 D sizing evidence
+
+完整 D evidence capture（不提交 raw 文件）为 16,382 frames、sequence `0..16,381`、
+约 72 分 57 秒；`frames.jsonl` 约 187.57 MiB，已核验的 `framesSha256` 为
+`7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a`。Raw GSI payload
+的最大值约 20,518 B，Capture V1 JSONL line 最大值约 20,623 B；p50 分别为 11,972 B
+与 12,076 B。
+
+D evidence profile 使用 `buffer=0.1 / throttle=0.1`，约 4 fps；最坏连续 30 秒为
+123 frames / 约 1.94 MiB，60 秒为 244 frames / 约 3.69 MiB。这个窗口只用于解释
+evidence 与 128 frames / 2 MiB 的 sizing rationale，不能推断 production `buffer=0 /
+throttle=0` 下承诺相同的 queue headroom。
 
 验证用 spike recorder 可以选择更简单的同步持久化，但不得被未经评估地复制为 production hot path。
 
@@ -790,7 +842,25 @@ source-generation boundary；更复杂的 disconnect/reconnect scenario 仍不�
 
 ## 12. GSI configuration baseline
 
-### 12.1 Reference Capture Profile
+### 12.1 Production Reference Profile
+
+production reference cfg 固定为：
+
+```text
+uri        http://127.0.0.1:3000/gsi
+timeout    1.1
+buffer     0
+throttle   0
+heartbeat  10.0
+
+precision_time      3
+precision_position  1
+precision_vector    3
+```
+
+仓库提供 `config/gamestate_integration_rivalhub_broadcast.cfg.example`。其中 token
+只是 placeholder，不得提交真实 credential。production profile 与下方 evidence
+profile 分开，不做 installer 或额外 latency tuning。
 
 真实 observer capture 已使用以下字段集合：
 
@@ -824,7 +894,17 @@ allgrenades
 
 `tournamentdraft` 不作为 telemetry core 的必需输入。BP 的 canonical owner 仍然是 RivalHub；Broadcast 只消费 canonical BP 做 presentation playback。
 
-### 12.2 Update rate
+### 12.2 D Evidence Profile / Update rate
+
+真实 sizing 使用的 D evidence profile 保持：
+
+```text
+buffer     0.1
+throttle   0.1
+heartbeat  60
+```
+
+它只记录真实 corpus 的采集条件，不是 production 推荐值。
 
 首轮 observer captures 使用：
 
@@ -850,7 +930,7 @@ p95 ≈ 257 ms
 
 - runtime core 禁止硬编码固定 GSI Hz；
 - Radar / animation 必须预期 source snapshot 频率明显低于浏览器渲染频率，并通过 interpolation/presentation scheduling 平滑；
-- production `buffer` / `throttle` 仍不在本 PR 冻结，后续用真实比赛形态与性能数据决定。
+- production `buffer=0` / `throttle=0` 由当前 Issue 冻结；D evidence profile 不得被误读为 production recommendation。
 
 ---
 
@@ -1200,11 +1280,14 @@ CI 绿灯与当前短时 capture 都不能替代 Layer D。
 - UTC wall clock 用于时间点与 evidence；
 - production capture 保存 sanitized accepted raw GSI；
 - production recorder 属于 Companion runtime，而不是 testkit；
+- production ingress body limit 为 64 KiB，server request timeout 为 5 s；
+- recorder hard bound 为 128 pending frames / 2 MiB（含 in-flight），overflow 为 drop-newest；
+- recorder graceful finalize 最多 drain 10 s，health 暴露 queue/drop/incomplete 状态且不泄漏 token 或 raw payload；
 - replay 必须复用 production telemetry adapter；
 - recorder queue 必须 bounded；
 - recorder failure 不得拖死 live telemetry runtime；
 - GSI source cadence 与 renderer cadence 分离，Radar/visual motion 需要 interpolation；
-- production GSI `buffer` / `throttle` 暂不冻结；
+- production GSI `buffer=0` / `throttle=0`，`heartbeat=10` 已冻结；
 - 第一条真实 workspace dependency 必须验证 clean-tree typecheck/build。
 
 ---
@@ -1221,8 +1304,7 @@ CI 绿灯与当前短时 capture 都不能替代 Layer D。
 - halftime / side switch / map end 的真实 frame sequence；
 - `provider.timestamp` 精度与跨 restart 行为；
 - 长时 payload volume / recorder throughput / disk sizing；
-- production recorder 的实际 drop/backpressure behavior；
-- 推荐 production `buffer` / `throttle`；
+- production recorder 在真实 Windows + CS2 长时运行中的 drop/backpressure behavior；
 - semantic/reference corpus 的最小覆盖集合；
 - 正式赛事 GOTV / observer path 与 Demo / local spectator 是否存在 source-shape 差异。
 

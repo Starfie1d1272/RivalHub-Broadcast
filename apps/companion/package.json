@@ -9,9 +9,12 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@rivalhub-broadcast/core": "workspace:*",
+    "@rivalhub-broadcast/telemetry-gsi": "workspace:*",
     "fastify": "catalog:"
   },
   "devDependencies": {
+    "@rivalhub-broadcast/testkit": "workspace:*",
     "@types/node": "catalog:",
     "@typescript/native": "catalog:",
     "tsx": "catalog:",

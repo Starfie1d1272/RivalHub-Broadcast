@@ -62,6 +62,19 @@ describe('Capture V1 reader and verifier', () => {
     }
   });
 
+  it('rejects a partial directory even when its manifest and frames are structurally valid', async () => {
+    const root = await temporaryDirectory();
+    const partialDir = join(root, 'test-capture.partial');
+    try {
+      await writeCapture(partialDir, [testFrame(1, 1_000)]);
+      await expect(verifyCapture(partialDir)).rejects.toMatchObject({
+        code: 'UNFINALIZED_CAPTURE',
+      });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
   it.each([
     [
       'unsupported formatVersion',

@@ -12,7 +12,7 @@
     }
   },
   "scripts": {
-    "build": "tsc -b tsconfig.json --pretty false",
+    "build": "tsc -b tsconfig.json --pretty false --force",
     "typecheck": "tsc -b tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
   },
   "dependencies": {
