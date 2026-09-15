@@ -14,6 +14,7 @@ import {
   type CompanionRuntimeDiagnosticCode,
   type GsiClock,
   type GsiDiagnosticsSink,
+  type GsiSequenceSource,
   type ObservationSink,
 } from './telemetry/gsi-ingress.js';
 
@@ -22,6 +23,7 @@ export interface CompanionAppOptions {
   readonly gsiToken?: string;
   readonly recorder?: CaptureRecorder;
   readonly producerInstanceId?: string;
+  readonly gsiSequenceSource?: GsiSequenceSource;
   readonly programRuntime?: ProgramRuntime;
   readonly debugEvidenceStore?: DebugEvidenceStore;
   readonly debugClock?: DebugRuntimeClock;
@@ -76,6 +78,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     registerGsiIngress(app, {
       gsiToken: options.gsiToken,
       recorder,
+      ...(options.gsiSequenceSource === undefined
+        ? {}
+        : { sequenceSource: options.gsiSequenceSource }),
       onAcceptedRaw: (input) => {
         debugEvidenceStore.recordAcceptedRaw(input);
         options.onAcceptedRaw?.(input);

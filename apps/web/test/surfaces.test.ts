@@ -1,7 +1,67 @@
-import { describe, expect, it } from 'vitest';
+// @vitest-environment jsdom
 
-import { SurfacePage, surfaceDefinitions, surfaceForPath } from '../src/App';
-import { parseDebugRuntimeResponse } from '../src/debug/runtime';
+import { act, createElement } from 'react';
+import { createRoot, type Root } from 'react-dom/client';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+import { DebugPage, SurfacePage, surfaceDefinitions, surfaceForPath } from '../src/App';
+import { parseDebugRuntimeResponse, type DebugRuntimeResponse } from '../src/debug/runtime';
+
+const DEBUG_RESPONSE: DebugRuntimeResponse = {
+  producerInstanceId: 'web-test-producer',
+  sourceGeneration: 0,
+  freshness: 'fresh',
+  raw: { current: { sequence: 4 } },
+  normalized: { current: { receive: { sequence: 4 } } },
+  runtime: {
+    current: { runtimeSeq: 2, map: { epoch: 1, name: 'de_ancient' } },
+    lastDisposition: { kind: 'accepted', reason: 'contiguous' },
+  },
+  recentTransitions: [],
+  latestGsiDiagnostics: null,
+  recentRuntimeDiagnostics: [],
+  recorderHealth: { state: 'recording' },
+  deliveryHealth: [],
+};
+
+const AWAITING_DEBUG_RESPONSE: DebugRuntimeResponse = {
+  ...DEBUG_RESPONSE,
+  freshness: 'awaiting',
+  raw: { current: null },
+  normalized: { current: null },
+  runtime: { current: {}, lastDisposition: null },
+  recorderHealth: { state: 'recording' },
+};
+
+let root: Root | undefined;
+
+function mountDebugPage(): HTMLDivElement {
+  const container = document.createElement('div');
+  document.body.append(container);
+  root = createRoot(container);
+  root.render(createElement(DebugPage));
+  return container;
+}
+
+function unmountDebugPage(): void {
+  if (root === undefined) return;
+  act(() => {
+    root?.unmount();
+  });
+  root = undefined;
+  document.body.replaceChildren();
+}
+
+beforeEach(() => {
+  vi.useFakeTimers();
+});
+
+afterEach(() => {
+  unmountDebugPage();
+  vi.restoreAllMocks();
+  vi.unstubAllGlobals();
+  vi.useRealTimers();
+});
 
 describe('web surface shell', () => {
   it.each([
@@ -41,5 +101,85 @@ describe('web surface shell', () => {
 
   it('rejects a response missing required debug fields instead of guessing state', () => {
     expect(parseDebugRuntimeResponse({ freshness: 'fresh' })).toBeUndefined();
+  });
+
+  it('renders the loading state while the first Companion request is pending', () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => new Promise<Response>(() => {})),
+    );
+
+    let container: HTMLDivElement;
+    act(() => {
+      container = mountDebugPage();
+    });
+
+    expect(container!.textContent).toContain('正在连接 Companion');
+    expect(container!.querySelector('[aria-live="polite"]')).not.toBeNull();
+  });
+
+  it('renders awaiting telemetry returned by Companion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(AWAITING_DEBUG_RESPONSE),
+        }),
+      ),
+    );
+
+    let container: HTMLDivElement;
+    await act(async () => {
+      container = mountDebugPage();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container!.textContent).toContain('Awaiting GSI');
+    expect(container!.textContent).toContain('暂无证据');
+    expect(container!.textContent).toContain('未建立');
+  });
+
+  it('renders ready debug evidence returned by Companion', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() =>
+        Promise.resolve({
+          ok: true,
+          json: () => Promise.resolve(DEBUG_RESPONSE),
+        }),
+      ),
+    );
+
+    let container: HTMLDivElement;
+    await act(async () => {
+      container = mountDebugPage();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container!.textContent).toContain('Fresh');
+    expect(container!.textContent).toContain('de_ancient');
+    expect(container!.textContent).toContain('Accepted raw');
+    expect(container!.textContent).toContain('Normalized observation');
+    expect(container!.textContent).toContain('Runtime state');
+  });
+
+  it('renders a degraded error state when Companion is unavailable', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(() => Promise.reject(new Error('network down'))),
+    );
+
+    let container: HTMLDivElement;
+    await act(async () => {
+      container = mountDebugPage();
+      await Promise.resolve();
+      await Promise.resolve();
+    });
+
+    expect(container!.querySelector('[role="alert"]')?.textContent).toContain('Companion 暂不可用');
+    expect(container!.textContent).toContain('network down');
   });
 });

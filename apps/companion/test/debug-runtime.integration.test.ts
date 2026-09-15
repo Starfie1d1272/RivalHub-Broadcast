@@ -266,6 +266,60 @@ describe('Companion debug runtime composition', () => {
     });
   });
 
+  it('takes an ingress sequence gap through Runtime and exposes resync without a cross-gap transition', async () => {
+    const sequence = [0, 2];
+    let sequenceIndex = 0;
+    const recorder = new FakeRecorder();
+    app = buildApp({
+      gsiToken: TOKEN,
+      recorder,
+      producerInstanceId: 'gap-resync-producer',
+      gsiSequenceSource: () => {
+        const value = sequence[sequenceIndex];
+        sequenceIndex += 1;
+        if (value === undefined) throw new Error('unexpected sequence fault sample');
+        return value;
+      },
+      debugClock: { nowMonotonicMs: () => 200 },
+      clock: createClock(2),
+    });
+
+    expect(
+      (
+        await postGsi(app, {
+          map: { name: 'de_ancient', phase: 'live' },
+          round: { phase: 'freezetime' },
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect(
+      (
+        await postGsi(app, {
+          map: { name: 'de_ancient', phase: 'live' },
+          round: { phase: 'live' },
+        })
+      ).statusCode,
+    ).toBe(204);
+
+    const response = await app.inject({ method: 'GET', url: '/debug/runtime' });
+    expect(response.json()).toMatchObject({
+      raw: { current: { sequence: 2 } },
+      normalized: { current: { receive: { sequence: 2 } } },
+      runtime: {
+        current: {
+          runtimeSeq: 2,
+          programSource: { lastAccepted: { sequence: 2 } },
+        },
+        lastDisposition: {
+          kind: 'accepted',
+          reason: 'gap-resync',
+          missingSequenceRange: { from: 1, to: 1 },
+        },
+      },
+      recentTransitions: [],
+    });
+  });
+
   it.each([
     ['halftime', 'match/halftime-side-switch', 'Fixture Team 002', 'Fixture Team 001'],
     ['overtime', 'match/overtime-side-switch', 'Fixture Team 001', 'Fixture Team 002'],

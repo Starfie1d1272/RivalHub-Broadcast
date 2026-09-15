@@ -67,6 +67,8 @@ export interface AcceptedRawInput {
 }
 /** Synchronous local handoff only; the callback must not perform I/O or return a Promise. */
 export type AcceptedRawSink = (input: AcceptedRawInput) => void;
+/** Deterministic receive-sequence seam for integration fault injection; omit in production. */
+export type GsiSequenceSource = () => number;
 
 export type CompanionRuntimeDiagnosticCode =
   | 'adapter_unexpected_failure'
@@ -78,6 +80,7 @@ export type CompanionRuntimeDiagnosticCode =
 export interface GsiIngressOptions {
   readonly gsiToken: string;
   readonly recorder: CaptureRecorder;
+  readonly sequenceSource?: GsiSequenceSource;
   readonly onAcceptedRaw?: AcceptedRawSink;
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
@@ -138,6 +141,7 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
 
   const clock = options.clock ?? defaultClock;
   let sequence = 0;
+  const nextSequence = options.sequenceSource ?? (() => sequence++);
 
   app.post(
     '/gsi',
@@ -160,8 +164,7 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       }
 
       const receive = clock.now();
-      const acceptedSequence = sequence;
-      sequence += 1;
+      const acceptedSequence = nextSequence();
       const payload = withoutAuth(root);
       const receiveContext: TelemetryReceiveContext = {
         sequence: acceptedSequence,
