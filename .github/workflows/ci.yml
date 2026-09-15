@@ -195,7 +195,8 @@ jobs:
         if: ${{ failure() }}
         shell: pwsh
         run: |
-          $logs = @(Get-ChildItem -LiteralPath $env:QUALIFICATION_BUILD_ROOT -Recurse -File -Include 'companion.log', 'companion.stderr.log' -ErrorAction SilentlyContinue)
+          $extractedRoot = Join-Path $env:RUNNER_TEMP 'qualification extracted path'
+          $logs = @(Get-ChildItem -LiteralPath $extractedRoot -Recurse -File -Include 'companion.log', 'companion.stderr.log' -ErrorAction SilentlyContinue)
           if ($logs.Count -eq 0) { Write-Output 'No Companion logs were produced.'; exit 0 }
           foreach ($log in $logs) {
             Write-Output "--- $($log.FullName)"
