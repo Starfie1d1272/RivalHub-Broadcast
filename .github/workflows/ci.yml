@@ -186,6 +186,7 @@ jobs:
           Push-Location $bundleRoot.FullName
           try {
             $installOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1 2>&1 | Out-String
+            Write-Output $installOutput
             if ($LASTEXITCODE -ne 0) { throw 'install-gsi.ps1 执行失败' }
             if ($installOutput -notmatch 'GSI 配置冲突') { throw '未输出 GSI 配置冲突预检警告' }
             & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
