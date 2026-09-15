@@ -96,13 +96,16 @@ Delayed Program GOTV
 
 ```text
 /program
-  正式节目 HUD / Radar / scene
-  → OBS Browser Source
+  Program-safe HUD / Radar / scene renderer
+  → 可由普通浏览器作为开发/诊断 host 打开
+  → 可作为本机透明 / topmost / click-through Program Overlay，供解说兼 OB 自己看到正式节目图形
+  → 可由 OBS Browser Source 或其它经过生产验收的 Program host 消费
 
-/assist（最终 route/desktop 形态由实现 Issue 冻结）
-  本机解说兼 OB 的透明 / click-through 辅助层
+/assist（最终 route/desktop host 技术由实现 Issue 冻结）
+  本机解说兼 OB 的透明 / topmost / click-through 辅助层
+  → 只消费 ObserverAssistProjection
   → 只显示 Assist 信息
-  → 不进入 OBS
+  → 不进入官方 OBS Program
 
 /operator
   同一制作人员需要时使用的 Match/config/health/scene/incident/recovery/OBS/uplink 控制界面
@@ -110,6 +113,10 @@ Delayed Program GOTV
 /debug
   Raw/normalized telemetry、timing、identity、adapter diagnostics
 ```
+
+`ProgramProjection`、Program renderer 与承载它的 host 是三个不同层次：Projection 决定允许显示什么，Renderer 决定如何画，Host 决定画面出现在哪里。Program 可以同时存在本机 Overlay 与 OBS 中的两个 renderer instance，但它们消费同一 Program-safe projection，不形成第二份 RuntimeState 或第二套 Program truth。
+
+Program Overlay 与 Assist Overlay 必须是独立 surface/window。Assist 安全不能依赖“OBS 恰好没有抓到某块区域”或 CSS/window z-order；future information 从类型/projection 边界就不得进入 Program。官方 OBS 路径是否使用 Browser Source、捕获独立 Program Overlay，或未来其它经过验证的 Program host，属于部署选择，不改变这一安全边界。
 
 `/operator` 是控制/诊断职责，不代表现场存在另一位“导播用户”。
 
@@ -222,7 +229,7 @@ Gameplay 是核心 scene，但不是整个产品。
 
 展示字段需要具备配置能力。第一版不要求自由拖拽所有像素，但架构不能把字段、布局和效果硬编码成只能维护一套 HUD。
 
-Renderer 消费 Broadcast 自己的 presentation projection，不直接消费 Raw GSI 或 RivalHub API。
+Renderer 消费 Broadcast 自己的 presentation projection，不直接消费 Raw GSI 或 RivalHub API。Program renderer 不应知道自己运行在 Chrome、OBS CEF、透明桌面窗口还是未来其它 host；不同 host 只负责窗口/嵌入/capture 生命周期，不复制 Program domain 或重新解释 RuntimeState。
 
 ## 5. Radar
 
@@ -544,19 +551,23 @@ ReliableObservation
 
 OBS control channel 不是 Core 的运行依赖，但“一键创建 / 校验 RivalHub Program preset”是正式 production integration 能力。
 
-官方 preset 至少应表达：
+官方 preset 的基线实现至少应表达：
 
 ```text
 RivalHub Program Scene
 ├─ CS2 Program Capture（Delayed GOTV）
-├─ /program Browser Source
+├─ /program Browser Source（默认、独立 Program host）
 └─ 其它明确允许播出的 Program assets
 ```
 
+Program renderer 同时允许在本机透明 Program Overlay 中运行，供解说兼 OB 自己看到 HUD/Radar。官方 OBS 输出可以继续直接消费 `/program` Browser Source；如果未来选择直接捕获独立 Program Overlay 或其它 host，也必须单独完成 Windows + OBS capture、DPI、窗口层级、重连与 non-leak 验收，不能因为“桌面上看起来一样”就默认等价。
+
 规则：
 
+- Program Overlay 与 Assist Overlay 是独立窗口/surface；
 - Observer Assist surface/window 不得进入官方 Program preset；
 - Display Capture 等可能把 topmost Assist Overlay 一起采集的方式必须提示泄漏风险；
+- Program/Assist 安全边界由 projection/schema 保证，OBS capture selection 只作为第二道防线；
 - obs-websocket 可用于初次配置、检测、修复及未来可选 scene control；
 - OBS control channel 断开后，已经建立的 `/program` Browser Source 必须继续工作；
 - 深度 auto-director / 复杂 OBS orchestration 不作为基础 Program output 前提。
@@ -581,7 +592,7 @@ Simulator/replay 必须走与生产相同的 GSI ingress/normalizer，不允许�
 
 Snapshot consumer 必须证明 queue/memory 不随运行时间增长；Browser reconnect 获取 current baseline projection 后继续，不重放离线期间全部旧 snapshot。
 
-正式赛事前必须完成真实 Windows + CS2 spectator + OBS 长时间彩排；Observer Assist 进入实现后还要验证 topmost overlay 不会进入正式 Program 输出。
+正式赛事前必须完成真实 Windows + CS2 spectator + OBS 长时间彩排；Program 本机 Overlay 进入生产路径后，还要验证它与 OBS Program host 的语义/视觉一致性、透明/topmost/click-through 行为以及常见 DPI/窗口模式；Observer Assist 进入实现后还要验证独立 Assist Overlay 不会进入正式 Program 输出。
 
 ## 17. V1 产品范围与实施 Gate
 
@@ -604,7 +615,8 @@ V1 的产品目标覆盖三条能力线，但共享同一 Runtime Foundation，�
 - grenade / smoke / inferno 基础展示；
 - KDA / ADR / round history 等直播临时统计；
 - Halftime / Map Result / InterMap / Match Result；
-- 单一 OBS Program Browser Source；
+- Program-safe renderer 可同时承载于本机透明 Program Overlay 与 OBS Program host；
+- OBS Browser Source 作为首个基线 Program host，允许后续增加经过生产验收的其它 host；
 - Operator / Debug surface；
 - 官方 OBS Program preset 的创建/校验能力。
 
@@ -612,7 +624,7 @@ V1 的产品目标覆盖三条能力线，但共享同一 Runtime Foundation，�
 
 - Observer Assist 的最小 future kill cue 与 Program non-leak；
 - Lookahead alignment/fail-closed；
-- Assist surface 的真实环境 non-leak 验收。
+- 独立 Assist Overlay 的真实环境 non-leak 验收。
 
 **共享 Runtime Foundation：**
 
@@ -641,8 +653,10 @@ V1 的产品目标覆盖三条能力线，但共享同一 Runtime Foundation，�
 - MulNX/HLAE adapter；
 - LHM/OpenHUD compatibility；
 - 自由拖拽 Layout Editor；
-- Electron/Tauri desktop shell；
+- 完整 Electron/Tauri desktop shell；
 - 动态第三方 plugin marketplace。
+
+这里“完整 desktop shell”仍是后续选择；V1 所需的薄 Program/Assist overlay host 不等于提前冻结 Electron/Tauri 作为全产品壳。
 
 ## 19. 与 RivalHub Issues / DAK 的关系
 
