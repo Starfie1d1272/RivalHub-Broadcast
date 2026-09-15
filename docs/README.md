@@ -4,10 +4,10 @@
 
 当前文档：
 
-- [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里。
-- [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项；当前 runtime 模型以 current snapshot + explicit transition 为核心，并区分 Program-safe / Assist-private state 与 source-local continuity。
+- [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里；顶层产品结构按“赛事与实时数据 / 正式节目制播 / Observer Assist”三条能力线组织。
+- [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项；当前 runtime 模型以 current snapshot + explicit transition 为核心，并区分 Program-safe / Assist-private state、source-local continuity，以及第一方 RivalHub adapter 与 Shared Runtime Foundation 的依赖边界。
 - [`telemetry.md`](telemetry.md)：M1 Telemetry / GSI 设计基线，定义 Raw GSI、block-specific source semantics、normalized telemetry、production capture、replay 与真实 CS2 evidence/验证边界。
-- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、RivalHub read/write 集成顺序、Issue 生命周期与 GitHub Project 组织方式。
+- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、三条产品能力线的阶段映射、RivalHub read/write 集成顺序、Issue 生命周期与 GitHub Project 组织方式。
 - [`development-validation.md`](development-validation.md)：macOS 主开发、跨平台 CI、真实 Windows + CS2/CSTV + OBS 验收与 reference corpus 的职责边界。
 - [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
 - [`rfcs/`](rfcs/)：重大但尚未完全冻结的专项产品/技术设计；RFC-0001 负责 Lookahead acquisition、alignment、cue scheduling、portability 与可选增强研究。
@@ -19,16 +19,17 @@
 - ADR-0001：项目定位与权威边界；
 - ADR-0002：Runtime / Workspace 技术基线；
 - ADR-0003：RuntimeState / projection、session/identity、delivery/backpressure、outbox 与跨仓 contract invariant；
-- ADR-0004：Delayed Program 输出、machine-only Lookahead feed、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界。
+- ADR-0004：Delayed Program 输出、machine-only Lookahead feed、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界；
+- ADR-0005：赛事与实时数据 / 正式节目制播 / Observer Assist 三条产品能力线、Shared Runtime Foundation，以及 RivalHub 第一方集成与 Core/Lookahead 可移植性边界。
 
 文档 authority 关系：
 
 ```text
 product.md
-  产品要做到什么
+  产品要做到什么；三条能力线分别解决什么问题
 
 architecture.md + ADR
-  长期架构 invariant / ownership / Program vs Assist boundary
+  长期架构 invariant / ownership / 第一方 adapter / Program vs Assist boundary
 
 telemetry.md
   单个 GSI source 的 Raw GSI / source semantics / capture / replay evidence
@@ -37,7 +38,7 @@ rfcs/
   尚未完全冻结的专项设计；不能覆盖 Accepted ADR
 
 roadmap.md
-  阶段级交付、RivalHub read/write 接入顺序与依赖
+  阶段级交付、三条能力线的推进顺序、RivalHub read/write 接入顺序与依赖
 
 development-validation.md
   Mac/CI/真实 Windows+CS2/CSTV+OBS 的验证职责
