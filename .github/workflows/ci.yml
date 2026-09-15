@@ -128,7 +128,7 @@ jobs:
     needs: [quality, platform, qualification_offline]
     runs-on: windows-2025
     env:
-      QUALIFICATION_BUILD_ROOT: ${{ runner.temp }}/rivalhub-qualification-build
+      QUALIFICATION_BUILD_ROOT: ${{ github.workspace }}/.agent-tmp/rivalhub-qualification-build
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
