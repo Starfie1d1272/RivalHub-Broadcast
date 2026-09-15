@@ -58,9 +58,19 @@ export interface GsiClock {
 export type ObservationSink = (observation: TelemetryObservation) => void;
 /** Synchronous local handoff only; the callback must not perform I/O or return a Promise. */
 export type GsiDiagnosticsSink = (diagnostics: GsiDiagnosticBatch) => void;
+/** Synchronous local handoff of the accepted, shallow-auth-sanitized source payload. */
+export interface AcceptedRawInput {
+  readonly sequence: number;
+  readonly receivedAt: string;
+  readonly receivedMonotonicMs: number;
+  readonly payload: Record<string, unknown>;
+}
+/** Synchronous local handoff only; the callback must not perform I/O or return a Promise. */
+export type AcceptedRawSink = (input: AcceptedRawInput) => void;
 
 export type CompanionRuntimeDiagnosticCode =
   | 'adapter_unexpected_failure'
+  | 'accepted_raw_sink_failed'
   | 'gsi_diagnostics_sink_failed'
   | 'observation_sink_failed'
   | 'recorder_unexpected_failure';
@@ -68,6 +78,7 @@ export type CompanionRuntimeDiagnosticCode =
 export interface GsiIngressOptions {
   readonly gsiToken: string;
   readonly recorder: CaptureRecorder;
+  readonly onAcceptedRaw?: AcceptedRawSink;
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
   readonly clock?: GsiClock;
@@ -167,6 +178,17 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
         });
       } catch {
         reportRuntimeDiagnostic(options, 'recorder_unexpected_failure');
+      }
+
+      try {
+        options.onAcceptedRaw?.({
+          sequence: acceptedSequence,
+          receivedAt: receive.receivedAt,
+          receivedMonotonicMs: receive.receivedMonotonicMs,
+          payload,
+        });
+      } catch {
+        reportRuntimeDiagnostic(options, 'accepted_raw_sink_failed');
       }
 
       let adapted: GsiAdaptResult;

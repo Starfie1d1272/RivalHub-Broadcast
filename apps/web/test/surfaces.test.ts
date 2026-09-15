@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { SurfacePage, surfaceDefinitions, surfaceForPath } from '../src/App';
+import { parseDebugRuntimeResponse } from '../src/debug/runtime';
 
 describe('web surface shell', () => {
   it.each([
@@ -18,5 +19,27 @@ describe('web surface shell', () => {
       type: 'main',
       props: { 'data-surface': 'debug' },
     });
+  });
+
+  it('accepts the bounded awaiting debug shape', () => {
+    expect(
+      parseDebugRuntimeResponse({
+        producerInstanceId: 'producer-1',
+        sourceGeneration: 0,
+        freshness: 'awaiting',
+        raw: { current: null },
+        normalized: { current: null },
+        runtime: { current: {}, lastDisposition: null },
+        recentTransitions: [],
+        latestGsiDiagnostics: null,
+        recentRuntimeDiagnostics: [],
+        recorderHealth: { state: 'recording' },
+        deliveryHealth: [],
+      }),
+    ).toMatchObject({ freshness: 'awaiting', sourceGeneration: 0 });
+  });
+
+  it('rejects a response missing required debug fields instead of guessing state', () => {
+    expect(parseDebugRuntimeResponse({ freshness: 'fresh' })).toBeUndefined();
   });
 });

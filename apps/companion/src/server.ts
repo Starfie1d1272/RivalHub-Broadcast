@@ -1,6 +1,8 @@
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 
 import { buildApp } from './app.js';
+import { createProgramRuntime } from './runtime/program-runtime.js';
 import {
   createCaptureRecorder,
   createDisabledRecorder,
@@ -15,6 +17,7 @@ const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
+const producerInstanceId = randomUUID();
 
 function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
   const fields = {
@@ -43,7 +46,8 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     console.error(`Companion capture recorder unavailable: ${String(error)}`);
   }
 
-  const app = buildApp({ logger: true, gsiToken, recorder });
+  const programRuntime = createProgramRuntime(producerInstanceId);
+  const app = buildApp({ logger: true, gsiToken, recorder, programRuntime });
   let shutdownPromise: Promise<void> | undefined;
 
   function shutdown(signal: string): void {
