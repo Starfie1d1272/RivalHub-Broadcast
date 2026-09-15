@@ -6,6 +6,8 @@ $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
 $appPath = Join-Path $script:BundleRoot 'app'
 if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'bundled runtime/node.exe is missing' }
 if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw 'bundled Companion dist/server.js is missing' }
+$dependencyPath = Join-Path $appPath 'node_modules\.pnpm\node_modules'
+if (-not (Test-Path -LiteralPath $dependencyPath -PathType Container)) { throw 'bundled dependency store is missing' }
 
 $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
 if ($listeners.Count -gt 0) { throw 'port 3000 is already occupied; stop the other process before starting qualification' }
@@ -57,6 +59,7 @@ $env:QUALIFICATION_CONTROL_TOKEN = $controlToken
 $env:QUALIFICATION_RUN_ID = $runId
 $env:QUALIFICATION_SCENARIO_PATH = (Join-Path $runDir 'scenario.jsonl')
 $env:QUALIFICATION_EVIDENCE_DIR = $runDir
+$env:NODE_PATH = if ($env:NODE_PATH) { "$dependencyPath;$($env:NODE_PATH)" } else { $dependencyPath }
 
 $stdoutPath = Join-Path $runDir 'logs\companion.log'
 $stderrPath = Join-Path $runDir 'logs\companion.stderr.log'
