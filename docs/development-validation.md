@@ -214,6 +214,45 @@ Evidence:
 
 真实平台验证应尽量使用**明确 commit/build 对应的可复现 artifact 或标准 start workflow**。不要在 validator 机器上临时修改代码后，再把结果当成仓库某个 revision 的正式验收证据。
 
+## 4.1 M1 Qualification Bundle
+
+M1 的 Windows + CS2 平台验证使用绑定 exact git SHA 的 portable qualification bundle，不把 source checkout 当作现场主流程。bundle 由 `pnpm qualification:build` 从当前 revision 构建：使用 `pnpm deploy` 生成自包含的 production Companion，并携带与 workspace `engines` 一致的官方 Node 24 Windows x64 runtime。借用的 Windows 机器不需要安装 Git、pnpm 或 Node，也不允许现场改代码。
+
+bundle 的稳定目录契约为：
+
+```text
+rivalhub-broadcast-qualification-<shortSHA>-win-x64/
+  runtime/node.exe
+  app/package.json
+  app/dist/**
+  app/node_modules/**
+  scripts/{install-gsi,start,mark,check,stop}.ps1
+  scripts/{qualification-supervisor.mjs,qualification-contract.json,verify-evidence.mjs}
+  scripts/evidence/{contract,capture,scenario,checks,integrity,report,qualification}.mjs
+  config/gamestate_integration_rivalhub_broadcast.cfg.template
+  metadata/{artifact.json,SHA256SUMS}
+  evidence/
+  README.txt
+```
+
+现场首选打开 loopback-only 的 `/qualification` 页面完成一次连续的 Demo A → 在 CS2 中执行 `quit` → 等待机器自动观察到 stale → 页面确认已退出 CS2 → 开始下一场 → 重开 CS2 → Demo B 流程。页面背后的 qualification-only HTTP/PowerShell seam 负责有限 marker、显式 `ProgramRuntime.resetMapExecution()` 和自动证据采集；该 surface 不属于正式 Operator UI、HUD 或 Program/OBS 输出。`start.ps1` 自动生成并安装 canonical GSI cfg，并启动外层 `qualification-supervisor.mjs` 管理整个 run lifecycle。页面的“结束测试并导出结果”会先让 Companion graceful shutdown，随后由 supervisor 自动 finalize、verify、恢复原 GSI cfg，并在页面显示 `PASS`、`FAIL` 或 `INCONCLUSIVE` 及报告相对路径；`stop.ps1` 仅作为 supervisor 不可用时的 automation fallback。人工的 `cs2-closed` 是退出 CS2 的声明，机器的 `runtime-stale` 是 GSI 沉默事实；两者都必须发生在下一场 reset 之前，但不要求人工点击先于 stale。reset 后如果 Core 观察到可靠的非空 map-name change 并推进 map epoch，独立 verifier 会把它作为 Demo B 的合法 execution boundary。
+
+每个 `demo-a-live` / `demo-b-live` marker 都必须携带同一时刻的 accepted observation（sequence、receivedAt、monotonic time、map epoch、runtime sequence、source generation、producer identity 与 freshness）。独立 verifier 会将该 observation 的 sequence/timestamp 与 Capture V1 frame 对应，并分别证明它位于 reset 前或 reset 后的 execution；仅凭 marker 加上 capture 中任意 frame 不能判定 production chain 通过。marker vocabulary、check keys、结果值、schema version 与 pinned Node runtime 位于仓库内的 `apps/companion/src/qualification/contract.json`，runtime evaluation 与 verifier evaluation 保持独立。
+
+`next-execution` 的 after marker 还必须记录 `programTelemetryCleared: true`，由 reset 后真实 RuntimeSnapshot 计算；controller 与 offline verifier 都必须验证该事实，才能把 explicit reset 或 Demo B recovery 判为通过。页面展示的 qualification semantic result 与 GSI 配置恢复状态分开表达；恢复失败不能改写 `qualification.json` 或 `REPORT.md` 中已经冻结的核心验收结果。finalization/verification 失败时保留 `.qualification-local` 供诊断，不自动删除 supervisor 日志。
+
+GSI 安装器会优先读取 Steam `libraryfolders.vdf`（并结合常见注册表安装路径），枚举 library 中的 CS2；`-Cs2Root` 仍是自动发现为零或多个候选时的明确 fallback。portable qualification runtime 当前固定为 contract 中声明的官方 Node Windows x64 版本，升级必须通过普通 PR 修改该配置。
+
+仓库级验证入口为：
+
+```text
+pnpm qualification:build
+pnpm qualification:offline
+pnpm qualification:verify <evidence-dir-or-zip>
+```
+
+`qualification:offline` 在借用 Windows 机器前运行确定性测试、真实语义 fixture/replay、runtime/recorder/Companion integration 与 bundle structure smoke。Linux/macOS/Windows CI 的对应 job 只证明自动化与 bundle 脚本可执行；PR 的 Windows job 必须 checkout 并上传 PR head SHA 对应的 ZIP，且通过 automated gate 后才能作为真实 validator 的输入。GitHub-hosted Windows smoke 不等于真实 Windows + CS2 acceptance；后者仍须使用该 exact-revision artifact 完成独立的 Layer C/D 现场证据。
+
 ## 5. Real Telemetry Reference Corpus
 
 第一批真实 Windows + CS2 observer capture 已经取得，并已经用于 `docs/telemetry.md` 的 evidence-backed semantics，包括 normal-player、observer、warmup/local-BOT 以及完整比赛生命周期的派生 evidence。
