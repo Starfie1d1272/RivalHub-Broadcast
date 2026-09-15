@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import { tmpdir } from 'node:os';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
+import { createInitialRuntimeState, reduceRuntime } from '@rivalhub-broadcast/core/runtime';
 import {
   iterateCaptureFrames,
   verifyCapture,
@@ -287,5 +288,105 @@ describe('Companion GSI capture integration', () => {
       frameCount: 128,
       droppedFrames: 872,
     });
+  });
+
+  it('keeps runtime continuity separate from recorder drops and resyncs after a missing observation', async () => {
+    const recorderCalls: Array<{ sequence: number; admitted: boolean }> = [];
+    const recorder: CaptureRecorder = {
+      captureId: 'runtime-ingress-capture',
+      tryRecord(input) {
+        const admitted = input.sequence !== 1;
+        recorderCalls.push({ sequence: input.sequence, admitted });
+        return admitted;
+      },
+      getHealth() {
+        return {
+          state: 'degraded',
+          pendingFrames: 0,
+          pendingBytes: 0,
+          maxPendingFrames: 128,
+          maxPendingBytes: 2 * 1024 * 1024,
+          frameCount: recorderCalls.filter(({ admitted }) => admitted).length,
+          droppedFrames: recorderCalls.filter(({ admitted }) => !admitted).length,
+          incomplete: true,
+          lastErrorCode: 'recorder_overflow',
+        };
+      },
+      async finalize() {},
+    };
+
+    let runtimeState = createInitialRuntimeState('companion-integration-producer');
+    const reductions: Array<ReturnType<typeof reduceRuntime>> = [];
+    app = buildApp({
+      gsiToken: TOKEN,
+      recorder,
+      clock: createClock(),
+      onObservation: (observation) => {
+        if (observation.receive.sequence === 2) {
+          throw new Error('test observation handoff unavailable');
+        }
+
+        const reduction = reduceRuntime(
+          runtimeState,
+          {
+            kind: 'program-telemetry',
+            sourceGeneration: 0,
+            observation,
+          },
+          { staleAfterMs: 1_000 },
+        );
+        reductions.push(reduction);
+        runtimeState = reduction.state;
+      },
+    });
+
+    const payloadForPhase = (phase: 'freezetime' | 'live' | 'over') => ({
+      provider: { name: 'CS2' },
+      map: { name: 'de_nuke', phase: 'live' },
+      round: { phase },
+    });
+
+    expect((await postGsi(app, payloadForPhase('freezetime'))).statusCode).toBe(204);
+    expect((await postGsi(app, payloadForPhase('live'))).statusCode).toBe(204);
+    expect((await postGsi(app, payloadForPhase('over'))).statusCode).toBe(204);
+    expect((await postGsi(app, payloadForPhase('over'))).statusCode).toBe(204);
+
+    expect(recorderCalls).toEqual([
+      { sequence: 0, admitted: true },
+      { sequence: 1, admitted: false },
+      { sequence: 2, admitted: true },
+      { sequence: 3, admitted: true },
+    ]);
+    expect(reductions.map(({ state }) => state.programTelemetry?.receive.sequence)).toEqual([
+      0, 1, 3,
+    ]);
+
+    const baseline = reductions[0];
+    const afterRecorderDrop = reductions[1];
+    const afterMissingObservation = reductions[2];
+    if (
+      baseline === undefined ||
+      afterRecorderDrop === undefined ||
+      afterMissingObservation === undefined
+    ) {
+      throw new Error('expected three runtime reductions');
+    }
+
+    expect(baseline.disposition).toEqual({ kind: 'accepted', reason: 'baseline' });
+    expect(afterRecorderDrop.disposition).toEqual({ kind: 'accepted', reason: 'contiguous' });
+    expect(afterRecorderDrop.transitions).toEqual([
+      expect.objectContaining({
+        kind: 'round_started',
+        sourceGeneration: 0,
+        receiveSequence: 1,
+      }),
+    ]);
+    expect(afterMissingObservation.disposition).toEqual({
+      kind: 'accepted',
+      reason: 'gap-resync',
+      missingSequenceRange: { from: 2, to: 2 },
+    });
+    expect(afterMissingObservation.transitions).toEqual([]);
+    expect(afterMissingObservation.state.programTelemetry?.telemetry.round?.phase).toBe('over');
   });
 });
