@@ -11,6 +11,13 @@
         "token"         "REPLACE_WITH_GSI_TOKEN"
     }
 
+    "output"
+    {
+        "precision_time"     "3"
+        "precision_position" "1"
+        "precision_vector"   "3"
+    }
+
     "data"
     {
         "provider"              "1"

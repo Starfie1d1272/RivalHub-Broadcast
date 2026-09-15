@@ -196,6 +196,9 @@ importers:
 
   apps/companion:
     dependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../../packages/core
       '@rivalhub-broadcast/telemetry-gsi':
         specifier: workspace:*
         version: link:../../packages/telemetry-gsi

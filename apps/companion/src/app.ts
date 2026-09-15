@@ -5,14 +5,16 @@ import {
   GSI_REQUEST_TIMEOUT_MS,
   registerGsiIngress,
   type GsiClock,
-  type TelemetrySink,
+  type GsiDiagnosticsSink,
+  type ObservationSink,
 } from './telemetry/gsi-ingress.js';
 
 export interface CompanionAppOptions {
   readonly logger?: boolean;
   readonly gsiToken?: string;
   readonly recorder?: CaptureRecorder;
-  readonly telemetrySink?: TelemetrySink;
+  readonly onObservation?: ObservationSink;
+  readonly onGsiDiagnostics?: GsiDiagnosticsSink;
   readonly clock?: GsiClock;
 }
 
@@ -40,7 +42,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       gsiToken: options.gsiToken,
       recorder,
       ...(options.clock === undefined ? {} : { clock: options.clock }),
-      ...(options.telemetrySink === undefined ? {} : { sink: options.telemetrySink }),
+      ...(options.onObservation === undefined ? {} : { onObservation: options.onObservation }),
+      ...(options.onGsiDiagnostics === undefined
+        ? {}
+        : { onGsiDiagnostics: options.onGsiDiagnostics }),
       onRuntimeDiagnostic: (code) => {
         if (!runtimeDegraded) {
           app.log.warn({ code }, 'Companion telemetry path degraded');

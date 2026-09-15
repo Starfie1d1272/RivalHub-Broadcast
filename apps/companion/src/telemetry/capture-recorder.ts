@@ -1,13 +1,45 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { open, mkdir, rename } from 'node:fs/promises';
+import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
+
+import {
+  createCaptureManifest,
+  openCaptureFile,
+  renameCapture,
+  serializeCaptureFrame,
+  writeCaptureManifest,
+  writeFully,
+  type CaptureFileHandle,
+  type CaptureFrameInput,
+  type CaptureWriterFactory,
+} from './capture-storage.js';
+
+export type {
+  CaptureFileHandle,
+  CaptureFrameInput,
+  CaptureWriterFactory,
+  ProductionCaptureFrameV1,
+  ProductionCaptureManifestV1,
+} from './capture-storage.js';
 
 export const RECORDER_MAX_PENDING_FRAMES = 128;
 export const RECORDER_MAX_PENDING_BYTES = 2 * 1024 * 1024;
 export const RECORDER_SHUTDOWN_DRAIN_TIMEOUT_MS = 10_000;
 
 export type RecorderState = 'recording' | 'degraded' | 'failed' | 'finalizing' | 'closed';
+
+export type RecorderErrorCode =
+  | 'recorder_not_configured'
+  | 'recorder_start_failed'
+  | 'recorder_encode_failed'
+  | 'recorder_overflow'
+  | 'recorder_writer_failed'
+  | 'recorder_finalize_timeout'
+  | 'recorder_finalize_failed';
+
+export type RecorderOperation =
+  'open' | 'encode' | 'write' | 'truncate' | 'sync' | 'close' | 'manifest' | 'rename';
 
 export interface RecorderHealth {
   readonly state: RecorderState;
@@ -18,38 +50,18 @@ export interface RecorderHealth {
   readonly frameCount: number;
   readonly droppedFrames: number;
   readonly incomplete: boolean;
-  readonly lastErrorCode?: string;
+  readonly lastErrorCode?: RecorderErrorCode;
 }
 
 export interface RecorderDiagnostic {
-  readonly code:
-    | 'recorder_overflow'
-    | 'recorder_writer_failed'
-    | 'recorder_start_failed'
-    | 'recorder_finalize_timeout'
-    | 'recorder_finalize_failed';
+  readonly code: RecorderErrorCode;
+  readonly operation?: RecorderOperation;
+  readonly causeCode?: string;
 }
-
-export interface CaptureFrameInput {
-  readonly sequence: number;
-  readonly receivedAt: string;
-  readonly receivedMonotonicMs: number;
-  readonly payload: Record<string, unknown>;
-}
-
-export interface CaptureFileHandle {
-  write(buffer: Buffer, position: number): Promise<number>;
-  sync(): Promise<void>;
-  truncate(length: number): Promise<void>;
-  close(): Promise<void>;
-}
-
-export type CaptureWriterFactory = (framesPath: string) => Promise<CaptureFileHandle>;
 
 export interface CaptureRecorder {
   readonly captureId: string;
-  serializeFrame(input: CaptureFrameInput): Buffer;
-  offer(buffer: Buffer): boolean;
+  tryRecord(input: CaptureFrameInput): boolean;
   getHealth(): RecorderHealth;
   finalize(): Promise<void>;
 }
@@ -67,68 +79,19 @@ export interface CaptureRecorderOptions {
   readonly onDiagnostic?: (diagnostic: RecorderDiagnostic) => void;
 }
 
+type RecorderLifecycle = 'accepting' | 'finalizing' | 'abandoned' | 'closed';
+type RecorderWriterState = 'healthy' | 'failed';
+type RecorderIntegrity = 'complete-candidate' | 'incomplete';
+
 function defaultCaptureId(createdAt: string): string {
   const timestamp = createdAt.replace(/[-:.TZ]/g, '');
   return `${timestamp}-${randomUUID().slice(0, 8)}`;
 }
 
-function adaptFileHandle(fileHandle: Awaited<ReturnType<typeof open>>): CaptureFileHandle {
-  return {
-    async write(buffer, position) {
-      const result = await fileHandle.write(buffer, 0, buffer.length, position);
-      return result.bytesWritten;
-    },
-    sync: () => fileHandle.sync(),
-    truncate: (length) => fileHandle.truncate(length),
-    close: () => fileHandle.close(),
-  };
-}
-
-async function openCaptureFile(framesPath: string): Promise<CaptureFileHandle> {
-  return adaptFileHandle(await open(framesPath, 'wx'));
-}
-
-async function writeFully(
-  fileHandle: CaptureFileHandle,
-  buffer: Buffer,
-  position: number,
-): Promise<void> {
-  let written = 0;
-  while (written < buffer.length) {
-    const bytesWritten = await fileHandle.write(buffer.subarray(written), position + written);
-    if (!Number.isSafeInteger(bytesWritten) || bytesWritten <= 0) {
-      throw new Error('capture writer returned no progress');
-    }
-    if (bytesWritten > buffer.length - written) {
-      throw new Error('capture writer returned an invalid byte count');
-    }
-    written += bytesWritten;
-  }
-}
-
-function createManifest(
-  captureId: string,
-  createdAt: string,
-  broadcastCommit: string,
-  gsiConfig: Record<string, unknown>,
-  complete: boolean,
-  frameCount: number,
-  droppedFrames: number,
-  framesSha256: string,
-): Record<string, unknown> {
-  return {
-    formatVersion: 1,
-    captureId,
-    createdAt,
-    platform: process.platform,
-    broadcastCommit,
-    scenario: 'production-gsi-session',
-    gsiConfig,
-    complete,
-    frameCount,
-    droppedFrames,
-    framesSha256,
-  };
+function getCauseCode(error: unknown): string | undefined {
+  if (typeof error !== 'object' || error === null) return undefined;
+  const code = (error as { readonly code?: unknown }).code;
+  return typeof code === 'string' && /^[A-Za-z0-9_]+$/.test(code) ? code : undefined;
 }
 
 class ProductionCaptureRecorder implements CaptureRecorder {
@@ -147,16 +110,14 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   private readonly onDiagnostic: ((diagnostic: RecorderDiagnostic) => void) | undefined;
   private readonly hash = createHash('sha256');
   private readonly queue: Buffer[] = [];
-  private readonly drainWaiters: Array<() => void> = [];
-  private readonly emittedDiagnostics = new Set<RecorderDiagnostic['code']>();
+  private readonly emittedDiagnostics = new Set<RecorderErrorCode>();
 
   private fileHandle: CaptureFileHandle | undefined;
   private activeBuffer: Buffer | undefined;
-  private pumpRunning = false;
-  private admissionsStopped = false;
-  private writerFailed = false;
-  private shutdownAbandoned = false;
-  private closed = false;
+  private pumpPromise: Promise<void> | undefined;
+  private lifecycle: RecorderLifecycle = 'accepting';
+  private writerState: RecorderWriterState = 'healthy';
+  private integrity: RecorderIntegrity = 'complete-candidate';
   private finalizePromise: Promise<void> | undefined;
   private pendingFrames = 0;
   private pendingBytes = 0;
@@ -164,9 +125,8 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   private droppedFrames = 0;
   private confirmedOffset = 0;
   private lastElapsedUs = 0;
-  private incomplete = false;
-  private lastErrorCode: string | undefined;
-  private canPublish = true;
+  private lastErrorCode: RecorderErrorCode | undefined;
+  private publicationSafe = true;
 
   private constructor(options: CaptureRecorderOptions) {
     this.captureDir = options.captureDir;
@@ -190,12 +150,17 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   static async create(options: CaptureRecorderOptions): Promise<ProductionCaptureRecorder> {
     const recorder = new ProductionCaptureRecorder(options);
     try {
-      await mkdir(recorder.captureDir, { recursive: true });
-      await mkdir(recorder.partialDir);
+      await mkdir(recorder.captureDir, { recursive: true, mode: 0o700 });
+      await mkdir(recorder.partialDir, { mode: 0o700 });
       recorder.fileHandle = await recorder.writerFactory(recorder.framesPath);
     } catch (error: unknown) {
+      const causeCode = getCauseCode(error);
       try {
-        options.onDiagnostic?.({ code: 'recorder_start_failed' });
+        options.onDiagnostic?.({
+          code: 'recorder_start_failed',
+          operation: 'open',
+          ...(causeCode === undefined ? {} : { causeCode }),
+        });
       } catch {
         // Startup diagnostics must not replace the original startup error.
       }
@@ -204,62 +169,54 @@ class ProductionCaptureRecorder implements CaptureRecorder {
     return recorder;
   }
 
-  serializeFrame(input: CaptureFrameInput): Buffer {
-    const elapsedDelta = (input.receivedMonotonicMs - this.startedMonotonicMs) * 1000;
-    const candidateElapsedUs = Number.isFinite(elapsedDelta)
-      ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(elapsedDelta)))
-      : this.lastElapsedUs;
-    const elapsedUs = Math.max(this.lastElapsedUs, candidateElapsedUs);
-    this.lastElapsedUs = elapsedUs;
-    return Buffer.from(
-      `${JSON.stringify({
-        version: 1,
-        sequence: input.sequence,
-        elapsedUs,
-        receivedAt: input.receivedAt,
-        payload: input.payload,
-      })}\n`,
-      'utf8',
-    );
-  }
-
-  offer(buffer: Buffer): boolean {
+  tryRecord(input: CaptureFrameInput): boolean {
     if (
-      this.admissionsStopped ||
-      this.writerFailed ||
-      this.closed ||
+      this.lifecycle !== 'accepting' ||
+      this.writerState === 'failed' ||
       this.fileHandle === undefined
     ) {
       this.dropFrame();
       return false;
     }
 
-    if (
-      this.pendingFrames + 1 > RECORDER_MAX_PENDING_FRAMES ||
-      this.pendingBytes + buffer.byteLength > RECORDER_MAX_PENDING_BYTES
-    ) {
-      this.dropFrame('recorder_overflow');
+    if (this.pendingFrames + 1 > RECORDER_MAX_PENDING_FRAMES) {
+      this.dropFrame('recorder_overflow', 'write');
+      return false;
+    }
+
+    let buffer: Buffer;
+    try {
+      buffer = serializeCaptureFrame(input, this.elapsedUs(input.receivedMonotonicMs));
+    } catch (error: unknown) {
+      this.droppedFrames += 1;
+      this.markIncomplete();
+      this.recordError('recorder_encode_failed', 'encode', error);
+      return false;
+    }
+
+    if (this.pendingBytes + buffer.byteLength > RECORDER_MAX_PENDING_BYTES) {
+      this.dropFrame('recorder_overflow', 'write');
       return false;
     }
 
     this.queue.push(buffer);
     this.pendingFrames += 1;
     this.pendingBytes += buffer.byteLength;
-    void this.pump();
+    this.ensurePump();
     return true;
   }
 
   getHealth(): RecorderHealth {
     let state: RecorderState;
-    if (this.closed) {
+    if (this.lifecycle === 'closed') {
       state = 'closed';
-    } else if (this.shutdownAbandoned) {
+    } else if (this.lifecycle === 'abandoned') {
       state = 'failed';
-    } else if (this.finalizePromise !== undefined && this.admissionsStopped) {
+    } else if (this.lifecycle === 'finalizing') {
       state = 'finalizing';
-    } else if (this.writerFailed) {
+    } else if (this.writerState === 'failed') {
       state = 'failed';
-    } else if (this.incomplete) {
+    } else if (this.integrity === 'incomplete') {
       state = 'degraded';
     } else {
       state = 'recording';
@@ -273,7 +230,7 @@ class ProductionCaptureRecorder implements CaptureRecorder {
       maxPendingBytes: RECORDER_MAX_PENDING_BYTES,
       frameCount: this.frameCount,
       droppedFrames: this.droppedFrames,
-      incomplete: this.incomplete,
+      incomplete: this.integrity === 'incomplete',
       ...(this.lastErrorCode === undefined ? {} : { lastErrorCode: this.lastErrorCode }),
     };
   }
@@ -283,25 +240,43 @@ class ProductionCaptureRecorder implements CaptureRecorder {
     return this.finalizePromise;
   }
 
-  private elapsedDrainPromise(): Promise<void> {
-    if (this.pendingFrames === 0 || this.writerFailed) return Promise.resolve();
-    return new Promise((resolve) => {
-      this.drainWaiters.push(resolve);
+  private elapsedUs(receivedMonotonicMs: number): number {
+    const elapsedDelta = (receivedMonotonicMs - this.startedMonotonicMs) * 1000;
+    const candidateElapsedUs = Number.isFinite(elapsedDelta)
+      ? Math.min(Number.MAX_SAFE_INTEGER, Math.max(0, Math.floor(elapsedDelta)))
+      : this.lastElapsedUs;
+    const elapsedUs = Math.max(this.lastElapsedUs, candidateElapsedUs);
+    this.lastElapsedUs = elapsedUs;
+    return elapsedUs;
+  }
+
+  private ensurePump(): void {
+    if (this.pumpPromise !== undefined) return;
+
+    const pumpPromise = this.runPump().catch((error: unknown) => {
+      this.handleWriterFailure(error);
+    });
+    this.pumpPromise = pumpPromise;
+    void pumpPromise.then(() => {
+      if (this.pumpPromise !== pumpPromise) return;
+      this.pumpPromise = undefined;
+      if (
+        this.lifecycle === 'accepting' &&
+        this.writerState === 'healthy' &&
+        this.queue.length > 0
+      ) {
+        this.ensurePump();
+      }
     });
   }
 
-  private notifyDrainWaiters(): void {
-    if (this.pendingFrames !== 0 && !this.writerFailed) return;
-    const waiters = this.drainWaiters.splice(0);
-    for (const resolve of waiters) resolve();
-  }
-
-  private async pump(): Promise<void> {
-    if (this.pumpRunning) return;
-    this.pumpRunning = true;
-
+  private async runPump(): Promise<void> {
     try {
-      while (this.queue.length > 0 && !this.writerFailed && !this.shutdownAbandoned) {
+      while (
+        this.queue.length > 0 &&
+        this.writerState === 'healthy' &&
+        this.lifecycle !== 'abandoned'
+      ) {
         const buffer = this.queue.shift();
         if (buffer === undefined) break;
         this.activeBuffer = buffer;
@@ -309,8 +284,8 @@ class ProductionCaptureRecorder implements CaptureRecorder {
         try {
           if (this.fileHandle === undefined) throw new Error('capture file is not open');
           await writeFully(this.fileHandle, buffer, this.confirmedOffset);
-        } catch {
-          await this.handleWriterFailure();
+        } catch (error: unknown) {
+          this.handleWriterFailure(error);
           break;
         }
 
@@ -320,174 +295,198 @@ class ProductionCaptureRecorder implements CaptureRecorder {
         this.pendingFrames -= 1;
         this.pendingBytes -= buffer.byteLength;
         this.activeBuffer = undefined;
-        this.notifyDrainWaiters();
       }
     } finally {
-      this.pumpRunning = false;
-      if (
-        this.shutdownAbandoned &&
-        this.activeBuffer === undefined &&
-        this.fileHandle !== undefined
-      ) {
-        const fileHandle = this.fileHandle;
-        this.fileHandle = undefined;
-        try {
-          await fileHandle.truncate(this.confirmedOffset);
-          await fileHandle.close();
-        } catch {
-          this.canPublish = false;
-        }
-        this.closed = true;
+      if (this.lifecycle === 'abandoned' && this.activeBuffer === undefined) {
+        await this.closeAbandonedFile();
       }
-      this.notifyDrainWaiters();
     }
   }
 
-  private async handleWriterFailure(): Promise<void> {
-    this.writerFailed = true;
-    this.incomplete = true;
-    this.lastErrorCode = 'recorder_writer_failed';
-    this.emitDiagnostic('recorder_writer_failed');
+  private handleWriterFailure(error: unknown): void {
+    if (this.writerState === 'failed') return;
+    this.writerState = 'failed';
+    this.markIncomplete();
+    this.recordError('recorder_writer_failed', 'write', error);
 
-    this.droppedFrames += 1 + this.queue.length;
+    this.droppedFrames += (this.activeBuffer === undefined ? 0 : 1) + this.queue.length;
     this.queue.length = 0;
     this.pendingFrames = 0;
     this.pendingBytes = 0;
     this.activeBuffer = undefined;
-
-    try {
-      if (this.fileHandle !== undefined) {
-        await this.fileHandle.truncate(this.confirmedOffset);
-      }
-    } catch {
-      this.canPublish = false;
-    }
-
-    this.notifyDrainWaiters();
   }
 
-  private dropFrame(diagnostic?: RecorderDiagnostic['code']): void {
+  private dropFrame(code?: RecorderErrorCode, operation?: RecorderOperation): void {
     this.droppedFrames += 1;
-    this.incomplete = true;
-    if (diagnostic !== undefined) {
-      this.lastErrorCode = diagnostic;
-      this.emitDiagnostic(diagnostic);
-    }
+    this.markIncomplete();
+    if (code !== undefined) this.recordError(code, operation);
   }
 
-  private emitDiagnostic(code: RecorderDiagnostic['code']): void {
-    if (this.emittedDiagnostics.has(code)) return;
-    this.emittedDiagnostics.add(code);
+  private markIncomplete(): void {
+    this.integrity = 'incomplete';
+  }
+
+  private recordError(
+    code: RecorderErrorCode,
+    operation?: RecorderOperation,
+    error?: unknown,
+  ): void {
+    this.lastErrorCode = code;
+    const causeCode = getCauseCode(error);
+    this.emitDiagnostic({
+      code,
+      ...(operation === undefined ? {} : { operation }),
+      ...(causeCode === undefined ? {} : { causeCode }),
+    });
+  }
+
+  private emitDiagnostic(diagnostic: RecorderDiagnostic): void {
+    if (this.emittedDiagnostics.has(diagnostic.code)) return;
+    this.emittedDiagnostics.add(diagnostic.code);
     try {
-      this.onDiagnostic?.({ code });
+      this.onDiagnostic?.(diagnostic);
     } catch {
       // Diagnostics must never affect the live telemetry path.
     }
   }
 
   private discardQueuedFrames(): void {
-    if (this.queue.length === 0) return;
-    this.droppedFrames += this.queue.length;
-    this.incomplete = true;
-    this.queue.length = 0;
+    if (this.queue.length > 0) {
+      this.droppedFrames += this.queue.length;
+      this.markIncomplete();
+      this.queue.length = 0;
+    }
     this.pendingFrames = this.activeBuffer === undefined ? 0 : 1;
     this.pendingBytes = this.activeBuffer?.byteLength ?? 0;
-    this.notifyDrainWaiters();
   }
 
-  private async finalizeInternal(): Promise<void> {
-    this.admissionsStopped = true;
-    if (this.closed || this.fileHandle === undefined) {
-      this.closed = true;
-      return;
-    }
-
-    const timedOut = await new Promise<boolean>((resolve) => {
+  private async waitForPump(pumpPromise: Promise<void> | undefined): Promise<boolean> {
+    if (pumpPromise === undefined) return false;
+    return new Promise<boolean>((resolve) => {
       let settled = false;
       const timeoutHandle = setTimeout(() => {
         settled = true;
         resolve(true);
       }, this.shutdownDrainTimeoutMs);
-      void this.elapsedDrainPromise().then(() => {
+      void pumpPromise.then(() => {
         if (settled) return;
         settled = true;
         clearTimeout(timeoutHandle);
         resolve(false);
       });
     });
+  }
 
+  private async closeAbandonedFile(): Promise<void> {
+    if (this.fileHandle === undefined) return;
+    const fileHandle = this.fileHandle;
+    this.fileHandle = undefined;
+    try {
+      await fileHandle.truncate(this.confirmedOffset);
+    } catch (error: unknown) {
+      this.publicationSafe = false;
+      this.recordError('recorder_finalize_failed', 'truncate', error);
+    }
+    try {
+      await fileHandle.close();
+    } catch (error: unknown) {
+      this.publicationSafe = false;
+      this.recordError('recorder_finalize_failed', 'close', error);
+    }
+    if (!this.publicationSafe) this.markIncomplete();
+    this.lifecycle = 'closed';
+  }
+
+  private async finalizeInternal(): Promise<void> {
+    if (this.lifecycle === 'closed') return;
+    this.lifecycle = 'finalizing';
+    if (this.fileHandle === undefined) {
+      this.lifecycle = 'closed';
+      return;
+    }
+
+    const pumpPromise = this.pumpPromise;
+    const timedOut = await this.waitForPump(pumpPromise);
     if (timedOut) {
-      this.incomplete = true;
-      this.lastErrorCode = 'recorder_finalize_timeout';
-      this.emitDiagnostic('recorder_finalize_timeout');
+      this.markIncomplete();
+      this.recordError('recorder_finalize_timeout');
       this.discardQueuedFrames();
-      if (this.activeBuffer !== undefined) {
-        this.shutdownAbandoned = true;
+      if (this.activeBuffer !== undefined || this.pumpPromise !== undefined) {
+        this.lifecycle = 'abandoned';
         return;
       }
     }
 
-    if (this.activeBuffer !== undefined) {
-      this.shutdownAbandoned = true;
+    if (this.activeBuffer !== undefined || this.pumpPromise !== undefined) {
+      this.lifecycle = 'abandoned';
       return;
     }
 
     const fileHandle = this.fileHandle;
-    let safe = this.canPublish;
-    try {
-      await fileHandle.truncate(this.confirmedOffset);
-      await fileHandle.sync();
-    } catch {
-      safe = false;
+    if (fileHandle === undefined) {
+      this.lifecycle = 'closed';
+      return;
     }
 
+    let safe = this.publicationSafe;
+    try {
+      await fileHandle.truncate(this.confirmedOffset);
+    } catch (error: unknown) {
+      safe = false;
+      this.publicationSafe = false;
+      this.recordError('recorder_finalize_failed', 'truncate', error);
+    }
+    try {
+      await fileHandle.sync();
+    } catch (error: unknown) {
+      safe = false;
+      this.publicationSafe = false;
+      this.recordError('recorder_finalize_failed', 'sync', error);
+    }
     try {
       await fileHandle.close();
-    } catch {
+    } catch (error: unknown) {
       safe = false;
+      this.publicationSafe = false;
+      this.recordError('recorder_finalize_failed', 'close', error);
     }
     this.fileHandle = undefined;
 
     if (!safe) {
-      this.incomplete = true;
-      this.lastErrorCode ??= 'recorder_finalize_failed';
-      this.emitDiagnostic('recorder_finalize_failed');
-      this.closed = true;
+      this.markIncomplete();
+      this.lifecycle = 'closed';
       return;
     }
 
     const framesSha256 = this.hash.digest('hex');
-    const manifest = createManifest(
+    const manifest = createCaptureManifest(
       this.captureId,
       this.createdAt,
       this.broadcastCommit,
       this.gsiConfig,
-      !this.incomplete && this.droppedFrames === 0,
+      this.integrity === 'complete-candidate' && this.droppedFrames === 0,
       this.frameCount,
       this.droppedFrames,
       framesSha256,
     );
 
     try {
-      const manifestHandle = await open(join(this.partialDir, 'manifest.json'), 'wx');
-      try {
-        await writeFully(
-          adaptFileHandle(manifestHandle),
-          Buffer.from(`${JSON.stringify(manifest)}\n`, 'utf8'),
-          0,
-        );
-        await manifestHandle.sync();
-      } finally {
-        await manifestHandle.close();
-      }
-      await rename(this.partialDir, this.finalDir);
-      this.closed = true;
-    } catch {
-      this.incomplete = true;
-      this.lastErrorCode ??= 'recorder_finalize_failed';
-      this.emitDiagnostic('recorder_finalize_failed');
-      this.closed = true;
+      await writeCaptureManifest(this.partialDir, manifest);
+    } catch (error: unknown) {
+      this.markIncomplete();
+      this.recordError('recorder_finalize_failed', 'manifest', error);
+      this.lifecycle = 'closed';
+      return;
     }
+    try {
+      await renameCapture(this.partialDir, this.finalDir);
+    } catch (error: unknown) {
+      this.markIncomplete();
+      this.recordError('recorder_finalize_failed', 'rename', error);
+      this.lifecycle = 'closed';
+      return;
+    }
+    this.lifecycle = 'closed';
   }
 }
 
@@ -497,22 +496,9 @@ class DisabledCaptureRecorder implements CaptureRecorder {
   private droppedFrames = 0;
   private closed = false;
 
-  constructor(private readonly lastErrorCode: string) {}
+  constructor(private readonly lastErrorCode: RecorderErrorCode) {}
 
-  serializeFrame(input: CaptureFrameInput): Buffer {
-    return Buffer.from(
-      `${JSON.stringify({
-        version: 1,
-        sequence: input.sequence,
-        elapsedUs: 0,
-        receivedAt: input.receivedAt,
-        payload: input.payload,
-      })}\n`,
-      'utf8',
-    );
-  }
-
-  offer(): boolean {
+  tryRecord(): boolean {
     this.droppedFrames += 1;
     return false;
   }
@@ -543,6 +529,8 @@ export async function createCaptureRecorder(
   return ProductionCaptureRecorder.create(options);
 }
 
-export function createDisabledRecorder(lastErrorCode = 'recorder_start_failed'): CaptureRecorder {
+export function createDisabledRecorder(
+  lastErrorCode: RecorderErrorCode = 'recorder_start_failed',
+): CaptureRecorder {
   return new DisabledCaptureRecorder(lastErrorCode);
 }

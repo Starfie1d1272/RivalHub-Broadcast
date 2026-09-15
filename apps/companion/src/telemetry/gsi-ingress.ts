@@ -2,9 +2,11 @@ import { timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
 import {
   adaptGsiPayload,
   type GsiAdaptResult,
+  type GsiDiagnosticBatch,
   type TelemetryReceiveContext,
 } from '@rivalhub-broadcast/telemetry-gsi';
 
@@ -52,12 +54,14 @@ export interface GsiClock {
   now(): GsiClockSample;
 }
 
-export type TelemetrySink = (result: GsiAdaptResult) => void;
+export type ObservationSink = (observation: TelemetryObservation) => void;
+export type GsiDiagnosticsSink = (diagnostics: GsiDiagnosticBatch) => void;
 
 export interface GsiIngressOptions {
   readonly gsiToken: string;
   readonly recorder: CaptureRecorder;
-  readonly sink?: TelemetrySink;
+  readonly onObservation?: ObservationSink;
+  readonly onGsiDiagnostics?: GsiDiagnosticsSink;
   readonly clock?: GsiClock;
   readonly onRuntimeDiagnostic?: (
     code: 'adapter_unexpected_failure' | 'telemetry_sink_failed' | 'recorder_unexpected_failure',
@@ -111,6 +115,10 @@ function reportRuntimeDiagnostic(
 }
 
 export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOptions): void {
+  if (options.gsiToken.trim().length === 0) {
+    throw new Error('gsiToken must be a non-empty value');
+  }
+
   const clock = options.clock ?? defaultClock;
   let sequence = 0;
 
@@ -145,13 +153,12 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       };
 
       try {
-        const frame = options.recorder.serializeFrame({
+        options.recorder.tryRecord({
           sequence: acceptedSequence,
           receivedAt: receive.receivedAt,
           receivedMonotonicMs: receive.receivedMonotonicMs,
           payload,
         });
-        options.recorder.offer(frame);
       } catch {
         reportRuntimeDiagnostic(options, 'recorder_unexpected_failure');
       }
@@ -166,7 +173,18 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       }
 
       try {
-        options.sink?.(adapted);
+        options.onGsiDiagnostics?.(adapted.diagnostics);
+      } catch {
+        reportRuntimeDiagnostic(options, 'telemetry_sink_failed');
+      }
+
+      if (!adapted.ok) {
+        sendNoContent(reply);
+        return;
+      }
+
+      try {
+        options.onObservation?.(adapted.observation);
       } catch {
         reportRuntimeDiagnostic(options, 'telemetry_sink_failed');
       }

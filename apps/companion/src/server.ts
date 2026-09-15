@@ -4,6 +4,7 @@ import { buildApp } from './app.js';
 import {
   createCaptureRecorder,
   createDisabledRecorder,
+  RECORDER_SHUTDOWN_DRAIN_TIMEOUT_MS,
   type CaptureRecorder,
 } from './telemetry/capture-recorder.js';
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
@@ -13,6 +14,7 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
+const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = RECORDER_SHUTDOWN_DRAIN_TIMEOUT_MS + 2_000;
 
 if (gsiToken === undefined || gsiToken.trim().length === 0) {
   console.error('Companion startup failed: GSI_TOKEN must be set to a non-empty value');
@@ -38,15 +40,28 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   let shutdownPromise: Promise<void> | undefined;
 
   function shutdown(signal: string): void {
-    shutdownPromise ??= app
-      .close()
-      .then(() => {
+    shutdownPromise ??= (async () => {
+      let appClosed = false;
+      const watchdog = setTimeout(() => {
+        if (appClosed && recorder.getHealth().state === 'closed') return;
+        console.error(
+          `Companion shutdown watchdog expired after ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS}ms`,
+        );
+        process.exit(1);
+      }, COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS);
+      watchdog.unref();
+
+      try {
+        await app.close();
+        appClosed = true;
         app.log.info({ signal }, 'Companion stopped');
-      })
-      .catch((error: unknown) => {
+      } catch (error: unknown) {
         app.log.error(error, 'Companion shutdown failed');
         process.exitCode = 1;
-      });
+      } finally {
+        if (recorder.getHealth().state === 'closed') clearTimeout(watchdog);
+      }
+    })();
   }
 
   process.once('SIGINT', () => shutdown('SIGINT'));

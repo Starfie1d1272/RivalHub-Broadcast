@@ -1,11 +1,14 @@
+import { readFile } from 'node:fs/promises';
+import { resolve } from 'node:path';
 import type { FastifyInstance } from 'fastify';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { buildApp } from '../src/app.js';
 import {
   GSI_BODY_LIMIT_BYTES,
+  PRODUCTION_GSI_CONFIG,
+  type ObservationSink,
   type GsiClock,
-  type TelemetrySink,
 } from '../src/telemetry/gsi-ingress.js';
 import type {
   CaptureFrameInput,
@@ -22,13 +25,9 @@ class FakeRecorder implements CaptureRecorder {
 
   constructor(private readonly admissionResult = true) {}
 
-  serializeFrame(input: CaptureFrameInput): Buffer {
+  tryRecord(input: CaptureFrameInput): boolean {
     this.inputs.push(input);
-    return Buffer.from(`${JSON.stringify(input)}\n`, 'utf8');
-  }
-
-  offer(buffer: Buffer): boolean {
-    this.offered.push(buffer);
+    this.offered.push(Buffer.from(`${JSON.stringify(input)}\n`, 'utf8'));
     return this.admissionResult;
   }
 
@@ -86,14 +85,17 @@ describe('Companion GSI ingress', () => {
     const recorder = new FakeRecorder();
     const received: Array<{ sequence: number; receivedAt: string; receivedMonotonicMs: number }> =
       [];
-    const sink: TelemetrySink = (result) => {
-      if (result.ok) received.push(result.observation.receive);
-    };
+    const sink: ObservationSink = (observation) => received.push(observation.receive);
+    let diagnosticsCallbacks = 0;
     app = buildApp({
       gsiToken: TOKEN,
       recorder,
       clock: createClock([{ receivedAt: '2026-09-14T06:00:00.000Z', receivedMonotonicMs: 10 }]),
-      telemetrySink: sink,
+      onObservation: sink,
+      onGsiDiagnostics: (diagnostics) => {
+        diagnosticsCallbacks += 1;
+        expect(diagnostics.entries).toEqual([]);
+      },
     });
 
     const response = await app.inject({
@@ -121,6 +123,7 @@ describe('Companion GSI ingress', () => {
     expect(received).toEqual([
       { sequence: 0, receivedAt: '2026-09-14T06:00:00.000Z', receivedMonotonicMs: 10 },
     ]);
+    expect(diagnosticsCallbacks).toBe(1);
   });
 
   it('does not consume accepted sequence for rejected requests', async () => {
@@ -226,7 +229,7 @@ describe('Companion GSI ingress', () => {
     app = buildApp({
       gsiToken: TOKEN,
       recorder,
-      telemetrySink: () => {
+      onObservation: () => {
         sinkCalls += 1;
         throw new Error('sink failure');
       },
@@ -245,5 +248,41 @@ describe('Companion GSI ingress', () => {
       status: 'degraded',
       recorder: { state: 'degraded', droppedFrames: 1, incomplete: true },
     });
+  });
+
+  it('keeps the shipped production cfg aligned with the frozen metadata profile', async () => {
+    const config = await readFile(
+      resolve(process.cwd(), 'config/gamestate_integration_rivalhub_broadcast.cfg.example'),
+      'utf8',
+    );
+    const expectedLines: Array<[string, string]> = [
+      ['uri', String(PRODUCTION_GSI_CONFIG.uri)],
+      ['timeout', String(PRODUCTION_GSI_CONFIG.timeout)],
+      ['buffer', String(PRODUCTION_GSI_CONFIG.buffer)],
+      ['throttle', String(PRODUCTION_GSI_CONFIG.throttle)],
+      ['heartbeat', `${String(PRODUCTION_GSI_CONFIG.heartbeat)}.0`],
+      ['precision_time', String(PRODUCTION_GSI_CONFIG.precision_time)],
+      ['precision_position', String(PRODUCTION_GSI_CONFIG.precision_position)],
+      ['precision_vector', String(PRODUCTION_GSI_CONFIG.precision_vector)],
+    ];
+
+    for (const [key, value] of expectedLines) {
+      expect(config).toMatch(new RegExp(`"${key}"\\s+"${value}"`));
+    }
+    expect(config).toContain('"output"');
+
+    const components = PRODUCTION_GSI_CONFIG.components;
+    expect(Array.isArray(components)).toBe(true);
+    if (!Array.isArray(components)) throw new Error('production components must be an array');
+    for (const component of components) {
+      expect(typeof component).toBe('string');
+      if (typeof component === 'string') {
+        expect(config).toMatch(new RegExp(`"${component}"\\s+"1"`));
+      }
+    }
+  });
+
+  it('rejects an empty token at the reusable ingress boundary', () => {
+    expect(() => buildApp({ gsiToken: ' ' })).toThrow('gsiToken must be a non-empty value');
   });
 });

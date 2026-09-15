@@ -162,6 +162,11 @@ RuntimeState / RuntimeTransition / identity / accumulators
 
 Production capture 与 runtime processing 共享同一个 accepted raw input，但 recorder 不得成为 telemetry processing 的前置阻塞条件。
 
+Companion 的稳定 composition seam 是：ingress 将一次 authenticated frame 交给
+`CaptureRecorder.tryRecord(input)`，recorder 自己负责 Capture V1 编码与 admission；adapter
+只将 Core-owned `TelemetryObservation` 交给 runtime，并将 `GsiDiagnosticBatch` 交给
+Companion diagnostics owner，两个 contract 不合并。
+
 ---
 
 ## 4. Package ownership
@@ -678,7 +683,11 @@ offset 并更新 `framesSha256`。short write 必须继续写完当前 line；�
 
 graceful shutdown 最多 drain 10 秒。queued-only timeout 会丢弃剩余 queued frame 并在
 安全时发布 `complete=false` 的 final capture；若 active OS write 仍 unresolved，则不与
-它并发 truncate/manifest/rename，继续保留 `.partial`。
+它并发 truncate/manifest/rename，继续保留 `.partial`。Companion composition root 在收到
+`SIGINT`/`SIGTERM` 时同时启动一个略高于 recorder deadline 的 `unref()` hard watchdog；
+正常 `app.close()` 会清理 watchdog，只有底层 I/O 使 shutdown 超时才 `process.exit(1)`，
+并保留 `.partial`。上述保证是 process/application-failure-safe publication，不是涵盖
+突然断电与 parent-directory fsync 的 database-grade transactional durability。
 
 ### 10.5 D sizing evidence
 
