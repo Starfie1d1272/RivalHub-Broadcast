@@ -4,6 +4,7 @@ import { createDisabledRecorder, type CaptureRecorder } from './telemetry/captur
 import {
   GSI_REQUEST_TIMEOUT_MS,
   registerGsiIngress,
+  type CompanionRuntimeDiagnosticCode,
   type GsiClock,
   type GsiDiagnosticsSink,
   type ObservationSink,
@@ -21,6 +22,7 @@ export interface CompanionAppOptions {
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
   let runtimeDegraded = false;
+  const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
 
   const app = Fastify({
     logger: options.logger ?? false,
@@ -47,10 +49,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         ? {}
         : { onGsiDiagnostics: options.onGsiDiagnostics }),
       onRuntimeDiagnostic: (code) => {
-        if (!runtimeDegraded) {
-          app.log.warn({ code }, 'Companion telemetry path degraded');
-        }
         runtimeDegraded = true;
+        if (emittedRuntimeDiagnostics.has(code)) return;
+        emittedRuntimeDiagnostics.add(code);
+        app.log.warn({ code }, 'Companion telemetry path degraded');
       },
     });
   }

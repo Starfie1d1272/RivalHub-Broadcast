@@ -4,8 +4,8 @@ import { buildApp } from './app.js';
 import {
   createCaptureRecorder,
   createDisabledRecorder,
-  RECORDER_SHUTDOWN_DRAIN_TIMEOUT_MS,
   type CaptureRecorder,
+  type RecorderDiagnostic,
 } from './telemetry/capture-recorder.js';
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
 
@@ -14,7 +14,16 @@ const port = Number.parseInt(process.env.PORT ?? '3000', 10);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
-const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = RECORDER_SHUTDOWN_DRAIN_TIMEOUT_MS + 2_000;
+const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
+
+function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
+  const fields = {
+    code: diagnostic.code,
+    ...(diagnostic.operation === undefined ? {} : { operation: diagnostic.operation }),
+    ...(diagnostic.causeCode === undefined ? {} : { causeCode: diagnostic.causeCode }),
+  };
+  console.warn(`Companion capture recorder diagnostic: ${JSON.stringify(fields)}`);
+}
 
 if (gsiToken === undefined || gsiToken.trim().length === 0) {
   console.error('Companion startup failed: GSI_TOKEN must be set to a non-empty value');
@@ -27,9 +36,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       captureDir,
       broadcastCommit,
       gsiConfig: PRODUCTION_GSI_CONFIG,
-      onDiagnostic: (diagnostic) => {
-        console.warn(`Companion capture recorder diagnostic: ${diagnostic.code}`);
-      },
+      onDiagnostic: logRecorderDiagnostic,
     });
   } catch (error: unknown) {
     recorder = createDisabledRecorder('recorder_start_failed');

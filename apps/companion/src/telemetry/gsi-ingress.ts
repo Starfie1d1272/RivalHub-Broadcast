@@ -54,8 +54,16 @@ export interface GsiClock {
   now(): GsiClockSample;
 }
 
+/** Synchronous local handoff only; the callback must not perform I/O or return a Promise. */
 export type ObservationSink = (observation: TelemetryObservation) => void;
+/** Synchronous local handoff only; the callback must not perform I/O or return a Promise. */
 export type GsiDiagnosticsSink = (diagnostics: GsiDiagnosticBatch) => void;
+
+export type CompanionRuntimeDiagnosticCode =
+  | 'adapter_unexpected_failure'
+  | 'gsi_diagnostics_sink_failed'
+  | 'observation_sink_failed'
+  | 'recorder_unexpected_failure';
 
 export interface GsiIngressOptions {
   readonly gsiToken: string;
@@ -63,9 +71,7 @@ export interface GsiIngressOptions {
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
   readonly clock?: GsiClock;
-  readonly onRuntimeDiagnostic?: (
-    code: 'adapter_unexpected_failure' | 'telemetry_sink_failed' | 'recorder_unexpected_failure',
-  ) => void;
+  readonly onRuntimeDiagnostic?: (code: CompanionRuntimeDiagnosticCode) => void;
 }
 
 const defaultClock: GsiClock = {
@@ -105,7 +111,7 @@ function sendNoContent(reply: FastifyReply): void {
 
 function reportRuntimeDiagnostic(
   options: GsiIngressOptions,
-  code: 'adapter_unexpected_failure' | 'telemetry_sink_failed' | 'recorder_unexpected_failure',
+  code: CompanionRuntimeDiagnosticCode,
 ): void {
   try {
     options.onRuntimeDiagnostic?.(code);
@@ -175,7 +181,7 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       try {
         options.onGsiDiagnostics?.(adapted.diagnostics);
       } catch {
-        reportRuntimeDiagnostic(options, 'telemetry_sink_failed');
+        reportRuntimeDiagnostic(options, 'gsi_diagnostics_sink_failed');
       }
 
       if (!adapted.ok) {
@@ -186,7 +192,7 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       try {
         options.onObservation?.(adapted.observation);
       } catch {
-        reportRuntimeDiagnostic(options, 'telemetry_sink_failed');
+        reportRuntimeDiagnostic(options, 'observation_sink_failed');
       }
 
       sendNoContent(reply);

@@ -1,7 +1,7 @@
 import { createHash } from 'node:crypto';
 import { createReadStream } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { TextDecoder } from 'node:util';
 
 import { CaptureFormatError } from './errors.js';
@@ -236,6 +236,13 @@ async function* parseFrames(
 }
 
 export async function verifyCapture(captureDir: string): Promise<VerifiedCapture> {
+  if (basename(captureDir).endsWith('.partial')) {
+    throw new CaptureFormatError(
+      'UNFINALIZED_CAPTURE',
+      `${captureDir} is an unpublished partial capture`,
+      { path: captureDir },
+    );
+  }
   const manifest = await readCaptureManifest(captureDir);
   const framesPath = join(captureDir, 'frames.jsonl');
   try {

@@ -71,6 +71,15 @@ function createClock(
   };
 }
 
+function parseConfigBlock(config: string, blockName: string): Array<[string, string]> {
+  const match = config.match(new RegExp(`"${blockName}"\\s*\\{([\\s\\S]*?)\\n\\s*\\}`));
+  if (match?.[1] === undefined) throw new Error(`missing cfg block: ${blockName}`);
+  return [...match[1].matchAll(/"([^"]+)"\s+"([^"]+)"/g)].map((entry) => [
+    entry[1] ?? '',
+    entry[2] ?? '',
+  ]);
+}
+
 describe('Companion GSI ingress', () => {
   let app: FastifyInstance | undefined;
 
@@ -255,31 +264,31 @@ describe('Companion GSI ingress', () => {
       resolve(process.cwd(), 'config/gamestate_integration_rivalhub_broadcast.cfg.example'),
       'utf8',
     );
-    const expectedLines: Array<[string, string]> = [
+    const expectedRootLines: Array<[string, string]> = [
       ['uri', String(PRODUCTION_GSI_CONFIG.uri)],
       ['timeout', String(PRODUCTION_GSI_CONFIG.timeout)],
       ['buffer', String(PRODUCTION_GSI_CONFIG.buffer)],
       ['throttle', String(PRODUCTION_GSI_CONFIG.throttle)],
       ['heartbeat', `${String(PRODUCTION_GSI_CONFIG.heartbeat)}.0`],
-      ['precision_time', String(PRODUCTION_GSI_CONFIG.precision_time)],
-      ['precision_position', String(PRODUCTION_GSI_CONFIG.precision_position)],
-      ['precision_vector', String(PRODUCTION_GSI_CONFIG.precision_vector)],
     ];
 
-    for (const [key, value] of expectedLines) {
+    for (const [key, value] of expectedRootLines) {
       expect(config).toMatch(new RegExp(`"${key}"\\s+"${value}"`));
     }
-    expect(config).toContain('"output"');
 
     const components = PRODUCTION_GSI_CONFIG.components;
     expect(Array.isArray(components)).toBe(true);
     if (!Array.isArray(components)) throw new Error('production components must be an array');
-    for (const component of components) {
-      expect(typeof component).toBe('string');
-      if (typeof component === 'string') {
-        expect(config).toMatch(new RegExp(`"${component}"\\s+"1"`));
-      }
-    }
+    const expectedComponents = components.map((component) => {
+      if (typeof component !== 'string') throw new Error('production component must be a string');
+      return [component, '1'] as [string, string];
+    });
+    expect(parseConfigBlock(config, 'output')).toEqual([
+      ['precision_time', String(PRODUCTION_GSI_CONFIG.precision_time)],
+      ['precision_position', String(PRODUCTION_GSI_CONFIG.precision_position)],
+      ['precision_vector', String(PRODUCTION_GSI_CONFIG.precision_vector)],
+    ]);
+    expect(parseConfigBlock(config, 'data')).toEqual(expectedComponents);
   });
 
   it('rejects an empty token at the reusable ingress boundary', () => {

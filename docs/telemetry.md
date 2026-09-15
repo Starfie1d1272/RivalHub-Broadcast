@@ -165,7 +165,8 @@ Production capture 与 runtime processing 共享同一个 accepted raw input，�
 Companion 的稳定 composition seam 是：ingress 将一次 authenticated frame 交给
 `CaptureRecorder.tryRecord(input)`，recorder 自己负责 Capture V1 编码与 admission；adapter
 只将 Core-owned `TelemetryObservation` 交给 runtime，并将 `GsiDiagnosticBatch` 交给
-Companion diagnostics owner，两个 contract 不合并。
+Companion diagnostics owner，两个 contract 不合并。两个 callback 都是同步本机 handoff；
+不得在其中执行 I/O 或返回 Promise。
 
 ---
 
@@ -585,8 +586,9 @@ Capture 不是官方比赛历史，也不是长期 telemetry data warehouse。
 ```
 
 production capture 默认写入 `CAPTURE_DIR`，未设置时使用
-`<cwd>/recordings/gsi`。`.partial` 目录表示 live 或未安全完成的 capture；没有
-`manifest.json` 的 `.partial` 目录不得被当作 completed Capture V1。
+`<cwd>/recordings/gsi`。任何 `.partial` 目录都表示 live 或未安全完成的 capture，
+无论是否已经写入 `manifest.json`，都不得被当作 published/completed Capture V1；
+testkit 的 `verifyCapture()` 会明确拒绝这类路径。
 
 `manifest.json` 至少表达：
 
@@ -681,13 +683,14 @@ Recorder failure 不应阻塞 live telemetry path。writer 只允许串行写同
 offset 并更新 `framesSha256`。short write 必须继续写完当前 line；无法安全 finalize 时
 保留 `.partial`。
 
-graceful shutdown 最多 drain 10 秒。queued-only timeout 会丢弃剩余 queued frame 并在
-安全时发布 `complete=false` 的 final capture；若 active OS write 仍 unresolved，则不与
-它并发 truncate/manifest/rename，继续保留 `.partial`。Companion composition root 在收到
-`SIGINT`/`SIGTERM` 时同时启动一个略高于 recorder deadline 的 `unref()` hard watchdog；
-正常 `app.close()` 会清理 watchdog，只有底层 I/O 使 shutdown 超时才 `process.exit(1)`，
-并保留 `.partial`。上述保证是 process/application-failure-safe publication，不是涵盖
-突然断电与 parent-directory fsync 的 database-grade transactional durability。
+recorder graceful shutdown 最多 drain 10 秒。queued-only timeout 会丢弃剩余 queued frame
+并在安全时发布 `complete=false` 的 final capture；若 active OS write 仍 unresolved，则
+不与它并发 truncate/manifest/rename，继续保留 `.partial`。这是 recorder 层 deadline。
+Companion composition root 在收到 `SIGINT`/`SIGTERM` 时另行启动 30 秒的 whole-shutdown
+`unref()` hard watchdog，覆盖 Fastify in-flight request drain、recorder drain、truncate/
+sync/close、manifest flush 与 rename；只有整个 shutdown envelope 仍未完成时才
+`process.exit(1)`。上述保证是 process/application-failure-safe publication，不是涵盖突然
+断电与 parent-directory fsync 的 database-grade transactional durability。
 
 ### 10.5 D sizing evidence
 

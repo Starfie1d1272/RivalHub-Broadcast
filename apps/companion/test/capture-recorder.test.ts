@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { access, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { access, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -34,6 +34,7 @@ class MemoryWriter implements CaptureFileHandle {
     private readonly maxBytesPerWrite = Number.POSITIVE_INFINITY,
     private readonly blockFirstWrite = false,
     private readonly failWriteAt: number | undefined = undefined,
+    private readonly failFinalizeOperation: 'truncate' | 'sync' | 'close' | undefined = undefined,
   ) {}
 
   private async track<T>(operation: () => T | Promise<T>): Promise<T> {
@@ -94,6 +95,9 @@ class MemoryWriter implements CaptureFileHandle {
     return this.track(() => {
       this.ensureOpen();
       this.syncCalls += 1;
+      if (this.failFinalizeOperation === 'sync') {
+        throw Object.assign(new Error('capture sync failed'), { code: 'EIO' });
+      }
     });
   }
 
@@ -101,6 +105,9 @@ class MemoryWriter implements CaptureFileHandle {
     return this.track(() => {
       this.ensureOpen();
       this.truncateCalls += 1;
+      if (this.failFinalizeOperation === 'truncate') {
+        throw Object.assign(new Error('capture truncate failed'), { code: 'EIO' });
+      }
       if (length < this.bytesWritten.length) {
         this.bytesWritten = this.bytesWritten.subarray(0, length);
       } else if (length > this.bytesWritten.length) {
@@ -115,6 +122,9 @@ class MemoryWriter implements CaptureFileHandle {
     return this.track(() => {
       this.ensureOpen();
       this.closeCalls += 1;
+      if (this.failFinalizeOperation === 'close') {
+        throw Object.assign(new Error('capture close failed'), { code: 'EIO' });
+      }
       this.closed = true;
     });
   }
@@ -301,6 +311,11 @@ async function waitFor(predicate: () => boolean): Promise<void> {
   throw new Error('condition did not become true');
 }
 
+async function expectPartialOnly(root: string, captureId: string): Promise<void> {
+  await access(join(root, `${captureId}.partial`));
+  await expect(access(join(root, captureId))).rejects.toThrow();
+}
+
 describe('production capture recorder', () => {
   const roots: string[] = [];
 
@@ -478,6 +493,63 @@ describe('production capture recorder', () => {
     expect(writer.maxActiveOperations).toBe(1);
     expect(writer.syncCalls).toBe(1);
     expect(writer.closeCalls).toBe(1);
+  });
+
+  it.each(['truncate', 'sync', 'close'] as const)(
+    'retains only the partial directory when %s fails during finalization',
+    async (operation) => {
+      const root = await makeRoot();
+      roots.push(root);
+      const writer = new MemoryWriter(Number.POSITIVE_INFINITY, false, undefined, operation);
+      const recorder = await makeRecorder(root, writer);
+
+      expect(recorder.tryRecord(frameInput(0))).toBe(true);
+      await recorder.finalize();
+
+      await expectPartialOnly(root, 'test-capture');
+      expect(recorder.getHealth()).toMatchObject({
+        state: 'closed',
+        incomplete: true,
+        lastErrorCode: 'recorder_finalize_failed',
+      });
+    },
+  );
+
+  it('retains only the partial directory when manifest creation fails', async () => {
+    const root = await makeRoot();
+    roots.push(root);
+    const recorder = await makeRecorder(root, new MemoryWriter());
+
+    expect(recorder.tryRecord(frameInput(0))).toBe(true);
+    await writeFile(join(root, 'test-capture.partial', 'manifest.json'), '{}', 'utf8');
+    await recorder.finalize();
+
+    await expectPartialOnly(root, 'test-capture');
+    expect(recorder.getHealth()).toMatchObject({
+      state: 'closed',
+      incomplete: true,
+      lastErrorCode: 'recorder_finalize_failed',
+    });
+  });
+
+  it('retains the partial directory when final publication rename fails', async () => {
+    const root = await makeRoot();
+    roots.push(root);
+    const captureId = 'rename-failure-capture';
+    const recorder = await makeRecorder(root, new MemoryWriter(), { captureId });
+
+    await mkdir(join(root, captureId));
+    await writeFile(join(root, captureId, 'sentinel'), 'existing final path', 'utf8');
+    expect(recorder.tryRecord(frameInput(0))).toBe(true);
+    await recorder.finalize();
+
+    await access(join(root, `${captureId}.partial`, 'manifest.json'));
+    await expect(access(join(root, captureId, 'manifest.json'))).rejects.toThrow();
+    expect(recorder.getHealth()).toMatchObject({
+      state: 'closed',
+      incomplete: true,
+      lastErrorCode: 'recorder_finalize_failed',
+    });
   });
 
   it('leaves partial capture untouched when active write remains unresolved at shutdown timeout', async () => {
