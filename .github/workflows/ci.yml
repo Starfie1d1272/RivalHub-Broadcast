@@ -146,7 +146,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build exact-SHA Windows qualification bundle
-        run: pnpm qualification:build -- --output "$env:QUALIFICATION_BUILD_ROOT"
+        run: node scripts/qualification/build.mjs --output "$env:QUALIFICATION_BUILD_ROOT"
 
       - name: Extract and smoke-test the portable bundle without CS2
         shell: pwsh
