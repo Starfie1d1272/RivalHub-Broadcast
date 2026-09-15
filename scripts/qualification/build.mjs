@@ -225,6 +225,19 @@ async function createDeployWorkspace(workspaceDir) {
   }
 }
 
+async function restorePortableWorkspaceDependencySpecifiers(appDir) {
+  const deployedManifestPath = join(appDir, 'package.json');
+  const sourceManifestPath = join(rootDir, 'apps', 'companion', 'package.json');
+  const [deployedManifest, sourceManifest] = await Promise.all([
+    readFile(deployedManifestPath, 'utf8').then((value) => JSON.parse(value)),
+    readFile(sourceManifestPath, 'utf8').then((value) => JSON.parse(value)),
+  ]);
+  for (const [name, specifier] of Object.entries(sourceManifest.dependencies ?? {})) {
+    if (specifier === 'workspace:*') deployedManifest.dependencies[name] = specifier;
+  }
+  await writeFile(deployedManifestPath, `${JSON.stringify(deployedManifest, null, 2)}\n`, 'utf8');
+}
+
 async function writeShaSums(bundleDir) {
   const sumsPath = join(bundleDir, 'metadata', 'SHA256SUMS');
   const files = await listFiles(bundleDir, new Set(['metadata/SHA256SUMS']));
@@ -280,11 +293,19 @@ async function main() {
     await createDeployWorkspace(deployWorkspaceDir);
     await runCommand(
       'pnpm',
-      ['--filter', '@rivalhub-broadcast/companion', 'deploy', deployedAppDir, '--prod', '--legacy'],
+      [
+        '--filter',
+        '@rivalhub-broadcast/companion',
+        'deploy',
+        deployedAppDir,
+        '--prod',
+        '--node-linker=hoisted',
+      ],
       { cwd: deployWorkspaceDir },
     );
     await cp(deployedAppDir, appDir, { recursive: true, dereference: true });
     await rm(deployedAppDir, { recursive: true, force: true });
+    await restorePortableWorkspaceDependencySpecifiers(appDir);
     const nodeVersion = options.skipNodeRuntime
       ? QUALIFICATION_NODE_VERSION
       : await downloadNodeRuntime(join(stagingDir, 'runtime'), options.nodeVersion, downloadDir);
