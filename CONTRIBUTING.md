@@ -46,10 +46,10 @@ RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。
 
 ```text
 Development
-  macOS / cross-platform
+  cross-platform / contributor environment
         ↓
 Automated validation
-  deterministic tests + GitHub Actions macOS/Windows
+  deterministic tests + GitHub Actions
         ↓
 Real-environment acceptance（按需）
   Windows / Windows+CS2 / Windows+OBS / Windows+CS2+OBS
@@ -57,9 +57,7 @@ Real-environment acceptance（按需）
 
 具体规则见 `docs/development-validation.md`。
 
-M0 CI baseline 为 PR 和 `main` push 提供 `quality`、`platform / macOS`、`platform / Windows` 与最终 `ci-gate`；PR metadata 由独立的 `pr-title` check 负责。GitHub-hosted Windows runner 是自动化验证环境，不替代真实 Windows + CS2/OBS 验收。
-
-如果 Issue 可以在 Mac 上继续实现和自动验证，只是等待真实 Windows/CS2/OBS 证据，不应把整个任务标成 `blocked`；使用 `needs-windows-validation` 或 Project 的 Platform validation 字段表达 pending gate。
+GitHub-hosted runner 是自动化验证环境，不替代真实 Windows + CS2/OBS 验收。如果 Issue 可以继续实现和自动验证，只是等待真实 Windows/CS2/OBS 证据，不应把整个任务标成 `blocked`；使用 `needs-windows-validation` 或 Project 的 Platform validation 字段表达 pending gate。
 
 ## Agent-ready
 
@@ -99,9 +97,30 @@ PR 必须说明：
 5. 实际执行过的验证命令；
 6. macOS / Windows CI / real Windows / CS2 / OBS 等平台验证状态；
 7. replay / visual / soak 等非普通单测证据（如适用）；
-8. 剩余风险和后续 Issue。
+8. 剩余风险和后续 Issue；
+9. **Documentation impact：实现是否改变了 README、产品/架构、协议、telemetry、运行或验证文档描述的事实；如改变，必须在同一 PR 更新。**
 
 PR 不应以“CI 绿了”替代业务 acceptance，也不应以 mock/simulator 代替要求中的真实环境验收。
+
+文档不是每个 PR 的流水账。以下内容通常留在 Issue/PR/Project，而不进入长期文档：
+
+- 单次调试过程与中间失败；
+- 当前开发机/协作者是否可用；
+- 一次性 commit SHA、PR 状态或短期执行顺序；
+- 已经被实现取代的 implementation plan；
+- 不构成长期开发表面的内部实现细节。
+
+以下变化则必须同步文档：
+
+- authority / ownership / package boundary；
+- public or cross-package contract；
+- runtime invariant / continuity / delivery semantics；
+- security / recovery / publication guarantee；
+- evidence-backed source semantics；
+- 用户或 operator 可见的运行方式；
+- milestone scope / acceptance model。
+
+如果代码与长期文档发生冲突，不能以“以后再补文档”作为 PR 完成状态。
 
 ## Architecture contract
 
@@ -127,6 +146,6 @@ Issue 只有在以下条件都满足时才算完成：
 - architecture guard / typecheck / lint / build 等相关检查通过；
 - Issue 声明的 automated validation 已完成；
 - Issue 声明为 closing gate 的 real-environment acceptance 已完成；
-- 文档没有与实现产生已知冲突；
+- **受实现影响的长期文档已在同一 PR 同步，且没有与实现产生已知冲突；**
 - PR 中记录了实际验证证据；
 - 未完成内容已经明确留给后续 Issue，而不是隐藏在 TODO 里。
