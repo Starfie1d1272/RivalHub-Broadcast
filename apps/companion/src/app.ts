@@ -106,9 +106,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     emittedRuntimeDiagnostics.add(code);
     app.log.warn(
       { code },
-      degradeRuntime
-        ? `Companion ${source} 路径已降级`
-        : `Companion ${source} 路径记录可恢复诊断`,
+      degradeRuntime ? `Companion ${source} 路径已降级` : `Companion ${source} 路径记录可恢复诊断`,
     );
   };
   const projectionCoordinator =
