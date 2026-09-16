@@ -9,11 +9,39 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./version": {
+      "types": "./dist/version.d.ts",
+      "import": "./dist/version.js"
+    },
+    "./shared": {
+      "types": "./dist/shared.d.ts",
+      "import": "./dist/shared.js"
+    },
+    "./program": {
+      "types": "./dist/program.d.ts",
+      "import": "./dist/program.js"
+    },
+    "./radar": {
+      "types": "./dist/radar.d.ts",
+      "import": "./dist/radar.js"
+    },
+    "./operator": {
+      "types": "./dist/operator.d.ts",
+      "import": "./dist/operator.js"
+    },
+    "./assist": {
+      "types": "./dist/assist.d.ts",
+      "import": "./dist/assist.js"
+    },
+    "./acceptance": {
+      "types": "./dist/acceptance.d.ts",
+      "import": "./dist/acceptance.js"
     }
   },
   "scripts": {
     "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json && tsc -p tsconfig.test.json --noEmit"
   },
   "dependencies": {
     "zod": "catalog:"

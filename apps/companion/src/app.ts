@@ -7,6 +7,11 @@ import { DebugEvidenceStore, type DebugRuntimeClock } from './runtime/debug-stat
 import type { LatestWinsConsumerHealth } from './runtime/latest-wins.js';
 import { createProgramRuntime, type ProgramRuntime } from './runtime/program-runtime.js';
 import {
+  createProjectionCoordinator,
+  type ProjectionCoordinator,
+} from './projections/projection-coordinator.js';
+import type { MatchContextBinding } from './match-context/index.js';
+import {
   registerQualificationRoutes,
   type QualificationControllerOptions,
   type QualificationFinishInput,
@@ -25,7 +30,6 @@ import {
   GSI_REQUEST_TIMEOUT_MS,
   registerGsiIngress,
   type AcceptedRawSink,
-  type CompanionRuntimeDiagnosticCode,
   type GsiClock,
   type GsiDiagnosticsSink,
   type GsiSequenceSource,
@@ -39,6 +43,9 @@ export interface CompanionAppOptions {
   readonly producerInstanceId?: string;
   readonly gsiSequenceSource?: GsiSequenceSource;
   readonly programRuntime?: ProgramRuntime;
+  readonly projectionCoordinator?: ProjectionCoordinator;
+  readonly matchContextBinding?: MatchContextBinding;
+  readonly projectionNowMonotonicMs?: () => number;
   readonly debugEvidenceStore?: DebugEvidenceStore;
   readonly debugClock?: DebugRuntimeClock;
   readonly deliveryConsumers?: readonly DeliveryHealthSource[];
@@ -61,6 +68,10 @@ export interface DeliveryHealthSource {
   close(): Promise<void>;
 }
 
+function projectionDiagnosticDegradesRuntime(code: string): boolean {
+  return code.endsWith('-schema-validation-failed') || code.endsWith('-wire-validation-failed');
+}
+
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
   const programRuntime =
@@ -71,14 +82,48 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
   const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
-  const qualificationMode = options.qualificationMode ?? false;
-  let runtimeDegraded = false;
-  const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
-
+  const projectionNowMonotonicMs =
+    options.projectionNowMonotonicMs ??
+    (() => {
+      const lastReceived =
+        programRuntime.getSnapshot().current.programSource.lastAccepted?.receivedMonotonicMs ?? 0;
+      return Math.max(performance.now(), lastReceived);
+    });
   const app = Fastify({
     logger: options.logger ?? false,
     requestTimeout: GSI_REQUEST_TIMEOUT_MS,
   });
+  let runtimeDegraded = false;
+  const emittedRuntimeDiagnostics = new Set<string>();
+  const recordRuntimeDiagnostic = (
+    code: string,
+    source: 'projection' | 'telemetry',
+    degradeRuntime = true,
+  ): void => {
+    if (degradeRuntime) runtimeDegraded = true;
+    debugEvidenceStore.recordRuntimeDiagnostic(code);
+    if (emittedRuntimeDiagnostics.has(code)) return;
+    emittedRuntimeDiagnostics.add(code);
+    app.log.warn(
+      { code },
+      degradeRuntime ? `Companion ${source} 路径已降级` : `Companion ${source} 路径记录可恢复诊断`,
+    );
+  };
+  const projectionCoordinator =
+    options.projectionCoordinator ??
+    createProjectionCoordinator({
+      programRuntime,
+      cstvSources,
+      ...(options.matchContextBinding === undefined
+        ? {}
+        : { matchContextBinding: options.matchContextBinding }),
+      ...(projectionNowMonotonicMs === undefined
+        ? {}
+        : { nowMonotonicMs: projectionNowMonotonicMs }),
+      onDiagnostic: ({ code }) =>
+        recordRuntimeDiagnostic(code, 'projection', projectionDiagnosticDegradesRuntime(code)),
+    });
+  const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {
     const recorderHealth = recorder.getHealth();
@@ -123,7 +168,8 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       },
       ...(options.clock === undefined ? {} : { clock: options.clock }),
       onObservation: (observation) => {
-        programRuntime.acceptObservation(observation);
+        const result = programRuntime.acceptObservation(observation);
+        projectionCoordinator.afterRuntimeMutation(result);
         debugEvidenceStore.recordNormalizedObservation(observation);
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
         options.onObservation?.(observation);
@@ -133,11 +179,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         options.onGsiDiagnostics?.(diagnostics);
       },
       onRuntimeDiagnostic: (code) => {
-        runtimeDegraded = true;
-        debugEvidenceStore.recordRuntimeDiagnostic(code);
-        if (emittedRuntimeDiagnostics.has(code)) return;
-        emittedRuntimeDiagnostics.add(code);
-        app.log.warn({ code }, 'Companion telemetry 路径已降级');
+        recordRuntimeDiagnostic(code, 'telemetry');
       },
     });
   }
@@ -179,6 +221,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       onAcceptedMapReset: () => {
         debugEvidenceStore.clearCurrentTelemetry();
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
+        projectionCoordinator.afterRuntimeMutation();
       },
       ...(options.onQualificationFinish === undefined
         ? {}
@@ -192,6 +235,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
       ...deliveryConsumers.map((consumer) => consumer.close()),
+      projectionCoordinator.close(),
     ]);
     await recorder.finalize();
   });

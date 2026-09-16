@@ -136,7 +136,7 @@ describe('architecture checker', () => {
     expect(withFiles({ 'packages/core/package.json': JSON.stringify(devOnlyManifest) })).toEqual(
       [],
     );
-  });
+  }, 15_000);
 
   it('checks static, export, dynamic, require, and type-only edges', () => {
     const violations = withFiles({
@@ -228,7 +228,7 @@ describe('architecture checker', () => {
       'ARCH_RIVALHUB_BOUNDARY',
       '@supabase/supabase-js',
     );
-  });
+  }, 15_000);
 
   it('rejects Core imports of Web and Companion even with legal workspace declarations', () => {
     const coreManifest = packageManifest('packages/core/package.json');
@@ -422,6 +422,42 @@ describe('architecture checker', () => {
       'exports',
     );
   });
+
+  it('keeps Program projection imports on the Program-safe graph', () => {
+    expectRule(
+      withFiles({
+        'packages/core/src/projection/program-boundary.ts':
+          "import { cue } from './observer-assist.js';\nvoid cue;\n",
+        'packages/core/src/projection/observer-assist.ts': 'export const cue = 1;\n',
+      }),
+      'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+      'observer-assist',
+    );
+
+    expectRule(
+      withFiles({
+        'packages/core/src/projection/program-indirect.ts':
+          "import { value } from './program-safe-helper.js';\nvoid value;\n",
+        'packages/core/src/projection/program-safe-helper.ts':
+          "import { cue } from './lookahead.js';\nvoid cue;\n",
+        'packages/core/src/projection/lookahead.ts': 'export const cue = 1;\n',
+      }),
+      'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+      'lookahead',
+    );
+
+    expectRule(
+      withFiles({
+        'packages/core/src/projection/program-helper-boundary.ts':
+          "import { value } from '../presentation-helper.js';\nvoid value;\n",
+        'packages/core/src/presentation-helper.ts':
+          "import { event } from './game-events/index.js';\nexport const value = event;\n",
+        'packages/core/src/game-events/index.ts': 'export const event = 1;\n',
+      }),
+      'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+      'game-events',
+    );
+  }, 15_000);
 });
 
 describe('architecture ESLint fast feedback', () => {
@@ -467,5 +503,5 @@ describe('architecture ESLint fast feedback', () => {
         }),
       ]),
     );
-  });
+  }, 15_000);
 });

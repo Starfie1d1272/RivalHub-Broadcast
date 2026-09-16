@@ -4,8 +4,9 @@
 Broadcast 如何消费 RivalHub 的赛事只读事实，以及在 RivalHub 暂时不可用时如何用同形
 fixture/LKG 继续建立当前比赛上下文。
 
-本文不是 `packages/protocol` 的浏览器 wire schema。Companion 到 Program、Radar、Operator
-的本地 wire DTO 属于后续 #29；本文不会为它提前定义万能 payload。
+本文不是浏览器端或 RivalHub-facing 的万能 wire schema。Companion 到 Program、Radar、
+Operator、Observer Assist 的本地 DTO 在文末以独立的 Local Protocol V1 章节记录；它们不
+改变上面的 RivalHub read-side authority，也不会合并成一个万能 payload。
 
 ## Authority 与数据流
 
@@ -235,7 +236,12 @@ provenance 仍是 `lifecycleCoverage: partial`，不被当作整场验收。整�
 `de_ancient` 从正式比赛到 `14:16` gameover 的完整生命周期。该 raw capture 因含真实身份不
 进入 Git；验收通过 `RIVALHUB_FULL_MATCH_CAPTURE_DIR` 指向经复核的 capture 目录运行，测试
 helper 在构造 formal identity evidence 前做确定性脱敏。证据边界是本地 artifact 可复核，CI
-不伪装成拥有该 raw capture；仓库内 semantic slice 仍独立执行。
+不伪装成拥有该 raw capture；仓库内 semantic slice 仍独立执行。设置同一个环境变量后，
+`apps/companion/test/projection-real-replay.test.ts` 会让每个 accepted frame 依次经过生产
+GSI adapter/replay、ProgramRuntime、identity、ProjectionCoordinator 的 Program/Radar/
+Operator/Assist projection 及最终 wire schema，使用 deterministic clock 跑两遍并比较去除
+`channelSeq` 后的 canonical digest；canonical JSON 同时拒绝 `undefined`、`NaN` 和
+`Infinity`。
 
 ## M2 边界
 
@@ -246,10 +252,105 @@ resolver、LKG 和真实 semantic GSI replay acceptance。明确不包含：
 - Broadcast → #610 `match_started` ReliableObservation uplink、pairing/auth、
   ReliableObservation/BroadcastLiveSnapshot 上传；
 - HUD/Radar/Waiting/Matchup renderer、BP playback/动画、scene engine 或 OBS；
-- #29 Program/Radar/Operator local protocol、浏览器 wire DTO；
 - sponsor、coverage、entrant abbreviation 或 generic provider/plugin/cache framework。
 
 真实 semantic capture 已由仓库 sanitizer 脱敏，capture 中的 `fixture-player-*` 不是
 canonical identity。replay 测试只在 test/helper 层把 source ID 转成合法的伪造 Steam64，
 然后才调用正式 resolver；不根据昵称或 observer slot 推断身份，也不让这些脱敏映射进入
 Core public API。生产 resolver 的 observed identity key 始终只有 Steam64 字符串。
+
+## Local Protocol V1（Issue #29）
+
+本节是与 RivalHub read-side contract 独立的本地制播协议章节。它只描述 Companion 在本机
+向各消费面提供的当前完整快照；不代表 RivalHub API，也不定义浏览器公开页面协议。RivalHub
+仍是赛事事实 authority，Program 只消费 delayed Program timeline，no-delay Lookahead 只属
+本机 Observer Assist advisory，不存在 Lookahead → Program fallback。
+
+### 所有权与 channel
+
+版本常量由 `packages/protocol` 维护，当前值固定为：
+
+```text
+localProtocolVersion = 1
+programSchemaVersion = 1
+radarSchemaVersion = 1
+operatorSchemaVersion = 1
+assistSchemaVersion = 1
+subprotocol = rivalhub-broadcast.local.v1
+```
+
+V1 的 WebSocket route path 为：
+
+```text
+/local/v1/program   Program-safe 节目快照
+/local/v1/radar     当前世界坐标的 Radar frame
+/local/v1/operator  本机操作与诊断投影
+/local/v1/assist    Observer Assist；当前仅表示 unavailable
+```
+
+channel 之间没有通用 union。每个 channel 有独立的 Zod schema、DTO、schema version 和
+wire mapper；`packages/protocol` 不依赖 Core、Radar、RivalHub 或 Web/React。`packages/core`
+只拥有 projection/domain，`packages/radar` 只拥有 framework-neutral Radar frame，Companion
+负责将 projection 映射为本协议 DTO 和发布。
+
+### 快照 envelope
+
+每条消息都是完整快照，不发送 delta、history、ACK 或离线 outbox。Envelope 的 `channel`
+使用短 channel id；其对应的 WebSocket route path 如上：
+
+```ts
+{
+  type: "snapshot",
+  protocolVersion: 1,
+  channel: "program" | "radar" | "operator" | "assist",
+  schemaVersion: 1,
+  channelSeq: number,
+  cursor: {
+    producerInstanceId: string,
+    liveSessionId: string | null,
+    runtimeSeq: number,
+    programSourceGeneration: number,
+    programReceiveSequence: number | null,
+    mapEpoch: number
+  },
+  payload: ChannelPayload
+}
+```
+
+`channelSeq` 从 1 开始，并在 `producerInstanceId + channel` 范围内单调递增。`runtimeSeq`
+只允许在同一 producer 内前进；它不是两条 ingress 的连接 generation，也不替代
+`programSourceGeneration` 或 `mapEpoch`。重新连接时 consumer 只接受当前 baseline，不重放
+历史快照。
+
+Program payload 只包含 status、MatchContext/identity freshness、canonical team/player（按
+当前 identity proof；canonical team presentation 的 `seriesScore` 位于各自 team，neutral
+team 固定为 `null`）、map/round/clock、bomb、coverage 等节目安全字段；不包含位置、
+grenade、地图几何、identity issue、LKG/raw GSI/raw CSTV、round history、scene 或
+Lookahead/future 字段。Radar frame 只包含 cursor/freshness、identity state、map name、
+observed player、coverage、all players、bomb、grenades；life state 由 health 明确派生，
+不承诺额外几何变换。Operator projection 只包含 operator-safe runtime transition、context、
+identity 和 source health。Assist V1 严格为 `{ cursor, availability: "unavailable" }`，不
+预留 future payload 字段。
+
+### 接受、重置与背压
+
+每个 socket/consumer 使用独立 acceptance state。接收方必须先拒绝 schema、protocol、channel
+或 schema version 错误；重复或倒序 `channelSeq` 静默忽略；同一 producer 下的
+`runtimeSeq` 回退拒绝。一个 socket 中途更换 `producerInstanceId` 也拒绝，新的 producer
+必须建立新的 acceptance state。`liveSessionId`、`programSourceGeneration` 或 `mapEpoch`
+变化时产生显式 reset signal，并清除对应旧 baseline 的连续性证明；producer change 是拒绝
+条件而不是 reset signal；source reconnect 后，
+旧 Lookahead alignment 不能继续产生 Assist cue。
+
+每个 subscriber 使用 latest-wins publisher：最多一个正在发送的快照和一个 pending 快照，
+新快照覆盖旧 pending，不积累 history/outbox。发送失败的 subscriber 被移除并记录诊断；
+慢 consumer 不得使内存队列随时间增长。Publisher close 后幂等关闭，且不再接受 publish
+或新 subscriber。
+
+### #29 的边界
+
+本节冻结 schema、projector、wire mapper、publisher、acceptance helper 和 non-leak/背压测试。
+它不实现真实 WebSocket route/host、origin/CORS/LAN policy、`bufferedAmount`、heartbeat、
+浏览器 renderer、Radar geometry、Operator command、Observer Assist cue、RivalHub uplink 或
+M3-B Lookahead。上述能力分别留给后续 issue；真实 Windows + CS2 spectator + OBS 彩排也不
+由本 issue 虚构为已完成。

@@ -60,6 +60,7 @@ export interface CstvSourceManager {
   getRecentGameEvents(): readonly GameEventObservation[];
   getRecentDiagnostics(): readonly CstvDiagnostic[];
   getSnapshot(): CstvSourceSnapshot;
+  subscribe(listener: () => void): () => void;
 }
 
 const defaultScheduler: CstvScheduler = {
@@ -101,6 +102,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   private readonly scheduler: CstvScheduler;
   private readonly recentGameEvents: GameEventObservation[] = [];
   private readonly recentDiagnostics: CstvDiagnostic[] = [];
+  private readonly listeners = new Set<() => void>();
   private activeSession: ReturnType<typeof createCstvLiveSession> | undefined;
   private activeAttempt: Promise<void> | undefined;
   private reconnectTimer: unknown;
@@ -143,7 +145,10 @@ class DefaultCstvSourceManager implements CstvSourceManager {
       this.reconnectTimer = undefined;
       this.reconnectScheduled = false;
     }
-    if (this.url !== undefined) this.state = 'stopped';
+    if (this.url !== undefined) {
+      this.state = 'stopped';
+      this.notifySnapshotChanged();
+    }
     this.activeSession?.stop();
     const activeAttempt = this.activeAttempt;
     this.stopPromise = (async () => {
@@ -157,7 +162,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   }
 
   getHealth(): CstvSourceHealth {
-    this.refreshTailTick();
+    if (this.refreshTailTick()) this.notifySnapshotChanged();
     return {
       role: this.role,
       state: this.state,
@@ -195,6 +200,11 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     };
   }
 
+  subscribe(listener: () => void): () => void {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  }
+
   private connect(): void {
     if (this.stopRequested || this.url === undefined) return;
 
@@ -208,6 +218,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.lastErrorCode = undefined;
     this.lastTerminalStatus = undefined;
     this.state = 'connecting';
+    this.notifySnapshotChanged();
 
     let attempt: Promise<void>;
     try {
@@ -253,6 +264,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
       }
 
       this.state = 'live';
+      this.notifySnapshotChanged();
       phase = 'run';
       const result = await session.run();
       if (!this.isCurrent(generation, session)) return;
@@ -279,6 +291,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.lastSync = sync;
     this.reconnectAttempt = 0;
     this.lastErrorCode = undefined;
+    this.notifySnapshotChanged();
   }
 
   private handleObservation(generation: number, observation: GameEventObservation): void {
@@ -287,6 +300,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.lastEventTick = observation.cursor.tick;
     this.lastEventSequence = observation.cursor.sequence;
     this.lastEventObservedAt = observation.cursor.observedAt;
+    this.notifySnapshotChanged();
   }
 
   private handleDiagnostic(generation: number, diagnostic: CstvDiagnostic): void {
@@ -297,6 +311,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   private recordDiagnostic(diagnostic: CstvDiagnostic): void {
     appendBounded(this.recentDiagnostics, diagnostic, CSTV_RECENT_DIAGNOSTICS_MAX);
     this.lastErrorCode = diagnostic.code;
+    this.notifySnapshotChanged();
   }
 
   private isCurrentGeneration(generation: number): boolean {
@@ -313,6 +328,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.lastTerminalStatus = status;
     if (status === 'complete') {
       this.state = 'ended';
+      this.notifySnapshotChanged();
       return;
     }
     if (status === 'timeout') {
@@ -323,8 +339,12 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.scheduleReconnect('session-cancelled');
   }
 
-  private refreshTailTick(): void {
-    if (this.activeSession !== undefined) this.tailTick = this.activeSession.tailTick;
+  private refreshTailTick(): boolean {
+    if (this.activeSession === undefined || this.tailTick === this.activeSession.tailTick) {
+      return false;
+    }
+    this.tailTick = this.activeSession.tailTick;
+    return true;
   }
 
   private scheduleReconnect(code: CstvDiagnosticCode): void {
@@ -336,11 +356,22 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.reconnectAttempt += 1;
     this.nextGeneration = this.generation + 1;
     this.reconnectScheduled = true;
+    this.notifySnapshotChanged();
     this.reconnectTimer = this.scheduler.setTimeout(() => {
       this.reconnectTimer = undefined;
       this.reconnectScheduled = false;
       this.connect();
     }, delayMs);
+  }
+
+  private notifySnapshotChanged(): void {
+    for (const listener of [...this.listeners]) {
+      try {
+        listener();
+      } catch {
+        // A health observer must not affect parser lifecycle or another observer.
+      }
+    }
   }
 }
 
