@@ -22,6 +22,12 @@ const SPLIT_GEOMETRY: MapGeometry = {
   layerRule: { kind: 'z-threshold', splitZ: -495 },
 };
 
+const CUSTOM_GEOMETRY: MapGeometry = {
+  ...MIRAGE,
+  mapKey: 'workshop/custom-map',
+  calibrationRevision: 'custom-provider/1',
+};
+
 describe('Radar map geometry', () => {
   it('projects Mirage world coordinates with the frozen translation, scale, and Y flip', () => {
     const origin = projectWorldPosition({ x: -3230, y: 1713, z: 12 }, MIRAGE);
@@ -44,6 +50,15 @@ describe('Radar map geometry', () => {
     expect(outside?.x).toBe(-1 / 1024);
     expect(outside?.y).toBe(0);
     expect(outside?.outOfBounds).toBe(true);
+  });
+
+  it('keeps pure geometry projection provider-neutral', () => {
+    const projected = projectWorldPosition({ x: -670, y: -847, z: 0 }, CUSTOM_GEOMETRY);
+
+    expect(CUSTOM_GEOMETRY.mapKey).toBe('workshop/custom-map');
+    expect(projected?.x).toBeCloseTo(0.5, 12);
+    expect(projected?.y).toBeCloseTo(0.5, 12);
+    expect(projected?.layer).toBe('single');
   });
 
   it('keeps projected coordinates unclamped and classifies split-map layers independently', () => {
