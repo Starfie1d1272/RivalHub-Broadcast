@@ -1,15 +1,13 @@
 import type { ObservedVector3 } from '@rivalhub-broadcast/core/telemetry';
 
-import type { SupportedRadarMapKey } from './cs2-overview-calibrations.js';
-
 export type RadarLayer = 'single' | 'upper' | 'lower' | 'unknown';
 
 export type RadarLayerRule =
   { readonly kind: 'single' } | { readonly kind: 'z-threshold'; readonly splitZ: number };
 
 export interface MapGeometry {
-  /** Canonical map id, e.g. de_mirage. */
-  readonly mapKey: SupportedRadarMapKey;
+  /** Provider-canonical map id, e.g. de_mirage. */
+  readonly mapKey: string;
 
   /** Auditable calibration snapshot revision. */
   readonly calibrationRevision: string;
@@ -33,10 +31,7 @@ export interface MapGeometry {
 }
 
 export interface MapGeometryProvider {
-  /**
-   * Resolve canonical or explicitly supported alias input.
-   * null / unknown / workshop/custom map => null.
-   */
+  /** Resolve a map identifier supported by this provider; return null when unresolved. */
   resolve(mapName: string | null): MapGeometry | null;
 }
 
