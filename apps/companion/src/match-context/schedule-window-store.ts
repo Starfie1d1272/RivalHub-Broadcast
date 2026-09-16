@@ -11,11 +11,17 @@ import type { ScheduleWindow } from '@rivalhub-broadcast/core/match-context';
 
 import { replaceDurableJson, type DurableJsonFaultInjector } from './durable-json.js';
 import { SerialCommitQueue } from './serial-commit.js';
+import {
+  sameScheduleWindowRequest,
+  scheduleWindowRequest,
+  type ScheduleWindowRequest,
+} from './schedule-window-request.js';
 import type { ContextFreshness, ContextOrigin } from './lkg-store.js';
 
 const SCHEDULE_WINDOW_CACHE_VERSION = 'rivalhub.broadcast-schedule-window-cache.v1' as const;
 
 export interface ScheduleWindowBinding {
+  readonly request: ScheduleWindowRequest;
   readonly schedule: BroadcastScheduleWindowV1;
   readonly window: ScheduleWindow;
   readonly origin: ContextOrigin;
@@ -31,6 +37,7 @@ export type ScheduleWindowStoreIssueCode =
   | 'schedule_lkg_invalid_json'
   | 'schedule_lkg_invalid_envelope'
   | 'schedule_lkg_invalid_candidate'
+  | 'schedule_lkg_request_mismatch'
   | 'schedule_lkg_write_failed'
   | 'schedule_lkg_commit_stale';
 
@@ -181,7 +188,9 @@ export class ScheduleWindowLkgStore {
     });
   }
 
-  async read(): Promise<ScheduleWindowStoreResult<ScheduleWindowBinding>> {
+  async read(
+    requestedRequest?: ScheduleWindowRequest,
+  ): Promise<ScheduleWindowStoreResult<ScheduleWindowBinding>> {
     let contents: string;
     try {
       contents = await readFile(this.filePath, 'utf8');
@@ -217,9 +226,23 @@ export class ScheduleWindowLkgStore {
     if (envelope === undefined) return invalidEnvelope();
     const validated = validateBroadcastScheduleWindow(envelope.payload);
     if (!validated.ok) return invalidCandidate(validated.diagnostics);
+    const cachedRequest = scheduleWindowRequest(validated.value);
+    if (
+      requestedRequest !== undefined &&
+      !sameScheduleWindowRequest(cachedRequest, requestedRequest)
+    ) {
+      return {
+        ok: false,
+        issue: {
+          code: 'schedule_lkg_request_mismatch',
+          message: 'ScheduleWindow LKG 的 competition 或时间窗口与请求不一致。',
+        },
+      };
+    }
 
     try {
       const binding: ScheduleWindowBinding = {
+        request: cachedRequest,
         schedule: validated.value,
         window: toScheduleWindow(validated.value),
         origin: 'cache',

@@ -9,12 +9,6 @@ export {
   type BroadcastScheduleWindowV1,
 } from './types.js';
 export {
-  broadcastScheduleCompetitionSchema,
-  broadcastScheduleEntrantSchema,
-  broadcastScheduleMatchSchema,
-  broadcastScheduleWindowSchema,
-} from './schema.js';
-export {
   compareScheduleMatches,
   sortScheduleMatches,
   validateBroadcastScheduleWindow,

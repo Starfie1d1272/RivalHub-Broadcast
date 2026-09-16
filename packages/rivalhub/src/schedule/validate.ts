@@ -7,8 +7,8 @@ import {
   type ContractValidationResult,
 } from '../diagnostics.js';
 import {
-  ISO_TIMESTAMP_PATTERN,
   addSemanticDiagnostic,
+  isValidIsoTimestamp,
   nonEmpty,
   scorePair,
   structuralDiagnostics,
@@ -45,10 +45,8 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
   timestamp(value.from, 'from', diagnostics);
   timestamp(value.to, 'to', diagnostics);
   if (
-    ISO_TIMESTAMP_PATTERN.test(value.from) &&
-    Number.isFinite(Date.parse(value.from)) &&
-    ISO_TIMESTAMP_PATTERN.test(value.to) &&
-    Number.isFinite(Date.parse(value.to)) &&
+    isValidIsoTimestamp(value.from) &&
+    isValidIsoTimestamp(value.to) &&
     Date.parse(value.from) > Date.parse(value.to)
   ) {
     addSemanticDiagnostic(

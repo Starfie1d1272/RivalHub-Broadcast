@@ -402,6 +402,22 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     expect(issueCodes(live)).toContain('map_mismatch');
   });
 
+  it('does not treat an incomplete canonical BO3 map list as proof of a wrong live map', async () => {
+    const context = toMatchContext(await readManifest());
+    const partialMapContext: MatchContext = {
+      ...context,
+      maps: context.maps.slice(0, 1),
+    };
+    const resolution = resolveIdentity(
+      partialMapContext,
+      evidence(observedPlayers(context), { mapName: 'de_mirage', mapPhase: 'live' }),
+    );
+
+    expect(resolution.state).toBe('matched');
+    expect(issueCodes(resolution)).toContain('map_not_confirmed');
+    expect(issueCodes(resolution)).not.toContain('map_mismatch');
+  });
+
   it('starts unbound and can be rebound without carrying prior identity proof', async () => {
     const context = toMatchContext(await readManifest());
     const resolver = createIdentityResolver();

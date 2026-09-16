@@ -13,6 +13,7 @@ import {
   ScheduleWindowLkgStore,
   SourceLoadError,
 } from '../src/match-context/index.js';
+import type { ScheduleWindowRequest } from '../src/match-context/index.js';
 import type { DurableJsonCommitPoint } from '../src/match-context/durable-json.js';
 
 const fixtureRoot = resolve(process.cwd(), 'packages/rivalhub/test/fixtures');
@@ -30,6 +31,30 @@ async function temporaryDirectory(): Promise<string> {
 
 function source(kind: 'online' | 'fixture', value: unknown) {
   return { kind, load: () => Promise.resolve(value) } as const;
+}
+
+function scheduleRequest(schedule: BroadcastScheduleWindowV1): ScheduleWindowRequest {
+  return {
+    competitionId: schedule.competition.competitionId,
+    from: schedule.from,
+    to: schedule.to,
+  };
+}
+
+function scheduleSource(
+  kind: 'online' | 'fixture',
+  value: unknown,
+  request: ScheduleWindowRequest,
+) {
+  return { kind, request, load: () => Promise.resolve(value) } as const;
+}
+
+function scheduleFailureSource(
+  kind: 'online' | 'fixture',
+  request: ScheduleWindowRequest,
+  error: Error,
+) {
+  return { kind, request, load: () => Promise.reject(error) } as const;
 }
 
 function deferred<T>() {
@@ -430,6 +455,67 @@ describe('Match Manifest last-known-good seam', () => {
 });
 
 describe('independent ScheduleWindow last-known-good seam', () => {
+  it('requires a source response to match its requested competition and exact window', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const request = {
+      ...scheduleRequest(schedule),
+      to: '2026-09-16T15:00:00.000Z',
+    };
+    const controller = new ScheduleWindowController({
+      lkgStore: new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') }),
+    });
+
+    const result = await controller.refresh(scheduleSource('online', schedule, request));
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'schedule_source_request_mismatch',
+      'schedule_lkg_unavailable',
+    ]);
+    expect(controller.getCurrent()).toBeUndefined();
+  });
+
+  it('does not reuse memory or disk LKG from an incompatible schedule request', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const filePath = join(root, 'schedule.json');
+    const store = new ScheduleWindowLkgStore({ filePath });
+    const controller = new ScheduleWindowController({ lkgStore: store });
+    const firstRequest = scheduleRequest(schedule);
+    expect((await store.save(schedule, 'fixture')).ok).toBe(true);
+    expect((await controller.refresh(scheduleSource('fixture', schedule, firstRequest))).ok).toBe(
+      true,
+    );
+
+    const incompatibleRequest: ScheduleWindowRequest = {
+      competitionId: 'competition-other',
+      from: '2026-09-16T14:00:00.000Z',
+      to: '2026-09-16T18:00:00.000Z',
+    };
+    const result = await controller.refresh(
+      scheduleFailureSource(
+        'online',
+        incompatibleRequest,
+        new SourceLoadError('schedule service offline'),
+      ),
+    );
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'schedule_source_failed' })]),
+    );
+    const unavailable = result.diagnostics.find(
+      (diagnostic) => diagnostic.code === 'schedule_lkg_unavailable',
+    );
+    expect(unavailable?.storeIssue?.code).toBe('schedule_lkg_request_mismatch');
+    expect(controller.getCurrent()).toBeUndefined();
+  });
+
   it('refreshes online data and retains stale schedule when the next source fails', async () => {
     const root = await temporaryDirectory();
     const schedule = await readFixture<BroadcastScheduleWindowV1>(
@@ -441,11 +527,11 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     });
     const controller = new ScheduleWindowController({ lkgStore: store });
 
-    const fresh = await controller.refresh(source('online', schedule));
-    const stale = await controller.refresh({
-      kind: 'online',
-      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
-    });
+    const request = scheduleRequest(schedule);
+    const fresh = await controller.refresh(scheduleSource('online', schedule, request));
+    const stale = await controller.refresh(
+      scheduleFailureSource('online', request, new SourceLoadError('schedule service offline')),
+    );
 
     expect(fresh.ok).toBe(true);
     expect(stale.ok).toBe(true);
@@ -471,10 +557,13 @@ describe('independent ScheduleWindow last-known-good seam', () => {
       lkgStore: new ScheduleWindowLkgStore({ filePath }),
     });
 
-    const result = await controller.refresh({
-      kind: 'online',
-      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
-    });
+    const result = await controller.refresh(
+      scheduleFailureSource(
+        'online',
+        scheduleRequest(schedule),
+        new SourceLoadError('schedule service offline'),
+      ),
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('disk ScheduleWindow LKG should be available');
@@ -537,7 +626,9 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     });
 
     const controller = new ScheduleWindowController({ lkgStore: store });
-    const result = await controller.refresh(source('online', schedule));
+    const result = await controller.refresh(
+      scheduleSource('online', schedule, scheduleRequest(schedule)),
+    );
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('fresh validated schedule should remain active');
@@ -561,14 +652,19 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     const schedule = await readFixture<BroadcastScheduleWindowV1>(
       'broadcast-schedule-window-v1.valid.json',
     );
-    const nextSchedule = structuredClone(schedule) as { revision: string };
+    const nextSchedule = structuredClone(schedule) as BroadcastScheduleWindowV1 & {
+      revision: string;
+    };
     nextSchedule.revision = 'revision-next';
     const store = new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') });
     const controller = new ScheduleWindowController({ lkgStore: store });
     const oldLoad = deferred<unknown>();
 
-    const oldRefresh = controller.refresh({ kind: 'online', load: () => oldLoad.promise });
-    const latestRefresh = controller.refresh(source('online', nextSchedule));
+    const request = scheduleRequest(schedule);
+    const oldRefresh = controller.refresh({ kind: 'online', request, load: () => oldLoad.promise });
+    const latestRefresh = controller.refresh(
+      scheduleSource('online', nextSchedule, scheduleRequest(nextSchedule)),
+    );
     const latestResult = await latestRefresh;
     oldLoad.resolve(schedule);
     const oldResult = await oldRefresh;
@@ -586,12 +682,40 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     expect(envelope.payload.revision).toBe('revision-next');
   });
 
+  it('clears the current schedule and cancels an in-flight refresh', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const controller = new ScheduleWindowController({
+      lkgStore: new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') }),
+    });
+    const pending = deferred<unknown>();
+    const refresh = controller.refresh({
+      kind: 'online',
+      request: scheduleRequest(schedule),
+      load: () => pending.promise,
+    });
+
+    controller.clearCurrent();
+    pending.resolve(schedule);
+    const result = await refresh;
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'schedule_refresh_stale',
+    ]);
+    expect(controller.getCurrent()).toBeUndefined();
+  });
+
   it('prefers the current in-memory ScheduleWindow over an older disk LKG', async () => {
     const root = await temporaryDirectory();
     const schedule = await readFixture<BroadcastScheduleWindowV1>(
       'broadcast-schedule-window-v1.valid.json',
     );
-    const nextSchedule = structuredClone(schedule) as { revision: string };
+    const nextSchedule = structuredClone(schedule) as BroadcastScheduleWindowV1 & {
+      revision: string;
+    };
     nextSchedule.revision = 'revision-memory';
     const filePath = join(root, 'schedule.json');
     const baseline = new ScheduleWindowLkgStore({ filePath });
@@ -604,13 +728,13 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     });
     const controller = new ScheduleWindowController({ lkgStore: store });
 
-    const fresh = await controller.refresh(source('online', nextSchedule));
+    const request = scheduleRequest(nextSchedule);
+    const fresh = await controller.refresh(scheduleSource('online', nextSchedule, request));
     expect(fresh.ok).toBe(true);
     if (!fresh.ok) throw new Error('fresh schedule should remain active');
-    const failedRefresh = await controller.refresh({
-      kind: 'online',
-      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
-    });
+    const failedRefresh = await controller.refresh(
+      scheduleFailureSource('online', request, new SourceLoadError('schedule service offline')),
+    );
 
     expect(failedRefresh.ok).toBe(true);
     if (!failedRefresh.ok) throw new Error('memory schedule should remain active');
@@ -631,7 +755,9 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     const store = new ScheduleWindowLkgStore({ filePath });
     const controller = new ScheduleWindowController({ lkgStore: store });
 
-    const fresh = await controller.refresh(source('fixture', schedule));
+    const fresh = await controller.refresh(
+      scheduleSource('fixture', schedule, scheduleRequest(schedule)),
+    );
     expect(fresh.ok).toBe(true);
     if (!fresh.ok) throw new Error('valid schedule should bind');
     expect(fresh.binding.diagnostics).toEqual([]);
@@ -658,10 +784,13 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     const scheduleController = new ScheduleWindowController({ lkgStore: scheduleStore });
     expect((await scheduleStore.save(schedule, 'fixture')).ok).toBe(true);
 
-    const failure = await scheduleController.refresh({
-      kind: 'fixture',
-      load: () => Promise.resolve({ ...schedule, revision: 'broken', from: 'not-a-time' }),
-    });
+    const failure = await scheduleController.refresh(
+      scheduleSource(
+        'fixture',
+        { ...schedule, revision: 'broken', from: 'not-a-time' },
+        scheduleRequest(schedule),
+      ),
+    );
 
     expect(failure.ok).toBe(true);
     expect(controller.getActiveBinding()).toEqual(before);
@@ -675,10 +804,17 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     });
 
     await expect(
-      controller.refresh({
-        kind: 'online',
-        load: () => Promise.reject(programmerError),
-      }),
+      controller.refresh(
+        scheduleFailureSource(
+          'online',
+          {
+            competitionId: 'competition-m2',
+            from: '2026-09-16T08:00:00.000Z',
+            to: '2026-09-16T14:00:00.000Z',
+          },
+          programmerError,
+        ),
+      ),
     ).rejects.toBe(programmerError);
   });
 });

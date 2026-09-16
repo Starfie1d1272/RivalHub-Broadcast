@@ -22,6 +22,10 @@ import {
 
 const STEAM64_PATTERN = /^\d{17}$/;
 
+function maximumMapCount(format: BroadcastManifestV1['match']['format']): number {
+  return format === 'bo1' ? 1 : format === 'bo3' ? 3 : 5;
+}
+
 function hasUnsupportedSchemaVersion(input: unknown): boolean {
   return (
     typeof input === 'object' &&
@@ -166,17 +170,27 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
   const knownEntryIds = new Set(entryIds);
   const mapOrders = new Set<number>();
   const mapIds = new Set<string>();
+  const maximumMaps = maximumMapCount(value.match.format);
+  if (value.maps.length > maximumMaps) {
+    addSemanticDiagnostic(
+      diagnostics,
+      'invalid_map_count',
+      'error',
+      'maps',
+      `${value.match.format} 的 canonical map list 不得超过 ${maximumMaps} 张地图。`,
+    );
+  }
   for (const [index, map] of value.maps.entries()) {
     const path = `maps.${index}`;
     nonEmpty(map.mapId, `${path}.mapId`, diagnostics, 'mapId');
     nonEmpty(map.mapName, `${path}.mapName`, diagnostics, 'mapName');
-    if (!Number.isSafeInteger(map.mapOrder) || map.mapOrder < 1) {
+    if (!Number.isSafeInteger(map.mapOrder) || map.mapOrder < 1 || map.mapOrder > maximumMaps) {
       addSemanticDiagnostic(
         diagnostics,
         'invalid_map_order',
         'error',
         `${path}.mapOrder`,
-        'mapOrder 必须是从 1 开始的安全整数。',
+        `mapOrder 必须是 1 到 ${maximumMaps} 之间的安全整数。`,
       );
     }
     if (mapOrders.has(map.mapOrder)) {

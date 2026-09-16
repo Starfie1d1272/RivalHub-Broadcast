@@ -5,6 +5,12 @@ import { makeContractDiagnostic, type ContractDiagnostic } from './diagnostics.j
 export const ISO_TIMESTAMP_PATTERN =
   /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
+const ISO_TIMESTAMP_SCHEMA = z.iso.datetime({ offset: true });
+
+export function isValidIsoTimestamp(value: string): boolean {
+  return ISO_TIMESTAMP_PATTERN.test(value) && ISO_TIMESTAMP_SCHEMA.safeParse(value).success;
+}
+
 export function structuralDiagnostics(
   error: z.ZodError,
   contractName: string,
@@ -47,7 +53,7 @@ export function timestamp(
   diagnostics: ContractDiagnostic[],
 ): void {
   if (value === null) return;
-  if (!ISO_TIMESTAMP_PATTERN.test(value) || !Number.isFinite(Date.parse(value))) {
+  if (!isValidIsoTimestamp(value)) {
     addSemanticDiagnostic(
       diagnostics,
       'invalid_timestamp',

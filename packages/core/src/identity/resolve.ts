@@ -79,6 +79,29 @@ function sortUnresolved(players: Iterable<UnresolvedObservedPlayer>): Unresolved
   );
 }
 
+function maximumMapCount(format: MatchContext['format']): number {
+  return format === 'bo1' ? 1 : format === 'bo3' ? 3 : 5;
+}
+
+function hasCompleteCanonicalMapSet(context: MatchContext): boolean {
+  const expectedCount = maximumMapCount(context.format);
+  if (context.maps.length !== expectedCount) return false;
+
+  const mapOrders = new Set<number>();
+  for (const map of context.maps) {
+    if (
+      !Number.isSafeInteger(map.mapOrder) ||
+      map.mapOrder < 1 ||
+      map.mapOrder > expectedCount ||
+      map.mapName.trim().length === 0
+    ) {
+      return false;
+    }
+    mapOrders.add(map.mapOrder);
+  }
+  return mapOrders.size === expectedCount;
+}
+
 function knownMapIssue(
   context: MatchContext,
   evidence: NormalizedIdentityEvidence,
@@ -94,7 +117,17 @@ function knownMapIssue(
   }
 
   const knownMaps = new Set(context.maps.map((map) => map.mapName));
-  if (knownMaps.size === 0 || knownMaps.has(evidence.mapName)) return false;
+  if (knownMaps.has(evidence.mapName)) return false;
+  if (!hasCompleteCanonicalMapSet(context)) {
+    issues.push(
+      issue(
+        'map_not_confirmed',
+        'warning',
+        `当前 map ${evidence.mapName} 尚未被不完整的 canonical series map list 确认。`,
+      ),
+    );
+    return false;
+  }
   if (evidence.mapPhase === 'live') {
     issues.push(
       issue('map_mismatch', 'error', `live map ${evidence.mapName} 不属于当前 series maps。`),

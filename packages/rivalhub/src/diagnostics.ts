@@ -14,6 +14,7 @@ export type ContractDiagnosticCode =
   | 'missing_display_name'
   | 'incomplete_roster'
   | 'invalid_map_order'
+  | 'invalid_map_count'
   | 'invalid_round'
   | 'duplicate_map_order'
   | 'duplicate_map_id'

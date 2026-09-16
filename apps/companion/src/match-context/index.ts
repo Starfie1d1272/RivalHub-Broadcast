@@ -4,6 +4,7 @@ export {
   readFixtureJson,
   type FixtureSource,
   type FixtureSourceKind,
+  type ScheduleWindowFixtureSource,
 } from './fixture-source.js';
 export {
   createMatchContextController,
@@ -53,3 +54,4 @@ export {
   type ScheduleWindowSource,
 } from './schedule-window-controller.js';
 export { SourceLoadError } from './source-error.js';
+export type { ScheduleWindowRequest } from './schedule-window-request.js';

@@ -100,8 +100,11 @@ V1 中 `startedAt` 必须存在且可为 `null`；validator 只校验它的 null
 commentators。
 
 窗口要求 `from <= to`、`matchId` 唯一、A/B entry 不同，时间字段可为 `null`。输出按
-`scheduledAt` 升序排列；相同时间以及无时间项按 `matchId` 作确定性 fallback。窗口失败
-不会解除当前 MatchContext，也不会影响当前 Program。
+`scheduledAt` 升序排列；相同时间以及无时间项按 `matchId` 作确定性 fallback。Companion
+的 acquisition 还会为每次请求携带 `ScheduleWindowRequest { competitionId, from, to }`，
+source response、内存 binding 与磁盘 LKG 必须与该三元组完全一致；不兼容的赛事或时间窗口
+不得作为 fallback。V1 暂采用 exact window compatibility，滚动窗口若未来需要放宽必须单独
+冻结兼容规则。窗口失败不会解除当前 MatchContext，也不会影响当前 Program。
 
 ## Validator 与领域分层
 
@@ -121,8 +124,9 @@ commentators。
 ```
 
 校验覆盖精确 version、非空 ID、A/B 不重复、Manifest 内全局唯一的 playerId 与非空
-Steam64、partial roster、地图/veto order 与 entry 引用、score pair、nullable ISO
-timestamp、ScheduleWindow 时间范围、matchId 唯一和 deterministic sort。缺少
+Steam64、partial roster、地图/veto order 与 entry 引用、format 对应的 canonical map 数量
+上限、score pair、严格的 nullable ISO timestamp、ScheduleWindow 时间范围、matchId 唯一和
+deterministic sort。缺少
 Steam64/displayName 是可表达的 warning；重复 canonical Steam64、未知 entry 引用、
 错误时间和结构错误是 blocking error。validator 不把 Steam64 转成 JavaScript number，
 也不推断 `startedAt` 的 authority。V1 的 veto `actionType` 只接受 `ban`、`pick`、
@@ -167,7 +171,9 @@ matched proof 与 canonical branding；degraded frame 仍先扫描当前帧的�
 矛盾，正面矛盾可以将状态置为 mismatch。`allplayers_unavailable/allplayers_degraded` 只是独立的
 freshness/health diagnostics，具体何时失效由 Runtime freshness policy 决定。source generation
 或 map epoch 变化会清除旧 baseline，直到新 evidence 重新证明。warmup/初始化阶段的未知
-地图不会直接制造 mismatch。
+地图不会直接制造 mismatch。只有当前 format 对应的完整 canonical map list 已确认，且 live
+map 明确不在其中时才产生 `map_mismatch`；地图列表为空或尚未达到 BO1/BO3/BO5 的完整数量
+时，对未知 live map 只产生 `map_not_confirmed` warning。
 
 ## Fixture 与 LKG
 
@@ -193,7 +199,10 @@ Match LKG 与 ScheduleWindow LKG 是两个独立 seam：
   当前绑定或缓存。
 - ScheduleWindow 的 `ScheduleWindowController` 负责 source acquisition、current binding 与
   latest-wins；`ScheduleWindowLkgStore` 只负责磁盘读写。source 失败时优先使用当前内存
-  ScheduleWindow，再考虑磁盘 LKG，避免新内存版本倒退为旧磁盘版本。
+  ScheduleWindow，但仅当 `ScheduleWindowRequest` 完全兼容；随后才考虑同样兼容的磁盘 LKG，
+  避免新内存版本倒退为旧磁盘版本或跨赛事/窗口泄漏。
+- ScheduleWindow request 变化会解除不兼容的 current binding；公开 `clearCurrent()` 会递增
+  refresh generation，已在途的旧 refresh 不能重新激活任何 schedule。
 - Schedule source 已成功 validate 时，即使 LKG persistence 失败，仍继续使用 fresh binding，
   并将写入失败作为独立 diagnostic，不回退到 stale LKG。
 - MatchContextBinding 与 ScheduleWindowBinding 都携带 validator 产生的 contract diagnostics；
@@ -211,6 +220,10 @@ source 错误分类也保持分层：source adapter 将网络、可用性、文�
 `source_load_failed`/`schedule_source_failed`；validator、DTO converter 和 binding callback
 不在同一个大 catch 中，分别保留 validation diagnostics 或向调用方传播其 invariant/callback
 错误。未包装的异常按 programmer/invariant 错误传播。
+
+`packages/rivalhub` 公共入口只暴露 V1 DTO 类型、schema version、完整 validator、领域
+converter、typed diagnostics 与 conversion error；raw structural Zod schemas 仅供包内
+validator 使用，调用方不得绕过 semantic validation。
 
 ## 完整比赛 replay 证据
 

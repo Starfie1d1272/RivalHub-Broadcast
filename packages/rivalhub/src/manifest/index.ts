@@ -15,16 +15,5 @@ export {
   type BroadcastVetoActionType,
   type BroadcastVetoStepV1,
 } from './types.js';
-export {
-  broadcastCommentatorSchema,
-  broadcastCompetitionSchema,
-  broadcastEntrantSchema,
-  broadcastManifestSchema,
-  broadcastMapSchema,
-  broadcastMatchSchema,
-  broadcastPlayerSchema,
-  broadcastRosterSchema,
-  broadcastVetoStepSchema,
-} from './schema.js';
 export { validateBroadcastManifest } from './validate.js';
 export { BroadcastManifestConversionError, toMatchContext } from './to-match-context.js';

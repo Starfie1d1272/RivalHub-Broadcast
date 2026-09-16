@@ -8,6 +8,11 @@ import {
 import { SerialCommitQueue } from './serial-commit.js';
 import { SourceLoadError } from './source-error.js';
 import {
+  scheduleMatchesRequest,
+  sameScheduleWindowRequest,
+  type ScheduleWindowRequest,
+} from './schedule-window-request.js';
+import {
   ScheduleWindowLkgStore,
   type ScheduleWindowBinding,
   type ScheduleWindowSaveOptions,
@@ -17,6 +22,8 @@ import type { ContextOrigin } from './lkg-store.js';
 
 export interface ScheduleWindowSource {
   readonly kind: Exclude<ContextOrigin, 'cache'>;
+  /** The competition and exact time window this source load represents. */
+  readonly request: ScheduleWindowRequest;
   /** Expected network/source failures must reject with SourceLoadError. */
   readonly load: () => Promise<unknown>;
 }
@@ -24,6 +31,7 @@ export interface ScheduleWindowSource {
 export type ScheduleWindowControllerIssueCode =
   | 'schedule_source_failed'
   | 'schedule_source_invalid'
+  | 'schedule_source_request_mismatch'
   | 'schedule_conversion_failed'
   | 'schedule_memory_fallback'
   | 'schedule_lkg_fallback'
@@ -79,16 +87,29 @@ export class ScheduleWindowController {
     return this.currentBinding;
   }
 
+  /** Cancel in-flight refreshes and remove the current schedule binding. */
+  clearCurrent(): void {
+    this.refreshGeneration += 1;
+    this.currentBinding = undefined;
+  }
+
   async refresh(source: ScheduleWindowSource): Promise<ScheduleWindowRefreshResult> {
     const generation = ++this.refreshGeneration;
     const isCurrent = () => generation === this.refreshGeneration;
+    const request: ScheduleWindowRequest = { ...source.request };
+    if (
+      this.currentBinding !== undefined &&
+      !sameScheduleWindowRequest(this.currentBinding.request, request)
+    ) {
+      this.currentBinding = undefined;
+    }
 
     let candidate: unknown;
     try {
       candidate = await source.load();
     } catch (error: unknown) {
       if (!(error instanceof SourceLoadError)) throw error;
-      return this.useFallback(generation, {
+      return this.useFallback(generation, request, {
         code: 'schedule_source_failed',
         message: 'ScheduleWindow source 加载失败。',
       });
@@ -96,10 +117,16 @@ export class ScheduleWindowController {
 
     const validated = validateBroadcastScheduleWindow(candidate);
     if (!validated.ok) {
-      return this.useFallback(generation, {
+      return this.useFallback(generation, request, {
         code: 'schedule_source_invalid',
         message: 'ScheduleWindow source 未通过 validation。',
         diagnostics: validated.diagnostics,
+      });
+    }
+    if (!scheduleMatchesRequest(request, validated.value)) {
+      return this.useFallback(generation, request, {
+        code: 'schedule_source_request_mismatch',
+        message: 'ScheduleWindow source 返回的 competition 或时间窗口与请求不一致。',
       });
     }
 
@@ -143,6 +170,7 @@ export class ScheduleWindowController {
         );
       }
       const binding: ScheduleWindowBinding = {
+        request,
         schedule: validated.value,
         window,
         origin: source.kind,
@@ -156,13 +184,14 @@ export class ScheduleWindowController {
 
   private async useFallback(
     generation: number,
+    request: ScheduleWindowRequest,
     diagnostic: ScheduleWindowControllerIssue,
   ): Promise<ScheduleWindowRefreshResult> {
     return this.commitQueue.run(async () => {
       if (generation !== this.refreshGeneration) return this.staleRefreshResult();
 
       const current = this.currentBinding;
-      if (current !== undefined) {
+      if (current !== undefined && sameScheduleWindowRequest(current.request, request)) {
         const staleBinding: ScheduleWindowBinding = { ...current, freshness: 'stale' };
         this.currentBinding = staleBinding;
         return {
@@ -178,7 +207,7 @@ export class ScheduleWindowController {
         };
       }
 
-      const fallback = await this.lkgStore.read();
+      const fallback = await this.lkgStore.read(request);
       if (generation !== this.refreshGeneration) return this.staleRefreshResult();
       if (fallback.ok) {
         this.currentBinding = fallback.value;

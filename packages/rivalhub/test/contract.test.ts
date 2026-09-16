@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import * as publicContractApi from '../src/index.js';
 import {
   compareScheduleMatches,
   validateBroadcastManifest,
@@ -169,6 +170,62 @@ describe('BroadcastManifestV1 contract', () => {
         expect.objectContaining({ code: 'incomplete_score_pair' }),
       ]),
     );
+  });
+
+  it.each([
+    ['rejects a non-existent calendar date', '2026-02-31T00:00:00Z', false],
+    ['accepts a leap-day timestamp', '2028-02-29T00:00:00Z', true],
+    ['accepts an explicit offset timestamp', '2026-09-16T08:00:00+08:00', true],
+  ] as const)('%s', async (_name, timestamp, expected) => {
+    const fixture = await readJson<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const candidate = mutableClone(fixture);
+    candidate.match.scheduledAt = timestamp;
+
+    const result = validateBroadcastManifest(candidate);
+
+    expect(result.ok).toBe(expected);
+    if (!expected) {
+      expect(result.diagnostics).toEqual(
+        expect.arrayContaining([expect.objectContaining({ code: 'invalid_timestamp' })]),
+      );
+    }
+  });
+
+  it('keeps structural Zod schemas private to the contract package', () => {
+    expect(publicContractApi).not.toHaveProperty('broadcastManifestSchema');
+    expect(publicContractApi).not.toHaveProperty('broadcastScheduleWindowSchema');
+    expect(publicContractApi.validateBroadcastManifest).toBeTypeOf('function');
+    expect(publicContractApi.validateBroadcastScheduleWindow).toBeTypeOf('function');
+  });
+
+  it('enforces the canonical map count and mapOrder bounds for each match format', async () => {
+    const fixture = await readJson<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+
+    const bo1 = mutableClone(fixture);
+    bo1.match.format = 'bo1';
+    bo1.maps = bo1.maps.slice(0, 2);
+    const bo1Result = validateBroadcastManifest(bo1);
+    expect(bo1Result.ok).toBe(false);
+    expect(bo1Result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'invalid_map_count' })]),
+    );
+
+    const bo3 = mutableClone(fixture);
+    bo3.maps[0]!.mapOrder = 4;
+    const bo3Result = validateBroadcastManifest(bo3);
+    expect(bo3Result.ok).toBe(false);
+    expect(bo3Result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'invalid_map_order' })]),
+    );
+
+    const bo5 = mutableClone(fixture);
+    bo5.match.format = 'bo5';
+    bo5.maps = [
+      ...bo5.maps,
+      { ...bo5.maps[2]!, mapId: 'map-m2-04', mapOrder: 4, mapName: 'de_overpass' },
+      { ...bo5.maps[2]!, mapId: 'map-m2-05', mapOrder: 5, mapName: 'de_vertigo' },
+    ];
+    expect(validateBroadcastManifest(bo5).ok).toBe(true);
   });
 
   it('accepts additive V1 fields and strips them before DTO consumption', async () => {
