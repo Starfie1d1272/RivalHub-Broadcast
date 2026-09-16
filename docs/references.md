@@ -29,7 +29,7 @@ Radar 不等于地图 calibration，也不等于某一个现成 Radar 应用：
 ```text
 Map geometry / calibration
   → MapGeometryProvider
-  → 当前默认 provider 计划复用 DAK @cs2dak/maps
+  → Broadcast checked-in CS2 overview calibration snapshot；DAK 仅作独立交叉参考
 
 Radar domain
   → RadarFrame / marker / utility / floor / interpolation / autozoom math

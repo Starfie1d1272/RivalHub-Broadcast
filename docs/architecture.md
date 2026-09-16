@@ -523,7 +523,7 @@ requestAnimationFrame scheduling
 OBS/browser-specific rendering
 ```
 
-当前默认 `MapGeometryProvider` 计划复用 DAK `@cs2dak/maps` 的 calibration，但 Radar 不直接把 DAK package shape 当成自己的 domain contract。
+当前默认 `MapGeometryProvider` 使用 `packages/radar` 自己持有的、显式版本化的 CS2 overview calibration snapshot；DAK `@cs2dak/maps` 仅作为独立交叉参考，不是 Broadcast 的 build/runtime owner。Radar 不把 DAK package shape 当成自己的 domain contract。
 
 Radar source snapshot 频率与浏览器渲染频率分离，使用 interpolation/presentation scheduling 平滑，而不是无界提高 transport 频率。
 
@@ -713,7 +713,7 @@ ADR-0005 增加的“RivalHub-first 但不反向锁定 Core/Radar/Lookahead”�
 - RivalHub pairing / credential storage；
 - cloud live uplink rate；
 - Radar asset 来源与生成流程；
-- `MapGeometryProvider` contract 与 `@cs2dak/maps` 的具体消费方式；
+- #30 之外的 geometry 扩展与 custom/workshop map support；
 - GSI parser dependency 的最终选择；
 - Lookahead CSTV headless parser / alignment implementation 的最终选择；
 - Observer Assist 是 browser route、透明 desktop window 还是其它 shell integration；

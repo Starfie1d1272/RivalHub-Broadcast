@@ -376,7 +376,7 @@ requestAnimationFrame scheduling
 OBS/browser-specific rendering details
 ```
 
-地图几何通过 `MapGeometryProvider` 进入 Radar；当前默认 provider 计划复用 DAK `@cs2dak/maps`，但 Radar 不直接把 DAK package shape 作为自己的 domain contract。
+地图几何通过 `MapGeometryProvider` 进入 Radar；当前默认 provider 使用 Broadcast 自己持有的、显式版本化的 CS2 overview calibration snapshot。DAK `@cs2dak/maps` 仅作为独立交叉参考，不是 Broadcast 的 build/runtime owner；Radar 不直接把 DAK package shape 作为自己的 domain contract。
 
 Boltobserv / Obserview 等用于算法与产品 UX 参考，不作为第二套 GSI runtime/sidecar。
 
