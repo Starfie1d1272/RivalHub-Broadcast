@@ -8,6 +8,8 @@ export type BroadcastMatchFormat = 'bo1' | 'bo3' | 'bo5';
 
 export type BroadcastSide = 't' | 'ct';
 
+export type BroadcastVetoActionType = 'ban' | 'pick' | 'side_pick' | 'decider';
+
 export interface BroadcastCompetitionV1 {
   readonly competitionId: string;
   readonly slug: string;
@@ -53,7 +55,7 @@ export interface BroadcastEntrantV1 {
 
 export interface BroadcastVetoStepV1 {
   readonly stepOrder: number;
-  readonly actionType: string;
+  readonly actionType: BroadcastVetoActionType;
   readonly mapName: string;
   readonly entryId: string | null;
   readonly side: BroadcastSide | null;

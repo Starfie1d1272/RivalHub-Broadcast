@@ -50,7 +50,7 @@ export const broadcastEntrantSchema = z.strictObject({
 
 export const broadcastVetoStepSchema = z.strictObject({
   stepOrder: z.number(),
-  actionType: z.string(),
+  actionType: z.enum(['ban', 'pick', 'side_pick', 'decider']),
   mapName: z.string(),
   entryId: nullableString,
   side: z.enum(['t', 'ct']).nullable(),

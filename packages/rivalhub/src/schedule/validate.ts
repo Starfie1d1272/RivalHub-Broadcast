@@ -138,6 +138,15 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
     }
     matchIds.add(match.matchId);
     nonEmpty(match.stage, `${path}.stage`, diagnostics, 'stage');
+    if (match.round !== null && (!Number.isSafeInteger(match.round) || match.round < 1)) {
+      add(
+        diagnostics,
+        'invalid_round',
+        'error',
+        `${path}.round`,
+        'round 必须是从 1 开始的安全整数或 null。',
+      );
+    }
     nonEmpty(match.entrantA.entryId, `${path}.entrantA.entryId`, diagnostics, 'entryId');
     nonEmpty(match.entrantB.entryId, `${path}.entrantB.entryId`, diagnostics, 'entryId');
     nonEmpty(match.entrantA.name, `${path}.entrantA.name`, diagnostics, 'entrant name');
@@ -159,10 +168,10 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
   return diagnostics;
 }
 
-function scheduleTime(match: BroadcastScheduleMatchV1): number {
-  if (match.scheduledAt === null) return Number.POSITIVE_INFINITY;
+function scheduleTime(match: BroadcastScheduleMatchV1): number | undefined {
+  if (match.scheduledAt === null) return undefined;
   const parsed = Date.parse(match.scheduledAt);
-  return Number.isFinite(parsed) ? parsed : Number.POSITIVE_INFINITY;
+  return Number.isFinite(parsed) ? parsed : undefined;
 }
 
 function compareStrings(left: string, right: string): number {
@@ -173,8 +182,14 @@ export function compareScheduleMatches(
   left: BroadcastScheduleMatchV1,
   right: BroadcastScheduleMatchV1,
 ): number {
-  const timeDifference = scheduleTime(left) - scheduleTime(right);
-  return timeDifference !== 0 ? timeDifference : compareStrings(left.matchId, right.matchId);
+  const leftTime = scheduleTime(left);
+  const rightTime = scheduleTime(right);
+  if (leftTime !== undefined && rightTime !== undefined && leftTime !== rightTime) {
+    return leftTime - rightTime;
+  }
+  if (leftTime === undefined && rightTime !== undefined) return 1;
+  if (leftTime !== undefined && rightTime === undefined) return -1;
+  return compareStrings(left.matchId, right.matchId);
 }
 
 export function sortScheduleMatches(
@@ -205,6 +220,3 @@ export function validateBroadcastScheduleWindow(
   if (hasBlockingDiagnostic(diagnostics)) return validationFailure(diagnostics);
   return validationSuccess({ ...value, matches: sortScheduleMatches(value.matches) }, diagnostics);
 }
-
-export const parseBroadcastScheduleWindow = validateBroadcastScheduleWindow;
-export const validateScheduleWindow = validateBroadcastScheduleWindow;

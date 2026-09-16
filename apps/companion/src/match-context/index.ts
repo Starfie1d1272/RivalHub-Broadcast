@@ -1,6 +1,5 @@
 export {
   createFixtureManifestSource,
-  createFixtureMatchContextSource,
   createFixtureScheduleWindowSource,
   readFixtureJson,
   type FixtureSource,
@@ -18,7 +17,6 @@ export {
   type MatchContextSource,
 } from './controller.js';
 export {
-  LastKnownGoodManifestStore,
   MatchManifestLkgStore,
   type ContextFreshness,
   type ContextOrigin,
@@ -28,12 +26,12 @@ export {
   type MatchContextStoreIssueCode,
   type MatchContextStoreResult,
   type MatchContextStoreSuccess,
+  type MatchManifestLkgSaveOptions,
   type MatchManifestLkgStoreOptions,
 } from './lkg-store.js';
 export {
   createScheduleWindowStore,
   ScheduleWindowLkgStore,
-  ScheduleWindowStore,
   type ScheduleWindowBinding,
   type ScheduleWindowSource,
   type ScheduleWindowStoreFailure,
@@ -42,4 +40,5 @@ export {
   type ScheduleWindowStoreOptions,
   type ScheduleWindowStoreResult,
   type ScheduleWindowStoreSuccess,
+  type ScheduleWindowSaveOptions,
 } from './schedule-window-store.js';

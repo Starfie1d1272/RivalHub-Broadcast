@@ -123,7 +123,9 @@ Steam64、partial roster、地图/veto order 与 entry 引用、score pair、nul
 timestamp、ScheduleWindow 时间范围、matchId 唯一和 deterministic sort。缺少
 Steam64/displayName 是可表达的 warning；重复 canonical Steam64、未知 entry 引用、
 错误时间和结构错误是 blocking error。validator 不把 Steam64 转成 JavaScript number，
-也不推断 `startedAt` 的 authority。
+也不推断 `startedAt` 的 authority。V1 的 veto `actionType` 只接受 `ban`、`pick`、
+`side_pick`、`decider`；`round`、`mapOrder`、`stepOrder` 均须为从 1 开始的安全整数（或
+contract 允许为 `null` 的 `round` 保持为 `null`）。
 
 只有没有 blocking error 的 candidate 才能转换为 Core domain。`MatchContext` 只保留
 Broadcast-owned 的 provider-neutral 字段；`revision`、schema version、来源和 freshness
@@ -153,10 +155,14 @@ identity-dependent result capability，但 neutral telemetry、operator/debug �
 可用。
 
 半场与加时换边只更新 entry 到 CT/T 的动态 side mapping，不改变 player/entry identity。
-resolver 优先使用当前 map side team evidence，在该 evidence 不足时使用已映射选手的
-当前 side。单帧 allplayers absent/degraded 会在同一 source generation/map epoch 下保留
-已有 proof；source generation 或 map epoch 变化会先清除旧 baseline，直到新 evidence
-重新证明。warmup/初始化阶段的未知地图不会直接制造 mismatch。
+resolver 优先使用已经以 Steam64 解析到 CompetitionEntry 的 observed player 当前 side；
+`map.team_ct/team_t.name` 只能作为 player evidence 不足时的 fallback 或 cross-check。两者
+冲突时保留 player proof，并发出 typed `side_mapping_conflict`，不能让字符串队名覆盖已确认
+的身份。单帧 allplayers absent/degraded 会在同一 source generation/map epoch 下保留已有
+matched proof 与 canonical branding；`allplayers_unavailable/allplayers_degraded` 只是独立的
+freshness/health diagnostics，具体何时失效由 Runtime freshness policy 决定。source generation
+或 map epoch 变化会清除旧 baseline，直到新 evidence 重新证明。warmup/初始化阶段的未知
+地图不会直接制造 mismatch。
 
 ## Fixture 与 LKG
 
@@ -165,10 +171,20 @@ fixture source 只负责读取 JSON，不另造 fixture-only domain shape。
 
 Match LKG 与 ScheduleWindow LKG 是两个独立 seam：
 
-- Match LKG 保存原始 Manifest JSON；每次恢复都重新 parse、validate、convert。
+- Match LKG 保存一个 versioned cache envelope：`metadata`（matchId、来源、存储时间）与
+  原始 Manifest DTO `payload` 同在一个 JSON 文件中；每次恢复都重新 parse、validate、convert。
+- ScheduleWindow LKG 使用同样的窄 durable-json helper 和独立 envelope version；不拆成
+  payload/metadata 两个文件，也不建设通用 cache framework。
 - candidate 只有 structural + blocking semantic validation 通过后才可替换 LKG。
+- envelope 通过同目录临时文件加一次 atomic replace 提交；写入或提交失败会删除临时文件并
+  保留旧 envelope，不会产生半更新的 metadata/payload 组合。
 - online/fixture 失败时只接受 `LKG.matchId === requestedMatchId` 的缓存，不选最近比赛。
 - 切换 A → B 时先解除 A 的 active binding；B 失败时不会残留 A 的队名、logo 或 roster。
+- MatchContext selection 与 ScheduleWindow refresh 都带 request/refresh generation，最终
+  active/current binding 与 LKG 只接受 latest-wins commit；旧 source 即使晚返回也不能覆盖
+  当前绑定或缓存。
+- Schedule source 已成功 validate 时，即使 LKG persistence 失败，仍继续使用 fresh binding，
+  并将写入失败作为独立 diagnostic，不回退到 stale LKG。
 - 运行中的 fresh binding 标记 `online` 或 `fixture`；磁盘恢复标记 `cache` + `stale`，并
   保留原始缓存来源和存储时间。
 - ScheduleWindow 可以独立刷新或恢复 stale LKG；它的失败不清除当前 MatchContext。
@@ -176,6 +192,23 @@ Match LKG 与 ScheduleWindow LKG 是两个独立 seam：
 stale 是 context acquisition/freshness 事实，不是 identity mismatch；logo/avatar 资源
 失败、schedule 离线、单个 GSI block 暂缺和 renderer/OBS 问题也不会被伪装成 identity
 mismatch。
+
+source 错误分类也保持分层：只有 `source.load()` 自身的网络或源端 rejection 进入
+`source_load_failed`/`schedule_source_failed`；validator、DTO converter 和 binding callback
+不在同一个大 catch 中，分别保留 validation diagnostics 或向调用方传播其 invariant/callback
+错误。
+
+## 完整比赛 replay 证据
+
+semantic fixtures 继续只保留最小、可追溯的语义切片；`match/regulation-to-overtime` 的
+provenance 仍是 `lifecycleCoverage: partial`，不被当作整场验收。整场 identity replay 使用
+现有外部 Windows capture `20260914T060149Z-4cda66b7-recovered-match`：连续序列
+`0..16381`、`16382` 帧、`droppedFrames=0`，`framesSha256` 为
+`7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a`，其 manifest 记录
+`de_ancient` 从正式比赛到 `14:16` gameover 的完整生命周期。该 raw capture 因含真实身份不
+进入 Git；验收通过 `RIVALHUB_FULL_MATCH_CAPTURE_DIR` 指向经复核的 capture 目录运行，测试
+helper 在构造 formal identity evidence 前做确定性脱敏。证据边界是本地 artifact 可复核，CI
+不伪装成拥有该 raw capture；仓库内 semantic slice 仍独立执行。
 
 ## M2 边界
 
@@ -190,6 +223,6 @@ resolver、LKG 和真实 semantic GSI replay acceptance。明确不包含：
 - sponsor、coverage、entrant abbreviation 或 generic provider/plugin/cache framework。
 
 真实 semantic capture 已由仓库 sanitizer 脱敏，capture 中的 `fixture-player-*` 不是
-canonical identity。replay 测试只使用显式的测试侧 source-ID → 合法 Steam64 alias，
-不根据昵称、observer slot 或数组位置猜身份；这不改变生产 resolver 的 Steam64-only
-规则，也不把脱敏值当作生产 Steam64。
+canonical identity。replay 测试只在 test/helper 层把 source ID 转成合法的伪造 Steam64，
+然后才调用正式 resolver；不根据昵称或 observer slot 推断身份，也不让这些脱敏映射进入
+Core public API。生产 resolver 的 observed identity key 始终只有 Steam64 字符串。

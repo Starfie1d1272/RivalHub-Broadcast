@@ -86,6 +86,3 @@ export function toMatchContext(input: unknown): MatchContext {
     commentators: manifest.commentators.map((commentator) => ({ ...commentator })),
   };
 }
-
-export const broadcastManifestToMatchContext = toMatchContext;
-export const convertManifestToMatchContext = toMatchContext;

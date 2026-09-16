@@ -6,6 +6,8 @@ export type MatchFormat = 'bo1' | 'bo3' | 'bo5';
 
 export type MatchSide = Exclude<SourceSide, 'unknown'>;
 
+export type MatchVetoActionType = 'ban' | 'pick' | 'side_pick' | 'decider';
+
 export interface MatchCompetitionContext {
   readonly competitionId: string;
   readonly slug: string;
@@ -42,7 +44,7 @@ export interface MatchMapContext {
 
 export interface MatchVetoStepContext {
   readonly stepOrder: number;
-  readonly actionType: string;
+  readonly actionType: MatchVetoActionType;
   readonly mapName: string;
   readonly entryId: string | null;
   readonly side: MatchSide | null;

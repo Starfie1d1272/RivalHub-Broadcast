@@ -9,6 +9,7 @@ export type {
   MatchSide,
   MatchStatus,
   MatchVetoStepContext,
+  MatchVetoActionType,
   ScheduleMatchContext,
   ScheduleWindow,
 } from './types.js';

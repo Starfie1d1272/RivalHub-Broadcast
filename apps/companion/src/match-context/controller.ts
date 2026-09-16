@@ -5,11 +5,13 @@ import {
   type ContractDiagnostic,
 } from '@rivalhub-broadcast/rivalhub';
 
+import { SerialCommitQueue } from './serial-commit.js';
 import {
   type ContextFreshness,
   type ContextOrigin,
   type MatchContextBinding,
   type MatchContextStoreIssue,
+  type MatchManifestLkgSaveOptions,
   type MatchManifestLkgStore,
 } from './lkg-store.js';
 
@@ -22,9 +24,11 @@ export type MatchContextControllerIssueCode =
   | 'source_load_failed'
   | 'source_invalid'
   | 'source_match_mismatch'
+  | 'source_conversion_failed'
   | 'lkg_fallback'
   | 'lkg_unavailable'
-  | 'active_binding_cleared';
+  | 'lkg_persistence_failed'
+  | 'selection_stale';
 
 export interface MatchContextControllerIssue {
   readonly code: MatchContextControllerIssueCode;
@@ -65,7 +69,9 @@ export class MatchContextController {
   private readonly lkgStore: MatchManifestLkgStore;
   private readonly onBindingChanged:
     ((binding: MatchContextBinding | undefined) => void) | undefined;
+  private readonly commitQueue = new SerialCommitQueue();
   private activeBinding: MatchContextBinding | undefined;
+  private selectionGeneration = 0;
 
   constructor(options: MatchContextControllerOptions) {
     this.lkgStore = options.lkgStore;
@@ -90,74 +96,117 @@ export class MatchContextController {
     requestedMatchId: string,
     source: MatchContextSource,
   ): Promise<MatchContextSelectionResult> {
+    const generation = ++this.selectionGeneration;
+    const isCurrent = () => generation === this.selectionGeneration;
     this.clearActive();
-    const diagnostics: MatchContextControllerIssue[] = [];
-    let sourceFailure: MatchContextControllerIssue | undefined;
 
+    let candidate: unknown;
     try {
-      const candidate = await source.load();
-      const validated = validateBroadcastManifest(candidate);
-      if (!validated.ok) {
-        sourceFailure = controllerIssue('source_invalid', 'Manifest source 未通过 validation。', {
-          diagnostics: validated.diagnostics,
-        });
-      } else if (validated.value.match.matchId !== requestedMatchId) {
-        sourceFailure = controllerIssue(
-          'source_match_mismatch',
-          'Manifest source matchId 与请求不一致。',
-        );
-      } else {
-        const context = toMatchContext(validated.value);
-        const saved = await this.lkgStore.save(validated.value, source.kind);
-        if (!saved.ok) {
-          diagnostics.push(
-            controllerIssue('lkg_unavailable', '当前 candidate 有效，但未能更新 Manifest LKG。', {
-              storeIssue: saved.issue,
-            }),
-          );
-        }
-        const binding: MatchContextBinding = {
-          manifest: validated.value,
-          context,
-          origin: source.kind,
-          freshness: 'fresh',
-        };
-        this.setActive(binding);
-        return { ok: true, binding, diagnostics };
-      }
+      candidate = await source.load();
     } catch {
-      sourceFailure = controllerIssue('source_load_failed', 'Manifest source 加载失败。');
+      return this.useFallback(generation, requestedMatchId, [
+        controllerIssue('source_load_failed', 'Manifest source 加载失败。'),
+      ]);
     }
 
-    if (sourceFailure !== undefined) diagnostics.push(sourceFailure);
+    const validated = validateBroadcastManifest(candidate);
+    if (!validated.ok) {
+      return this.useFallback(generation, requestedMatchId, [
+        controllerIssue('source_invalid', 'Manifest source 未通过 validation。', {
+          diagnostics: validated.diagnostics,
+        }),
+      ]);
+    }
+    if (validated.value.match.matchId !== requestedMatchId) {
+      return this.useFallback(generation, requestedMatchId, [
+        controllerIssue('source_match_mismatch', 'Manifest source matchId 与请求不一致。'),
+      ]);
+    }
+
+    let context;
+    try {
+      context = toMatchContext(validated.value);
+    } catch {
+      return {
+        ok: false,
+        requestedMatchId,
+        diagnostics: [
+          controllerIssue(
+            'source_conversion_failed',
+            'Manifest candidate 无法转换为 MatchContext。',
+          ),
+        ],
+      };
+    }
+
+    return this.commitQueue.run(async () => {
+      if (!isCurrent()) return this.staleSelectionResult(requestedMatchId);
+
+      const saveOptions: MatchManifestLkgSaveOptions = { canCommit: isCurrent };
+      const saved = await this.lkgStore.save(validated.value, source.kind, saveOptions);
+      if (!isCurrent() || (!saved.ok && saved.issue.code === 'lkg_commit_stale')) {
+        return this.staleSelectionResult(requestedMatchId);
+      }
+
+      const diagnostics: MatchContextControllerIssue[] = [];
+      if (!saved.ok) {
+        diagnostics.push(
+          controllerIssue(
+            'lkg_persistence_failed',
+            '当前 candidate 有效，但未能更新 Manifest LKG。',
+            {
+              storeIssue: saved.issue,
+            },
+          ),
+        );
+      }
+      const binding: MatchContextBinding = {
+        manifest: validated.value,
+        context,
+        origin: source.kind,
+        freshness: 'fresh',
+      };
+      this.setActive(binding);
+      return { ok: true, binding, diagnostics };
+    });
+  }
+
+  private async useFallback(
+    generation: number,
+    requestedMatchId: string,
+    diagnostics: MatchContextControllerIssue[],
+  ): Promise<MatchContextSelectionResult> {
     const fallback = await this.lkgStore.read(requestedMatchId);
-    if (fallback.ok) {
+    return this.commitQueue.run(() => {
+      if (generation !== this.selectionGeneration)
+        return this.staleSelectionResult(requestedMatchId);
+      if (fallback.ok) {
+        diagnostics.push(
+          controllerIssue('lkg_fallback', '已使用同一 matchId 的 stale Manifest LKG。'),
+        );
+        this.setActive(fallback.value);
+        return { ok: true, binding: fallback.value, diagnostics };
+      }
       diagnostics.push(
-        controllerIssue('lkg_fallback', '已使用同一 matchId 的 stale Manifest LKG。'),
+        controllerIssue('lkg_unavailable', '没有可用于该 matchId 的 Manifest LKG。', {
+          storeIssue: fallback.issue,
+        }),
       );
-      this.setActive(fallback.value);
-      return { ok: true, binding: fallback.value, diagnostics };
-    }
-    diagnostics.push(
-      controllerIssue('lkg_unavailable', '没有可用于该 matchId 的 Manifest LKG。', {
-        storeIssue: fallback.issue,
-      }),
-    );
-    return { ok: false, requestedMatchId, diagnostics };
+      return { ok: false, requestedMatchId, diagnostics };
+    });
   }
 
-  async select(
-    requestedMatchId: string,
-    source: MatchContextSource,
-  ): Promise<MatchContextSelectionResult> {
-    return this.selectMatch(requestedMatchId, source);
-  }
-
-  async load(
-    requestedMatchId: string,
-    source: MatchContextSource,
-  ): Promise<MatchContextSelectionResult> {
-    return this.selectMatch(requestedMatchId, source);
+  private staleSelectionResult(requestedMatchId: string): MatchContextSelectionFailure {
+    return {
+      ok: false,
+      requestedMatchId,
+      diagnostics: [
+        controllerIssue(
+          'selection_stale',
+          'MatchContext selection 已被更新的 selection supersede。',
+        ),
+      ],
+    };
   }
 }
 

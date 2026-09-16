@@ -1,19 +1,17 @@
 export {
   IdentityResolver,
   createIdentityResolver,
-  identityEvidenceFromObservation,
   resolveIdentity,
   unboundIdentityResolution,
 } from './resolve.js';
+export { identityEvidenceFromObservation } from './evidence.js';
 export type {
   IdentityCapabilities,
-  IdentityEvidenceInput,
   IdentityIssue,
   IdentityIssueCode,
   IdentityIssueSeverity,
   IdentityObservationInput,
   IdentityResolution,
-  IdentityResolverOptions,
   IdentitySideMapping,
   IdentityState,
   ResolvedIdentityPlayer,

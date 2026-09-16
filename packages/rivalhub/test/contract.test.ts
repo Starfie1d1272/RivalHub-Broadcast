@@ -4,8 +4,7 @@ import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import {
-  parseBroadcastManifest,
-  parseBroadcastScheduleWindow,
+  compareScheduleMatches,
   validateBroadcastManifest,
   validateBroadcastScheduleWindow,
   type BroadcastManifestV1,
@@ -100,6 +99,20 @@ describe('BroadcastManifestV1 contract', () => {
       'duplicate_map_order',
     ],
     [
+      'invalid map order range',
+      (candidate: Mutable<BroadcastManifestV1>) => {
+        candidate.maps[0]!.mapOrder = 0;
+      },
+      'invalid_map_order',
+    ],
+    [
+      'invalid round',
+      (candidate: Mutable<BroadcastManifestV1>) => {
+        candidate.match.round = 1.5;
+      },
+      'invalid_round',
+    ],
+    [
       'unknown map picker',
       (candidate: Mutable<BroadcastManifestV1>) => {
         candidate.maps[0]!.pickedByEntryId = 'entry-not-in-match';
@@ -118,7 +131,7 @@ describe('BroadcastManifestV1 contract', () => {
     const candidate = mutableClone(fixture);
     mutate(candidate);
 
-    const result = parseBroadcastManifest(candidate);
+    const result = validateBroadcastManifest(candidate);
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code })]));
   });
@@ -168,6 +181,19 @@ describe('BroadcastManifestV1 contract', () => {
       expect.arrayContaining([expect.objectContaining({ code: 'unexpected_field' })]),
     );
   });
+
+  it('rejects veto action types outside the canonical V1 domain', async () => {
+    const fixture = await readJson<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const candidate = mutableClone(fixture);
+    candidate.veto[0]!.actionType = 'remove' as never;
+
+    const result = validateBroadcastManifest(candidate);
+
+    expect(result.ok).toBe(false);
+    expect(result.diagnostics).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'invalid_shape' })]),
+    );
+  });
 });
 
 describe('BroadcastScheduleWindowV1 contract', () => {
@@ -210,6 +236,13 @@ describe('BroadcastScheduleWindowV1 contract', () => {
       },
       'duplicate_entry_id',
     ],
+    [
+      'invalid round',
+      (candidate: Mutable<BroadcastScheduleWindowV1>) => {
+        candidate.matches[0]!.round = 0;
+      },
+      'invalid_round',
+    ],
   ] as const)('rejects %s with a typed diagnostic', async (_name, mutate, code) => {
     const fixture = await readJson<BroadcastScheduleWindowV1>(
       'broadcast-schedule-window-v1.valid.json',
@@ -217,8 +250,34 @@ describe('BroadcastScheduleWindowV1 contract', () => {
     const candidate = mutableClone(fixture);
     mutate(candidate);
 
-    const result = parseBroadcastScheduleWindow(candidate);
+    const result = validateBroadcastScheduleWindow(candidate);
     expect(result.ok).toBe(false);
     expect(result.diagnostics).toEqual(expect.arrayContaining([expect.objectContaining({ code })]));
+  });
+
+  it('sorts multiple null scheduledAt values deterministically after reverse input', async () => {
+    const fixture = await readJson<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const candidate = mutableClone(fixture);
+    candidate.matches = [...candidate.matches]
+      .reverse()
+      .map((match) => ({ ...match, scheduledAt: null }));
+
+    const result = validateBroadcastScheduleWindow(candidate);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('null schedule times should validate');
+    expect(result.value.matches.map((match) => match.matchId)).toEqual([
+      'match-m2-00',
+      'match-m2-01',
+      'match-m2-unknown-time',
+    ]);
+    expect(compareScheduleMatches(result.value.matches[0]!, result.value.matches[1]!)).toBeLessThan(
+      0,
+    );
+    expect(compareScheduleMatches(result.value.matches[1]!, result.value.matches[2]!)).toBeLessThan(
+      0,
+    );
   });
 });

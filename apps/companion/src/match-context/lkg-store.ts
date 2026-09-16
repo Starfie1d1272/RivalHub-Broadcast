@@ -1,6 +1,4 @@
-import { randomUUID } from 'node:crypto';
-import { access, mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
-import { dirname, join, basename } from 'node:path';
+import { readFile } from 'node:fs/promises';
 
 import {
   toMatchContext,
@@ -10,8 +8,13 @@ import {
 } from '@rivalhub-broadcast/rivalhub';
 import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
 
+import { replaceDurableJson, type DurableJsonFaultInjector } from './durable-json.js';
+import { SerialCommitQueue } from './serial-commit.js';
+
 export type ContextOrigin = 'online' | 'fixture' | 'cache';
 export type ContextFreshness = 'fresh' | 'stale';
+
+const MATCH_MANIFEST_CACHE_VERSION = 'rivalhub.broadcast-match-context-cache.v1' as const;
 
 export interface MatchContextBinding {
   readonly manifest: BroadcastManifestV1;
@@ -26,10 +29,11 @@ export type MatchContextStoreIssueCode =
   | 'lkg_not_found'
   | 'lkg_read_failed'
   | 'lkg_invalid_json'
+  | 'lkg_invalid_envelope'
   | 'lkg_invalid_candidate'
   | 'lkg_match_mismatch'
-  | 'lkg_metadata_invalid'
-  | 'lkg_write_failed';
+  | 'lkg_write_failed'
+  | 'lkg_commit_stale';
 
 export interface MatchContextStoreIssue {
   readonly code: MatchContextStoreIssueCode;
@@ -52,60 +56,52 @@ export type MatchContextStoreResult<T> = MatchContextStoreSuccess<T> | MatchCont
 
 export interface MatchManifestLkgStoreOptions {
   readonly filePath: string;
-  readonly metadataPath?: string;
   readonly clock?: () => string;
+  /** Test-only hook used to prove failed commits preserve the previous envelope. */
+  readonly faultInjector?: DurableJsonFaultInjector;
 }
 
-interface MatchManifestLkgMetadata {
+interface MatchManifestCacheMetadata {
   readonly matchId: string;
   readonly origin: Exclude<ContextOrigin, 'cache'>;
   readonly storedAt: string;
 }
 
-function defaultMetadataPath(filePath: string): string {
-  return `${filePath}.meta.json`;
+interface MatchManifestCacheEnvelope {
+  readonly cacheVersion: typeof MATCH_MANIFEST_CACHE_VERSION;
+  readonly metadata: MatchManifestCacheMetadata;
+  readonly payload: BroadcastManifestV1;
 }
 
 function isSourceOrigin(value: unknown): value is Exclude<ContextOrigin, 'cache'> {
   return value === 'online' || value === 'fixture';
 }
 
-function isMetadata(value: unknown): value is MatchManifestLkgMetadata {
-  if (typeof value !== 'object' || value === null) return false;
-  const record = value as Record<string, unknown>;
-  return (
-    typeof record.matchId === 'string' &&
-    isSourceOrigin(record.origin) &&
-    typeof record.storedAt === 'string'
-  );
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-async function fileExists(path: string): Promise<boolean> {
-  try {
-    await access(path);
-    return true;
-  } catch {
-    return false;
+function parseEnvelope(value: unknown): MatchManifestCacheEnvelope | undefined {
+  if (!isRecord(value) || value.cacheVersion !== MATCH_MANIFEST_CACHE_VERSION) return undefined;
+  const metadata = value.metadata;
+  if (!isRecord(metadata)) return undefined;
+  if (
+    typeof metadata.matchId !== 'string' ||
+    !isSourceOrigin(metadata.origin) ||
+    typeof metadata.storedAt !== 'string' ||
+    value.payload === undefined
+  ) {
+    return undefined;
   }
-}
-
-async function writeAtomically(path: string, contents: string): Promise<void> {
-  await mkdir(dirname(path), { recursive: true });
-  const temporaryPath = join(
-    dirname(path),
-    `.${basename(path)}.${process.pid}.${randomUUID()}.tmp`,
-  );
-  try {
-    await writeFile(temporaryPath, contents, { encoding: 'utf8', mode: 0o600 });
-    await rename(temporaryPath, path);
-  } catch (error: unknown) {
-    try {
-      await unlink(temporaryPath);
-    } catch {
-      // The original write/rename error is the useful diagnostic.
-    }
-    throw error;
-  }
+  return {
+    cacheVersion: MATCH_MANIFEST_CACHE_VERSION,
+    metadata: {
+      matchId: metadata.matchId,
+      origin: metadata.origin,
+      storedAt: metadata.storedAt,
+    },
+    payload: value.payload as BroadcastManifestV1,
+  };
 }
 
 function invalidCandidate(diagnostics: readonly ContractDiagnostic[]): MatchContextStoreFailure {
@@ -119,43 +115,76 @@ function invalidCandidate(diagnostics: readonly ContractDiagnostic[]): MatchCont
   };
 }
 
+function invalidEnvelope(): MatchContextStoreFailure {
+  return {
+    ok: false,
+    issue: {
+      code: 'lkg_invalid_envelope',
+      message: 'Manifest LKG cache envelope 缺少有效的版本、metadata 或 payload。',
+    },
+  };
+}
+
+export interface MatchManifestLkgSaveOptions {
+  readonly canCommit?: () => boolean;
+}
+
 export class MatchManifestLkgStore {
   private readonly filePath: string;
-  private readonly metadataPath: string;
   private readonly clock: () => string;
+  private readonly faultInjector: DurableJsonFaultInjector | undefined;
+  private readonly commitQueue = new SerialCommitQueue();
 
   constructor(options: MatchManifestLkgStoreOptions) {
     this.filePath = options.filePath;
-    this.metadataPath = options.metadataPath ?? defaultMetadataPath(options.filePath);
     this.clock = options.clock ?? (() => new Date().toISOString());
+    this.faultInjector = options.faultInjector;
   }
 
   async save(
     candidate: unknown,
     origin: Exclude<ContextOrigin, 'cache'>,
+    options: MatchManifestLkgSaveOptions = {},
   ): Promise<MatchContextStoreResult<BroadcastManifestV1>> {
     const validated = validateBroadcastManifest(candidate);
     if (!validated.ok) return invalidCandidate(validated.diagnostics);
 
-    const storedAt = this.clock();
-    const metadata: MatchManifestLkgMetadata = {
-      matchId: validated.value.match.matchId,
-      origin,
-      storedAt,
-    };
-    try {
-      await writeAtomically(this.filePath, `${JSON.stringify(validated.value, null, 2)}\n`);
-      await writeAtomically(this.metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
-    } catch {
-      return {
-        ok: false,
-        issue: {
-          code: 'lkg_write_failed',
-          message: 'Manifest LKG 写入失败，candidate 未被视为可恢复缓存。',
+    return this.commitQueue.run(async () => {
+      const envelope: MatchManifestCacheEnvelope = {
+        cacheVersion: MATCH_MANIFEST_CACHE_VERSION,
+        metadata: {
+          matchId: validated.value.match.matchId,
+          origin,
+          storedAt: this.clock(),
         },
+        payload: validated.value,
       };
-    }
-    return { ok: true, value: validated.value, diagnostics: [] };
+
+      try {
+        const committed = await replaceDurableJson(this.filePath, envelope, {
+          ...(options.canCommit === undefined ? {} : { canCommit: options.canCommit }),
+          ...(this.faultInjector === undefined ? {} : { faultInjector: this.faultInjector }),
+        });
+        if (!committed) {
+          return {
+            ok: false,
+            issue: {
+              code: 'lkg_commit_stale',
+              message: 'Manifest LKG candidate 已被更新的 selection supersede。',
+            },
+          };
+        }
+      } catch {
+        return {
+          ok: false,
+          issue: {
+            code: 'lkg_write_failed',
+            message: 'Manifest LKG 原子提交失败，旧 cache envelope 保持不变。',
+          },
+        };
+      }
+      return { ok: true, value: validated.value, diagnostics: [] };
+    });
   }
 
   async read(requestedMatchId: string): Promise<MatchContextStoreResult<MatchContextBinding>> {
@@ -179,9 +208,10 @@ export class MatchManifestLkgStore {
         issue: { code: 'lkg_read_failed', message: 'Manifest LKG 读取失败。' },
       };
     }
-    let candidate: unknown;
+
+    let parsed: unknown;
     try {
-      candidate = JSON.parse(contents) as unknown;
+      parsed = JSON.parse(contents) as unknown;
     } catch {
       return {
         ok: false,
@@ -189,36 +219,22 @@ export class MatchManifestLkgStore {
       };
     }
 
-    const validated = validateBroadcastManifest(candidate);
+    const envelope = parseEnvelope(parsed);
+    if (envelope === undefined) return invalidEnvelope();
+
+    const validated = validateBroadcastManifest(envelope.payload);
     if (!validated.ok) return invalidCandidate(validated.diagnostics);
-    if (validated.value.match.matchId !== requestedMatchId) {
+    if (
+      validated.value.match.matchId !== envelope.metadata.matchId ||
+      validated.value.match.matchId !== requestedMatchId
+    ) {
       return {
         ok: false,
-        issue: { code: 'lkg_match_mismatch', message: 'Manifest LKG matchId 与请求不一致。' },
+        issue: {
+          code: 'lkg_match_mismatch',
+          message: 'Manifest LKG matchId 与请求或 envelope metadata 不一致。',
+        },
       };
-    }
-
-    const diagnostics: MatchContextStoreIssue[] = [];
-    let metadata: MatchManifestLkgMetadata | undefined;
-    if (await fileExists(this.metadataPath)) {
-      try {
-        const parsedMetadata = JSON.parse(await readFile(this.metadataPath, 'utf8')) as unknown;
-        if (
-          isMetadata(parsedMetadata) &&
-          parsedMetadata.matchId === validated.value.match.matchId
-        ) {
-          metadata = parsedMetadata;
-        } else
-          diagnostics.push({
-            code: 'lkg_metadata_invalid',
-            message: 'Manifest LKG provenance metadata 无效。',
-          });
-      } catch {
-        diagnostics.push({
-          code: 'lkg_metadata_invalid',
-          message: 'Manifest LKG provenance metadata 不是有效 JSON。',
-        });
-      }
     }
 
     try {
@@ -230,11 +246,10 @@ export class MatchManifestLkgStore {
           context,
           origin: 'cache',
           freshness: 'stale',
-          ...(metadata === undefined
-            ? {}
-            : { storedAt: metadata.storedAt, cachedFrom: metadata.origin }),
+          storedAt: envelope.metadata.storedAt,
+          cachedFrom: envelope.metadata.origin,
         },
-        diagnostics,
+        diagnostics: [],
       };
     } catch {
       return {
@@ -246,23 +261,4 @@ export class MatchManifestLkgStore {
       };
     }
   }
-
-  async load(requestedMatchId: string): Promise<MatchContextStoreResult<MatchContextBinding>> {
-    return this.read(requestedMatchId);
-  }
-
-  async readForMatch(
-    requestedMatchId: string,
-  ): Promise<MatchContextStoreResult<MatchContextBinding>> {
-    return this.read(requestedMatchId);
-  }
-
-  async saveLastKnownGood(
-    candidate: unknown,
-    origin: Exclude<ContextOrigin, 'cache'>,
-  ): Promise<MatchContextStoreResult<BroadcastManifestV1>> {
-    return this.save(candidate, origin);
-  }
 }
-
-export const LastKnownGoodManifestStore = MatchManifestLkgStore;

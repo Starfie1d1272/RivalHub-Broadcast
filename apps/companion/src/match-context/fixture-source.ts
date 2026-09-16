@@ -17,8 +17,6 @@ export function createFixtureManifestSource(path: string): FixtureSource {
   return { kind: 'fixture', path, load: () => readFixtureJson(path) };
 }
 
-export const createFixtureMatchContextSource = createFixtureManifestSource;
-
 export function createFixtureScheduleWindowSource(path: string): FixtureSource {
   return { kind: 'fixture', path, load: () => readFixtureJson(path) };
 }

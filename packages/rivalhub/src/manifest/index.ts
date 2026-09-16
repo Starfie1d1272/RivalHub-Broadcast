@@ -12,6 +12,7 @@ export {
   type BroadcastPlayerV1,
   type BroadcastRosterV1,
   type BroadcastSide,
+  type BroadcastVetoActionType,
   type BroadcastVetoStepV1,
 } from './types.js';
 export {
@@ -25,10 +26,5 @@ export {
   broadcastRosterSchema,
   broadcastVetoStepSchema,
 } from './schema.js';
-export { parseBroadcastManifest, validateBroadcastManifest, validateManifest } from './validate.js';
-export {
-  BroadcastManifestConversionError,
-  broadcastManifestToMatchContext,
-  convertManifestToMatchContext,
-  toMatchContext,
-} from './to-match-context.js';
+export { validateBroadcastManifest } from './validate.js';
+export { BroadcastManifestConversionError, toMatchContext } from './to-match-context.js';

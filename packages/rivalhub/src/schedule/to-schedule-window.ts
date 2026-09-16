@@ -44,6 +44,3 @@ export function toScheduleWindow(input: unknown): ScheduleWindow {
     })),
   };
 }
-
-export const broadcastScheduleWindowToScheduleWindow = toScheduleWindow;
-export const convertScheduleWindowToDomain = toScheduleWindow;

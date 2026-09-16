@@ -33,20 +33,13 @@ function canonicalPlayers(context: MatchContext) {
   ];
 }
 
-function aliasesFor(context: MatchContext): Record<string, string> {
-  return Object.fromEntries(
-    canonicalPlayers(context)
-      .filter((player): player is typeof player & { steam64: string } => player.steam64 !== null)
-      .map((player) => [`fixture-${player.playerId}`, player.steam64]),
-  );
-}
-
 function observedPlayers(
   context: MatchContext,
   options: {
     readonly sideA?: 'CT' | 'T';
     readonly sideB?: 'CT' | 'T';
     readonly includeSubstitute?: boolean;
+    readonly replaceStarter?: boolean;
     readonly count?: number;
     readonly nicknameSuffix?: string;
     readonly slotOffset?: number;
@@ -57,13 +50,22 @@ function observedPlayers(
   const active = canonicalPlayers(context).filter(
     (player) => player.isStarter || options.includeSubstitute === true,
   );
-  const selected = active.slice(0, options.count ?? 10);
-  return selected.map((player, index) => ({
-    sourcePlayerId: `fixture-${player.playerId}`,
-    displayName: `游戏昵称-${options.nicknameSuffix ?? '初始'}-${index}`,
-    observerSlot: (options.slotOffset ?? 0) + index + 1,
-    side: player.entryId === context.entrants.a.entryId ? sideA : sideB,
-  }));
+  let selected = active.slice(0, options.count ?? 10);
+  if (options.replaceStarter === true) {
+    const starters = active.filter((player) => player.isStarter);
+    const substitute = active.find((player) => !player.isStarter);
+    if (substitute === undefined) throw new Error('fixture must contain a substitute');
+    selected = [...starters.slice(1), substitute];
+  }
+  return selected.map((player, index) => {
+    if (player.steam64 === null) throw new Error('identity fixture player must have Steam64');
+    return {
+      sourcePlayerId: player.steam64,
+      displayName: `游戏昵称-${options.nicknameSuffix ?? '初始'}-${index}`,
+      observerSlot: (options.slotOffset ?? 0) + index + 1,
+      side: player.entryId === context.entrants.a.entryId ? sideA : sideB,
+    };
+  });
 }
 
 function evidence(
@@ -74,6 +76,7 @@ function evidence(
     readonly allPlayersCoverage?: 'present' | 'absent' | 'degraded';
     readonly mapName?: string;
     readonly mapPhase?: 'warmup' | 'live' | 'intermission' | 'gameover' | 'unknown';
+    readonly mapSideNames?: { readonly ct?: string; readonly t?: string };
   } = {},
 ) {
   return {
@@ -84,6 +87,7 @@ function evidence(
       overrides.allPlayersCoverage ?? (players === undefined ? 'absent' : 'present'),
     ...(overrides.mapName === undefined ? {} : { mapName: overrides.mapName }),
     ...(overrides.mapPhase === undefined ? {} : { mapPhase: overrides.mapPhase }),
+    ...(overrides.mapSideNames === undefined ? {} : { mapSideNames: overrides.mapSideNames }),
   } as const;
 }
 
@@ -97,8 +101,6 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     const resolution = resolveIdentity(
       context,
       evidence(observedPlayers(context), { mapName: 'de_ancient', mapPhase: 'live' }),
-      undefined,
-      { sourceIdAliases: aliasesFor(context) },
     );
 
     expect(resolution.state).toBe('matched');
@@ -115,13 +117,11 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
 
   it('updates only side mapping when halftime or overtime swaps CT/T', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
-    const before = resolveIdentity(context, evidence(observedPlayers(context)), undefined, options);
+    const before = resolveIdentity(context, evidence(observedPlayers(context)));
     const after = resolveIdentity(
       context,
       evidence(observedPlayers(context, { sideA: 'T', sideB: 'CT' })),
       before,
-      options,
     );
 
     expect(before.state).toBe('matched');
@@ -132,15 +132,40 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     );
   });
 
+  it('lets Steam64-resolved player side proof win a conflicting map name fallback', async () => {
+    const context = toMatchContext(await readManifest());
+    const resolution = resolveIdentity(
+      context,
+      evidence(observedPlayers(context, { sideA: 'T', sideB: 'CT' }), {
+        mapSideNames: {
+          ct: context.entrants.a.name,
+          t: context.entrants.b.name,
+        },
+      }),
+    );
+
+    expect(resolution.state).toBe('matched');
+    expect(resolution.sideMapping).toEqual({ a: 'T', b: 'CT' });
+    expect(issueCodes(resolution)).toContain('side_mapping_conflict');
+    expect(resolution.issues).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          code: 'side_mapping_conflict',
+          entryId: context.entrants.a.entryId,
+          observedSide: 'T',
+          mapSide: 'CT',
+        }),
+      ]),
+    );
+  });
+
   it('ignores nickname and observer-slot changes for identity matching', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
-    const before = resolveIdentity(context, evidence(observedPlayers(context)), undefined, options);
+    const before = resolveIdentity(context, evidence(observedPlayers(context)));
     const after = resolveIdentity(
       context,
       evidence(observedPlayers(context, { nicknameSuffix: '改名', slotOffset: 20 })),
       before,
-      options,
     );
 
     expect(after.state).toBe('matched');
@@ -149,40 +174,33 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     );
   });
 
-  it('keeps a legal substitute matched and emits lineup_differs_from_expected', async () => {
+  it('keeps a legal ten-player replacement matched and emits lineup_differs_from_expected', async () => {
     const context = toMatchContext(await readManifest());
     const resolution = resolveIdentity(
       context,
-      evidence(observedPlayers(context, { includeSubstitute: true, count: 11 }), {
+      evidence(observedPlayers(context, { includeSubstitute: true, replaceStarter: true }), {
         mapName: 'de_ancient',
       }),
-      undefined,
-      { sourceIdAliases: aliasesFor(context) },
     );
 
     expect(resolution.state).toBe('matched');
-    expect(resolution.players).toHaveLength(11);
-    expect(issueCodes(resolution)).toContain('lineup_differs_from_expected');
+    expect(resolution.players).toHaveLength(10);
+    expect(resolution.unresolved).toHaveLength(0);
+    expect(issueCodes(resolution)).toEqual(['lineup_differs_from_expected']);
   });
 
   it('treats a partial lineup as degraded while preserving the mapped players', async () => {
     const context = toMatchContext(await readManifest());
-    const resolution = resolveIdentity(
-      context,
-      evidence(observedPlayers(context, { count: 9 })),
-      undefined,
-      { sourceIdAliases: aliasesFor(context) },
-    );
+    const resolution = resolveIdentity(context, evidence(observedPlayers(context, { count: 9 })));
 
     expect(resolution.state).toBe('degraded');
     expect(resolution.players).toHaveLength(9);
     expect(issueCodes(resolution)).toContain('partial_roster_evidence');
   });
 
-  it('keeps legal identities on a single absent or degraded allplayers frame', async () => {
+  it('keeps matched identity and branding on isolated absent or degraded allplayers frames', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
-    const resolver = createIdentityResolver(context, options);
+    const resolver = createIdentityResolver(context);
     const matched = resolver.resolve(evidence(observedPlayers(context)));
     const absent = resolver.resolve(evidence(undefined, { allPlayersCoverage: 'absent' }));
     const degraded = resolver.resolve(
@@ -190,28 +208,25 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     );
 
     expect(matched.state).toBe('matched');
-    expect(absent.state).toBe('degraded');
+    expect(absent.state).toBe('matched');
     expect(absent.players).toHaveLength(10);
-    expect(degraded.state).toBe('degraded');
+    expect(absent.capabilities.canonicalTeamBranding).toBe(true);
+    expect(absent.players.every((player) => player.evidence === 'retained')).toBe(true);
+    expect(degraded.state).toBe('matched');
     expect(degraded.players).toHaveLength(10);
+    expect(degraded.capabilities.canonicalTeamBranding).toBe(true);
+    expect(issueCodes(degraded)).toContain('allplayers_degraded');
   });
 
   it('does not reuse old proof across source generation or map epoch baselines', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
-    const matched = resolveIdentity(
-      context,
-      evidence(observedPlayers(context)),
-      undefined,
-      options,
-    );
+    const matched = resolveIdentity(context, evidence(observedPlayers(context)));
     const newGeneration = resolveIdentity(
       context,
       evidence(undefined, { sourceGeneration: 2 }),
       matched,
-      options,
     );
-    const newMap = resolveIdentity(context, evidence(undefined, { mapEpoch: 2 }), matched, options);
+    const newMap = resolveIdentity(context, evidence(undefined, { mapEpoch: 2 }), matched);
 
     expect(newGeneration.state).toBe('resolving');
     expect(newGeneration.players).toHaveLength(0);
@@ -223,15 +238,12 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
 
   it('fails closed for unexpected or duplicated human Steam64 while keeping neutral telemetry', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
     const unexpected = observedPlayers(context);
     unexpected[0] = { ...unexpected[0]!, sourcePlayerId: '76561198000000099' };
-    const mismatch = resolveIdentity(context, evidence(unexpected), undefined, options);
+    const mismatch = resolveIdentity(context, evidence(unexpected));
     const duplicate = resolveIdentity(
       context,
       evidence([...observedPlayers(context), observedPlayers(context)[0]!]),
-      undefined,
-      options,
     );
 
     expect(mismatch.state).toBe('mismatch');
@@ -245,10 +257,9 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
 
   it('does not guess BOT/non-Steam64 identities and handles missing canonical Steam64 locally', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
     const withBot = observedPlayers(context);
     withBot[0] = { ...withBot[0]!, sourcePlayerId: 'BOT-001' };
-    const degraded = resolveIdentity(context, evidence(withBot), undefined, options);
+    const degraded = resolveIdentity(context, evidence(withBot));
     const incompleteContext: MatchContext = {
       ...context,
       entrants: {
@@ -261,12 +272,7 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
         },
       },
     };
-    const missingCanonical = resolveIdentity(
-      incompleteContext,
-      evidence(observedPlayers(context)),
-      undefined,
-      options,
-    );
+    const missingCanonical = resolveIdentity(incompleteContext, evidence(observedPlayers(context)));
 
     expect(degraded.state).toBe('degraded');
     expect(degraded.players).toHaveLength(9);
@@ -277,18 +283,13 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
 
   it('only marks a wrong live map as mismatch after gameplay evidence is explicit', async () => {
     const context = toMatchContext(await readManifest());
-    const options = { sourceIdAliases: aliasesFor(context) };
     const warmup = resolveIdentity(
       context,
       evidence(observedPlayers(context), { mapName: 'de_wrong', mapPhase: 'warmup' }),
-      undefined,
-      options,
     );
     const live = resolveIdentity(
       context,
       evidence(observedPlayers(context), { mapName: 'de_wrong', mapPhase: 'live' }),
-      undefined,
-      options,
     );
 
     expect(warmup.state).toBe('matched');
@@ -299,7 +300,7 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
 
   it('starts unbound and can be rebound without carrying prior identity proof', async () => {
     const context = toMatchContext(await readManifest());
-    const resolver = createIdentityResolver(undefined, { sourceIdAliases: aliasesFor(context) });
+    const resolver = createIdentityResolver();
     expect(resolver.getResolution().state).toBe('unbound');
     expect(resolver.bind(context).state).toBe('resolving');
     expect(

@@ -191,6 +191,18 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
   timestamp(value.match.scheduledAt, 'match.scheduledAt', diagnostics);
   timestamp(value.match.startedAt, 'match.startedAt', diagnostics);
   timestamp(value.match.completedAt, 'match.completedAt', diagnostics);
+  if (
+    value.match.round !== null &&
+    (!Number.isSafeInteger(value.match.round) || value.match.round < 1)
+  ) {
+    add(
+      diagnostics,
+      'invalid_round',
+      'error',
+      'match.round',
+      'round 必须是从 1 开始的安全整数或 null。',
+    );
+  }
   scorePair(value.match.scoreA, value.match.scoreB, 'match.score', diagnostics);
 
   const playerIds = new Map<string, string>();
@@ -323,6 +335,3 @@ export function validateBroadcastManifest(
     ? validationFailure(diagnostics)
     : validationSuccess(value, diagnostics);
 }
-
-export const parseBroadcastManifest = validateBroadcastManifest;
-export const validateManifest = validateBroadcastManifest;

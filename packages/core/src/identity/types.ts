@@ -1,9 +1,5 @@
 import type { MapPhase, SourceSide } from '../telemetry/map.js';
-import type {
-  ObservedPlayer,
-  TelemetryObservation,
-  TelemetryCoverageStatus,
-} from '../telemetry/index.js';
+import type { ObservedPlayer, TelemetryCoverageStatus } from '../telemetry/index.js';
 
 export type IdentityState = 'unbound' | 'resolving' | 'matched' | 'degraded' | 'mismatch';
 
@@ -27,6 +23,7 @@ export type IdentityIssueCode =
   | 'duplicate_observed_identity'
   | 'unknown_observed_side'
   | 'ambiguous_side_mapping'
+  | 'side_mapping_conflict'
   | 'lineup_differs_from_expected'
   | 'map_not_confirmed'
   | 'map_mismatch';
@@ -39,6 +36,8 @@ export interface IdentityIssue {
   readonly steam64?: string;
   readonly canonicalPlayerId?: string;
   readonly entryId?: string;
+  readonly observedSide?: SourceSide;
+  readonly mapSide?: SourceSide;
 }
 
 export interface IdentityObservationInput {
@@ -52,17 +51,6 @@ export interface IdentityObservationInput {
     readonly ct?: string;
     readonly t?: string;
   };
-}
-
-export type IdentityEvidenceInput =
-  IdentityObservationInput | TelemetryObservation | readonly ObservedPlayer[];
-
-export interface IdentityResolverOptions {
-  /**
-   * Only test/fixture redaction may use aliases. Production identity matching
-   * uses the source player id itself when it is a Steam64 string.
-   */
-  readonly sourceIdAliases?: ReadonlyMap<string, string> | Readonly<Record<string, string>>;
 }
 
 export interface ResolvedIdentityPlayer {
