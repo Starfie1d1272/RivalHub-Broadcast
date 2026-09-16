@@ -68,6 +68,10 @@ export interface DeliveryHealthSource {
   close(): Promise<void>;
 }
 
+function projectionDiagnosticDegradesRuntime(code: string): boolean {
+  return code.endsWith('-schema-validation-failed') || code.endsWith('-wire-validation-failed');
+}
+
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
   const programRuntime =
@@ -91,12 +95,21 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   });
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<string>();
-  const recordRuntimeDiagnostic = (code: string, source: 'projection' | 'telemetry'): void => {
-    runtimeDegraded = true;
+  const recordRuntimeDiagnostic = (
+    code: string,
+    source: 'projection' | 'telemetry',
+    degradeRuntime = true,
+  ): void => {
+    if (degradeRuntime) runtimeDegraded = true;
     debugEvidenceStore.recordRuntimeDiagnostic(code);
     if (emittedRuntimeDiagnostics.has(code)) return;
     emittedRuntimeDiagnostics.add(code);
-    app.log.warn({ code }, `Companion ${source} 路径已降级`);
+    app.log.warn(
+      { code },
+      degradeRuntime
+        ? `Companion ${source} 路径已降级`
+        : `Companion ${source} 路径记录可恢复诊断`,
+    );
   };
   const projectionCoordinator =
     options.projectionCoordinator ??
@@ -109,7 +122,8 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       ...(projectionNowMonotonicMs === undefined
         ? {}
         : { nowMonotonicMs: projectionNowMonotonicMs }),
-      onDiagnostic: ({ code }) => recordRuntimeDiagnostic(code, 'projection'),
+      onDiagnostic: ({ code }) =>
+        recordRuntimeDiagnostic(code, 'projection', projectionDiagnosticDegradesRuntime(code)),
     });
   const qualificationMode = options.qualificationMode ?? false;
 
