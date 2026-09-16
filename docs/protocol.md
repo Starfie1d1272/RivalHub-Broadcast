@@ -354,3 +354,34 @@ identity 和 source health。Assist V1 严格为 `{ cursor, availability: "unava
 浏览器 renderer、Radar geometry、Operator command、Observer Assist cue、RivalHub uplink 或
 M3-B Lookahead。上述能力分别留给后续 issue；真实 Windows + CS2 spectator + OBS 彩排也不
 由本 issue 虚构为已完成。
+
+## Local Protocol V1 production transport implementation（Issue #32）
+
+Issue #32 将上一节已经冻结的 Local Protocol V1 接入 production Companion，但不改变 DTO、
+version 或 acceptance 语义。Companion 使用同一 Fastify instance 同时提供 `apps/web/dist`
+静态资源和四条 WebSocket route：`/local/v1/program`、`/local/v1/radar`、
+`/local/v1/operator`、`/local/v1/assist`。每条 socket 直接订阅对应的
+`ProjectionCoordinator.getPublisher(channel)`，连接时从 publisher 当前快照开始，断线重连
+也只重新取得当前 baseline，不补发历史。
+
+WebSocket 使用 `rivalhub-broadcast.local.v1` subprotocol；缺失或不支持的 protocol、缺失或
+不安全的 Origin 在 upgrade 前拒绝。默认 host 是 `127.0.0.1`，loopback mode 只接受
+`127.0.0.1`、`localhost`、`::1` 的 HTTP(S) Origin；非 loopback 监听必须显式设置
+`LOCAL_WEB_LAN_MODE=1` 和精确的 `LOCAL_WEB_ALLOWED_ORIGINS` allowlist。本地 snapshot lane
+是 server → browser 的只读通道，browser application message 会以 close code `1008` 和
+`read-only local snapshot channel` 关闭。
+
+传输层关闭 `perMessageDeflate`，单次 WebSocket payload 上限为 64 KiB，并对
+`bufferedAmount` 与序列化快照分别实施 256 KiB hard guard。publisher 继续保持一个
+in-flight 加一个 pending latest；不创建 FIFO 或 history queue。共享 ping/pong heartbeat 每
+15 秒运行，连续约 30 秒没有 pong 的 connection 被清理，shutdown 会同步清理 timer、socket
+和 publisher subscription。
+
+`apps/web` 使用浏览器原生 WebSocket，按当前页面 Origin 将 `http:`/`https:` 映射为
+`ws:`/`wss:`，并直接使用 `packages/protocol` 的 channel schema 与
+`createSnapshotAcceptance()`。每个新 connection 都有独立 acceptance state；固定重连退避为
+`250/500/1000/2000/5000ms`，收到第一份 valid baseline 后重置。schema/channel 不兼容进入
+terminal `protocol-error`，旧 connection callback 由 browser-side generation guard 忽略。
+OBS Browser Source 的 unload/reload 等价于销毁旧 connection，再以新 connection 获取当前
+baseline；不依赖旧的 localStorage、IndexedDB 或 history replay。真实 Windows + CS2 + OBS
+验收仍由 #35 负责。

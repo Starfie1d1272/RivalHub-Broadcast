@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
 import {
   formatDebugJson,
@@ -9,6 +9,8 @@ import {
   type DebugFreshness,
   type DebugRuntimeResponse,
 } from './debug/runtime';
+import { createLocalChannelClient } from './realtime';
+import type { LocalChannel } from '@rivalhub-broadcast/protocol/version';
 
 export const surfaceDefinitions = [
   {
@@ -16,18 +18,21 @@ export const surfaceDefinitions = [
     path: '/program',
     title: 'Program',
     description: '节目输出占位页面。真实 scene 与 HUD 属于后续 milestone。',
+    realtimeChannel: 'program',
   },
   {
     id: 'operator',
     path: '/operator',
     title: 'Operator',
     description: '导播控制占位页面。真实运行控制属于后续 milestone。',
+    realtimeChannel: 'operator',
   },
   {
     id: 'debug',
     path: '/debug',
     title: 'Debug',
     description: '查看 Companion 当前的输入、归一化结果、运行时状态与退化信号。',
+    realtimeChannel: null,
   },
 ] as const;
 
@@ -35,6 +40,25 @@ export type SurfaceDefinition = (typeof surfaceDefinitions)[number];
 
 export function surfaceForPath(pathname: string): SurfaceDefinition {
   return surfaceDefinitions.find((surface) => surface.path === pathname) ?? surfaceDefinitions[0];
+}
+
+function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }) {
+  const client = useMemo(() => createLocalChannelClient(channel), [channel]);
+  useEffect(() => {
+    client.start();
+    return () => client.dispose();
+  }, [client]);
+  const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+
+  return (
+    <p
+      className="shell__realtime"
+      data-connection-state={snapshot.state}
+      data-local-channel={channel}
+    >
+      Local realtime · {snapshot.state}
+    </p>
+  );
 }
 
 export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }) {
@@ -58,6 +82,9 @@ export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }
         ))}
       </nav>
 
+      {surface.realtimeChannel === null ? null : (
+        <SurfaceConnectionMarker channel={surface.realtimeChannel} />
+      )}
       <p className="shell__note">工程 shell 已就绪；本页面暂不连接运行时数据。</p>
     </main>
   );

@@ -178,6 +178,20 @@ production recorder 属于 Companion/telemetry runtime；`testkit` 只消费 cap
 
 仓库的一手文档默认使用中文。长期文档记录稳定产品语义、架构 invariant、evidence-backed source facts 与阶段目标；单个 PR 的临时实现过程、当前机器状态、短期排期和一次性调试记录留在 Issue/PR/Project，不沉淀为长期规范。代码或 contract 改变了文档描述的事实时，同一 PR 必须同步更新相关文档。
 
+## 本地 Web host
+
+production Companion 与 Web build 使用同一 HTTP host：
+
+```text
+production: http://127.0.0.1:3000/program
+dev:        http://127.0.0.1:4173/program
+```
+
+默认 Companion 只监听 `127.0.0.1`。需要局域网访问时，必须显式设置
+`LOCAL_WEB_LAN_MODE=1`，并通过 `LOCAL_WEB_ALLOWED_ORIGINS` 提供逗号分隔的完整
+`http://`/`https://` Origin allowlist；非 loopback `HOST` 未启用该模式时会拒绝启动。
+`WEB_ROOT` 可覆盖 production `apps/web/dist`，但显式目录必须包含 `index.html`。
+
 ## 许可证
 
 RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only (AGPL-3.0-only)**。

@@ -275,6 +275,13 @@ export class ProjectionCoordinator {
   getPublisher(channel: 'assist'): LocalChannelPublisher<AssistSnapshot>;
   getPublisher(
     channel: keyof ProjectionPublishers,
+  ):
+    | LocalChannelPublisher<ProgramSnapshot>
+    | LocalChannelPublisher<RadarSnapshot>
+    | LocalChannelPublisher<OperatorSnapshot>
+    | LocalChannelPublisher<AssistSnapshot>;
+  getPublisher(
+    channel: keyof ProjectionPublishers,
   ): LocalChannelPublisher<ProgramSnapshot | RadarSnapshot | OperatorSnapshot | AssistSnapshot> {
     return this.publishers[channel];
   }

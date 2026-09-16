@@ -35,6 +35,12 @@ import {
   type GsiSequenceSource,
   type ObservationSink,
 } from './telemetry/gsi-ingress.js';
+import { registerStaticHost } from './local-web/static-host.js';
+import {
+  createLocalWebSocketTransport,
+  registerLocalWebSocketTransport,
+  type LocalWebSocketDiagnostic,
+} from './local-web/websocket-transport.js';
 
 export interface CompanionAppOptions {
   readonly logger?: boolean;
@@ -61,6 +67,10 @@ export interface CompanionAppOptions {
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
   readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
+  readonly webRoot?: string;
+  readonly host?: string;
+  readonly localWebLanMode?: boolean;
+  readonly localWebAllowedOrigins?: readonly string[];
 }
 
 export interface DeliveryHealthSource {
@@ -93,6 +103,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     logger: options.logger ?? false,
     requestTimeout: GSI_REQUEST_TIMEOUT_MS,
   });
+  registerStaticHost(app, options.webRoot === undefined ? {} : { webRoot: options.webRoot });
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<string>();
   const recordRuntimeDiagnostic = (
@@ -123,6 +134,31 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       onDiagnostic: ({ code }) =>
         recordRuntimeDiagnostic(code, 'projection', projectionDiagnosticDegradesRuntime(code)),
     });
+  const localWebTransport = createLocalWebSocketTransport({
+    getPublisher: (channel) => projectionCoordinator.getPublisher(channel),
+    originPolicyOptions: {
+      ...(options.host === undefined ? {} : { host: options.host }),
+      ...(options.localWebLanMode === undefined ? {} : { lanMode: options.localWebLanMode }),
+      ...(options.localWebAllowedOrigins === undefined
+        ? {}
+        : { allowedOrigins: options.localWebAllowedOrigins }),
+    },
+    logger: app.log,
+    onDiagnostic: (diagnostic: LocalWebSocketDiagnostic) => {
+      if (diagnostic.code === 'ws_closed' || diagnostic.code === 'ws_connected') return;
+      app.log.debug(
+        {
+          code: diagnostic.code,
+          ...(diagnostic.channel === undefined ? {} : { channel: diagnostic.channel }),
+          ...(diagnostic.connectionId === undefined
+            ? {}
+            : { connectionId: diagnostic.connectionId }),
+        },
+        'Companion local WebSocket diagnostic',
+      );
+    },
+  });
+  registerLocalWebSocketTransport(app, localWebTransport);
   const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {
@@ -235,8 +271,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
       ...deliveryConsumers.map((consumer) => consumer.close()),
-      projectionCoordinator.close(),
     ]);
+    await localWebTransport.close();
+    await projectionCoordinator.close();
     await recorder.finalize();
   });
 

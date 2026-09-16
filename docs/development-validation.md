@@ -64,7 +64,17 @@ GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行�
 - OBS Browser Source 基础兼容测试；
 - Program renderer 不依赖具体 browser/desktop host 才能表达正确业务语义。
 
+Issue #32 的 production Local Web Host 属于本层：同一 Fastify instance 提供 Vite static
+assets 与 Local Protocol V1 WebSocket，普通浏览器、Vite dev proxy 和未来 OBS Browser
+Source 都复用当前 page Origin 推导出的 `ws:`/`wss:` URL。自动化验证应覆盖 static route、
+subprotocol/Origin policy、baseline/reconnect、publisher latest-wins、buffer guard、
+heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。
+
 非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。任何透明 topmost/click-through 桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
+
+因此 #32 的 Real-environment acceptance gate 为 `Not required`。真实 Windows + CS2 + OBS
+Browser Source 的 reload、长时 soak、Program/Assist capture isolation 与生产路径关闭仍由
+#35 单独验收；CI 通过不能替代该 Layer D 证据。
 
 ### Layer C — Real CS2 / CSTV validation
 

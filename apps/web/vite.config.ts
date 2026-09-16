@@ -6,6 +6,10 @@ export default defineConfig({
   server: {
     proxy: {
       '/debug/runtime': 'http://127.0.0.1:3000',
+      '/local/v1': {
+        target: 'http://127.0.0.1:3000',
+        ws: true,
+      },
     },
   },
 });

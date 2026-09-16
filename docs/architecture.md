@@ -431,7 +431,7 @@ Program / Lookahead 各自的 connection generation、source-local seq/tick 属�
 Program / Operator / Debug 重连时：
 
 ```text
-hello / protocol negotiation
+WebSocket subprotocol negotiation
 → current liveSessionId / mapEpoch
 → current baseline projection
 → continue live updates
@@ -440,6 +440,29 @@ hello / protocol negotiation
 不重放断线期间所有历史 snapshot。
 
 Observer Assist 如果是 browser/desktop consumer，同样获取当前 alignment health + 当前 cue baseline 后继续，不重放已经过期的 future cue。
+
+当前 production local web host 已由 `apps/companion` 内的 Fastify composition root 提供：
+
+```text
+apps/web/dist
+  ├─ /          → index.html
+  ├─ /program   → index.html
+  ├─ /operator  → index.html
+  └─ /debug     → index.html + /debug/runtime HTTP polling
+
+Local Protocol V1
+  ├─ /local/v1/program
+  ├─ /local/v1/radar
+  ├─ /local/v1/operator
+  └─ /local/v1/assist
+```
+
+静态 host 与 WebSocket adapter 仍属于 `apps/companion` 的 host/adapter 层；它们直接消费
+已有 projection publisher，不建立第二套 broker、RuntimeState 或 protocol。Browser client
+位于 `apps/web/src/realtime/`，只保存当前 channel snapshot、connection state 和 reset
+signals。默认 host 为 loopback；LAN 访问需要显式 Origin allowlist，且 transport failure
+不会改变 Runtime/domain truth。Vite dev host 通过 `/local/v1` WebSocket proxy 复用相同的
+browser URL contract。
 
 ## 11. Local-first 与 observation outbox
 
@@ -709,7 +732,7 @@ ADR-0005 增加的“RivalHub-first 但不反向锁定 Core/Radar/Lookahead”�
 以下内容仍需要实现 spike 或后续 ADR：
 
 - `BroadcastManifest` / ReliableObservation / BroadcastLiveSnapshot 精确字段；
-- local HTTP/WS endpoint 与 message envelope；
+- desktop/portable host 与最终 packaging；
 - RivalHub pairing / credential storage；
 - cloud live uplink rate；
 - Radar asset 来源与生成流程；
