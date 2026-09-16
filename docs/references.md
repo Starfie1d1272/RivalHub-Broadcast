@@ -32,10 +32,11 @@ Map geometry / calibration
   → Broadcast checked-in CS2 overview calibration snapshot；DAK 仅作独立交叉参考
 
 Radar domain
-  → RadarFrame / marker / utility / floor / interpolation / autozoom math
+  → RadarFrame / world→radar / floor / marker / utility semantics
 
-Radar presentation
+Radar presentation / renderer
   → React / SVG / Canvas / DOM / theme / rAF
+  → interpolation / smoothing / autozoom presentation / responsive sizing
 ```
 
 Boltobserv / Obserview 用来验证 observer UX、autozoom、avatar marker、telestrator 等产品方向，但不作为第二套 runtime。
