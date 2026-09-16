@@ -7,6 +7,11 @@ import { DebugEvidenceStore, type DebugRuntimeClock } from './runtime/debug-stat
 import type { LatestWinsConsumerHealth } from './runtime/latest-wins.js';
 import { createProgramRuntime, type ProgramRuntime } from './runtime/program-runtime.js';
 import {
+  createProjectionCoordinator,
+  type ProjectionCoordinator,
+} from './projections/projection-coordinator.js';
+import type { MatchContextBinding } from './match-context/index.js';
+import {
   registerQualificationRoutes,
   type QualificationControllerOptions,
   type QualificationFinishInput,
@@ -39,6 +44,9 @@ export interface CompanionAppOptions {
   readonly producerInstanceId?: string;
   readonly gsiSequenceSource?: GsiSequenceSource;
   readonly programRuntime?: ProgramRuntime;
+  readonly projectionCoordinator?: ProjectionCoordinator;
+  readonly matchContextBinding?: MatchContextBinding;
+  readonly projectionNowMonotonicMs?: () => number;
   readonly debugEvidenceStore?: DebugEvidenceStore;
   readonly debugClock?: DebugRuntimeClock;
   readonly deliveryConsumers?: readonly DeliveryHealthSource[];
@@ -71,6 +79,25 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
   const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
+  const projectionNowMonotonicMs =
+    options.projectionNowMonotonicMs ??
+    (() => {
+      const lastReceived =
+        programRuntime.getSnapshot().current.programSource.lastAccepted?.receivedMonotonicMs ?? 0;
+      return Math.max(performance.now(), lastReceived);
+    });
+  const projectionCoordinator =
+    options.projectionCoordinator ??
+    createProjectionCoordinator({
+      programRuntime,
+      cstvSources,
+      ...(options.matchContextBinding === undefined
+        ? {}
+        : { matchContextBinding: options.matchContextBinding }),
+      ...(projectionNowMonotonicMs === undefined
+        ? {}
+        : { nowMonotonicMs: projectionNowMonotonicMs }),
+    });
   const qualificationMode = options.qualificationMode ?? false;
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
@@ -123,7 +150,8 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       },
       ...(options.clock === undefined ? {} : { clock: options.clock }),
       onObservation: (observation) => {
-        programRuntime.acceptObservation(observation);
+        const result = programRuntime.acceptObservation(observation);
+        projectionCoordinator.afterRuntimeMutation(result);
         debugEvidenceStore.recordNormalizedObservation(observation);
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
         options.onObservation?.(observation);
@@ -179,6 +207,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       onAcceptedMapReset: () => {
         debugEvidenceStore.clearCurrentTelemetry();
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
+        projectionCoordinator.afterRuntimeMutation();
       },
       ...(options.onQualificationFinish === undefined
         ? {}
@@ -192,6 +221,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
       ...deliveryConsumers.map((consumer) => consumer.close()),
+      projectionCoordinator.close(),
     ]);
     await recorder.finalize();
   });

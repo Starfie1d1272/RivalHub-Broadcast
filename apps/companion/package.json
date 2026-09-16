@@ -10,6 +10,8 @@
   },
   "dependencies": {
     "@rivalhub-broadcast/core": "workspace:*",
+    "@rivalhub-broadcast/protocol": "workspace:*",
+    "@rivalhub-broadcast/radar": "workspace:*",
     "@rivalhub-broadcast/rivalhub": "workspace:*",
     "@rivalhub-broadcast/telemetry-cstv": "workspace:*",
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*",

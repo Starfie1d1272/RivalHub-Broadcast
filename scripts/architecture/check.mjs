@@ -61,6 +61,7 @@ export function checkArchitecture(options = {}) {
   const records = loadSourceRecords(repository, workspaces);
   checkImportEdges(records, repository, workspaces, report);
   checkCstvParserImportOwnership(records, report);
+  checkProgramProjectionImportOwnership(records, repository, report);
   checkWorkspaceCycles(workspaces, report);
 
   return violations.sort((left, right) => {
@@ -597,6 +598,66 @@ function checkCstvParserImportOwnership(records, report) {
       });
     }
   }
+}
+
+function checkProgramProjectionImportOwnership(records, repository, report) {
+  const entryRecords = [...records.values()].filter(
+    (record) =>
+      record.owner.name === '@rivalhub-broadcast/core' && isProgramProjectionPath(record.path),
+  );
+  const visited = new Set();
+  const queue = entryRecords.map((record) => ({ record, entryPath: record.path }));
+
+  while (queue.length > 0) {
+    const { record, entryPath } = queue.shift();
+    const visitKey = `${entryPath}|${record.path}`;
+    if (visited.has(visitKey)) continue;
+    visited.add(visitKey);
+
+    if (isForbiddenProgramProjectionPath(record.path)) {
+      report({
+        ruleId: 'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+        file: entryPath,
+        target: record.path,
+        message:
+          'Program projection imports must stay on the Program-safe graph; observer assist, future/lookahead, and gameplay event modules are forbidden.',
+      });
+      continue;
+    }
+
+    for (const edge of record.allEdges) {
+      const resolvedPath = resolveRelativeModule(record.path, edge.specifier, repository);
+      const target = resolvedPath ? records.get(resolvedPath) : undefined;
+      if (isForbiddenProgramProjectionSpecifier(edge.specifier, resolvedPath)) {
+        report({
+          ruleId: 'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+          file: entryPath,
+          target: edge.specifier,
+          message:
+            'Program projection imports must stay on the Program-safe graph; observer assist, future/lookahead, and gameplay event modules are forbidden.',
+        });
+        continue;
+      }
+      if (target && target.path.startsWith('packages/core/src/projection/')) {
+        queue.push({ record: target, entryPath });
+      }
+    }
+  }
+}
+
+function isProgramProjectionPath(path) {
+  return /^packages\/core\/src\/projection\/program(?:[-/].*)?\.[cm]?[jt]sx?$/.test(path);
+}
+
+function isForbiddenProgramProjectionPath(path) {
+  return /(?:^|\/)(?:observer-assist|lookahead|future|game-events)(?:\/|\.|$)/.test(path);
+}
+
+function isForbiddenProgramProjectionSpecifier(specifier, resolvedPath) {
+  return (
+    isForbiddenProgramProjectionPath(specifier.replaceAll('\\', '/')) ||
+    (resolvedPath ? isForbiddenProgramProjectionPath(resolvedPath) : false)
+  );
 }
 
 function isCstvParserSpecifier(specifier) {

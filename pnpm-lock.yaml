@@ -208,6 +208,12 @@ importers:
       '@rivalhub-broadcast/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rivalhub-broadcast/protocol':
+        specifier: workspace:*
+        version: link:../../packages/protocol
+      '@rivalhub-broadcast/radar':
+        specifier: workspace:*
+        version: link:../../packages/radar
       '@rivalhub-broadcast/rivalhub':
         specifier: workspace:*
         version: link:../../packages/rivalhub
@@ -285,6 +291,10 @@ importers:
         version: typescript@7.0.2
 
   packages/radar:
+    dependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../core
     devDependencies:
       '@typescript/native':
         specifier: 'catalog:'
