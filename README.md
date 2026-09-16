@@ -150,6 +150,7 @@ packages/
   protocol/             Broadcast-owned local wire protocol
   core/                 RuntimeState / identity / transitions / accumulators / projectors
   telemetry-gsi/        GSI adapter
+  telemetry-cstv/       Live CSTV GameEvent adapter (parser-neutral output)
   rivalhub/             RivalHub contract adapter / uplink
   radar/                framework-neutral Radar domain / geometry / interpolation
   testkit/              capture reader / simulator / replay / fault injection

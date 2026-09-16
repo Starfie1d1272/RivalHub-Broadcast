@@ -99,6 +99,12 @@ describe('architecture checker', () => {
         target: 'fastify',
       },
       {
+        manifestPath: 'packages/telemetry-cstv/package.json',
+        dependencies: { '@rivalhub-broadcast/companion': 'workspace:*' },
+        ruleId: 'ARCH_TELEMETRY_CSTV_BOUNDARY',
+        target: '@rivalhub-broadcast/companion',
+      },
+      {
         manifestPath: 'apps/web/package.json',
         dependencies: { '@rivalhub-broadcast/telemetry-gsi': 'workspace:*' },
         ruleId: 'ARCH_WEB_BOUNDARY',
@@ -176,6 +182,27 @@ describe('architecture checker', () => {
       withFiles({ 'packages/telemetry-gsi/src/boundary.ts': "import 'node:fs';\n" }),
       'ARCH_TELEMETRY_GSI_BOUNDARY',
       'node:fs',
+    );
+    expectRule(
+      withFiles({
+        'packages/core/src/cstv-edge.ts':
+          "import { create } from '@rivalhub-broadcast/telemetry-cstv';\nvoid create;\n",
+      }),
+      'ARCH_CORE_BOUNDARY',
+      '@rivalhub-broadcast/telemetry-cstv',
+    );
+    expectRule(
+      withFiles({ 'packages/telemetry-cstv/src/boundary.ts': "import 'node:fs';\n" }),
+      'ARCH_TELEMETRY_CSTV_BOUNDARY',
+      'node:fs',
+    );
+    expectRule(
+      withFiles({
+        'packages/telemetry-cstv/src/boundary.ts':
+          "import { adapt } from '@rivalhub-broadcast/telemetry-gsi';\nvoid adapt;\n",
+      }),
+      'ARCH_TELEMETRY_CSTV_BOUNDARY',
+      '@rivalhub-broadcast/telemetry-gsi',
     );
     expectRule(
       withFiles({
@@ -333,6 +360,52 @@ describe('architecture checker', () => {
     );
   });
 
+  it('keeps the direct cs2parser dependency and imports inside telemetry-cstv', () => {
+    const companionManifest = packageManifest('apps/companion/package.json');
+    companionManifest.dependencies = {
+      ...companionManifest.dependencies,
+      cs2parser: '2.5.0',
+    };
+
+    expectRule(
+      withFiles({ 'apps/companion/package.json': JSON.stringify(companionManifest) }),
+      'ARCH_CSTV_PARSER_OWNERSHIP',
+      'cs2parser',
+    );
+    expectRule(
+      withFiles({ 'apps/companion/src/parser-edge.ts': "import 'cs2parser';\n" }),
+      'ARCH_CSTV_PARSER_OWNERSHIP',
+      'cs2parser',
+    );
+    expectRule(
+      withFiles({
+        'apps/web/src/parser-edge.ts': "import type { DemoReader } from 'cs2parser';\n",
+      }),
+      'ARCH_CSTV_PARSER_OWNERSHIP',
+      'cs2parser',
+    );
+    expectRule(
+      withFiles({
+        'packages/core/src/parser-edge.ts': "import { DemoReader } from 'cs2parser';\n",
+      }),
+      'ARCH_CSTV_PARSER_OWNERSHIP',
+      'cs2parser',
+    );
+    expectRule(
+      withFiles({
+        'packages/testkit/src/parser-edge.ts': "await import('cs2parser/dist/index.mjs');\n",
+      }),
+      'ARCH_CSTV_PARSER_OWNERSHIP',
+      'cs2parser/dist',
+    );
+
+    expect(
+      withFiles({
+        'packages/telemetry-cstv/src/parser-edge.ts': "import { DemoReader } from 'cs2parser';\n",
+      }),
+    ).toEqual([]);
+  });
+
   it('rejects shared package source exports', () => {
     const coreManifest = packageManifest('packages/core/package.json');
     coreManifest.files = ['src'];
@@ -379,6 +452,18 @@ describe('architecture ESLint fast feedback', () => {
         expect.objectContaining({
           ruleId: 'no-restricted-imports',
           message: expect.stringContaining('src directory'),
+        }),
+      ]),
+    );
+
+    const [parserResult] = await eslint.lintText("import { DemoReader } from 'cs2parser';\n", {
+      filePath: 'apps/web/src/main.tsx',
+    });
+    expect(parserResult?.messages).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          ruleId: 'no-restricted-imports',
+          message: expect.stringContaining('owned exclusively by packages/telemetry-cstv'),
         }),
       ]),
     );

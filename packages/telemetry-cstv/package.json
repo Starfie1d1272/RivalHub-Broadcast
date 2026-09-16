@@ -1,5 +1,5 @@
 {
-  "name": "@rivalhub-broadcast/core",
+  "name": "@rivalhub-broadcast/telemetry-cstv",
   "private": true,
   "type": "module",
   "files": [
@@ -9,23 +9,15 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
-    },
-    "./runtime": {
-      "types": "./dist/runtime/index.d.ts",
-      "import": "./dist/runtime/index.js"
-    },
-    "./telemetry": {
-      "types": "./dist/telemetry/index.d.ts",
-      "import": "./dist/telemetry/index.js"
-    },
-    "./game-events": {
-      "types": "./dist/game-events/index.d.ts",
-      "import": "./dist/game-events/index.js"
     }
   },
   "scripts": {
     "build": "tsc -b tsconfig.json --pretty false --force",
     "typecheck": "tsc -b tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
+  },
+  "dependencies": {
+    "@rivalhub-broadcast/core": "workspace:*",
+    "cs2parser": "catalog:"
   },
   "devDependencies": {
     "@typescript/native": "catalog:"

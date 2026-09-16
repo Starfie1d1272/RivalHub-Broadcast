@@ -7,8 +7,9 @@ $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
 $appPath = Join-Path $script:BundleRoot 'app'
 if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'bundle 内缺少 runtime\node.exe' }
 if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw 'bundle 内缺少 Companion dist\server.js' }
-$dependencyPath = Join-Path $appPath 'node_modules\.pnpm\node_modules'
-if (-not (Test-Path -LiteralPath $dependencyPath -PathType Container)) { throw 'bundle 内缺少依赖存储' }
+$nodeModulesPath = Join-Path $appPath 'node_modules'
+if (-not (Test-Path -LiteralPath $nodeModulesPath -PathType Container)) { throw 'bundle 内缺少 node_modules' }
+$dependencyPath = Join-Path $nodeModulesPath '.pnpm\node_modules'
 
 $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
 if ($listeners.Count -gt 0) { throw '3000 端口已被占用；请先停止其他进程再开始 qualification' }
@@ -68,7 +69,9 @@ $env:QUALIFICATION_NODE_PATH = $nodePath
 $env:QUALIFICATION_RUN_DIR = $runDir
 $env:QUALIFICATION_RUN_STATE_PATH = $script:RunStatePath
 $env:QUALIFICATION_FINALIZATION_PATH = (Join-Path $script:QualificationStateRoot 'finalization.json')
-$env:NODE_PATH = if ($env:NODE_PATH) { "$dependencyPath;$($env:NODE_PATH)" } else { $dependencyPath }
+if (Test-Path -LiteralPath $dependencyPath -PathType Container) {
+    $env:NODE_PATH = if ($env:NODE_PATH) { "$dependencyPath;$($env:NODE_PATH)" } else { $dependencyPath }
+}
 
 $supervisorPath = Join-Path $script:BundleRoot 'scripts\qualification-supervisor.mjs'
 if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw 'bundle 内缺少 qualification supervisor 脚本' }
