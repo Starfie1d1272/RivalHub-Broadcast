@@ -208,6 +208,9 @@ importers:
       '@rivalhub-broadcast/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rivalhub-broadcast/rivalhub':
+        specifier: workspace:*
+        version: link:../../packages/rivalhub
       '@rivalhub-broadcast/telemetry-cstv':
         specifier: workspace:*
         version: link:../../packages/telemetry-cstv
@@ -288,10 +291,26 @@ importers:
         version: typescript@7.0.2
 
   packages/rivalhub:
+    dependencies:
+      '@rivalhub-broadcast/core':
+        specifier: workspace:*
+        version: link:../core
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.2
     devDependencies:
+      '@rivalhub-broadcast/testkit':
+        specifier: workspace:*
+        version: link:../testkit
+      '@types/node':
+        specifier: 'catalog:'
+        version: 24.13.4
       '@typescript/native':
         specifier: 'catalog:'
         version: typescript@7.0.2
+      vitest:
+        specifier: 'catalog:'
+        version: 5.0.0(@types/node@24.13.4)(jsdom@26.1.0)(vite@8.3.0(@types/node@24.13.4)(esbuild@0.28.2)(tsx@4.23.13))
 
   packages/telemetry-cstv:
     dependencies:
