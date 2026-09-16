@@ -9,7 +9,7 @@
   },
   "scripts": {
     "architecture:check": "node scripts/architecture/check.mjs",
-    "build": "pnpm --recursive --sort run build",
+    "build": "pnpm --recursive --sort --workspace-concurrency=1 run build",
     "dev": "pnpm --parallel --filter @rivalhub-broadcast/companion --filter @rivalhub-broadcast/web run dev",
     "format": "prettier --write \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig*.json\" \"eslint.config.js\" \"vitest.config.ts\" \".prettierrc.json\" \"apps/**/*.{ts,tsx,js,jsx,json,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,html}\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig*.json\" \"eslint.config.js\" \"vitest.config.ts\" \".prettierrc.json\" \"apps/**/*.{ts,tsx,js,jsx,json,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,html}\" \"scripts/**/*.mjs\"",
