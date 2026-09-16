@@ -1,9 +1,22 @@
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join, resolve } from 'node:path';
+
+import type { BroadcastManifestV1 } from '@rivalhub-broadcast/rivalhub';
 import { describe, expect, it } from 'vitest';
 
-import { createProjectionCoordinator } from '../src/projections/projection-coordinator.js';
+import {
+  createProjectionCoordinator,
+  type ProjectionScheduler,
+} from '../src/projections/projection-coordinator.js';
 import { createProgramRuntime } from '../src/runtime/program-runtime.js';
 import { createCstvSourceManagers } from '../src/telemetry/cstv-source-manager.js';
 import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
+import {
+  MatchContextController,
+  MatchManifestLkgStore,
+  SourceLoadError,
+} from '../src/match-context/index.js';
 
 function observation(): TelemetryObservation {
   return {
@@ -25,6 +38,87 @@ function observation(): TelemetryObservation {
     },
     telemetry: { map: { name: 'de_mirage', phase: 'live' } },
   };
+}
+
+async function readManifest(): Promise<BroadcastManifestV1> {
+  return JSON.parse(
+    await readFile(
+      resolve(process.cwd(), 'packages/rivalhub/test/fixtures/broadcast-manifest-v1.valid.json'),
+      'utf8',
+    ),
+  ) as BroadcastManifestV1;
+}
+
+function matchedObservation(manifest: BroadcastManifestV1): TelemetryObservation {
+  const entrantPlayers = (entry: 'a' | 'b', side: 'CT' | 'T') =>
+    manifest.entrants[entry].roster.players.slice(0, 5).map((player, index) => ({
+      sourcePlayerId:
+        player.steam64 ??
+        (() => {
+          throw new Error('fixture player lacks Steam64');
+        })(),
+      ...(player.displayName === null ? {} : { displayName: player.displayName }),
+      side,
+      observerSlot: index,
+      state: { health: 100 },
+    }));
+  const allPlayers = [...entrantPlayers('a', 'CT'), ...entrantPlayers('b', 'T')];
+  return {
+    receive: {
+      sequence: 1,
+      receivedAt: '2026-09-16T00:00:00.000Z',
+      receivedMonotonicMs: 0,
+    },
+    source: { kind: 'cs2-gsi' },
+    coverage: {
+      provider: 'present',
+      map: 'present',
+      round: 'absent',
+      phaseCountdowns: 'absent',
+      player: 'present',
+      allPlayers: 'present',
+      bomb: 'absent',
+      grenades: 'absent',
+    },
+    telemetry: {
+      map: {
+        name: 'de_ancient',
+        phase: 'live',
+        sides: {
+          ct: { name: manifest.entrants.a.name },
+          t: { name: manifest.entrants.b.name },
+        },
+      },
+      allPlayers,
+      player: allPlayers[0]!,
+    },
+  };
+}
+
+class ManualProjectionScheduler implements ProjectionScheduler {
+  readonly delays: number[] = [];
+  private readonly callbacks = new Map<() => void, () => void>();
+
+  setTimeout(callback: () => void, delayMs: number): unknown {
+    this.delays.push(delayMs);
+    this.callbacks.set(callback, callback);
+    return callback;
+  }
+
+  clearTimeout(handle: unknown): void {
+    this.callbacks.delete(handle as () => void);
+  }
+
+  runNext(): void {
+    const callback = this.callbacks.values().next().value as (() => void) | undefined;
+    if (callback === undefined) return;
+    this.callbacks.delete(callback);
+    callback();
+  }
+
+  pendingCount(): number {
+    return this.callbacks.size;
+  }
 }
 
 describe('ProjectionCoordinator', () => {
@@ -60,5 +154,132 @@ describe('ProjectionCoordinator', () => {
 
     await subscription.close();
     await coordinator.close();
+  });
+
+  it('publishes one time-driven stale transition and reschedules only for a new frame', async () => {
+    let now = 0;
+    const scheduler = new ManualProjectionScheduler();
+    const runtime = createProgramRuntime('coordinator-stale', {
+      continuityPolicy: { staleAfterMs: 100 },
+    });
+    const coordinator = createProjectionCoordinator({
+      programRuntime: runtime,
+      cstvSources: createCstvSourceManagers({}),
+      nowMonotonicMs: () => now,
+      scheduler,
+    });
+    const published: number[] = [];
+    const subscription = coordinator.getPublisher('program').subscribe((snapshot) => {
+      published.push(snapshot.channelSeq);
+      return Promise.resolve();
+    });
+
+    coordinator.afterRuntimeMutation(runtime.acceptObservation(observation()));
+    expect(coordinator.getCurrent().program.status.telemetry).toBe('fresh');
+    expect(scheduler.delays).toEqual([100]);
+    expect(scheduler.pendingCount()).toBe(1);
+
+    now = 101;
+    scheduler.runNext();
+    expect(coordinator.getCurrent().program.status.telemetry).toBe('stale');
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(published).toEqual([1, 3]);
+    expect(scheduler.pendingCount()).toBe(0);
+
+    const mapReset = runtime.resetMapExecution('operator-correction', {
+      monotonicMs: 200,
+      utc: '2026-09-16T00:00:00.200Z',
+    });
+    coordinator.afterRuntimeMutation(mapReset);
+    expect(scheduler.pendingCount()).toBe(0);
+
+    const next = observation();
+    now = 300;
+    coordinator.afterRuntimeMutation(
+      runtime.acceptObservation({
+        ...next,
+        receive: {
+          ...next.receive,
+          sequence: 2,
+          receivedAt: '2026-09-16T00:00:00.300Z',
+          receivedMonotonicMs: 300,
+        },
+      }),
+    );
+    expect(coordinator.getCurrent().program.status.telemetry).toBe('fresh');
+    expect(scheduler.delays).toEqual([100, 100]);
+    expect(scheduler.pendingCount()).toBe(1);
+
+    await subscription.close();
+    await coordinator.close();
+    expect(scheduler.pendingCount()).toBe(0);
+  });
+
+  it('preserves matched identity and branding across same-context stale memory fallback', async () => {
+    const root = await mkdtemp(join(tmpdir(), 'rivalhub-projection-coordinator-'));
+    try {
+      const manifest = await readManifest();
+      const manifestWithScore = {
+        ...manifest,
+        match: { ...manifest.match, scoreA: 1, scoreB: 0 },
+      } as BroadcastManifestV1;
+      const runtime = createProgramRuntime('coordinator-context', {
+        continuityPolicy: { staleAfterMs: 100 },
+      });
+      let now = 0;
+      const coordinator = createProjectionCoordinator({
+        programRuntime: runtime,
+        cstvSources: createCstvSourceManagers({}),
+        nowMonotonicMs: () => now,
+      });
+      const controller = new MatchContextController({
+        lkgStore: new MatchManifestLkgStore({ filePath: join(root, 'manifest.json') }),
+        onBindingChanged: (binding) => coordinator.setMatchContextBinding(binding),
+      });
+
+      coordinator.afterRuntimeMutation(
+        runtime.acceptObservation(matchedObservation(manifestWithScore)),
+      );
+      const fresh = await controller.selectMatch(manifestWithScore.match.matchId, {
+        kind: 'fixture',
+        load: () => Promise.resolve(manifestWithScore),
+      });
+      expect(fresh.ok).toBe(true);
+      if (!fresh.ok) throw new Error('fixture match context should bind');
+      expect(coordinator.getCurrent().identity.state).toBe('matched');
+      expect(coordinator.getCurrent().program.teams.ct).toMatchObject({
+        mode: 'canonical',
+        name: manifestWithScore.entrants.a.name,
+        seriesScore: 1,
+      });
+      const runtimeSeq = runtime.getSnapshot().current.runtimeSeq;
+      const channelSeq = coordinator.getPublisher('program').getCurrent()?.channelSeq;
+
+      now = 10;
+      const stale = await controller.selectMatch(manifestWithScore.match.matchId, {
+        kind: 'online',
+        load: () => Promise.reject(new SourceLoadError('offline')),
+      });
+      expect(stale.ok).toBe(true);
+      if (!stale.ok) throw new Error('same-match memory fallback should bind');
+      expect(stale.binding.context).toBe(fresh.binding.context);
+      expect(coordinator.getCurrent().identity.state).toBe('matched');
+      expect(coordinator.getCurrent().program.status.context).toBe('stale');
+      expect(coordinator.getCurrent().program.teams.ct).toMatchObject({
+        mode: 'canonical',
+        name: manifestWithScore.entrants.a.name,
+        seriesScore: null,
+      });
+      expect(coordinator.getCurrent().program.teams.t.seriesScore).toBeNull();
+      expect(runtime.getSnapshot().current.runtimeSeq).toBe(runtimeSeq);
+      expect(coordinator.getPublisher('program').getCurrent()?.channelSeq).toBe(
+        (channelSeq ?? 0) + 1,
+      );
+
+      await coordinator.close();
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
   });
 });

@@ -29,6 +29,7 @@ import {
 import { projectRadarFrame, type RadarFrame } from '@rivalhub-broadcast/radar';
 
 import type { MatchContextBinding } from '../match-context/index.js';
+import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
 import type { CstvSourceManagers } from '../telemetry/cstv-source-manager.js';
 import type { ProgramRuntime } from '../runtime/program-runtime.js';
 import {
@@ -62,11 +63,21 @@ export interface ProjectionCoordinatorOptions {
   readonly identityResolver?: IdentityResolver;
   readonly matchContextBinding?: MatchContextBinding;
   readonly nowMonotonicMs?: () => number;
+  readonly scheduler?: ProjectionScheduler;
   readonly publishers?: ProjectionPublishers;
   readonly onDiagnostic?: (diagnostic: { readonly code: string }) => void;
 }
 
+export interface ProjectionScheduler {
+  setTimeout(callback: () => void, delayMs: number): unknown;
+  clearTimeout(handle: unknown): void;
+}
+
 const defaultNowMonotonicMs = (): number => globalThis.performance?.now() ?? Date.now();
+const defaultScheduler: ProjectionScheduler = {
+  setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
+  clearTimeout: (handle) => clearTimeout(handle as NodeJS.Timeout),
+};
 
 function defaultPublishers(
   onDiagnostic: ((diagnostic: { readonly code: string }) => void) | undefined,
@@ -125,82 +136,127 @@ export class ProjectionCoordinator {
   private readonly cstvSources: CstvSourceManagers;
   private readonly identityResolver: IdentityResolver;
   private readonly nowMonotonicMs: () => number;
+  private readonly scheduler: ProjectionScheduler;
   private readonly publishers: Required<ProjectionPublishers>;
   private readonly onDiagnostic: ((diagnostic: { readonly code: string }) => void) | undefined;
+  private readonly sourceUnsubscribers: readonly (() => void)[];
   private contextBinding: MatchContextBinding | undefined;
+  private boundContext: MatchContext | undefined;
   private boundMatchId: string | undefined;
   private lastIdentityEvidence:
     { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined;
   private current: ProjectionBundle;
+  private staleTimer: unknown;
+  private staleTimerKey:
+    { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined;
+  private staleDeadline: number | undefined;
+  private stalePublishedKey:
+    { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined;
+  private staleSuppressedUntilNewFrame = false;
+  private refreshing = false;
+  private closed = false;
 
   constructor(options: ProjectionCoordinatorOptions) {
     this.programRuntime = options.programRuntime;
     this.cstvSources = options.cstvSources;
     this.identityResolver = options.identityResolver ?? createIdentityResolver();
     this.nowMonotonicMs = options.nowMonotonicMs ?? defaultNowMonotonicMs;
+    this.scheduler = options.scheduler ?? defaultScheduler;
     this.onDiagnostic = options.onDiagnostic;
     this.publishers = mergePublishers(options.publishers, options.onDiagnostic);
     this.contextBinding = options.matchContextBinding;
     if (this.contextBinding !== undefined) {
+      this.boundContext = this.contextBinding.context;
       this.identityResolver.bind(this.contextBinding.context);
       this.boundMatchId = this.contextBinding.context.matchId;
     }
+    this.sourceUnsubscribers = [
+      this.cstvSources.program.subscribe(() => this.refresh()),
+      this.cstvSources.lookahead.subscribe(() => this.refresh()),
+    ];
     this.current = this.refresh();
   }
 
   setMatchContextBinding(binding: MatchContextBinding | undefined): ProjectionBundle {
+    if (this.closed) return this.current;
     this.contextBinding = binding;
     if (binding === undefined) {
+      this.boundContext = undefined;
       this.boundMatchId = undefined;
       this.lastIdentityEvidence = undefined;
       this.identityResolver.unbind();
     } else {
-      this.identityResolver.bind(binding.context);
+      const contextChanged =
+        this.boundContext !== binding.context || this.boundMatchId !== binding.context.matchId;
+      this.boundContext = binding.context;
       this.boundMatchId = binding.context.matchId;
-      this.lastIdentityEvidence = undefined;
+      if (contextChanged) {
+        this.identityResolver.bind(binding.context);
+        this.lastIdentityEvidence = undefined;
+      }
     }
     return this.refresh();
   }
 
   afterRuntimeMutation(result?: RuntimeReduceResult): ProjectionBundle {
-    if (result !== undefined && result.disposition.kind !== 'accepted') return this.current;
+    if (this.closed) return this.current;
+    if (result !== undefined) {
+      if (result.disposition.kind !== 'accepted') return this.current;
+      if (
+        result.disposition.reason === 'map-execution-reset' ||
+        result.disposition.reason === 'source-generation-advanced'
+      ) {
+        this.cancelStaleTimer();
+        this.stalePublishedKey = undefined;
+        this.staleSuppressedUntilNewFrame = true;
+      } else {
+        this.staleSuppressedUntilNewFrame = false;
+      }
+    }
     return this.refresh();
   }
 
   refresh(): ProjectionBundle {
-    const runtimeSnapshot = this.programRuntime.getSnapshot();
-    const runtimeState = runtimeSnapshot.current;
-    const runtimeView = selectProgramSafeRuntimeView(runtimeState);
-    const identity = this.resolveIdentity(runtimeSnapshot);
-    const nowMonotonicMs = this.nowMonotonicMs();
-    const context = this.contextBinding?.context;
-    const program = projectProgram({
-      runtime: runtimeView,
-      ...(context === undefined ? {} : { context }),
-      ...(this.contextBinding === undefined
-        ? {}
-        : { contextFreshness: this.contextBinding.freshness }),
-      identity,
-      nowMonotonicMs,
-      continuityPolicy: runtimeSnapshot.continuityPolicy,
-    });
-    const radar = projectRadarFrame({
-      runtime: runtimeView,
-      identity,
-      nowMonotonicMs,
-      continuityPolicy: runtimeSnapshot.continuityPolicy,
-    });
-    const operator = projectOperator({
-      runtime: runtimeSnapshot,
-      context: this.contextBinding,
-      identity,
-      cstvSources: this.cstvSources,
-      nowMonotonicMs,
-    });
-    const assist = projectObserverAssist(runtimeView);
-    this.current = { program, radar, operator, assist, identity };
-    this.publish(program, radar, operator, assist);
-    return this.current;
+    if (this.closed || this.refreshing) return this.current;
+    this.refreshing = true;
+    try {
+      const runtimeSnapshot = this.programRuntime.getSnapshot();
+      const runtimeState = runtimeSnapshot.current;
+      const runtimeView = selectProgramSafeRuntimeView(runtimeState);
+      const identity = this.resolveIdentity(runtimeSnapshot);
+      const nowMonotonicMs = this.nowMonotonicMs();
+      const context = this.contextBinding?.context;
+      const program = projectProgram({
+        runtime: runtimeView,
+        ...(context === undefined ? {} : { context }),
+        ...(this.contextBinding === undefined
+          ? {}
+          : { contextFreshness: this.contextBinding.freshness }),
+        identity,
+        nowMonotonicMs,
+        continuityPolicy: runtimeSnapshot.continuityPolicy,
+      });
+      const radar = projectRadarFrame({
+        runtime: runtimeView,
+        identity,
+        nowMonotonicMs,
+        continuityPolicy: runtimeSnapshot.continuityPolicy,
+      });
+      const operator = projectOperator({
+        runtime: runtimeSnapshot,
+        context: this.contextBinding,
+        identity,
+        cstvSources: this.cstvSources,
+        nowMonotonicMs,
+      });
+      const assist = projectObserverAssist(runtimeView);
+      this.current = { program, radar, operator, assist, identity };
+      this.publish(program, radar, operator, assist);
+      this.scheduleStaleDeadline(runtimeView, nowMonotonicMs, runtimeSnapshot.continuityPolicy);
+      return this.current;
+    } finally {
+      this.refreshing = false;
+    }
   }
 
   getCurrent(): ProjectionBundle {
@@ -218,6 +274,10 @@ export class ProjectionCoordinator {
   }
 
   async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
+    this.cancelStaleTimer();
+    for (const unsubscribe of this.sourceUnsubscribers) unsubscribe();
     await Promise.all([
       this.publishers.program.close(),
       this.publishers.radar.close(),
@@ -230,13 +290,19 @@ export class ProjectionCoordinator {
     runtimeSnapshot: ReturnType<ProgramRuntime['getSnapshot']>,
   ): IdentityResolution {
     if (this.contextBinding === undefined) {
+      this.boundContext = undefined;
       this.boundMatchId = undefined;
       return this.identityResolver.unbind();
     }
 
-    if (this.boundMatchId !== this.contextBinding.context.matchId) {
+    if (
+      this.boundContext !== this.contextBinding.context ||
+      this.boundMatchId !== this.contextBinding.context.matchId
+    ) {
       this.identityResolver.bind(this.contextBinding.context);
+      this.boundContext = this.contextBinding.context;
       this.boundMatchId = this.contextBinding.context.matchId;
+      this.lastIdentityEvidence = undefined;
     }
 
     const observation = runtimeSnapshot.current.programTelemetry;
@@ -339,6 +405,114 @@ export class ProjectionCoordinator {
       report(this.onDiagnostic, `${channel}-wire-validation-failed`);
     }
   }
+
+  private scheduleStaleDeadline(
+    runtimeView: ReturnType<typeof selectProgramSafeRuntimeView>,
+    nowMonotonicMs: number,
+    policy: ReturnType<ProgramRuntime['getSnapshot']>['continuityPolicy'],
+  ): void {
+    const lastAccepted = runtimeView.programSourceLastAccepted;
+    const receiveSequence = runtimeView.cursor.programReceiveSequence;
+    if (runtimeView.telemetry === null || lastAccepted === null || receiveSequence === null) {
+      this.cancelStaleTimer();
+      this.stalePublishedKey = undefined;
+      return;
+    }
+    if (this.staleSuppressedUntilNewFrame) {
+      this.cancelStaleTimer();
+      return;
+    }
+
+    const key = {
+      sourceGeneration: runtimeView.cursor.programSourceGeneration,
+      receiveSequence,
+    } as const;
+    const deadline = lastAccepted.receivedMonotonicMs + policy.staleAfterMs;
+    if (sameStaleKey(this.stalePublishedKey, key) && nowMonotonicMs >= deadline) {
+      this.cancelStaleTimer();
+      return;
+    }
+    if (
+      sameStaleKey(this.staleTimerKey, key) &&
+      this.staleDeadline === deadline &&
+      this.staleTimer !== undefined
+    ) {
+      return;
+    }
+
+    this.armStaleTimer(key, deadline, Math.max(0, deadline - nowMonotonicMs));
+  }
+
+  private armStaleTimer(
+    key: { readonly sourceGeneration: number; readonly receiveSequence: number },
+    deadline: number,
+    delayMs: number,
+  ): void {
+    this.cancelStaleTimer();
+    this.staleTimerKey = key;
+    this.staleDeadline = deadline;
+    this.staleTimer = this.scheduler.setTimeout(() => {
+      this.handleStaleDeadline(key, deadline);
+    }, delayMs);
+  }
+
+  private handleStaleDeadline(
+    key: { readonly sourceGeneration: number; readonly receiveSequence: number },
+    deadline: number,
+  ): void {
+    this.staleTimer = undefined;
+    this.staleTimerKey = undefined;
+    this.staleDeadline = undefined;
+    if (this.closed) return;
+
+    const runtimeSnapshot = this.programRuntime.getSnapshot();
+    const runtimeView = selectProgramSafeRuntimeView(runtimeSnapshot.current);
+    const currentReceiveSequence = runtimeView.cursor.programReceiveSequence;
+    const currentKey =
+      runtimeView.telemetry === null || currentReceiveSequence === null
+        ? undefined
+        : {
+            sourceGeneration: runtimeView.cursor.programSourceGeneration,
+            receiveSequence: currentReceiveSequence,
+          };
+    if (!sameStaleKey(currentKey, key)) {
+      this.scheduleStaleDeadline(
+        runtimeView,
+        this.nowMonotonicMs(),
+        runtimeSnapshot.continuityPolicy,
+      );
+      return;
+    }
+
+    const nowMonotonicMs = this.nowMonotonicMs();
+    if (nowMonotonicMs <= deadline) {
+      this.armStaleTimer(key, deadline, Math.max(1, deadline - nowMonotonicMs + 1));
+      return;
+    }
+
+    if (sameStaleKey(this.stalePublishedKey, key)) return;
+    this.stalePublishedKey = key;
+    this.refresh();
+  }
+
+  private cancelStaleTimer(): void {
+    if (this.staleTimer !== undefined) this.scheduler.clearTimeout(this.staleTimer);
+    this.staleTimer = undefined;
+    this.staleTimerKey = undefined;
+    this.staleDeadline = undefined;
+  }
+}
+
+function sameStaleKey(
+  left: { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined,
+  right: { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined,
+): boolean {
+  return (
+    left !== undefined &&
+    right !== undefined &&
+    left.sourceGeneration === right.sourceGeneration &&
+    left.receiveSequence === right.receiveSequence
+  );
 }
 
 export function createProjectionCoordinator(

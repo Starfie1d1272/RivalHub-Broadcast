@@ -86,4 +86,26 @@ describe('Local channel publisher', () => {
     await subscription.close();
     await publisher.close();
   });
+
+  it('closes idempotently and rejects post-close publishes/subscriptions without delivery', async () => {
+    const sent: number[] = [];
+    const publisher = createLocalChannelPublisher<Snapshot>({
+      id: 'operator',
+      schema: { parse: (input) => input as Snapshot },
+    });
+    publisher.publish({ value: 1 });
+    await publisher.close();
+    await publisher.close();
+
+    publisher.publish({ value: 2 });
+    const subscription = publisher.subscribe((snapshot) => {
+      sent.push(snapshot.value);
+      return Promise.resolve();
+    });
+    await subscription.close();
+
+    expect(publisher.getCurrent()).toEqual({ channelSeq: 1, value: 1 });
+    expect(sent).toEqual([]);
+    expect(subscription.getHealth()).toMatchObject({ state: 'closed', offered: 0, sent: 0 });
+  });
 });

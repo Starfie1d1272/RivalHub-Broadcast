@@ -349,4 +349,32 @@ describe('CSTV source manager', () => {
       'PROGRAM_CSTV_URL must be a valid http(s) URL',
     );
   });
+
+  it('notifies observers when externally visible source health changes', async () => {
+    const sessions: FakeSession[] = [];
+    const scheduler = new FakeScheduler();
+    const manager = createCstvSourceManager({
+      role: 'program',
+      url: 'https://example.test/program/',
+      parserSessionFactory: createFakeParserFactory(sessions),
+      scheduler,
+    });
+    const states: string[] = [];
+    const unsubscribe = manager.subscribe(() => {
+      states.push(manager.getHealth().state);
+    });
+
+    manager.start();
+    await flush();
+    sessions[0]?.resolveRun({ status: 'timeout' });
+    await flush();
+
+    expect(states).toEqual(expect.arrayContaining(['connecting', 'live', 'reconnecting']));
+    const countBeforeUnsubscribe = states.length;
+    unsubscribe();
+    scheduler.runNext();
+    await flush();
+    expect(states).toHaveLength(countBeforeUnsubscribe);
+    await manager.stop();
+  });
 });

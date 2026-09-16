@@ -638,7 +638,7 @@ function checkProgramProjectionImportOwnership(records, repository, report) {
         });
         continue;
       }
-      if (target && target.path.startsWith('packages/core/src/projection/')) {
+      if (target && target.path.startsWith('packages/core/src/')) {
         queue.push({ record: target, entryPath });
       }
     }

@@ -18,6 +18,9 @@ export {
 export type {
   SnapshotAcceptance,
   SnapshotAcceptanceKind,
+  SnapshotAccepted,
+  SnapshotIgnored,
+  SnapshotRejected,
   SnapshotAcceptanceResult,
   SnapshotAcceptanceState,
   SnapshotCursorLike,

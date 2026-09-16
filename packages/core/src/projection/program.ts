@@ -17,12 +17,14 @@ import {
   type ProgramSafeRuntimeView,
 } from './program-safe-runtime.js';
 import type { ProjectionCursor } from './cursor.js';
+import { getProjectionIdentityState, isProjectionIdentityCurrent } from './identity.js';
 
 export interface ProgramTeamPresentationCanonical {
   readonly mode: 'canonical';
   readonly entryId: string;
   readonly name: string;
   readonly logoUrl: string | null;
+  readonly seriesScore: number | null;
 }
 
 export interface ProgramTeamPresentationNeutral {
@@ -30,6 +32,7 @@ export interface ProgramTeamPresentationNeutral {
   readonly entryId: null;
   readonly name: 'CT' | 'T';
   readonly logoUrl: null;
+  readonly seriesScore: null;
 }
 
 export type ProgramTeamPresentation =
@@ -106,10 +109,6 @@ export interface ProgramProjection {
     };
     readonly format: MatchFormat;
     readonly stage: string;
-    readonly seriesScore: null | {
-      readonly a: number | null;
-      readonly b: number | null;
-    };
   };
   readonly teams: {
     readonly ct: ProgramTeamPresentation;
@@ -164,20 +163,18 @@ function currentIdentityProof(
   runtime: ProgramSafeRuntimeView,
   identity: IdentityResolution,
 ): boolean {
-  return (
-    identity.sourceGeneration === runtime.cursor.programSourceGeneration &&
-    identity.mapEpoch === runtime.cursor.mapEpoch
-  );
+  return isProjectionIdentityCurrent(runtime, identity);
 }
 
 function neutralTeam(name: 'CT' | 'T'): ProgramTeamPresentationNeutral {
-  return { mode: 'neutral', entryId: null, name, logoUrl: null };
+  return { mode: 'neutral', entryId: null, name, logoUrl: null, seriesScore: null };
 }
 
 function canonicalTeams(
   context: MatchContext | undefined,
   identity: IdentityResolution,
   identityIsCurrent: boolean,
+  contextFreshness: 'unbound' | 'fresh' | 'stale',
 ): { readonly ct: ProgramTeamPresentation; readonly t: ProgramTeamPresentation } {
   const canUseBranding =
     context !== undefined &&
@@ -201,12 +198,24 @@ function canonicalTeams(
       entryId: bySide.CT.entryId,
       name: bySide.CT.name,
       logoUrl: bySide.CT.logoUrl,
+      seriesScore:
+        contextFreshness === 'fresh'
+          ? identity.sideMapping.a === 'CT'
+            ? context.scoreA
+            : context.scoreB
+          : null,
     },
     t: {
       mode: 'canonical',
       entryId: bySide.T.entryId,
       name: bySide.T.name,
       logoUrl: bySide.T.logoUrl,
+      seriesScore:
+        contextFreshness === 'fresh'
+          ? identity.sideMapping.a === 'T'
+            ? context.scoreA
+            : context.scoreB
+          : null,
     },
   };
 }
@@ -316,7 +325,7 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
     status: {
       telemetry: telemetryFreshness,
       context: contextFreshness,
-      identity: input.identity.state,
+      identity: getProjectionIdentityState(input.runtime, input.identity),
     },
     match:
       input.context === undefined
@@ -326,12 +335,8 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
             competition: { ...input.context.competition },
             format: input.context.format,
             stage: input.context.stage,
-            seriesScore:
-              contextFreshness === 'stale'
-                ? null
-                : { a: input.context.scoreA, b: input.context.scoreB },
           },
-    teams: canonicalTeams(input.context, input.identity, identityIsCurrent),
+    teams: canonicalTeams(input.context, input.identity, identityIsCurrent, contextFreshness),
     map: {
       name: nullable(map?.name),
       mode: nullable(map?.mode),

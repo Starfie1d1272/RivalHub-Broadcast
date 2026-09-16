@@ -19,12 +19,14 @@ const teamSchema = z.discriminatedUnion('mode', [
     entryId: z.string().min(1),
     name: z.string(),
     logoUrl: nullableString,
+    seriesScore: nullableNumber,
   }),
   z.object({
     mode: z.literal('neutral'),
     entryId: z.null(),
     name: z.enum(['CT', 'T']),
     logoUrl: z.null(),
+    seriesScore: z.null(),
   }),
 ]);
 
@@ -110,7 +112,6 @@ export const programPayloadSchema = z.object({
       }),
       format: z.enum(['bo1', 'bo3', 'bo5']),
       stage: z.string(),
-      seriesScore: z.object({ a: nullableNumber, b: nullableNumber }).nullable(),
     })
     .nullable(),
   teams: z.object({ ct: teamSchema, t: teamSchema }),

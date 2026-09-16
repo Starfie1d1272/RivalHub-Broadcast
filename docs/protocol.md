@@ -236,7 +236,12 @@ provenance 仍是 `lifecycleCoverage: partial`，不被当作整场验收。整�
 `de_ancient` 从正式比赛到 `14:16` gameover 的完整生命周期。该 raw capture 因含真实身份不
 进入 Git；验收通过 `RIVALHUB_FULL_MATCH_CAPTURE_DIR` 指向经复核的 capture 目录运行，测试
 helper 在构造 formal identity evidence 前做确定性脱敏。证据边界是本地 artifact 可复核，CI
-不伪装成拥有该 raw capture；仓库内 semantic slice 仍独立执行。
+不伪装成拥有该 raw capture；仓库内 semantic slice 仍独立执行。设置同一个环境变量后，
+`apps/companion/test/projection-real-replay.test.ts` 会让每个 accepted frame 依次经过生产
+GSI adapter/replay、ProgramRuntime、identity、ProjectionCoordinator 的 Program/Radar/
+Operator/Assist projection 及最终 wire schema，使用 deterministic clock 跑两遍并比较去除
+`channelSeq` 后的 canonical digest；canonical JSON 同时拒绝 `undefined`、`NaN` 和
+`Infinity`。
 
 ## M2 边界
 
@@ -318,7 +323,8 @@ wire mapper；`packages/protocol` 不依赖 Core、Radar、RivalHub 或 Web/Reac
 历史快照。
 
 Program payload 只包含 status、MatchContext/identity freshness、canonical team/player（按
-当前 identity proof）、map/round/clock、bomb、coverage 等节目安全字段；不包含位置、
+当前 identity proof；canonical team presentation 的 `seriesScore` 位于各自 team，neutral
+team 固定为 `null`）、map/round/clock、bomb、coverage 等节目安全字段；不包含位置、
 grenade、地图几何、identity issue、LKG/raw GSI/raw CSTV、round history、scene 或
 Lookahead/future 字段。Radar frame 只包含 cursor/freshness、identity state、map name、
 observed player、coverage、all players、bomb、grenades；life state 由 health 明确派生，
@@ -332,12 +338,14 @@ identity 和 source health。Assist V1 严格为 `{ cursor, availability: "unava
 或 schema version 错误；重复或倒序 `channelSeq` 静默忽略；同一 producer 下的
 `runtimeSeq` 回退拒绝。一个 socket 中途更换 `producerInstanceId` 也拒绝，新的 producer
 必须建立新的 acceptance state。`liveSessionId`、`programSourceGeneration` 或 `mapEpoch`
-变化时产生显式 reset signal，并清除对应旧 baseline 的连续性证明；source reconnect 后，
+变化时产生显式 reset signal，并清除对应旧 baseline 的连续性证明；producer change 是拒绝
+条件而不是 reset signal；source reconnect 后，
 旧 Lookahead alignment 不能继续产生 Assist cue。
 
 每个 subscriber 使用 latest-wins publisher：最多一个正在发送的快照和一个 pending 快照，
 新快照覆盖旧 pending，不积累 history/outbox。发送失败的 subscriber 被移除并记录诊断；
-慢 consumer 不得使内存队列随时间增长。
+慢 consumer 不得使内存队列随时间增长。Publisher close 后幂等关闭，且不再接受 publish
+或新 subscriber。
 
 ### #29 的边界
 

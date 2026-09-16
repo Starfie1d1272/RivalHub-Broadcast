@@ -48,6 +48,7 @@ class DefaultLocalChannelPublisher<
   private current: TSnapshot | null = null;
   private channelSeq = 0;
   private subscriberSequence = 0;
+  private closed = false;
 
   constructor(options: LocalChannelPublisherOptions<TSnapshot>) {
     if (options.id.trim().length === 0)
@@ -58,6 +59,7 @@ class DefaultLocalChannelPublisher<
   }
 
   publish(snapshot: Omit<TSnapshot, 'channelSeq'>): void {
+    if (this.closed) return;
     const candidate = { ...snapshot, channelSeq: this.channelSeq + 1 } as TSnapshot;
     let parsed: TSnapshot;
     try {
@@ -78,6 +80,22 @@ class DefaultLocalChannelPublisher<
 
   subscribe(send: (snapshot: TSnapshot) => Promise<void>): LocalSubscription {
     const subscriberId = `${this.id}-${++this.subscriberSequence}`;
+    if (this.closed) {
+      return {
+        close: () => Promise.resolve(),
+        getHealth: () => ({
+          id: subscriberId,
+          state: 'closed' as const,
+          inFlight: false,
+          hasPendingLatest: false,
+          offered: 0,
+          sent: 0,
+          coalesced: 0,
+          failed: 0,
+        }),
+      };
+    }
+
     let active = true;
     const consumerRef: { current?: LatestWinsConsumer<TSnapshot> } = {};
     const guardedSend = async (snapshot: TSnapshot): Promise<void> => {
@@ -117,6 +135,8 @@ class DefaultLocalChannelPublisher<
   }
 
   async close(): Promise<void> {
+    if (this.closed) return;
+    this.closed = true;
     const subscribers = [...this.subscribers.values()];
     this.subscribers.clear();
     await Promise.all(subscribers.map((subscriber) => subscriber.close()));

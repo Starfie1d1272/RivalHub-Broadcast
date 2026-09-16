@@ -16,23 +16,51 @@ const liveSessionSchema = z.discriminatedUnion('kind', [
   z.object({ kind: z.literal('bound'), liveSessionId: z.string() }),
 ]);
 
-const runtimeTransitionSchema = z.object({
-  kind: z.string(),
+const runtimeTransitionBaseSchema = z.object({
   runtimeSeq: z.number().int().nonnegative(),
   producerInstanceId: z.string(),
   liveSession: liveSessionSchema,
   mapEpoch: z.number().int().nonnegative(),
   at: runtimeTimeSchema,
-  sourceGeneration: z.number().int().nonnegative().nullable(),
-  receiveSequence: z.number().int().nonnegative().nullable(),
-  roundNumber: z.number().int().nullable(),
-  winnerSide: sourceSideSchema.nullable(),
-  previousMapEpoch: z.number().int().nonnegative().nullable(),
-  previousMapName: nullableString,
-  mapName: nullableString,
-  reason: nullableString,
-  resetReason: nullableString,
 });
+
+const runtimeTransitionSchema = z.union([
+  runtimeTransitionBaseSchema.extend({
+    kind: z.literal('round_started'),
+    sourceGeneration: z.number().int().nonnegative(),
+    receiveSequence: z.number().int().nonnegative(),
+    roundNumber: z.number().int().nullable(),
+  }),
+  runtimeTransitionBaseSchema.extend({
+    kind: z.literal('round_ended'),
+    sourceGeneration: z.number().int().nonnegative(),
+    receiveSequence: z.number().int().nonnegative(),
+    roundNumber: z.number().int().nullable(),
+    winnerSide: sourceSideSchema.nullable(),
+  }),
+  runtimeTransitionBaseSchema.extend({
+    kind: z.literal('map_ended'),
+    sourceGeneration: z.number().int().nonnegative(),
+    receiveSequence: z.number().int().nonnegative(),
+  }),
+  runtimeTransitionBaseSchema.extend({
+    kind: z.literal('map_execution_changed'),
+    reason: z.literal('observed-map-name-change'),
+    sourceGeneration: z.number().int().nonnegative(),
+    receiveSequence: z.number().int().nonnegative(),
+    previousMapEpoch: z.number().int().nonnegative(),
+    previousMapName: nullableString,
+    mapName: nullableString,
+  }),
+  runtimeTransitionBaseSchema.extend({
+    kind: z.literal('map_execution_changed'),
+    reason: z.literal('explicit-reset'),
+    resetReason: z.enum(['same-map-restart', 'restore', 'operator-correction']),
+    previousMapEpoch: z.number().int().nonnegative(),
+    previousMapName: nullableString,
+    mapName: nullableString,
+  }),
+]);
 
 const runtimeDispositionSchema = z
   .object({

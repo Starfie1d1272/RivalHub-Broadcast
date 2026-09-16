@@ -445,6 +445,18 @@ describe('architecture checker', () => {
       'ARCH_PROGRAM_PROJECTION_BOUNDARY',
       'lookahead',
     );
+
+    expectRule(
+      withFiles({
+        'packages/core/src/projection/program-helper-boundary.ts':
+          "import { value } from '../presentation-helper.js';\nvoid value;\n",
+        'packages/core/src/presentation-helper.ts':
+          "import { event } from './game-events/index.js';\nexport const value = event;\n",
+        'packages/core/src/game-events/index.ts': 'export const event = 1;\n',
+      }),
+      'ARCH_PROGRAM_PROJECTION_BOUNDARY',
+      'game-events',
+    );
   }, 15_000);
 });
 

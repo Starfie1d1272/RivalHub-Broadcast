@@ -30,8 +30,20 @@ function payload() {
     },
     match: null,
     teams: {
-      ct: { mode: 'neutral' as const, entryId: null, name: 'CT' as const, logoUrl: null },
-      t: { mode: 'neutral' as const, entryId: null, name: 'T' as const, logoUrl: null },
+      ct: {
+        mode: 'neutral' as const,
+        entryId: null,
+        name: 'CT' as const,
+        logoUrl: null,
+        seriesScore: null,
+      },
+      t: {
+        mode: 'neutral' as const,
+        entryId: null,
+        name: 'T' as const,
+        logoUrl: null,
+        seriesScore: null,
+      },
     },
     map: {
       name: 'de_mirage',
@@ -120,6 +132,7 @@ describe('Local Protocol V1 acceptance', () => {
       liveSessionChanged: true,
       programSourceGenerationChanged: true,
     });
+    expect(sourceAndSession.reset).not.toHaveProperty('producerInstanceChanged');
   });
 
   it('rejects an unsafe channel sequence', () => {

@@ -5,6 +5,7 @@ export {
 } from './program-safe-runtime.js';
 export { projectObserverAssist } from './observer-assist.js';
 export { projectProgram } from './program.js';
+export { getProjectionIdentityState, isProjectionIdentityCurrent } from './identity.js';
 export type { ProjectionCursor } from './cursor.js';
 export type {
   ProgramSafeRuntimeFreshness,

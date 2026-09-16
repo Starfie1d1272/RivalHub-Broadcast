@@ -1,4 +1,5 @@
 import {
+  getProjectionIdentityState,
   getProgramSafeRuntimeFreshness,
   selectProgramSafeRuntimeView,
   type ProjectionCursor,
@@ -111,7 +112,7 @@ export function projectOperator(input: OperatorProjectionInput): OperatorProject
       diagnostics: context.diagnostics.slice(),
     },
     identity: {
-      state: input.identity.state,
+      state: getProjectionIdentityState(safeRuntime, input.identity),
       capabilities: { ...input.identity.capabilities },
       sideMapping: { ...input.identity.sideMapping },
       issues: input.identity.issues.map((issue) => ({ ...issue })),

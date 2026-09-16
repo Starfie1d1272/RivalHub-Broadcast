@@ -104,4 +104,32 @@ describe('Radar frame projector', () => {
     expect(frame).not.toHaveProperty('mapGeometry');
     expect(frame).not.toHaveProperty('future');
   });
+
+  it('does not retain player facts when the current allplayers block is absent', () => {
+    const initial = createInitialRuntimeState('radar-producer');
+    const state = reduceRuntime(
+      initial,
+      { kind: 'program-telemetry', sourceGeneration: 0, observation: observation() },
+      POLICY,
+    ).state;
+    const telemetryWithoutPlayers = { ...state.programTelemetry!.telemetry };
+    delete telemetryWithoutPlayers.allPlayers;
+    const absent = {
+      ...state,
+      programTelemetry: {
+        ...state.programTelemetry!,
+        coverage: { ...state.programTelemetry!.coverage, allPlayers: 'absent' as const },
+        telemetry: telemetryWithoutPlayers,
+      },
+    };
+    const frame = projectRadarFrame({
+      runtime: selectProgramSafeRuntimeView(absent),
+      identity: unboundIdentityResolution(),
+      nowMonotonicMs: 0,
+      continuityPolicy: POLICY,
+    });
+
+    expect(frame.coverage.allPlayers).toBe('absent');
+    expect(frame.players).toEqual([]);
+  });
 });

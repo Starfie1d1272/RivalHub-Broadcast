@@ -1,4 +1,4 @@
-import { operatorPayloadSchema, type OperatorPayload } from '@rivalhub-broadcast/protocol/operator';
+import type { OperatorPayload } from '@rivalhub-broadcast/protocol/operator';
 
 import type { OperatorProjection } from '../projections/operator-projection.js';
 
@@ -6,46 +6,84 @@ function optionalNumber(value: number | undefined): number | null {
   return value ?? null;
 }
 
+function transitionBase(transition: OperatorProjection['runtime']['recentTransitions'][number]) {
+  return {
+    runtimeSeq: transition.runtimeSeq,
+    producerInstanceId: transition.producerInstanceId,
+    liveSession:
+      transition.liveSession.kind === 'bound'
+        ? { kind: 'bound' as const, liveSessionId: transition.liveSession.liveSessionId }
+        : { kind: 'unbound' as const },
+    mapEpoch: transition.mapEpoch,
+    at: { ...transition.at },
+  };
+}
+
 function optionalString(value: string | undefined): string | null {
   return value ?? null;
 }
 
-function transitionValue<T extends object, K extends PropertyKey>(transition: T, key: K): unknown {
-  return key in transition ? (transition as Record<PropertyKey, unknown>)[key] : undefined;
+function assertNever(value: never): never {
+  throw new Error(`unhandled RuntimeTransition kind: ${String(value)}`);
 }
 
 function mapTransition(
   transition: OperatorProjection['runtime']['recentTransitions'][number],
 ): OperatorPayload['runtime']['recentTransitions'][number] {
-  return {
-    kind: transition.kind,
-    runtimeSeq: transition.runtimeSeq,
-    producerInstanceId: transition.producerInstanceId,
-    liveSession:
-      transition.liveSession.kind === 'bound'
-        ? { kind: 'bound', liveSessionId: transition.liveSession.liveSessionId }
-        : { kind: 'unbound' },
-    mapEpoch: transition.mapEpoch,
-    at: { ...transition.at },
-    sourceGeneration: optionalNumber(
-      transitionValue(transition, 'sourceGeneration') as number | undefined,
-    ),
-    receiveSequence: optionalNumber(
-      transitionValue(transition, 'receiveSequence') as number | undefined,
-    ),
-    roundNumber: optionalNumber(transitionValue(transition, 'roundNumber') as number | undefined),
-    winnerSide:
-      (transitionValue(transition, 'winnerSide') as 'CT' | 'T' | 'unknown' | undefined) ?? null,
-    previousMapEpoch: optionalNumber(
-      transitionValue(transition, 'previousMapEpoch') as number | undefined,
-    ),
-    previousMapName: optionalString(
-      transitionValue(transition, 'previousMapName') as string | undefined,
-    ),
-    mapName: optionalString(transitionValue(transition, 'mapName') as string | undefined),
-    reason: optionalString(transitionValue(transition, 'reason') as string | undefined),
-    resetReason: optionalString(transitionValue(transition, 'resetReason') as string | undefined),
-  };
+  switch (transition.kind) {
+    case 'round_started':
+      return {
+        ...transitionBase(transition),
+        kind: transition.kind,
+        sourceGeneration: transition.sourceGeneration,
+        receiveSequence: transition.receiveSequence,
+        roundNumber: optionalNumber(transition.roundNumber),
+      };
+    case 'round_ended':
+      return {
+        ...transitionBase(transition),
+        kind: transition.kind,
+        sourceGeneration: transition.sourceGeneration,
+        receiveSequence: transition.receiveSequence,
+        roundNumber: optionalNumber(transition.roundNumber),
+        winnerSide: transition.winnerSide ?? null,
+      };
+    case 'map_ended':
+      return {
+        ...transitionBase(transition),
+        kind: transition.kind,
+        sourceGeneration: transition.sourceGeneration,
+        receiveSequence: transition.receiveSequence,
+      };
+    case 'map_execution_changed':
+      switch (transition.reason) {
+        case 'observed-map-name-change':
+          return {
+            ...transitionBase(transition),
+            kind: transition.kind,
+            reason: transition.reason,
+            sourceGeneration: transition.sourceGeneration,
+            receiveSequence: transition.receiveSequence,
+            previousMapEpoch: transition.previousMapEpoch,
+            previousMapName: optionalString(transition.previousMapName),
+            mapName: optionalString(transition.mapName),
+          };
+        case 'explicit-reset':
+          return {
+            ...transitionBase(transition),
+            kind: transition.kind,
+            reason: transition.reason,
+            resetReason: transition.resetReason,
+            previousMapEpoch: transition.previousMapEpoch,
+            previousMapName: optionalString(transition.previousMapName),
+            mapName: optionalString(transition.mapName),
+          };
+        default:
+          return assertNever(transition);
+      }
+    default:
+      return assertNever(transition);
+  }
 }
 
 function mapDisposition(
@@ -93,7 +131,7 @@ function mapSourceHealth(
 }
 
 export function mapOperatorProjection(projection: OperatorProjection): OperatorPayload {
-  return operatorPayloadSchema.parse({
+  return {
     runtime: {
       telemetryFreshness: projection.runtime.telemetryFreshness,
       mapName: projection.runtime.mapName,
@@ -108,7 +146,7 @@ export function mapOperatorProjection(projection: OperatorProjection): OperatorP
       freshness: projection.matchContext.freshness,
       storedAt: projection.matchContext.storedAt,
       cachedFrom: projection.matchContext.cachedFrom,
-      diagnostics: projection.matchContext.diagnostics,
+      diagnostics: projection.matchContext.diagnostics.map((diagnostic) => ({ ...diagnostic })),
     },
     identity: {
       state: projection.identity.state,
@@ -137,5 +175,5 @@ export function mapOperatorProjection(projection: OperatorProjection): OperatorP
       cstvProgram: mapSourceHealth(projection.sources.cstvProgram),
       cstvLookahead: mapSourceHealth(projection.sources.cstvLookahead),
     },
-  });
+  };
 }

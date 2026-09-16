@@ -30,24 +30,35 @@ export interface SnapshotAcceptanceState {
 export type SnapshotAcceptanceKind = 'accepted' | 'ignored' | 'rejected';
 
 export interface SnapshotResetSignals {
-  readonly producerInstanceChanged: boolean;
   readonly liveSessionChanged: boolean;
   readonly programSourceGenerationChanged: boolean;
   readonly mapEpochChanged: boolean;
 }
 
-export interface SnapshotAcceptanceResult<TSnapshot> {
-  readonly kind: SnapshotAcceptanceKind;
-  readonly reason?:
-    | 'schema-invalid'
-    | 'channel-changed'
-    | 'producer-changed'
-    | 'duplicate-or-out-of-order'
-    | 'runtime-seq-regression';
-  readonly snapshot?: TSnapshot;
+export interface SnapshotAccepted<TSnapshot> {
+  readonly kind: 'accepted';
+  readonly snapshot: TSnapshot;
   readonly state: SnapshotAcceptanceState;
   readonly reset: SnapshotResetSignals;
 }
+
+export interface SnapshotIgnored {
+  readonly kind: 'ignored';
+  readonly reason: 'duplicate-or-out-of-order';
+  readonly state: SnapshotAcceptanceState;
+  readonly reset: SnapshotResetSignals;
+}
+
+export interface SnapshotRejected {
+  readonly kind: 'rejected';
+  readonly reason:
+    'schema-invalid' | 'channel-changed' | 'producer-changed' | 'runtime-seq-regression';
+  readonly state: SnapshotAcceptanceState;
+  readonly reset: SnapshotResetSignals;
+}
+
+export type SnapshotAcceptanceResult<TSnapshot> =
+  SnapshotAccepted<TSnapshot> | SnapshotIgnored | SnapshotRejected;
 
 export interface SnapshotSchema<TSnapshot> {
   parse(input: unknown): TSnapshot;
@@ -65,17 +76,16 @@ export function createSnapshotAcceptanceState(): SnapshotAcceptanceState {
 
 function noResets(): SnapshotResetSignals {
   return {
-    producerInstanceChanged: false,
     liveSessionChanged: false,
     programSourceGenerationChanged: false,
     mapEpochChanged: false,
   };
 }
 
-function rejected<TSnapshot>(
+function rejected(
   state: SnapshotAcceptanceState,
-  reason: NonNullable<SnapshotAcceptanceResult<TSnapshot>['reason']>,
-): SnapshotAcceptanceResult<TSnapshot> {
+  reason: SnapshotRejected['reason'],
+): SnapshotRejected {
   return { kind: 'rejected', reason, state, reset: noResets() };
 }
 
@@ -121,9 +131,6 @@ export function acceptSnapshot<TSnapshot extends SnapshotEnvelopeLike>(
 
   const previousCursor = previous.lastCursor;
   const reset: SnapshotResetSignals = {
-    producerInstanceChanged:
-      previousCursor !== null &&
-      previousCursor.producerInstanceId !== snapshot.cursor.producerInstanceId,
     liveSessionChanged:
       previousCursor !== null && previousCursor.liveSessionId !== snapshot.cursor.liveSessionId,
     programSourceGenerationChanged:

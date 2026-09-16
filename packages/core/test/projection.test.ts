@@ -198,8 +198,18 @@ describe('Program-safe projections', () => {
     expect(first).toEqual(second);
     expect(state).toEqual(before);
     expect(first.status).toEqual({ telemetry: 'fresh', context: 'fresh', identity: 'matched' });
-    expect(first.teams.ct).toMatchObject({ mode: 'canonical', entryId: 'a', name: 'Alpha' });
-    expect(first.teams.t).toMatchObject({ mode: 'canonical', entryId: 'b', name: 'Bravo' });
+    expect(first.teams.ct).toMatchObject({
+      mode: 'canonical',
+      entryId: 'a',
+      name: 'Alpha',
+      seriesScore: 1,
+    });
+    expect(first.teams.t).toMatchObject({
+      mode: 'canonical',
+      entryId: 'b',
+      name: 'Bravo',
+      seriesScore: 0,
+    });
     expect(first.players.map((item) => item.sourcePlayerId)).toEqual(
       [...first.players].map((item) => item.sourcePlayerId).sort(),
     );
@@ -229,7 +239,8 @@ describe('Program-safe projections', () => {
 
     expect(projection.status.telemetry).toBe('stale');
     expect(projection.status.context).toBe('stale');
-    expect(projection.match?.seriesScore).toBeNull();
+    expect(projection.teams.ct.seriesScore).toBeNull();
+    expect(projection.teams.t.seriesScore).toBeNull();
     expect(projection.map.name).toBe('de_mirage');
     expect(projection.clock?.endsInSeconds).toBe(42);
   });
@@ -321,8 +332,10 @@ describe('Program-safe projections', () => {
       entryId: null,
       name: 'CT',
       logoUrl: null,
+      seriesScore: null,
     });
     expect(projection.players.every((item) => item.canonicalPlayerId === null)).toBe(true);
+    expect(projection.status.identity).toBe('resolving');
   });
 
   it('does not expose the previous Program source after a source generation advance', () => {
@@ -353,5 +366,46 @@ describe('Program-safe projections', () => {
     expect(Object.keys(assist).sort()).toEqual(['availability', 'cursor']);
     expect(assist).not.toHaveProperty('future');
     expect(assist).not.toHaveProperty('cue');
+  });
+
+  it('keeps absent and degraded allplayers frame-local instead of inventing player LKG', () => {
+    const context = contextFixture();
+    const input = observation();
+    const state = acceptedState(input);
+    const identity = matchedIdentity(context, input);
+    const telemetryWithoutPlayers = { ...state.programTelemetry!.telemetry };
+    delete telemetryWithoutPlayers.allPlayers;
+    const absent = projectProgram({
+      runtime: selectProgramSafeRuntimeView({
+        ...state,
+        programTelemetry: {
+          ...state.programTelemetry!,
+          coverage: { ...state.programTelemetry!.coverage, allPlayers: 'absent' },
+          telemetry: telemetryWithoutPlayers,
+        },
+      }),
+      context,
+      identity,
+      nowMonotonicMs: 7,
+      continuityPolicy: POLICY,
+    });
+    const degraded = projectProgram({
+      runtime: selectProgramSafeRuntimeView({
+        ...state,
+        programTelemetry: {
+          ...state.programTelemetry!,
+          coverage: { ...state.programTelemetry!.coverage, allPlayers: 'degraded' },
+        },
+      }),
+      context,
+      identity,
+      nowMonotonicMs: 7,
+      continuityPolicy: POLICY,
+    });
+
+    expect(absent.coverage.allPlayers).toBe('absent');
+    expect(absent.players).toEqual([]);
+    expect(degraded.coverage.allPlayers).toBe('degraded');
+    expect(degraded.players).toHaveLength(10);
   });
 });

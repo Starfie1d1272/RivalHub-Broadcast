@@ -1,6 +1,8 @@
 import type { IdentityResolution } from '@rivalhub-broadcast/core/identity';
 import {
+  getProjectionIdentityState,
   getProgramSafeRuntimeFreshness,
+  isProjectionIdentityCurrent,
   type ProgramSafeRuntimeView,
 } from '@rivalhub-broadcast/core/projection';
 import type { RuntimeContinuityPolicy } from '@rivalhub-broadcast/core/runtime';
@@ -16,10 +18,7 @@ export interface RadarProjectionInput {
 }
 
 function identityIsCurrent(input: RadarProjectionInput): boolean {
-  return (
-    input.identity.sourceGeneration === input.runtime.cursor.programSourceGeneration &&
-    input.identity.mapEpoch === input.runtime.cursor.mapEpoch
-  );
+  return isProjectionIdentityCurrent(input.runtime, input.identity);
 }
 
 function canonicalPlayerFor(input: RadarProjectionInput, sourcePlayerId: string) {
@@ -75,7 +74,7 @@ export function projectRadarFrame(input: RadarProjectionInput): RadarFrame {
   return {
     cursor: input.runtime.cursor,
     telemetryFreshness: freshness,
-    identityState: input.identity.state,
+    identityState: getProjectionIdentityState(input.runtime, input.identity),
     mapName: telemetry?.telemetry.map?.name ?? null,
     observedPlayerSourceId: telemetry?.telemetry.player?.sourcePlayerId ?? null,
     coverage: {

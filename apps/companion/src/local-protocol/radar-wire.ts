@@ -1,15 +1,18 @@
-import { radarPayloadSchema, type RadarPayload } from '@rivalhub-broadcast/protocol/radar';
+import type { RadarPayload } from '@rivalhub-broadcast/protocol/radar';
 import type { RadarFrame } from '@rivalhub-broadcast/radar';
 
 export function mapRadarFrame(frame: RadarFrame): RadarPayload {
-  return radarPayloadSchema.parse({
+  return {
     telemetryFreshness: frame.telemetryFreshness,
     identityState: frame.identityState,
     mapName: frame.mapName,
     observedPlayerSourceId: frame.observedPlayerSourceId,
     coverage: frame.coverage,
-    players: frame.players,
+    players: frame.players.map((player) => ({ ...player })),
     bomb: frame.bomb,
-    grenades: frame.grenades,
-  });
+    grenades: frame.grenades.map((grenade) => ({
+      ...grenade,
+      flames: grenade.flames.map((flame) => ({ ...flame })),
+    })),
+  };
 }
