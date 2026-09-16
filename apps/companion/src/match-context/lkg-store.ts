@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  BroadcastManifestConversionError,
   toMatchContext,
   validateBroadcastManifest,
   type BroadcastManifestV1,
@@ -23,6 +24,7 @@ export interface MatchContextBinding {
   readonly freshness: ContextFreshness;
   readonly storedAt?: string;
   readonly cachedFrom?: Exclude<ContextOrigin, 'cache'>;
+  readonly diagnostics: readonly ContractDiagnostic[];
 }
 
 export type MatchContextStoreIssueCode =
@@ -49,7 +51,7 @@ export interface MatchContextStoreFailure {
 export interface MatchContextStoreSuccess<T> {
   readonly ok: true;
   readonly value: T;
-  readonly diagnostics: readonly MatchContextStoreIssue[];
+  readonly diagnostics: readonly ContractDiagnostic[];
 }
 
 export type MatchContextStoreResult<T> = MatchContextStoreSuccess<T> | MatchContextStoreFailure;
@@ -183,7 +185,11 @@ export class MatchManifestLkgStore {
           },
         };
       }
-      return { ok: true, value: validated.value, diagnostics: [] };
+      return {
+        ok: true,
+        value: validated.value,
+        diagnostics: validated.diagnostics,
+      };
     });
   }
 
@@ -239,24 +245,28 @@ export class MatchManifestLkgStore {
 
     try {
       const context = toMatchContext(validated.value);
+      const binding: MatchContextBinding = {
+        manifest: validated.value,
+        context,
+        origin: 'cache',
+        freshness: 'stale',
+        storedAt: envelope.metadata.storedAt,
+        cachedFrom: envelope.metadata.origin,
+        diagnostics: validated.diagnostics,
+      };
       return {
         ok: true,
-        value: {
-          manifest: validated.value,
-          context,
-          origin: 'cache',
-          freshness: 'stale',
-          storedAt: envelope.metadata.storedAt,
-          cachedFrom: envelope.metadata.origin,
-        },
-        diagnostics: [],
+        value: binding,
+        diagnostics: validated.diagnostics,
       };
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof BroadcastManifestConversionError)) throw error;
       return {
         ok: false,
         issue: {
           code: 'lkg_invalid_candidate',
           message: 'Manifest LKG 无法重新转换为 MatchContext。',
+          diagnostics: error.diagnostics,
         },
       };
     }

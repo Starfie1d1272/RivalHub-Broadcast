@@ -3,44 +3,22 @@ export const BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION =
 
 export type BroadcastScheduleWindowSchemaVersion = typeof BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION;
 
-export type BroadcastScheduleMatchStatus = 'scheduled' | 'in_progress' | 'finished' | 'cancelled';
+import type {
+  BroadcastScheduleCompetitionSchemaOutput,
+  BroadcastScheduleEntrantSchemaOutput,
+  BroadcastScheduleMatchSchemaOutput,
+  BroadcastScheduleWindowSchemaOutput,
+} from './schema.js';
 
-export type BroadcastScheduleMatchFormat = 'bo1' | 'bo3' | 'bo5';
+type ReadonlyDeep<T> = T extends readonly (infer Item)[]
+  ? readonly ReadonlyDeep<Item>[]
+  : T extends object
+    ? { readonly [Key in keyof T]: ReadonlyDeep<T[Key]> }
+    : T;
 
-export interface BroadcastScheduleCompetitionV1 {
-  readonly competitionId: string;
-  readonly slug: string;
-  readonly name: string;
-  readonly themeColor: string | null;
-}
-
-export interface BroadcastScheduleEntrantV1 {
-  readonly entryId: string;
-  readonly name: string;
-  readonly logoUrl: string | null;
-}
-
-export interface BroadcastScheduleMatchV1 {
-  readonly matchId: string;
-  readonly scheduledAt: string | null;
-  readonly startedAt: string | null;
-  readonly completedAt: string | null;
-  readonly status: BroadcastScheduleMatchStatus;
-  readonly format: BroadcastScheduleMatchFormat;
-  readonly stage: string;
-  readonly round: number | null;
-  readonly isForfeit: boolean;
-  readonly scoreA: number | null;
-  readonly scoreB: number | null;
-  readonly entrantA: BroadcastScheduleEntrantV1;
-  readonly entrantB: BroadcastScheduleEntrantV1;
-}
-
-export interface BroadcastScheduleWindowV1 {
-  readonly schemaVersion: BroadcastScheduleWindowSchemaVersion;
-  readonly revision: string;
-  readonly competition: BroadcastScheduleCompetitionV1;
-  readonly from: string;
-  readonly to: string;
-  readonly matches: readonly BroadcastScheduleMatchV1[];
-}
+export type BroadcastScheduleWindowV1 = ReadonlyDeep<BroadcastScheduleWindowSchemaOutput>;
+export type BroadcastScheduleCompetitionV1 = ReadonlyDeep<BroadcastScheduleCompetitionSchemaOutput>;
+export type BroadcastScheduleEntrantV1 = ReadonlyDeep<BroadcastScheduleEntrantSchemaOutput>;
+export type BroadcastScheduleMatchV1 = ReadonlyDeep<BroadcastScheduleMatchSchemaOutput>;
+export type BroadcastScheduleMatchStatus = BroadcastScheduleMatchV1['status'];
+export type BroadcastScheduleMatchFormat = BroadcastScheduleMatchV1['format'];

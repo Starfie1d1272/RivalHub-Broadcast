@@ -105,7 +105,9 @@ commentators。
 
 ## Validator 与领域分层
 
-两套 contract 都先经过 strict structural schema，再经过 semantic validator。validator
+两套 contract 都先经过 structural schema，再经过 semantic validator。schema 对已知字段的
+形状保持严格；未来在同一 V1 中增加的可选字段会在 parse 时剥离，不会阻断旧 consumer，
+也不会穿过 Core。只有改变既有语义或必需字段的变化才提升 `schemaVersion`。validator
 返回可枚举的 `ContractDiagnostic`，至少包含：
 
 ```ts
@@ -142,13 +144,15 @@ resolver 输出以下五态，并另外输出 typed `IdentityIssue[]` 与 capabi
 ```text
 unbound → 没有 MatchContext
 resolving → 有上下文，但当前 source generation/map epoch 尚无足够新鲜 evidence
-matched → 完整 roster、当前选手和动态 CT/T side mapping 相互一致
+matched → A/B canonical roster 各至少五名，当前 evidence 实际解析出双方各五名合法
+Steam64 player，并且动态 CT/T side mapping 相互一致
 degraded → 没有明确错场证据，但 evidence 或 roster 不完整
 mismatch → 存在明确 canonical contradiction
 ```
 
-完整 roster 中的合法替补仍可保持 `matched`，但产生
-`lineup_differs_from_expected` warning。未知 BOT/非 Steam64 source id 不按昵称猜人；
+canonical roster 的完整性与当前 10 人 evidence 的完整性独立判断；`isStarter` 只是预期
+首发提示，不参与身份授权或 evidence 计数。完整 roster 中的合法替补仍可保持 `matched`，
+但产生 `lineup_differs_from_expected` warning。未知 BOT/非 Steam64 source id 不按昵称猜人；
 可识别的其它玩家继续保留，实体本身为 unresolved。unexpected human Steam64、重复
 observed Steam64、完整 evidence 下的错误 live map 会关闭 canonical branding 和
 identity-dependent result capability，但 neutral telemetry、operator/debug 和诊断继续
@@ -159,7 +163,8 @@ resolver 优先使用已经以 Steam64 解析到 CompetitionEntry 的 observed p
 `map.team_ct/team_t.name` 只能作为 player evidence 不足时的 fallback 或 cross-check。两者
 冲突时保留 player proof，并发出 typed `side_mapping_conflict`，不能让字符串队名覆盖已确认
 的身份。单帧 allplayers absent/degraded 会在同一 source generation/map epoch 下保留已有
-matched proof 与 canonical branding；`allplayers_unavailable/allplayers_degraded` 只是独立的
+matched proof 与 canonical branding；degraded frame 仍先扫描当前帧的重复或其它正面身份
+矛盾，正面矛盾可以将状态置为 mismatch。`allplayers_unavailable/allplayers_degraded` 只是独立的
 freshness/health diagnostics，具体何时失效由 Runtime freshness policy 决定。source generation
 或 map epoch 变化会清除旧 baseline，直到新 evidence 重新证明。warmup/初始化阶段的未知
 地图不会直接制造 mismatch。
@@ -180,11 +185,19 @@ Match LKG 与 ScheduleWindow LKG 是两个独立 seam：
   保留旧 envelope，不会产生半更新的 metadata/payload 组合。
 - online/fixture 失败时只接受 `LKG.matchId === requestedMatchId` 的缓存，不选最近比赛。
 - 切换 A → B 时先解除 A 的 active binding；B 失败时不会残留 A 的队名、logo 或 roster。
+- 同一 matchId 的 refresh 不会先清空当前 binding；source 失败时优先保留当前内存 binding
+  并标记为 stale，再考虑磁盘 LKG。公开的 `clearActive()` 是 unbind/cancel 操作，会递增
+  selection generation，已在途的旧 selection 不能重新激活。
 - MatchContext selection 与 ScheduleWindow refresh 都带 request/refresh generation，最终
   active/current binding 与 LKG 只接受 latest-wins commit；旧 source 即使晚返回也不能覆盖
   当前绑定或缓存。
+- ScheduleWindow 的 `ScheduleWindowController` 负责 source acquisition、current binding 与
+  latest-wins；`ScheduleWindowLkgStore` 只负责磁盘读写。source 失败时优先使用当前内存
+  ScheduleWindow，再考虑磁盘 LKG，避免新内存版本倒退为旧磁盘版本。
 - Schedule source 已成功 validate 时，即使 LKG persistence 失败，仍继续使用 fresh binding，
   并将写入失败作为独立 diagnostic，不回退到 stale LKG。
+- MatchContextBinding 与 ScheduleWindowBinding 都携带 validator 产生的 contract diagnostics；
+  fresh binding 和 cache reload 都重新 validate 并保留这些 warning。
 - 运行中的 fresh binding 标记 `online` 或 `fixture`；磁盘恢复标记 `cache` + `stale`，并
   保留原始缓存来源和存储时间。
 - ScheduleWindow 可以独立刷新或恢复 stale LKG；它的失败不清除当前 MatchContext。
@@ -193,10 +206,11 @@ stale 是 context acquisition/freshness 事实，不是 identity mismatch；logo
 失败、schedule 离线、单个 GSI block 暂缺和 renderer/OBS 问题也不会被伪装成 identity
 mismatch。
 
-source 错误分类也保持分层：只有 `source.load()` 自身的网络或源端 rejection 进入
+source 错误分类也保持分层：source adapter 将网络、可用性、文件读取和源格式 rejection
+包装为 `SourceLoadError`，只有这类 `source.load()` 失败进入
 `source_load_failed`/`schedule_source_failed`；validator、DTO converter 和 binding callback
 不在同一个大 catch 中，分别保留 validation diagnostics 或向调用方传播其 invariant/callback
-错误。
+错误。未包装的异常按 programmer/invariant 错误传播。
 
 ## 完整比赛 replay 证据
 

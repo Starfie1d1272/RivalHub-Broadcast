@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   hasBlockingDiagnostic,
   makeContractDiagnostic,
@@ -8,6 +6,13 @@ import {
   type ContractDiagnostic,
   type ContractValidationResult,
 } from '../diagnostics.js';
+import {
+  addSemanticDiagnostic,
+  nonEmpty,
+  scorePair,
+  structuralDiagnostics,
+  timestamp,
+} from '../validation-helpers.js';
 import { broadcastManifestSchema } from './schema.js';
 import {
   BROADCAST_MANIFEST_SCHEMA_VERSION,
@@ -16,8 +21,6 @@ import {
 } from './types.js';
 
 const STEAM64_PATTERN = /^\d{17}$/;
-const ISO_TIMESTAMP_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 function hasUnsupportedSchemaVersion(input: unknown): boolean {
   return (
@@ -27,78 +30,6 @@ function hasUnsupportedSchemaVersion(input: unknown): boolean {
     'schemaVersion' in input &&
     input.schemaVersion !== BROADCAST_MANIFEST_SCHEMA_VERSION
   );
-}
-
-function pathOf(path: readonly PropertyKey[]): string {
-  return path.length === 0 ? '$' : path.map(String).join('.');
-}
-
-function structuralDiagnostics(error: z.ZodError): ContractDiagnostic[] {
-  return error.issues.map((issue) =>
-    makeContractDiagnostic(
-      'structural',
-      'error',
-      issue.code === 'unrecognized_keys' ? 'unexpected_field' : 'invalid_shape',
-      pathOf(issue.path),
-      issue.code === 'unrecognized_keys'
-        ? 'contract 包含未声明字段。'
-        : 'contract 字段形状不符合 BroadcastManifestV1。',
-    ),
-  );
-}
-
-function add(
-  diagnostics: ContractDiagnostic[],
-  code: ContractDiagnostic['code'],
-  severity: ContractDiagnostic['severity'],
-  path: string,
-  message: string,
-): void {
-  diagnostics.push(makeContractDiagnostic('semantic', severity, code, path, message));
-}
-
-function nonEmpty(
-  value: string,
-  path: string,
-  diagnostics: ContractDiagnostic[],
-  label: string,
-): void {
-  if (value.trim().length === 0) add(diagnostics, 'empty_id', 'error', path, `${label} 不能为空。`);
-}
-
-function timestamp(value: string | null, path: string, diagnostics: ContractDiagnostic[]): void {
-  if (value === null) return;
-  if (!ISO_TIMESTAMP_PATTERN.test(value) || !Number.isFinite(Date.parse(value))) {
-    add(
-      diagnostics,
-      'invalid_timestamp',
-      'error',
-      path,
-      '时间必须是有效的 ISO timestamp 或 null。',
-    );
-  }
-}
-
-function scorePair(
-  scoreA: number | null,
-  scoreB: number | null,
-  path: string,
-  diagnostics: ContractDiagnostic[],
-): void {
-  if ((scoreA === null) !== (scoreB === null)) {
-    add(
-      diagnostics,
-      'incomplete_score_pair',
-      'error',
-      path,
-      'scoreA 与 scoreB 必须同时为 number 或同时为 null。',
-    );
-    return;
-  }
-  if (scoreA === null || scoreB === null) return;
-  if (!Number.isSafeInteger(scoreA) || !Number.isSafeInteger(scoreB) || scoreA < 0 || scoreB < 0) {
-    add(diagnostics, 'invalid_field', 'error', path, '比分必须是非负安全整数。');
-  }
 }
 
 function validatePlayer(
@@ -112,7 +43,7 @@ function validatePlayer(
   const playerPath = `${path}.playerId`;
   const previousPlayer = playerIds.get(player.playerId);
   if (previousPlayer !== undefined) {
-    add(
+    addSemanticDiagnostic(
       diagnostics,
       'duplicate_player_id',
       'error',
@@ -124,7 +55,7 @@ function validatePlayer(
   }
 
   if (player.steam64 === null || player.steam64.trim().length === 0) {
-    add(
+    addSemanticDiagnostic(
       diagnostics,
       'missing_steam64',
       'warning',
@@ -132,7 +63,7 @@ function validatePlayer(
       'canonical player 缺少 Steam64。',
     );
   } else if (!STEAM64_PATTERN.test(player.steam64)) {
-    add(
+    addSemanticDiagnostic(
       diagnostics,
       'invalid_steam64',
       'error',
@@ -142,7 +73,7 @@ function validatePlayer(
   } else {
     const previousSteam = steam64s.get(player.steam64);
     if (previousSteam !== undefined) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'duplicate_steam64',
         'error',
@@ -155,7 +86,7 @@ function validatePlayer(
   }
 
   if (player.displayName === null || player.displayName.trim().length === 0) {
-    add(
+    addSemanticDiagnostic(
       diagnostics,
       'missing_display_name',
       'warning',
@@ -185,7 +116,13 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
   nonEmpty(value.entrants.a.name, 'entrants.a.name', diagnostics, 'entrant name');
   nonEmpty(value.entrants.b.name, 'entrants.b.name', diagnostics, 'entrant name');
   if (entryIds[0] === entryIds[1]) {
-    add(diagnostics, 'duplicate_entry_id', 'error', 'entrants', 'A/B entryId 不得相同。');
+    addSemanticDiagnostic(
+      diagnostics,
+      'duplicate_entry_id',
+      'error',
+      'entrants',
+      'A/B entryId 不得相同。',
+    );
   }
 
   timestamp(value.match.scheduledAt, 'match.scheduledAt', diagnostics);
@@ -195,7 +132,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
     value.match.round !== null &&
     (!Number.isSafeInteger(value.match.round) || value.match.round < 1)
   ) {
-    add(
+    addSemanticDiagnostic(
       diagnostics,
       'invalid_round',
       'error',
@@ -213,7 +150,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
   ] as const) {
     const playersPath = `entrants.${entrantKey}.roster.players`;
     if (entrant.roster.players.length < 5) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'incomplete_roster',
         'warning',
@@ -234,7 +171,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
     nonEmpty(map.mapId, `${path}.mapId`, diagnostics, 'mapId');
     nonEmpty(map.mapName, `${path}.mapName`, diagnostics, 'mapName');
     if (!Number.isSafeInteger(map.mapOrder) || map.mapOrder < 1) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'invalid_map_order',
         'error',
@@ -243,15 +180,27 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
       );
     }
     if (mapOrders.has(map.mapOrder)) {
-      add(diagnostics, 'duplicate_map_order', 'error', `${path}.mapOrder`, 'mapOrder 必须唯一。');
+      addSemanticDiagnostic(
+        diagnostics,
+        'duplicate_map_order',
+        'error',
+        `${path}.mapOrder`,
+        'mapOrder 必须唯一。',
+      );
     }
     mapOrders.add(map.mapOrder);
     if (mapIds.has(map.mapId)) {
-      add(diagnostics, 'duplicate_map_id', 'error', `${path}.mapId`, 'mapId 必须唯一。');
+      addSemanticDiagnostic(
+        diagnostics,
+        'duplicate_map_id',
+        'error',
+        `${path}.mapId`,
+        'mapId 必须唯一。',
+      );
     }
     mapIds.add(map.mapId);
     if (map.pickedByEntryId !== null && !knownEntryIds.has(map.pickedByEntryId)) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'unknown_entry_reference',
         'error',
@@ -269,7 +218,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
     nonEmpty(step.actionType, `${path}.actionType`, diagnostics, 'actionType');
     nonEmpty(step.mapName, `${path}.mapName`, diagnostics, 'mapName');
     if (!Number.isSafeInteger(step.stepOrder) || step.stepOrder < 1) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'invalid_veto_step_order',
         'error',
@@ -278,7 +227,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
       );
     }
     if (vetoOrders.has(step.stepOrder)) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'duplicate_veto_step_order',
         'error',
@@ -288,7 +237,7 @@ function validateManifestSemantics(value: BroadcastManifestV1): ContractDiagnost
     }
     vetoOrders.add(step.stepOrder);
     if (step.entryId !== null && !knownEntryIds.has(step.entryId)) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'unknown_entry_reference',
         'error',
@@ -327,9 +276,11 @@ export function validateBroadcastManifest(
     ]);
   }
   const parsed = broadcastManifestSchema.safeParse(input);
-  if (!parsed.success) return validationFailure(structuralDiagnostics(parsed.error));
+  if (!parsed.success) {
+    return validationFailure(structuralDiagnostics(parsed.error, 'BroadcastManifestV1'));
+  }
 
-  const value = parsed.data as BroadcastManifestV1;
+  const value = parsed.data;
   const diagnostics = validateManifestSemantics(value);
   return hasBlockingDiagnostic(diagnostics)
     ? validationFailure(diagnostics)

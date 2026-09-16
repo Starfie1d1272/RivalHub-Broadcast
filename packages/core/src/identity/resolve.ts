@@ -111,7 +111,11 @@ function knownMapIssue(
   return false;
 }
 
-function addCanonicalIssues(canonical: CanonicalIndex, issues: IdentityIssue[]): void {
+function addCanonicalIssues(
+  context: MatchContext,
+  canonical: CanonicalIndex,
+  issues: IdentityIssue[],
+): void {
   for (const player of canonical.all) {
     if (player.steam64 === null || player.steam64.trim().length === 0) {
       issues.push(
@@ -148,14 +152,17 @@ function addCanonicalIssues(canonical: CanonicalIndex, issues: IdentityIssue[]):
       }),
     );
   }
-  if (canonical.all.length === 0) {
-    issues.push(
-      issue(
-        'roster_incomplete',
-        'warning',
-        '当前 MatchContext 没有可用于身份核验的 roster player。',
-      ),
-    );
+  for (const entrant of [context.entrants.a, context.entrants.b]) {
+    if (entrant.players.length < 5) {
+      issues.push(
+        issue(
+          'roster_incomplete',
+          'warning',
+          `参赛方 ${entrant.entryId} 的 canonical roster 少于五名选手。`,
+          { entryId: entrant.entryId },
+        ),
+      );
+    }
   }
 }
 
@@ -199,7 +206,7 @@ function unresolvedFromObserved(observed: ObservedPlayer): UnresolvedObservedPla
 function resolveCurrentPlayers(
   currentPlayers: readonly ObservedPlayer[],
   canonical: CanonicalIndex,
-  completeEvidence: boolean,
+  fullEvidenceCandidate: boolean,
   completeCanonicalSteam64: boolean,
   issues: IdentityIssue[],
 ): {
@@ -253,7 +260,7 @@ function resolveCurrentPlayers(
       issues.push(
         issue(
           'unexpected_human_steam64',
-          completeEvidence && completeCanonicalSteam64 ? 'error' : 'warning',
+          fullEvidenceCandidate && completeCanonicalSteam64 ? 'error' : 'warning',
           `观察到的 Steam64 ${sourcePlayerId} 不在当前完整 MatchRoster 中。`,
           { sourcePlayerId, steam64: sourcePlayerId },
         ),
@@ -342,25 +349,58 @@ export function resolveIdentity(
   }
 
   const canonical = buildCanonicalIndex(context);
-  addCanonicalIssues(canonical, issues);
+  addCanonicalIssues(context, canonical, issues);
   const hasCurrentEvidence = evidence.allPlayers !== undefined;
   const currentPlayers = evidence.allPlayers ?? [];
-  const expectedStarterCount = canonical.all.filter((player) => player.isStarter).length;
-  const expectedActiveCount = Math.max(expectedStarterCount, 1);
+  const canonicalPlayersByEntry = new Map<string, number>();
+  const canonicalSteam64ByEntry = new Map<string, number>();
+  for (const player of canonical.all) {
+    canonicalPlayersByEntry.set(
+      player.entryId,
+      (canonicalPlayersByEntry.get(player.entryId) ?? 0) + 1,
+    );
+    if (player.steam64 !== null && STEAM64_PATTERN.test(player.steam64)) {
+      canonicalSteam64ByEntry.set(
+        player.entryId,
+        (canonicalSteam64ByEntry.get(player.entryId) ?? 0) + 1,
+      );
+    }
+  }
+  const canonicalRosterComplete = [context.entrants.a, context.entrants.b].every(
+    (entrant) => (canonicalPlayersByEntry.get(entrant.entryId) ?? 0) >= 5,
+  );
+  const canonicalFiveSteam64Ready =
+    canonical.duplicateSteam64.size === 0 &&
+    [context.entrants.a, context.entrants.b].every(
+      (entrant) => (canonicalSteam64ByEntry.get(entrant.entryId) ?? 0) >= 5,
+    );
   const completeCanonicalSteam64 =
-    canonical.all.length > 0 && canonical.bySteam64.size === canonical.all.length;
-  const completeEvidence =
-    evidence.allPlayersCoverage === 'present' && currentPlayers.length >= expectedActiveCount;
+    canonical.duplicateSteam64.size === 0 &&
+    canonical.all.length > 0 &&
+    canonical.all.every(
+      (player) => player.steam64 !== null && STEAM64_PATTERN.test(player.steam64),
+    );
+  // This is deliberately independent from isStarter. That flag is an
+  // expected-lineup hint only; identity authorization is based on the
+  // canonical roster and current observed Steam64/side evidence.
+  const fullEvidenceCandidate =
+    evidence.allPlayersCoverage === 'present' &&
+    currentPlayers.length === 10 &&
+    canonicalRosterComplete;
   const mapMismatch = knownMapIssue(context, evidence, hasCurrentEvidence, issues);
 
   if (!hasCurrentEvidence || evidence.allPlayersCoverage === 'absent') {
     issues.push(
       issue(
-        'allplayers_unavailable',
+        evidence.allPlayersCoverage === 'degraded'
+          ? 'allplayers_degraded'
+          : 'allplayers_unavailable',
         'warning',
         compatiblePrevious && previous?.players.length !== 0
           ? '当前 frame 没有 allplayers；保留同一 proof 的已知 identity。'
-          : '当前没有足够新鲜的 allplayers roster evidence。',
+          : evidence.allPlayersCoverage === 'degraded'
+            ? '当前 allplayers evidence degraded，尚无可用于身份核验的完整 roster。'
+            : '当前没有足够新鲜的 allplayers roster evidence。',
       ),
     );
     if (compatiblePrevious && previous !== undefined && previous.players.length > 0) {
@@ -384,47 +424,85 @@ export function resolveIdentity(
 
   if (evidence.allPlayersCoverage === 'degraded') {
     issues.push(issue('allplayers_degraded', 'warning', 'allplayers evidence 已标记为 degraded。'));
-    // A degraded frame is an independent freshness/health signal. It cannot
-    // revoke an otherwise matched proof unless another positive contradiction
-    // (for example an explicit live wrong-map) is present in the same frame.
-    if (
-      !mapMismatch &&
-      compatiblePrevious &&
-      previous?.state === 'matched' &&
-      previous.players.length > 0
-    ) {
-      return createResolution(
-        'matched',
-        evidence,
-        previous.players.map((player) => ({ ...player, evidence: 'retained' })),
-        previous.unresolved,
-        previous.sideMapping,
-        issues,
-      );
-    }
-  }
-
-  if (!completeEvidence) {
-    issues.push(
-      issue(
-        'partial_roster_evidence',
-        'warning',
-        '当前 allplayers 数量不足以证明完整 active lineup。',
-      ),
-    );
   }
 
   const resolved = resolveCurrentPlayers(
     currentPlayers,
     canonical,
-    completeEvidence,
+    fullEvidenceCandidate,
     completeCanonicalSteam64,
     issues,
   );
+  const resolvedCountsByEntry = new Map<string, number>();
+  for (const player of resolved.currentResolved) {
+    resolvedCountsByEntry.set(player.entryId, (resolvedCountsByEntry.get(player.entryId) ?? 0) + 1);
+  }
   const resolvedByCanonicalId = new Map(
     resolved.currentResolved.map((player) => [player.canonicalPlayerId, player] as const),
   );
-  if (compatiblePrevious && previous !== undefined && !completeEvidence) {
+  const sideMapping = deriveSideMapping(
+    context,
+    evidence,
+    resolved.currentResolved,
+    compatiblePrevious ? previous : undefined,
+    issues,
+  );
+  const sideComplete =
+    sideMapping.a !== 'unknown' && sideMapping.b !== 'unknown' && sideMapping.a !== sideMapping.b;
+  const currentFiveVsFiveEvidence =
+    evidence.allPlayersCoverage === 'present' &&
+    currentPlayers.length === 10 &&
+    resolved.currentResolved.length === 10 &&
+    resolved.unresolved.length === 0 &&
+    !resolved.duplicateObserved &&
+    (resolvedCountsByEntry.get(context.entrants.a.entryId) ?? 0) === 5 &&
+    (resolvedCountsByEntry.get(context.entrants.b.entryId) ?? 0) === 5 &&
+    resolved.currentResolved.every((player) => player.side !== 'unknown') &&
+    sideComplete;
+
+  if (!currentFiveVsFiveEvidence) {
+    issues.push(
+      issue(
+        'partial_roster_evidence',
+        'warning',
+        '当前 evidence 尚不能证明双方各五名已通过 Steam64 与 side 核验的选手。',
+      ),
+    );
+  }
+
+  const currentPositiveContradiction =
+    resolved.duplicateObserved ||
+    mapMismatch ||
+    (resolved.unexpectedHuman && fullEvidenceCandidate && completeCanonicalSteam64) ||
+    canonical.duplicatePlayerIds.size > 0 ||
+    canonical.duplicateSteam64.size > 0;
+
+  // A degraded allplayers frame is a health/freshness signal, not an
+  // automatic identity revocation. The current frame is still scanned above
+  // so a positive contradiction (notably duplicate/ambiguous Steam64) wins.
+  if (
+    evidence.allPlayersCoverage === 'degraded' &&
+    compatiblePrevious &&
+    previous?.state === 'matched' &&
+    previous.players.length > 0 &&
+    !currentPositiveContradiction
+  ) {
+    return createResolution(
+      'matched',
+      evidence,
+      previous.players.map((player) => ({ ...player, evidence: 'retained' })),
+      previous.unresolved,
+      previous.sideMapping,
+      issues,
+    );
+  }
+
+  if (
+    compatiblePrevious &&
+    previous !== undefined &&
+    !currentFiveVsFiveEvidence &&
+    !currentPositiveContradiction
+  ) {
     for (const player of previous.players) {
       if (!resolvedByCanonicalId.has(player.canonicalPlayerId)) {
         resolvedByCanonicalId.set(player.canonicalPlayerId, {
@@ -435,15 +513,8 @@ export function resolveIdentity(
     }
   }
   const allResolved = sortResolvedPlayers(resolvedByCanonicalId.values());
-  const sideMapping = deriveSideMapping(
-    context,
-    evidence,
-    resolved.currentResolved,
-    compatiblePrevious ? previous : undefined,
-    issues,
-  );
 
-  if (completeEvidence) {
+  if (currentFiveVsFiveEvidence) {
     const expectedStarterIds = new Set(
       canonical.all.filter((player) => player.isStarter).map((player) => player.playerId),
     );
@@ -467,24 +538,10 @@ export function resolveIdentity(
     }
   }
 
-  const sideComplete =
-    sideMapping.a !== 'unknown' && sideMapping.b !== 'unknown' && sideMapping.a !== sideMapping.b;
-  const contextContradiction =
-    resolved.duplicateObserved ||
-    mapMismatch ||
-    (resolved.unexpectedHuman && completeEvidence && completeCanonicalSteam64) ||
-    canonical.duplicatePlayerIds.size > 0 ||
-    canonical.duplicateSteam64.size > 0;
-
   let state: IdentityState;
-  if (contextContradiction) {
+  if (currentPositiveContradiction) {
     state = 'mismatch';
-  } else if (
-    completeEvidence &&
-    resolved.unresolved.length === 0 &&
-    resolved.currentResolved.length >= expectedActiveCount &&
-    sideComplete
-  ) {
+  } else if (canonicalRosterComplete && canonicalFiveSteam64Ready && currentFiveVsFiveEvidence) {
     state = 'matched';
   } else {
     state = 'degraded';

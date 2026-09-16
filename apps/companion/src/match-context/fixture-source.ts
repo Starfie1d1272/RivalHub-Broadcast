@@ -1,5 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
+import { SourceLoadError } from './source-error.js';
+
 export type FixtureSourceKind = 'fixture';
 
 export interface FixtureSource {
@@ -9,8 +11,13 @@ export interface FixtureSource {
 }
 
 export async function readFixtureJson(path: string): Promise<unknown> {
-  const bytes = await readFile(path, 'utf8');
-  return JSON.parse(bytes) as unknown;
+  try {
+    const bytes = await readFile(path, 'utf8');
+    return JSON.parse(bytes) as unknown;
+  } catch (error: unknown) {
+    if (error instanceof SourceLoadError) throw error;
+    throw new SourceLoadError(`fixture source 读取失败：${path}`, error);
+  }
 }
 
 export function createFixtureManifestSource(path: string): FixtureSource {

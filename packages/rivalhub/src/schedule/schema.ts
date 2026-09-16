@@ -1,40 +1,39 @@
 import { z } from 'zod';
 
+import {
+  broadcastCompetitionSchema,
+  broadcastMatchFormatSchema,
+  broadcastMatchStatusSchema,
+  nullableNumberSchema,
+  nullableStringSchema,
+} from '../common-schemas.js';
 import { BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION } from './types.js';
 
-const nullableString = z.string().nullable();
-const nullableNumber = z.number().nullable();
+export const broadcastScheduleCompetitionSchema = broadcastCompetitionSchema;
 
-export const broadcastScheduleCompetitionSchema = z.strictObject({
-  competitionId: z.string(),
-  slug: z.string(),
-  name: z.string(),
-  themeColor: nullableString,
-});
-
-export const broadcastScheduleEntrantSchema = z.strictObject({
+export const broadcastScheduleEntrantSchema = z.object({
   entryId: z.string(),
   name: z.string(),
-  logoUrl: nullableString,
+  logoUrl: nullableStringSchema,
 });
 
-export const broadcastScheduleMatchSchema = z.strictObject({
+export const broadcastScheduleMatchSchema = z.object({
   matchId: z.string(),
-  scheduledAt: nullableString,
-  startedAt: nullableString,
-  completedAt: nullableString,
-  status: z.enum(['scheduled', 'in_progress', 'finished', 'cancelled']),
-  format: z.enum(['bo1', 'bo3', 'bo5']),
+  scheduledAt: nullableStringSchema,
+  startedAt: nullableStringSchema,
+  completedAt: nullableStringSchema,
+  status: broadcastMatchStatusSchema,
+  format: broadcastMatchFormatSchema,
   stage: z.string(),
-  round: nullableNumber,
+  round: nullableNumberSchema,
   isForfeit: z.boolean(),
-  scoreA: nullableNumber,
-  scoreB: nullableNumber,
+  scoreA: nullableNumberSchema,
+  scoreB: nullableNumberSchema,
   entrantA: broadcastScheduleEntrantSchema,
   entrantB: broadcastScheduleEntrantSchema,
 });
 
-export const broadcastScheduleWindowSchema = z.strictObject({
+export const broadcastScheduleWindowSchema = z.object({
   schemaVersion: z.literal(BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION),
   revision: z.string(),
   competition: broadcastScheduleCompetitionSchema,
@@ -43,4 +42,9 @@ export const broadcastScheduleWindowSchema = z.strictObject({
   matches: z.array(broadcastScheduleMatchSchema),
 });
 
+export type BroadcastScheduleCompetitionSchemaOutput = z.infer<
+  typeof broadcastScheduleCompetitionSchema
+>;
+export type BroadcastScheduleEntrantSchemaOutput = z.infer<typeof broadcastScheduleEntrantSchema>;
+export type BroadcastScheduleMatchSchemaOutput = z.infer<typeof broadcastScheduleMatchSchema>;
 export type BroadcastScheduleWindowSchemaOutput = z.infer<typeof broadcastScheduleWindowSchema>;

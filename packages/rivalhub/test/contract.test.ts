@@ -171,15 +171,35 @@ describe('BroadcastManifestV1 contract', () => {
     );
   });
 
-  it('rejects unknown fields at the structural boundary', async () => {
+  it('accepts additive V1 fields and strips them before DTO consumption', async () => {
     const fixture = await readJson<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
-    const candidate = { ...fixture, debugToken: 'must-not-cross-contract' };
+    const candidate = {
+      ...fixture,
+      futureCoverage: { producer: 'rivalhub' },
+      entrants: {
+        ...fixture.entrants,
+        a: {
+          ...fixture.entrants.a,
+          futureShortName: 'A',
+          roster: {
+            ...fixture.entrants.a.roster,
+            futurePairing: 'opaque',
+            players: fixture.entrants.a.roster.players.map((player) => ({
+              ...player,
+              futureIdentityHint: 'must-not-cross-contract',
+            })),
+          },
+        },
+      },
+    };
     const result = validateBroadcastManifest(candidate);
 
-    expect(result.ok).toBe(false);
-    expect(result.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'unexpected_field' })]),
-    );
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('additive V1 fields should be accepted');
+    expect(result.value).not.toHaveProperty('futureCoverage');
+    expect(result.value.entrants.a).not.toHaveProperty('futureShortName');
+    expect(result.value.entrants.a.roster).not.toHaveProperty('futurePairing');
+    expect(result.value.entrants.a.roster.players[0]).not.toHaveProperty('futureIdentityHint');
   });
 
   it('rejects veto action types outside the canonical V1 domain', async () => {
@@ -279,5 +299,28 @@ describe('BroadcastScheduleWindowV1 contract', () => {
     expect(compareScheduleMatches(result.value.matches[1]!, result.value.matches[2]!)).toBeLessThan(
       0,
     );
+  });
+
+  it('accepts additive ScheduleWindow fields without changing the known DTO', async () => {
+    const fixture = await readJson<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const candidate = {
+      ...fixture,
+      futureCoverage: 'optional',
+      matches: fixture.matches.map((match) => ({
+        ...match,
+        futurePairing: { auth: 'opaque' },
+        entrantA: { ...match.entrantA, shortName: 'A' },
+      })),
+    };
+
+    const result = validateBroadcastScheduleWindow(candidate);
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('additive ScheduleWindow fields should be accepted');
+    expect(result.value).not.toHaveProperty('futureCoverage');
+    expect(result.value.matches[0]).not.toHaveProperty('futurePairing');
+    expect(result.value.matches[0]?.entrantA).not.toHaveProperty('shortName');
   });
 });

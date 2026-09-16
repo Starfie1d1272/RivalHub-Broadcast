@@ -1,5 +1,3 @@
-import { z } from 'zod';
-
 import {
   hasBlockingDiagnostic,
   makeContractDiagnostic,
@@ -8,15 +6,20 @@ import {
   type ContractDiagnostic,
   type ContractValidationResult,
 } from '../diagnostics.js';
+import {
+  ISO_TIMESTAMP_PATTERN,
+  addSemanticDiagnostic,
+  nonEmpty,
+  scorePair,
+  structuralDiagnostics,
+  timestamp,
+} from '../validation-helpers.js';
 import { broadcastScheduleWindowSchema } from './schema.js';
 import {
   BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION,
   type BroadcastScheduleMatchV1,
   type BroadcastScheduleWindowV1,
 } from './types.js';
-
-const ISO_TIMESTAMP_PATTERN =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?(?:Z|[+-]\d{2}:\d{2})$/;
 
 function hasUnsupportedSchemaVersion(input: unknown): boolean {
   return (
@@ -26,78 +29,6 @@ function hasUnsupportedSchemaVersion(input: unknown): boolean {
     'schemaVersion' in input &&
     input.schemaVersion !== BROADCAST_SCHEDULE_WINDOW_SCHEMA_VERSION
   );
-}
-
-function pathOf(path: readonly PropertyKey[]): string {
-  return path.length === 0 ? '$' : path.map(String).join('.');
-}
-
-function structuralDiagnostics(error: z.ZodError): ContractDiagnostic[] {
-  return error.issues.map((issue) =>
-    makeContractDiagnostic(
-      'structural',
-      'error',
-      issue.code === 'unrecognized_keys' ? 'unexpected_field' : 'invalid_shape',
-      pathOf(issue.path),
-      issue.code === 'unrecognized_keys'
-        ? 'contract 包含未声明字段。'
-        : 'contract 字段形状不符合 BroadcastScheduleWindowV1。',
-    ),
-  );
-}
-
-function add(
-  diagnostics: ContractDiagnostic[],
-  code: ContractDiagnostic['code'],
-  severity: ContractDiagnostic['severity'],
-  path: string,
-  message: string,
-): void {
-  diagnostics.push(makeContractDiagnostic('semantic', severity, code, path, message));
-}
-
-function nonEmpty(
-  value: string,
-  path: string,
-  diagnostics: ContractDiagnostic[],
-  label: string,
-): void {
-  if (value.trim().length === 0) add(diagnostics, 'empty_id', 'error', path, `${label} 不能为空。`);
-}
-
-function timestamp(value: string | null, path: string, diagnostics: ContractDiagnostic[]): void {
-  if (value === null) return;
-  if (!ISO_TIMESTAMP_PATTERN.test(value) || !Number.isFinite(Date.parse(value))) {
-    add(
-      diagnostics,
-      'invalid_timestamp',
-      'error',
-      path,
-      '时间必须是有效的 ISO timestamp 或 null。',
-    );
-  }
-}
-
-function scorePair(
-  scoreA: number | null,
-  scoreB: number | null,
-  path: string,
-  diagnostics: ContractDiagnostic[],
-): void {
-  if ((scoreA === null) !== (scoreB === null)) {
-    add(
-      diagnostics,
-      'incomplete_score_pair',
-      'error',
-      path,
-      'scoreA 与 scoreB 必须同时为 number 或同时为 null。',
-    );
-    return;
-  }
-  if (scoreA === null || scoreB === null) return;
-  if (!Number.isSafeInteger(scoreA) || !Number.isSafeInteger(scoreB) || scoreA < 0 || scoreB < 0) {
-    add(diagnostics, 'invalid_field', 'error', path, '比分必须是非负安全整数。');
-  }
 }
 
 function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDiagnostic[] {
@@ -120,7 +51,13 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
     Number.isFinite(Date.parse(value.to)) &&
     Date.parse(value.from) > Date.parse(value.to)
   ) {
-    add(diagnostics, 'invalid_time_window', 'error', 'from', '时间窗口必须满足 from <= to。');
+    addSemanticDiagnostic(
+      diagnostics,
+      'invalid_time_window',
+      'error',
+      'from',
+      '时间窗口必须满足 from <= to。',
+    );
   }
 
   const matchIds = new Set<string>();
@@ -128,7 +65,7 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
     const path = `matches.${index}`;
     nonEmpty(match.matchId, `${path}.matchId`, diagnostics, 'matchId');
     if (matchIds.has(match.matchId)) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'duplicate_match_id',
         'error',
@@ -139,7 +76,7 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
     matchIds.add(match.matchId);
     nonEmpty(match.stage, `${path}.stage`, diagnostics, 'stage');
     if (match.round !== null && (!Number.isSafeInteger(match.round) || match.round < 1)) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'invalid_round',
         'error',
@@ -152,7 +89,7 @@ function validateScheduleSemantics(value: BroadcastScheduleWindowV1): ContractDi
     nonEmpty(match.entrantA.name, `${path}.entrantA.name`, diagnostics, 'entrant name');
     nonEmpty(match.entrantB.name, `${path}.entrantB.name`, diagnostics, 'entrant name');
     if (match.entrantA.entryId === match.entrantB.entryId) {
-      add(
+      addSemanticDiagnostic(
         diagnostics,
         'duplicate_entry_id',
         'error',
@@ -213,9 +150,11 @@ export function validateBroadcastScheduleWindow(
     ]);
   }
   const parsed = broadcastScheduleWindowSchema.safeParse(input);
-  if (!parsed.success) return validationFailure(structuralDiagnostics(parsed.error));
+  if (!parsed.success) {
+    return validationFailure(structuralDiagnostics(parsed.error, 'BroadcastScheduleWindowV1'));
+  }
 
-  const value = parsed.data as BroadcastScheduleWindowV1;
+  const value = parsed.data;
   const diagnostics = validateScheduleSemantics(value);
   if (hasBlockingDiagnostic(diagnostics)) return validationFailure(diagnostics);
   return validationSuccess({ ...value, matches: sortScheduleMatches(value.matches) }, diagnostics);

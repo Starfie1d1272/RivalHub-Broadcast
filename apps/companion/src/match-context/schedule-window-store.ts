@@ -1,6 +1,7 @@
 import { readFile } from 'node:fs/promises';
 
 import {
+  BroadcastScheduleWindowConversionError,
   toScheduleWindow,
   validateBroadcastScheduleWindow,
   type BroadcastScheduleWindowV1,
@@ -21,6 +22,7 @@ export interface ScheduleWindowBinding {
   readonly freshness: ContextFreshness;
   readonly storedAt?: string;
   readonly cachedFrom?: Exclude<ContextOrigin, 'cache'>;
+  readonly diagnostics: readonly ContractDiagnostic[];
 }
 
 export type ScheduleWindowStoreIssueCode =
@@ -30,11 +32,7 @@ export type ScheduleWindowStoreIssueCode =
   | 'schedule_lkg_invalid_envelope'
   | 'schedule_lkg_invalid_candidate'
   | 'schedule_lkg_write_failed'
-  | 'schedule_lkg_commit_stale'
-  | 'schedule_refresh_stale'
-  | 'schedule_source_failed'
-  | 'schedule_source_invalid'
-  | 'schedule_conversion_failed';
+  | 'schedule_lkg_commit_stale';
 
 export interface ScheduleWindowStoreIssue {
   readonly code: ScheduleWindowStoreIssueCode;
@@ -45,7 +43,7 @@ export interface ScheduleWindowStoreIssue {
 export interface ScheduleWindowStoreSuccess<T> {
   readonly ok: true;
   readonly value: T;
-  readonly diagnostics: readonly ScheduleWindowStoreIssue[];
+  readonly diagnostics: readonly ContractDiagnostic[];
 }
 
 export interface ScheduleWindowStoreFailure {
@@ -55,11 +53,6 @@ export interface ScheduleWindowStoreFailure {
 
 export type ScheduleWindowStoreResult<T> =
   ScheduleWindowStoreSuccess<T> | ScheduleWindowStoreFailure;
-
-export interface ScheduleWindowSource {
-  readonly kind: Exclude<ContextOrigin, 'cache'>;
-  readonly load: () => Promise<unknown>;
-}
 
 export interface ScheduleWindowStoreOptions {
   readonly filePath: string;
@@ -130,23 +123,17 @@ export interface ScheduleWindowSaveOptions {
   readonly canCommit?: () => boolean;
 }
 
+/** Disk-only durable seam for ScheduleWindow. Acquisition/current state lives in the controller. */
 export class ScheduleWindowLkgStore {
   private readonly filePath: string;
   private readonly clock: () => string;
   private readonly faultInjector: DurableJsonFaultInjector | undefined;
   private readonly writeQueue = new SerialCommitQueue();
-  private readonly commitQueue = new SerialCommitQueue();
-  private currentBinding: ScheduleWindowBinding | undefined;
-  private refreshGeneration = 0;
 
   constructor(options: ScheduleWindowStoreOptions) {
     this.filePath = options.filePath;
     this.clock = options.clock ?? (() => new Date().toISOString());
     this.faultInjector = options.faultInjector;
-  }
-
-  getCurrent(): ScheduleWindowBinding | undefined {
-    return this.currentBinding;
   }
 
   async save(
@@ -186,7 +173,11 @@ export class ScheduleWindowLkgStore {
           },
         };
       }
-      return { ok: true, value: validated.value, diagnostics: [] };
+      return {
+        ok: true,
+        value: validated.value,
+        diagnostics: validated.diagnostics,
+      };
     });
   }
 
@@ -228,120 +219,35 @@ export class ScheduleWindowLkgStore {
     if (!validated.ok) return invalidCandidate(validated.diagnostics);
 
     try {
+      const binding: ScheduleWindowBinding = {
+        schedule: validated.value,
+        window: toScheduleWindow(validated.value),
+        origin: 'cache',
+        freshness: 'stale',
+        storedAt: envelope.metadata.storedAt,
+        cachedFrom: envelope.metadata.origin,
+        diagnostics: validated.diagnostics,
+      };
       return {
         ok: true,
-        value: {
-          schedule: validated.value,
-          window: toScheduleWindow(validated.value),
-          origin: 'cache',
-          freshness: 'stale',
-          storedAt: envelope.metadata.storedAt,
-          cachedFrom: envelope.metadata.origin,
-        },
-        diagnostics: [],
+        value: binding,
+        diagnostics: validated.diagnostics,
       };
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof BroadcastScheduleWindowConversionError)) throw error;
       return {
         ok: false,
         issue: {
           code: 'schedule_lkg_invalid_candidate',
           message: 'ScheduleWindow LKG 无法重新转换为领域模型。',
+          diagnostics: error.diagnostics,
         },
       };
     }
-  }
-
-  async refresh(
-    source: ScheduleWindowSource,
-  ): Promise<ScheduleWindowStoreResult<ScheduleWindowBinding>> {
-    const generation = ++this.refreshGeneration;
-    const isCurrent = () => generation === this.refreshGeneration;
-
-    let candidate: unknown;
-    try {
-      candidate = await source.load();
-    } catch {
-      return this.useFallback(generation, {
-        code: 'schedule_source_failed',
-        message: 'ScheduleWindow source 加载失败，继续使用 stale LKG。',
-      });
-    }
-
-    const validated = validateBroadcastScheduleWindow(candidate);
-    if (!validated.ok) {
-      return this.useFallback(generation, {
-        code: 'schedule_source_invalid',
-        message: 'ScheduleWindow source 未通过 validation，继续使用 stale LKG。',
-        diagnostics: validated.diagnostics,
-      });
-    }
-
-    let window: ScheduleWindow;
-    try {
-      window = toScheduleWindow(validated.value);
-    } catch {
-      return {
-        ok: false,
-        issue: {
-          code: 'schedule_conversion_failed',
-          message: 'ScheduleWindow validated candidate 无法转换为领域模型。',
-        },
-      };
-    }
-
-    return this.commitQueue.run(async () => {
-      if (!isCurrent()) return this.staleRefreshResult();
-
-      const saved = await this.save(validated.value, source.kind, { canCommit: isCurrent });
-      if (!isCurrent() || (!saved.ok && saved.issue.code === 'schedule_lkg_commit_stale')) {
-        return this.staleRefreshResult();
-      }
-
-      const diagnostics: ScheduleWindowStoreIssue[] = saved.ok ? [] : [saved.issue];
-      const binding: ScheduleWindowBinding = {
-        schedule: validated.value,
-        window,
-        origin: source.kind,
-        freshness: 'fresh',
-      };
-      this.currentBinding = binding;
-      return { ok: true, value: binding, diagnostics };
-    });
-  }
-
-  private async useFallback(
-    generation: number,
-    diagnostic: ScheduleWindowStoreIssue,
-  ): Promise<ScheduleWindowStoreResult<ScheduleWindowBinding>> {
-    const fallback = await this.read();
-    return this.commitQueue.run(() => {
-      if (generation !== this.refreshGeneration) return this.staleRefreshResult();
-      if (fallback.ok) {
-        this.currentBinding = fallback.value;
-        return { ok: true, value: fallback.value, diagnostics: [diagnostic] };
-      }
-      const message = `${diagnostic.message.replace('继续使用 stale LKG。', '')}且没有可用 LKG。`;
-      return diagnostic.diagnostics === undefined
-        ? { ok: false, issue: { code: diagnostic.code, message } }
-        : {
-            ok: false,
-            issue: { code: diagnostic.code, message, diagnostics: diagnostic.diagnostics },
-          };
-    });
-  }
-
-  private staleRefreshResult(): ScheduleWindowStoreFailure {
-    return {
-      ok: false,
-      issue: {
-        code: 'schedule_refresh_stale',
-        message: 'ScheduleWindow refresh 已被更新的 refresh supersede。',
-      },
-    };
   }
 }
 
-export function createScheduleWindowStore(
+export function createScheduleWindowLkgStore(
   options: ScheduleWindowStoreOptions,
 ): ScheduleWindowLkgStore {
   return new ScheduleWindowLkgStore(options);

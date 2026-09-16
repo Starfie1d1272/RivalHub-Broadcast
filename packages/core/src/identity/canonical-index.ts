@@ -4,6 +4,8 @@ import type {
   MatchPlayerContext,
 } from '../match-context/index.js';
 
+const STEAM64_PATTERN = /^\d{17}$/;
+
 export interface CanonicalPlayer extends MatchPlayerContext {
   readonly entryId: string;
 }
@@ -32,7 +34,7 @@ export function buildCanonicalIndex(context: MatchContext): CanonicalIndex {
       if (byPlayerId.has(player.playerId)) duplicatePlayerIds.add(player.playerId);
       byPlayerId.set(player.playerId, canonical);
 
-      if (player.steam64 === null || player.steam64.trim().length === 0) continue;
+      if (player.steam64 === null || !STEAM64_PATTERN.test(player.steam64)) continue;
       const existing = bySteam64.get(player.steam64);
       if (existing !== undefined) {
         duplicateSteam64.add(player.steam64);

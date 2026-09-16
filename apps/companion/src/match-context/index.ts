@@ -30,10 +30,9 @@ export {
   type MatchManifestLkgStoreOptions,
 } from './lkg-store.js';
 export {
-  createScheduleWindowStore,
+  createScheduleWindowLkgStore,
   ScheduleWindowLkgStore,
   type ScheduleWindowBinding,
-  type ScheduleWindowSource,
   type ScheduleWindowStoreFailure,
   type ScheduleWindowStoreIssue,
   type ScheduleWindowStoreIssueCode,
@@ -42,3 +41,15 @@ export {
   type ScheduleWindowStoreSuccess,
   type ScheduleWindowSaveOptions,
 } from './schedule-window-store.js';
+export {
+  createScheduleWindowController,
+  ScheduleWindowController,
+  type ScheduleWindowControllerIssue,
+  type ScheduleWindowControllerIssueCode,
+  type ScheduleWindowControllerOptions,
+  type ScheduleWindowRefreshFailure,
+  type ScheduleWindowRefreshResult,
+  type ScheduleWindowRefreshSuccess,
+  type ScheduleWindowSource,
+} from './schedule-window-controller.js';
+export { SourceLoadError } from './source-error.js';

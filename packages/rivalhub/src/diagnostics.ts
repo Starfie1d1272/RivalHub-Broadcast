@@ -5,7 +5,6 @@ export type ContractDiagnosticSeverity = 'warning' | 'error';
 export type ContractDiagnosticCode =
   | 'unsupported_schema_version'
   | 'invalid_shape'
-  | 'unexpected_field'
   | 'empty_id'
   | 'duplicate_entry_id'
   | 'duplicate_player_id'
@@ -39,13 +38,11 @@ export interface ContractValidationSuccess<T> {
   readonly ok: true;
   readonly value: T;
   readonly diagnostics: readonly ContractDiagnostic[];
-  readonly issues: readonly ContractDiagnostic[];
 }
 
 export interface ContractValidationFailure {
   readonly ok: false;
   readonly diagnostics: readonly ContractDiagnostic[];
-  readonly issues: readonly ContractDiagnostic[];
 }
 
 export type ContractValidationResult<T> = ContractValidationSuccess<T> | ContractValidationFailure;
@@ -67,12 +64,12 @@ export function hasBlockingDiagnostic(diagnostics: readonly ContractDiagnostic[]
 export function validationFailure(
   diagnostics: readonly ContractDiagnostic[],
 ): ContractValidationFailure {
-  return { ok: false, diagnostics, issues: diagnostics };
+  return { ok: false, diagnostics };
 }
 
 export function validationSuccess<T>(
   value: T,
   diagnostics: readonly ContractDiagnostic[],
 ): ContractValidationSuccess<T> {
-  return { ok: true, value, diagnostics, issues: diagnostics };
+  return { ok: true, value, diagnostics };
 }

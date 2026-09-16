@@ -9,7 +9,9 @@ import {
   createFixtureManifestSource,
   MatchContextController,
   MatchManifestLkgStore,
+  ScheduleWindowController,
   ScheduleWindowLkgStore,
+  SourceLoadError,
 } from '../src/match-context/index.js';
 import type { DurableJsonCommitPoint } from '../src/match-context/durable-json.js';
 
@@ -216,7 +218,7 @@ describe('Match Manifest last-known-good seam', () => {
 
     const failed = await controller.selectMatch('match-m2-next', {
       kind: 'online',
-      load: () => Promise.reject(new Error('offline')),
+      load: () => Promise.reject(new SourceLoadError('offline')),
     });
 
     expect(failed.ok).toBe(false);
@@ -224,6 +226,101 @@ describe('Match Manifest last-known-good seam', () => {
     expect(failed.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
       expect.arrayContaining(['source_load_failed', 'lkg_unavailable']),
     );
+  });
+
+  it('keeps the same-match in-memory binding when refresh fails', async () => {
+    const root = await temporaryDirectory();
+    const manifest = await readFixture<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const candidate = structuredClone(manifest) as unknown as {
+      revision: string;
+      match: { matchId: string };
+    };
+    candidate.revision = 'revision-memory';
+    const baselinePath = join(root, 'baseline.json');
+    const baseline = new MatchManifestLkgStore({ filePath: baselinePath });
+    expect((await baseline.save(manifest, 'fixture')).ok).toBe(true);
+    const controller = new MatchContextController({
+      lkgStore: new MatchManifestLkgStore({
+        filePath: baselinePath,
+        faultInjector: (point) => {
+          if (point === 'before-rename') throw new Error('injected commit failure');
+        },
+      }),
+    });
+
+    const fresh = await controller.selectMatch(manifest.match.matchId, source('online', candidate));
+    expect(fresh.ok).toBe(true);
+    if (!fresh.ok) throw new Error('fresh same-match candidate should bind');
+    const failedRefresh = await controller.selectMatch(manifest.match.matchId, {
+      kind: 'online',
+      load: () => Promise.reject(new SourceLoadError('offline')),
+    });
+
+    expect(failedRefresh.ok).toBe(true);
+    if (!failedRefresh.ok) throw new Error('same-match memory binding should remain usable');
+    expect(failedRefresh.binding.manifest.revision).toBe('revision-memory');
+    expect(failedRefresh.binding.freshness).toBe('stale');
+    expect(failedRefresh.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'source_load_failed',
+      'memory_fallback',
+    ]);
+  });
+
+  it('cancels an in-flight selection when clearActive is called', async () => {
+    const root = await temporaryDirectory();
+    const manifest = await readFixture<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const controller = new MatchContextController({
+      lkgStore: new MatchManifestLkgStore({ filePath: join(root, 'manifest.json') }),
+    });
+    const pending = deferred<unknown>();
+    const selection = controller.selectMatch(manifest.match.matchId, {
+      kind: 'online',
+      load: () => pending.promise,
+    });
+
+    controller.clearActive();
+    pending.resolve(manifest);
+    const result = await selection;
+
+    expect(result.ok).toBe(false);
+    if (result.ok) throw new Error('cleared selection must not rebind');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(['selection_stale']);
+    expect(controller.getActiveBinding()).toBeUndefined();
+  });
+
+  it('carries contract warnings into fresh and restored MatchContext bindings', async () => {
+    const root = await temporaryDirectory();
+    const manifest = await readFixture<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const candidate = structuredClone(manifest) as unknown as {
+      entrants: {
+        a: { roster: { players: Array<{ steam64: string | null; displayName: string | null }> } };
+      };
+    };
+    candidate.entrants.a.roster.players = candidate.entrants.a.roster.players.slice(0, 4);
+    candidate.entrants.a.roster.players[0]!.steam64 = null;
+    candidate.entrants.a.roster.players[0]!.displayName = null;
+    const filePath = join(root, 'manifest.json');
+    const store = new MatchManifestLkgStore({ filePath });
+    const controller = new MatchContextController({ lkgStore: store });
+
+    const fresh = await controller.selectMatch(
+      manifest.match.matchId,
+      source('fixture', candidate),
+    );
+    expect(fresh.ok).toBe(true);
+    if (!fresh.ok) throw new Error('warning-bearing candidate should bind');
+    expect(fresh.binding.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(['missing_steam64', 'missing_display_name', 'incomplete_roster']),
+    );
+    expect(fresh.diagnostics).toEqual([]);
+
+    const restored = await store.read(manifest.match.matchId);
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) throw new Error('warning-bearing LKG should restore');
+    expect(restored.value.diagnostics.map((diagnostic) => diagnostic.code)).toEqual(
+      expect.arrayContaining(['missing_steam64', 'missing_display_name', 'incomplete_roster']),
+    );
+    expect(restored.diagnostics).toEqual(restored.value.diagnostics);
   });
 
   it('keeps a fresh MatchContext when its LKG persistence fails', async () => {
@@ -268,7 +365,7 @@ describe('Match Manifest last-known-good seam', () => {
     });
     const result = await restarted.selectMatch(manifest.match.matchId, {
       kind: 'online',
-      load: () => Promise.reject(new Error('offline')),
+      load: () => Promise.reject(new SourceLoadError('offline')),
     });
 
     expect(result.ok).toBe(true);
@@ -314,6 +411,22 @@ describe('Match Manifest last-known-good seam', () => {
       controller.selectMatch(manifest.match.matchId, source('online', manifest)),
     ).rejects.toBe(callbackError);
   });
+
+  it('propagates untyped source-loader errors instead of masking them as source_load_failed', async () => {
+    const root = await temporaryDirectory();
+    const manifest = await readFixture<BroadcastManifestV1>('broadcast-manifest-v1.valid.json');
+    const programmerError = new TypeError('source callback invariant failed');
+    const controller = new MatchContextController({
+      lkgStore: new MatchManifestLkgStore({ filePath: join(root, 'manifest.json') }),
+    });
+
+    await expect(
+      controller.selectMatch(manifest.match.matchId, {
+        kind: 'online',
+        load: () => Promise.reject(programmerError),
+      }),
+    ).rejects.toBe(programmerError);
+  });
 });
 
 describe('independent ScheduleWindow last-known-good seam', () => {
@@ -326,22 +439,51 @@ describe('independent ScheduleWindow last-known-good seam', () => {
       filePath: join(root, 'schedule.json'),
       clock: () => '2026-09-16T12:01:00.000Z',
     });
+    const controller = new ScheduleWindowController({ lkgStore: store });
 
-    const fresh = await store.refresh(source('online', schedule));
-    const stale = await store.refresh({
+    const fresh = await controller.refresh(source('online', schedule));
+    const stale = await controller.refresh({
       kind: 'online',
-      load: () => Promise.reject(new Error('schedule service offline')),
+      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
     });
 
     expect(fresh.ok).toBe(true);
     expect(stale.ok).toBe(true);
     if (!stale.ok) throw new Error('schedule LKG should remain available');
-    expect(stale.value.origin).toBe('cache');
-    expect(stale.value.freshness).toBe('stale');
-    expect(stale.value.window.matches[0]?.matchId).toBe('match-m2-00');
+    expect(stale.binding.origin).toBe('online');
+    expect(stale.binding.freshness).toBe('stale');
+    expect(stale.binding.schedule.revision).toBe(schedule.revision);
+    expect(stale.binding.window.matches[0]?.matchId).toBe('match-m2-00');
     expect(stale.diagnostics).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'schedule_source_failed' })]),
     );
+  });
+
+  it('uses the disk ScheduleWindow LKG only when the controller has no memory binding', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const filePath = join(root, 'schedule.json');
+    const writer = new ScheduleWindowLkgStore({ filePath });
+    expect((await writer.save(schedule, 'fixture')).ok).toBe(true);
+    const controller = new ScheduleWindowController({
+      lkgStore: new ScheduleWindowLkgStore({ filePath }),
+    });
+
+    const result = await controller.refresh({
+      kind: 'online',
+      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
+    });
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) throw new Error('disk ScheduleWindow LKG should be available');
+    expect(result.binding.origin).toBe('cache');
+    expect(result.binding.freshness).toBe('stale');
+    expect(result.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'schedule_source_failed',
+      'schedule_lkg_fallback',
+    ]);
   });
 
   it.each(['before-write', 'after-write', 'before-rename'] as DurableJsonCommitPoint[])(
@@ -394,17 +536,20 @@ describe('independent ScheduleWindow last-known-good seam', () => {
       },
     });
 
-    const result = await store.refresh(source('online', schedule));
+    const controller = new ScheduleWindowController({ lkgStore: store });
+    const result = await controller.refresh(source('online', schedule));
 
     expect(result.ok).toBe(true);
     if (!result.ok) throw new Error('fresh validated schedule should remain active');
-    expect(result.value.origin).toBe('online');
-    expect(result.value.freshness).toBe('fresh');
-    expect(result.value.schedule.revision).toBe(schedule.revision);
+    expect(result.binding.origin).toBe('online');
+    expect(result.binding.freshness).toBe('fresh');
+    expect(result.binding.schedule.revision).toBe(schedule.revision);
     expect(result.diagnostics).toEqual(
-      expect.arrayContaining([expect.objectContaining({ code: 'schedule_lkg_write_failed' })]),
+      expect.arrayContaining([
+        expect.objectContaining({ code: 'schedule_lkg_persistence_failed' }),
+      ]),
     );
-    expect(store.getCurrent()).toEqual(result.value);
+    expect(controller.getCurrent()).toEqual(result.binding);
     const lkg = await store.read();
     expect(lkg.ok).toBe(false);
     if (lkg.ok) throw new Error('failed first commit must not create an LKG');
@@ -419,10 +564,11 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     const nextSchedule = structuredClone(schedule) as { revision: string };
     nextSchedule.revision = 'revision-next';
     const store = new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') });
+    const controller = new ScheduleWindowController({ lkgStore: store });
     const oldLoad = deferred<unknown>();
 
-    const oldRefresh = store.refresh({ kind: 'online', load: () => oldLoad.promise });
-    const latestRefresh = store.refresh(source('online', nextSchedule));
+    const oldRefresh = controller.refresh({ kind: 'online', load: () => oldLoad.promise });
+    const latestRefresh = controller.refresh(source('online', nextSchedule));
     const latestResult = await latestRefresh;
     oldLoad.resolve(schedule);
     const oldResult = await oldRefresh;
@@ -430,12 +576,70 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     expect(latestResult.ok).toBe(true);
     expect(oldResult.ok).toBe(false);
     if (oldResult.ok) throw new Error('superseded refresh must not commit');
-    expect(oldResult.issue.code).toBe('schedule_refresh_stale');
-    expect(store.getCurrent()?.schedule.revision).toBe('revision-next');
+    expect(oldResult.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'schedule_refresh_stale',
+    ]);
+    expect(controller.getCurrent()?.schedule.revision).toBe('revision-next');
     const envelope = JSON.parse(await readFile(join(root, 'schedule.json'), 'utf8')) as {
       payload: { revision: string };
     };
     expect(envelope.payload.revision).toBe('revision-next');
+  });
+
+  it('prefers the current in-memory ScheduleWindow over an older disk LKG', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const nextSchedule = structuredClone(schedule) as { revision: string };
+    nextSchedule.revision = 'revision-memory';
+    const filePath = join(root, 'schedule.json');
+    const baseline = new ScheduleWindowLkgStore({ filePath });
+    expect((await baseline.save(schedule, 'fixture')).ok).toBe(true);
+    const store = new ScheduleWindowLkgStore({
+      filePath,
+      faultInjector: (point) => {
+        if (point === 'before-rename') throw new Error('injected commit failure');
+      },
+    });
+    const controller = new ScheduleWindowController({ lkgStore: store });
+
+    const fresh = await controller.refresh(source('online', nextSchedule));
+    expect(fresh.ok).toBe(true);
+    if (!fresh.ok) throw new Error('fresh schedule should remain active');
+    const failedRefresh = await controller.refresh({
+      kind: 'online',
+      load: () => Promise.reject(new SourceLoadError('schedule service offline')),
+    });
+
+    expect(failedRefresh.ok).toBe(true);
+    if (!failedRefresh.ok) throw new Error('memory schedule should remain active');
+    expect(failedRefresh.binding.schedule.revision).toBe('revision-memory');
+    expect(failedRefresh.binding.freshness).toBe('stale');
+    expect(failedRefresh.diagnostics.map((diagnostic) => diagnostic.code)).toEqual([
+      'schedule_source_failed',
+      'schedule_memory_fallback',
+    ]);
+  });
+
+  it('carries contract diagnostics into fresh and restored ScheduleWindow bindings', async () => {
+    const root = await temporaryDirectory();
+    const schedule = await readFixture<BroadcastScheduleWindowV1>(
+      'broadcast-schedule-window-v1.valid.json',
+    );
+    const filePath = join(root, 'schedule.json');
+    const store = new ScheduleWindowLkgStore({ filePath });
+    const controller = new ScheduleWindowController({ lkgStore: store });
+
+    const fresh = await controller.refresh(source('fixture', schedule));
+    expect(fresh.ok).toBe(true);
+    if (!fresh.ok) throw new Error('valid schedule should bind');
+    expect(fresh.binding.diagnostics).toEqual([]);
+
+    const restored = await store.read();
+    expect(restored.ok).toBe(true);
+    if (!restored.ok) throw new Error('valid schedule LKG should restore');
+    expect(restored.value.diagnostics).toEqual(fresh.binding.diagnostics);
   });
 
   it('does not couple schedule failure to an active MatchContext', async () => {
@@ -451,14 +655,30 @@ describe('independent ScheduleWindow last-known-good seam', () => {
     ).toBe(true);
     const before = controller.getActiveBinding();
     const scheduleStore = new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') });
+    const scheduleController = new ScheduleWindowController({ lkgStore: scheduleStore });
     expect((await scheduleStore.save(schedule, 'fixture')).ok).toBe(true);
 
-    const failure = await scheduleStore.refresh({
+    const failure = await scheduleController.refresh({
       kind: 'fixture',
       load: () => Promise.resolve({ ...schedule, revision: 'broken', from: 'not-a-time' }),
     });
 
     expect(failure.ok).toBe(true);
     expect(controller.getActiveBinding()).toEqual(before);
+  });
+
+  it('propagates untyped ScheduleWindow source-loader errors', async () => {
+    const root = await temporaryDirectory();
+    const programmerError = new TypeError('schedule source callback invariant failed');
+    const controller = new ScheduleWindowController({
+      lkgStore: new ScheduleWindowLkgStore({ filePath: join(root, 'schedule.json') }),
+    });
+
+    await expect(
+      controller.refresh({
+        kind: 'online',
+        load: () => Promise.reject(programmerError),
+      }),
+    ).rejects.toBe(programmerError);
   });
 });

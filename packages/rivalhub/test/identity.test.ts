@@ -40,6 +40,7 @@ function observedPlayers(
     readonly sideB?: 'CT' | 'T';
     readonly includeSubstitute?: boolean;
     readonly replaceStarter?: boolean;
+    readonly ignoreStarterFlags?: boolean;
     readonly count?: number;
     readonly nicknameSuffix?: string;
     readonly slotOffset?: number;
@@ -47,10 +48,21 @@ function observedPlayers(
 ): ObservedPlayer[] {
   const sideA = options.sideA ?? 'CT';
   const sideB = options.sideB ?? 'T';
-  const active = canonicalPlayers(context).filter(
+  const canonical = canonicalPlayers(context);
+  const active = canonical.filter(
     (player) => player.isStarter || options.includeSubstitute === true,
   );
-  let selected = active.slice(0, options.count ?? 10);
+  let selected =
+    options.ignoreStarterFlags === true
+      ? [
+          ...canonical
+            .filter((player) => player.entryId === context.entrants.a.entryId)
+            .slice(0, 5),
+          ...canonical
+            .filter((player) => player.entryId === context.entrants.b.entryId)
+            .slice(0, 5),
+        ]
+      : active.slice(0, options.count ?? 10);
   if (options.replaceStarter === true) {
     const starters = active.filter((player) => player.isStarter);
     const substitute = active.find((player) => !player.isStarter);
@@ -189,6 +201,77 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     expect(issueCodes(resolution)).toEqual(['lineup_differs_from_expected']);
   });
 
+  it('does not use nine starter flags to authorize a valid ten-player lineup', async () => {
+    const context = toMatchContext(await readManifest());
+    const nineStarterContext: MatchContext = {
+      ...context,
+      entrants: {
+        ...context.entrants,
+        a: {
+          ...context.entrants.a,
+          players: context.entrants.a.players.map((player, index) =>
+            index === 0 ? { ...player, isStarter: false } : player,
+          ),
+        },
+      },
+    };
+    const resolution = resolveIdentity(
+      nineStarterContext,
+      evidence(observedPlayers(context, { ignoreStarterFlags: true })),
+    );
+
+    expect(resolution.state).toBe('matched');
+    expect(resolution.players).toHaveLength(10);
+    expect(issueCodes(resolution)).toEqual(['lineup_differs_from_expected']);
+  });
+
+  it('does not use eleven starter flags to reject a valid ten-player lineup', async () => {
+    const context = toMatchContext(await readManifest());
+    const elevenStarterContext: MatchContext = {
+      ...context,
+      entrants: {
+        ...context.entrants,
+        a: {
+          ...context.entrants.a,
+          players: context.entrants.a.players.map((player, index) =>
+            index === context.entrants.a.players.length - 1
+              ? { ...player, isStarter: true }
+              : player,
+          ),
+        },
+      },
+    };
+    const resolution = resolveIdentity(
+      elevenStarterContext,
+      evidence(observedPlayers(context, { ignoreStarterFlags: true })),
+    );
+
+    expect(resolution.state).toBe('matched');
+    expect(resolution.players).toHaveLength(10);
+    expect(issueCodes(resolution)).toEqual(['lineup_differs_from_expected']);
+  });
+
+  it('requires at least five canonical roster members on each side', async () => {
+    const context = toMatchContext(await readManifest());
+    const incompleteContext: MatchContext = {
+      ...context,
+      entrants: {
+        ...context.entrants,
+        a: {
+          ...context.entrants.a,
+          players: context.entrants.a.players.slice(0, 4),
+        },
+      },
+    };
+    const resolution = resolveIdentity(
+      incompleteContext,
+      evidence(observedPlayers(context, { ignoreStarterFlags: true })),
+    );
+
+    expect(resolution.state).toBe('degraded');
+    expect(issueCodes(resolution)).toContain('roster_incomplete');
+  });
+
   it('treats a partial lineup as degraded while preserving the mapped players', async () => {
     const context = toMatchContext(await readManifest());
     const resolution = resolveIdentity(context, evidence(observedPlayers(context, { count: 9 })));
@@ -203,6 +286,9 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     const resolver = createIdentityResolver(context);
     const matched = resolver.resolve(evidence(observedPlayers(context)));
     const absent = resolver.resolve(evidence(undefined, { allPlayersCoverage: 'absent' }));
+    const degradedAbsent = resolver.resolve(
+      evidence(undefined, { allPlayersCoverage: 'degraded' }),
+    );
     const degraded = resolver.resolve(
       evidence(observedPlayers(context), { allPlayersCoverage: 'degraded' }),
     );
@@ -212,10 +298,28 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     expect(absent.players).toHaveLength(10);
     expect(absent.capabilities.canonicalTeamBranding).toBe(true);
     expect(absent.players.every((player) => player.evidence === 'retained')).toBe(true);
+    expect(degradedAbsent.state).toBe('matched');
+    expect(degradedAbsent.capabilities.canonicalTeamBranding).toBe(true);
+    expect(issueCodes(degradedAbsent)).toContain('allplayers_degraded');
     expect(degraded.state).toBe('matched');
     expect(degraded.players).toHaveLength(10);
     expect(degraded.capabilities.canonicalTeamBranding).toBe(true);
     expect(issueCodes(degraded)).toContain('allplayers_degraded');
+  });
+
+  it('lets a duplicate observed Steam64 contradict a previous proof even on a degraded frame', async () => {
+    const context = toMatchContext(await readManifest());
+    const resolver = createIdentityResolver(context);
+    const matched = resolver.resolve(evidence(observedPlayers(context)));
+    const duplicate = observedPlayers(context);
+    duplicate[0] = { ...duplicate[0]!, sourcePlayerId: duplicate[1]!.sourcePlayerId };
+
+    const resolution = resolver.resolve(evidence(duplicate, { allPlayersCoverage: 'degraded' }));
+
+    expect(matched.state).toBe('matched');
+    expect(resolution.state).toBe('mismatch');
+    expect(issueCodes(resolution)).toContain('duplicate_observed_identity');
+    expect(resolution.capabilities.canonicalTeamBranding).toBe(false);
   });
 
   it('does not reuse old proof across source generation or map epoch baselines', async () => {

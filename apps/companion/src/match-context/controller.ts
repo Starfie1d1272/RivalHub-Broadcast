@@ -1,4 +1,5 @@
 import {
+  BroadcastManifestConversionError,
   toMatchContext,
   validateBroadcastManifest,
   type BroadcastManifestV1,
@@ -6,6 +7,7 @@ import {
 } from '@rivalhub-broadcast/rivalhub';
 
 import { SerialCommitQueue } from './serial-commit.js';
+import { SourceLoadError } from './source-error.js';
 import {
   type ContextFreshness,
   type ContextOrigin,
@@ -17,6 +19,7 @@ import {
 
 export interface MatchContextSource {
   readonly kind: Exclude<ContextOrigin, 'cache'>;
+  /** Expected network/source failures must reject with SourceLoadError. */
   readonly load: () => Promise<unknown>;
 }
 
@@ -26,6 +29,7 @@ export type MatchContextControllerIssueCode =
   | 'source_match_mismatch'
   | 'source_conversion_failed'
   | 'lkg_fallback'
+  | 'memory_fallback'
   | 'lkg_unavailable'
   | 'lkg_persistence_failed'
   | 'selection_stale';
@@ -83,6 +87,12 @@ export class MatchContextController {
   }
 
   clearActive(): void {
+    this.selectionGeneration += 1;
+    this.clearActiveBinding();
+  }
+
+  private clearActiveBinding(): void {
+    if (this.activeBinding === undefined) return;
     this.activeBinding = undefined;
     this.onBindingChanged?.(undefined);
   }
@@ -98,12 +108,13 @@ export class MatchContextController {
   ): Promise<MatchContextSelectionResult> {
     const generation = ++this.selectionGeneration;
     const isCurrent = () => generation === this.selectionGeneration;
-    this.clearActive();
+    if (this.activeBinding?.context.matchId !== requestedMatchId) this.clearActiveBinding();
 
     let candidate: unknown;
     try {
       candidate = await source.load();
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof SourceLoadError)) throw error;
       return this.useFallback(generation, requestedMatchId, [
         controllerIssue('source_load_failed', 'Manifest source 加载失败。'),
       ]);
@@ -126,7 +137,8 @@ export class MatchContextController {
     let context;
     try {
       context = toMatchContext(validated.value);
-    } catch {
+    } catch (error: unknown) {
+      if (!(error instanceof BroadcastManifestConversionError)) throw error;
       return {
         ok: false,
         requestedMatchId,
@@ -134,6 +146,7 @@ export class MatchContextController {
           controllerIssue(
             'source_conversion_failed',
             'Manifest candidate 无法转换为 MatchContext。',
+            { diagnostics: error.diagnostics },
           ),
         ],
       };
@@ -165,6 +178,7 @@ export class MatchContextController {
         context,
         origin: source.kind,
         freshness: 'fresh',
+        diagnostics: validated.diagnostics,
       };
       this.setActive(binding);
       return { ok: true, binding, diagnostics };
@@ -176,8 +190,24 @@ export class MatchContextController {
     requestedMatchId: string,
     diagnostics: MatchContextControllerIssue[],
   ): Promise<MatchContextSelectionResult> {
-    const fallback = await this.lkgStore.read(requestedMatchId);
-    return this.commitQueue.run(() => {
+    return this.commitQueue.run(async () => {
+      if (generation !== this.selectionGeneration)
+        return this.staleSelectionResult(requestedMatchId);
+
+      const current = this.activeBinding;
+      if (current?.context.matchId === requestedMatchId) {
+        const staleBinding: MatchContextBinding = { ...current, freshness: 'stale' };
+        diagnostics.push(
+          controllerIssue(
+            'memory_fallback',
+            'Manifest source 失败，继续使用当前同 matchId 的内存 binding，并标记为 stale。',
+          ),
+        );
+        this.setActive(staleBinding);
+        return { ok: true, binding: staleBinding, diagnostics };
+      }
+
+      const fallback = await this.lkgStore.read(requestedMatchId);
       if (generation !== this.selectionGeneration)
         return this.staleSelectionResult(requestedMatchId);
       if (fallback.ok) {
