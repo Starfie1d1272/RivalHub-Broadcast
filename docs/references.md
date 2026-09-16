@@ -29,13 +29,14 @@ Radar 不等于地图 calibration，也不等于某一个现成 Radar 应用：
 ```text
 Map geometry / calibration
   → MapGeometryProvider
-  → 当前默认 provider 计划复用 DAK @cs2dak/maps
+  → Broadcast checked-in CS2 overview calibration snapshot；DAK 仅作独立交叉参考
 
 Radar domain
-  → RadarFrame / marker / utility / floor / interpolation / autozoom math
+  → RadarFrame / world→radar / floor / marker / utility semantics
 
-Radar presentation
+Radar presentation / renderer
   → React / SVG / Canvas / DOM / theme / rAF
+  → interpolation / smoothing / autozoom presentation / responsive sizing
 ```
 
 Boltobserv / Obserview 用来验证 observer UX、autozoom、avatar marker、telestrator 等产品方向，但不作为第二套 runtime。

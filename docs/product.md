@@ -252,7 +252,7 @@ Radar 是一等能力，不是一个附带静态 minimap。
 
 “已发生的轨迹”与“预测弹道”必须区分。没有地图碰撞/物理依据时，不得把简单速度外推包装成准确投掷预测。
 
-Radar 通过 `MapGeometryProvider` 消费地图几何。当前默认 provider 计划复用 DAK `@cs2dak/maps` 的 calibration owner，但 Broadcast 不把 DAK package shape 直接变成自己的 Radar domain contract；地图图片/游戏资产的许可与来源另行处理。
+Radar 通过 `MapGeometryProvider` 消费地图几何。当前默认 provider 使用 Broadcast 自己持有的、显式版本化的 CS2 overview calibration snapshot；DAK `@cs2dak/maps` 仅作为独立交叉参考，不是 Broadcast 的 runtime/build owner。Broadcast 不把 DAK package shape 直接变成自己的 Radar domain contract；地图图片/游戏资产的许可与来源另行处理。
 
 Radar domain 与 renderer 分离：world→radar、floor、marker/utility semantics、interpolation/autozoom math 属于 Radar domain；React/SVG/Canvas/DOM 与 rAF scheduling 属于 Web presentation。
 
