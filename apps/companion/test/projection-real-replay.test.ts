@@ -16,6 +16,7 @@ import {
   replayCapture,
   verifyCapture,
   type CaptureIdentityMapping,
+  type ReplayFaultPlanV1,
   type VerifiedCapture,
 } from '@rivalhub-broadcast/testkit';
 import { describe, expect, it } from 'vitest';
@@ -33,6 +34,11 @@ const FULL_MATCH_CAPTURE_ID = '20260914T060149Z-4cda66b7-recovered-match';
 const FULL_MATCH_FRAME_COUNT = 16_382;
 const FULL_MATCH_FRAMES_SHA256 = '7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a';
 const FULL_MATCH_PRODUCER_INSTANCE_ID = 'full-match-projection-replay';
+const FULL_MATCH_SOURCE_GENERATION_BOUNDARY_INDEX = 2_000;
+const FULL_MATCH_MAP_RESET_INDEX = 10_000;
+const FULL_MATCH_FAULT_PLAN: ReplayFaultPlanV1 = {
+  sourceGenerationBoundary: [{ beforeCaptureIndex: FULL_MATCH_SOURCE_GENERATION_BOUNDARY_INDEX }],
+};
 
 const noOpProjectionScheduler: ProjectionScheduler = {
   setTimeout: () => ({}),
@@ -51,6 +57,7 @@ interface ReplayPipelineResult {
   readonly finalIdentityMapEpoch: number;
   readonly identityStates: readonly string[];
   readonly sideMappings: readonly string[];
+  readonly faultBoundaryStates: readonly string[];
 }
 
 function normalizeChannelSeq<T extends { readonly channelSeq: number }>(
@@ -134,6 +141,7 @@ async function runPipeline(
   manifest: BroadcastManifestV1,
   context: MatchContext,
   redactionMap: CaptureIdentityMapping,
+  faultPlan?: ReplayFaultPlanV1,
 ): Promise<ReplayPipelineResult> {
   let nowMonotonicMs = 0;
   const runtime = createProgramRuntime(FULL_MATCH_PRODUCER_INSTANCE_ID, {
@@ -152,11 +160,56 @@ async function runPipeline(
   let accepted = 0;
   const identityStates = new Set<string>();
   const sideMappings = new Set<string>();
+  const faultBoundaryStates: string[] = [];
 
   try {
     digestSnapshots(digest, coordinator);
-    for await (const event of replayCapture(capture, { mode: { kind: 'step' } })) {
-      if (event.kind !== 'frame') continue;
+    for await (const event of replayCapture(capture, {
+      mode: { kind: 'step' },
+      ...(faultPlan === undefined ? {} : { faultPlan }),
+    })) {
+      if (event.kind === 'source-generation-boundary') {
+        const boundary = runtime.advanceProgramSourceGeneration({
+          monotonicMs: event.scheduledElapsedUs / 1_000,
+          utc: new Date(event.scheduledElapsedUs / 1_000).toISOString(),
+        });
+        expect(boundary.disposition).toEqual({
+          kind: 'accepted',
+          reason: 'source-generation-advanced',
+        });
+        coordinator.afterRuntimeMutation(boundary);
+        const current = coordinator.getCurrent();
+        expect(current.program.status.identity).toBe('resolving');
+        expect(current.program.teams.ct.mode).toBe('neutral');
+        expect(current.radar.identityState).toBe('resolving');
+        faultBoundaryStates.push(
+          `${boundary.disposition.reason}:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
+        );
+        digestSnapshots(digest, coordinator);
+        continue;
+      }
+
+      if (
+        faultPlan !== undefined &&
+        event.captureIndex === FULL_MATCH_MAP_RESET_INDEX &&
+        event.occurrence === 0
+      ) {
+        const reset = runtime.resetMapExecution('same-map-restart', {
+          monotonicMs: event.receiveContext.receivedMonotonicMs,
+          utc: event.receiveContext.receivedAt,
+        });
+        expect(reset.disposition).toEqual({ kind: 'accepted', reason: 'map-execution-reset' });
+        coordinator.afterRuntimeMutation(reset);
+        const current = coordinator.getCurrent();
+        expect(current.program.status.identity).toBe('resolving');
+        expect(current.program.teams.ct.mode).toBe('neutral');
+        expect(current.radar.identityState).toBe('resolving');
+        faultBoundaryStates.push(
+          `${reset.disposition.reason}:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
+        );
+        digestSnapshots(digest, coordinator);
+      }
+
       if (!event.result.ok) {
         throw new Error(`完整 capture 在 seq=${event.sourceFrame.sequence} 适配失败`);
       }
@@ -190,6 +243,7 @@ async function runPipeline(
       finalIdentityMapEpoch: final.identity.mapEpoch,
       identityStates: [...identityStates].sort(),
       sideMappings: [...sideMappings].sort(),
+      faultBoundaryStates,
     };
   } finally {
     await coordinator.close();
@@ -213,10 +267,32 @@ describe('完整真实 GSI replay → Companion projection pipeline', () => {
       const redactionMap = await findCaptureRedactionMap(capture);
       const first = await runPipeline(capture, manifest, context, redactionMap);
       const second = await runPipeline(capture, manifest, context, redactionMap);
+      const faultedFirst = await runPipeline(
+        capture,
+        manifest,
+        context,
+        redactionMap,
+        FULL_MATCH_FAULT_PLAN,
+      );
+      const faultedSecond = await runPipeline(
+        capture,
+        manifest,
+        context,
+        redactionMap,
+        FULL_MATCH_FAULT_PLAN,
+      );
 
       expect(first.frames).toBe(FULL_MATCH_FRAME_COUNT);
       expect(first.accepted).toBe(FULL_MATCH_FRAME_COUNT);
       expect(second).toEqual(first);
+      expect(first.faultBoundaryStates).toEqual([]);
+      expect(faultedSecond).toEqual(faultedFirst);
+      expect(faultedFirst.faultBoundaryStates).toEqual([
+        'source-generation-advanced:resolving:resolving:neutral:1:1',
+        'map-execution-reset:resolving:resolving:neutral:1:2',
+      ]);
+      expect(faultedFirst.finalIdentitySourceGeneration).toBe(1);
+      expect(faultedFirst.finalIdentityMapEpoch).toBeGreaterThan(first.finalIdentityMapEpoch);
       expect(first.finalRuntimeSeq).toBeGreaterThan(0);
       expect(first.finalMapName).toBe('de_ancient');
       expect(first.finalMapEpoch).toBeGreaterThan(0);

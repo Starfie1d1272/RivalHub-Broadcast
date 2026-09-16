@@ -82,27 +82,33 @@ const defaultScheduler: ProjectionScheduler = {
 function defaultPublishers(
   onDiagnostic: ((diagnostic: { readonly code: string }) => void) | undefined,
 ): Required<ProjectionPublishers> {
-  const diagnosticOption = onDiagnostic === undefined ? {} : { onDiagnostic };
+  const diagnosticOption = (channel: string) =>
+    onDiagnostic === undefined
+      ? {}
+      : {
+          onDiagnostic: (diagnostic: { readonly code: string }) =>
+            onDiagnostic({ code: `${channel}-${diagnostic.code}` }),
+        };
   return {
     program: createLocalChannelPublisher({
       id: 'program',
       schema: programSnapshotSchema,
-      ...diagnosticOption,
+      ...diagnosticOption('program'),
     }),
     radar: createLocalChannelPublisher({
       id: 'radar',
       schema: radarSnapshotSchema,
-      ...diagnosticOption,
+      ...diagnosticOption('radar'),
     }),
     operator: createLocalChannelPublisher({
       id: 'operator',
       schema: operatorSnapshotSchema,
-      ...diagnosticOption,
+      ...diagnosticOption('operator'),
     }),
     assist: createLocalChannelPublisher({
       id: 'assist',
       schema: assistSnapshotSchema,
-      ...diagnosticOption,
+      ...diagnosticOption('assist'),
     }),
   };
 }
@@ -170,11 +176,11 @@ export class ProjectionCoordinator {
       this.identityResolver.bind(this.contextBinding.context);
       this.boundMatchId = this.contextBinding.context.matchId;
     }
-    this.sourceUnsubscribers = [
-      this.cstvSources.program.subscribe(() => this.refresh()),
-      this.cstvSources.lookahead.subscribe(() => this.refresh()),
-    ];
     this.current = this.refresh();
+    this.sourceUnsubscribers = [
+      this.cstvSources.program.subscribe(() => this.refreshOperator()),
+      this.cstvSources.lookahead.subscribe(() => this.refreshOperator()),
+    ];
   }
 
   setMatchContextBinding(binding: MatchContextBinding | undefined): ProjectionBundle {
@@ -376,16 +382,7 @@ export class ProjectionCoordinator {
         payload: mapRadarFrame(radar),
       }),
     );
-    this.publishChannel('operator', () =>
-      this.publishers.operator.publish({
-        type: 'snapshot',
-        protocolVersion: LOCAL_PROTOCOL_VERSION,
-        channel: 'operator',
-        schemaVersion: OPERATOR_SCHEMA_VERSION,
-        cursor: operator.cursor,
-        payload: mapOperatorProjection(operator),
-      }),
-    );
+    this.publishOperator(operator);
     this.publishChannel('assist', () =>
       this.publishers.assist.publish({
         type: 'snapshot',
@@ -394,6 +391,39 @@ export class ProjectionCoordinator {
         schemaVersion: ASSIST_SCHEMA_VERSION,
         cursor: assist.cursor,
         payload: mapObserverAssistProjection(assist),
+      }),
+    );
+  }
+
+  private refreshOperator(): ProjectionBundle {
+    if (this.closed || this.refreshing) return this.current;
+    this.refreshing = true;
+    try {
+      const runtimeSnapshot = this.programRuntime.getSnapshot();
+      const operator = projectOperator({
+        runtime: runtimeSnapshot,
+        context: this.contextBinding,
+        identity: this.current.identity,
+        cstvSources: this.cstvSources,
+        nowMonotonicMs: this.nowMonotonicMs(),
+      });
+      this.current = { ...this.current, operator };
+      this.publishOperator(operator);
+      return this.current;
+    } finally {
+      this.refreshing = false;
+    }
+  }
+
+  private publishOperator(operator: OperatorProjection): void {
+    this.publishChannel('operator', () =>
+      this.publishers.operator.publish({
+        type: 'snapshot',
+        protocolVersion: LOCAL_PROTOCOL_VERSION,
+        channel: 'operator',
+        schemaVersion: OPERATOR_SCHEMA_VERSION,
+        cursor: operator.cursor,
+        payload: mapOperatorProjection(operator),
       }),
     );
   }

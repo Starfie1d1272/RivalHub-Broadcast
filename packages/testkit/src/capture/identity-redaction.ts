@@ -47,8 +47,16 @@ function redactPlayerId(sourcePlayerId: string, mapping: CaptureIdentityMapping)
   return redacted;
 }
 
+function redactedOptionalPlayerId(sourcePlayerId: string): string {
+  let hash = 0x811c9dc5;
+  for (const character of sourcePlayerId) {
+    hash = Math.imul(hash ^ character.codePointAt(0)!, 0x01000193);
+  }
+  return `redacted-player-${(hash >>> 0).toString(16).padStart(8, '0')}`;
+}
+
 function redactOptionalPlayerId(sourcePlayerId: string, mapping: CaptureIdentityMapping): string {
-  return mappedPlayerId(sourcePlayerId, mapping) ?? sourcePlayerId;
+  return mappedPlayerId(sourcePlayerId, mapping) ?? redactedOptionalPlayerId(sourcePlayerId);
 }
 
 export function redactObservedPlayerIds(

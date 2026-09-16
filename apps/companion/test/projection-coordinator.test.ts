@@ -10,7 +10,11 @@ import {
   type ProjectionScheduler,
 } from '../src/projections/projection-coordinator.js';
 import { createProgramRuntime } from '../src/runtime/program-runtime.js';
-import { createCstvSourceManagers } from '../src/telemetry/cstv-source-manager.js';
+import {
+  createCstvSourceManagers,
+  type CstvSourceManager,
+  type CstvSourceManagers,
+} from '../src/telemetry/cstv-source-manager.js';
 import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
 import {
   MatchContextController,
@@ -121,7 +125,67 @@ class ManualProjectionScheduler implements ProjectionScheduler {
   }
 }
 
+function observableCstvSources(): {
+  readonly sources: CstvSourceManagers;
+  readonly emitLookahead: () => void;
+} {
+  const createSource = (role: 'program' | 'lookahead') => {
+    const listeners = new Set<() => void>();
+    const source: CstvSourceManager & { emit(): void } = {
+      role,
+      start: () => {},
+      stop: async () => {},
+      getHealth: () => ({ role, state: 'disabled', generation: 0, reconnectAttempt: 0 }),
+      getRecentGameEvents: () => [],
+      getRecentDiagnostics: () => [],
+      getSnapshot: () => ({
+        health: { role, state: 'disabled', generation: 0, reconnectAttempt: 0 },
+        recentGameEvents: [],
+        recentDiagnostics: [],
+      }),
+      subscribe: (listener) => {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+      emit: () => {
+        for (const listener of listeners) listener();
+      },
+    };
+    return source;
+  };
+  const program = createSource('program');
+  const lookahead = createSource('lookahead');
+  return { sources: { program, lookahead }, emitLookahead: () => lookahead.emit() };
+}
+
 describe('ProjectionCoordinator', () => {
+  it('routes CSTV health changes to Operator without advancing other channel sequences', async () => {
+    const { sources, emitLookahead } = observableCstvSources();
+    const runtime = createProgramRuntime('coordinator-cstv-side-channel');
+    const coordinator = createProjectionCoordinator({
+      programRuntime: runtime,
+      cstvSources: sources,
+      nowMonotonicMs: () => 0,
+    });
+    const initial = {
+      program: coordinator.getPublisher('program').getCurrent()?.channelSeq,
+      radar: coordinator.getPublisher('radar').getCurrent()?.channelSeq,
+      operator: coordinator.getPublisher('operator').getCurrent()?.channelSeq,
+      assist: coordinator.getPublisher('assist').getCurrent()?.channelSeq,
+    };
+
+    emitLookahead();
+
+    expect(coordinator.getPublisher('program').getCurrent()?.channelSeq).toBe(initial.program);
+    expect(coordinator.getPublisher('radar').getCurrent()?.channelSeq).toBe(initial.radar);
+    expect(coordinator.getPublisher('assist').getCurrent()?.channelSeq).toBe(initial.assist);
+    expect(coordinator.getPublisher('operator').getCurrent()?.channelSeq).toBe(
+      (initial.operator ?? 0) + 1,
+    );
+
+    await coordinator.close();
+  });
+
   it('publishes current baseline snapshots and refreshes after accepted runtime mutation', async () => {
     const runtime = createProgramRuntime('coordinator-producer');
     const coordinator = createProjectionCoordinator({

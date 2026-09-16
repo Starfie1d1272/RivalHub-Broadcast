@@ -30,7 +30,6 @@ import {
   GSI_REQUEST_TIMEOUT_MS,
   registerGsiIngress,
   type AcceptedRawSink,
-  type CompanionRuntimeDiagnosticCode,
   type GsiClock,
   type GsiDiagnosticsSink,
   type GsiSequenceSource,
@@ -86,6 +85,19 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         programRuntime.getSnapshot().current.programSource.lastAccepted?.receivedMonotonicMs ?? 0;
       return Math.max(performance.now(), lastReceived);
     });
+  const app = Fastify({
+    logger: options.logger ?? false,
+    requestTimeout: GSI_REQUEST_TIMEOUT_MS,
+  });
+  let runtimeDegraded = false;
+  const emittedRuntimeDiagnostics = new Set<string>();
+  const recordRuntimeDiagnostic = (code: string, source: 'projection' | 'telemetry'): void => {
+    runtimeDegraded = true;
+    debugEvidenceStore.recordRuntimeDiagnostic(code);
+    if (emittedRuntimeDiagnostics.has(code)) return;
+    emittedRuntimeDiagnostics.add(code);
+    app.log.warn({ code }, `Companion ${source} 路径已降级`);
+  };
   const projectionCoordinator =
     options.projectionCoordinator ??
     createProjectionCoordinator({
@@ -97,15 +109,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       ...(projectionNowMonotonicMs === undefined
         ? {}
         : { nowMonotonicMs: projectionNowMonotonicMs }),
+      onDiagnostic: ({ code }) => recordRuntimeDiagnostic(code, 'projection'),
     });
   const qualificationMode = options.qualificationMode ?? false;
-  let runtimeDegraded = false;
-  const emittedRuntimeDiagnostics = new Set<CompanionRuntimeDiagnosticCode>();
-
-  const app = Fastify({
-    logger: options.logger ?? false,
-    requestTimeout: GSI_REQUEST_TIMEOUT_MS,
-  });
 
   app.get('/health', () => {
     const recorderHealth = recorder.getHealth();
@@ -161,11 +167,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         options.onGsiDiagnostics?.(diagnostics);
       },
       onRuntimeDiagnostic: (code) => {
-        runtimeDegraded = true;
-        debugEvidenceStore.recordRuntimeDiagnostic(code);
-        if (emittedRuntimeDiagnostics.has(code)) return;
-        emittedRuntimeDiagnostics.add(code);
-        app.log.warn({ code }, 'Companion telemetry 路径已降级');
+        recordRuntimeDiagnostic(code, 'telemetry');
       },
     });
   }

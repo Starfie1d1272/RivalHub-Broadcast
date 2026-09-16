@@ -1,4 +1,5 @@
 import {
+  getProjectionIdentityCapabilities,
   getProjectionIdentityState,
   getProgramSafeRuntimeFreshness,
   selectProgramSafeRuntimeView,
@@ -113,7 +114,7 @@ export function projectOperator(input: OperatorProjectionInput): OperatorProject
     },
     identity: {
       state: getProjectionIdentityState(safeRuntime, input.identity),
-      capabilities: { ...input.identity.capabilities },
+      capabilities: getProjectionIdentityCapabilities(safeRuntime, input.identity),
       sideMapping: { ...input.identity.sideMapping },
       issues: input.identity.issues.map((issue) => ({ ...issue })),
       resolvedCount: input.identity.players.length,

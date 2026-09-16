@@ -13,6 +13,7 @@ import {
   type RuntimeState,
 } from '../src/runtime/index.js';
 import {
+  getProjectionIdentityCapabilities,
   projectObserverAssist,
   projectProgram,
   selectProgramSafeRuntimeView,
@@ -336,6 +337,17 @@ describe('Program-safe projections', () => {
     });
     expect(projection.players.every((item) => item.canonicalPlayerId === null)).toBe(true);
     expect(projection.status.identity).toBe('resolving');
+    expect(
+      getProjectionIdentityCapabilities(selectProgramSafeRuntimeView(state), {
+        ...identity,
+        sourceGeneration: 1,
+      }),
+    ).toEqual({
+      canonicalPlayerMapping: false,
+      canonicalTeamBranding: false,
+      identityDependentResult: false,
+      neutralTelemetry: true,
+    });
   });
 
   it('does not expose the previous Program source after a source generation advance', () => {
