@@ -21,6 +21,14 @@
     "./game-events": {
       "types": "./dist/game-events/index.d.ts",
       "import": "./dist/game-events/index.js"
+    },
+    "./match-context": {
+      "types": "./dist/match-context/index.d.ts",
+      "import": "./dist/match-context/index.js"
+    },
+    "./identity": {
+      "types": "./dist/identity/index.d.ts",
+      "import": "./dist/identity/index.js"
     }
   },
   "scripts": {

@@ -12,10 +12,17 @@
     }
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "build": "tsc -b tsconfig.json --pretty false --force",
+    "typecheck": "tsc -b tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
+  },
+  "dependencies": {
+    "@rivalhub-broadcast/core": "workspace:*",
+    "zod": "catalog:"
   },
   "devDependencies": {
-    "@typescript/native": "catalog:"
+    "@rivalhub-broadcast/testkit": "workspace:*",
+    "@typescript/native": "catalog:",
+    "@types/node": "catalog:",
+    "vitest": "catalog:"
   }
 }

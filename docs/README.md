@@ -7,6 +7,7 @@
 - [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里；顶层产品结构按“赛事与实时数据 / 正式节目制播 / Observer Assist”三条能力线组织。
 - [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项；runtime 模型以 current snapshot + explicit transition 为核心，并区分 Program-safe / Assist-private state、source-local continuity，以及第一方 RivalHub adapter 与 Shared Runtime Foundation 的依赖边界。
 - [`telemetry.md`](telemetry.md)：Telemetry / GSI 设计与 evidence baseline，定义 Raw GSI、block-specific source semantics、`TelemetryObservation`、production capture、replay 与真实 CS2 evidence/验证边界。
+- [`protocol.md`](protocol.md)：M2 RivalHub read-side Manifest/ScheduleWindow contract、authority、identity proof、fixture 与独立 LKG 边界；#29 local protocol 仍另行实现。
 - [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、三条产品能力线的阶段映射、RivalHub read/write 集成顺序与阶段依赖。
 - [`development-validation.md`](development-validation.md)：跨平台开发/CI、真实 Windows + CS2/CSTV + OBS 验收与 reference corpus 的职责边界。
 - [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
@@ -51,7 +52,6 @@ RivalHub 主仓 #610 / #613 / #615 拥有主站 canonical Match Runtime、Broadc
 
 后续文档按实现需要 just-in-time 创建，不提前为尚未进入当前 milestone 的细节建立空规范。预期主题包括：
 
-- `protocol.md`：Broadcast-owned local protocol，以及 RivalHub BroadcastManifest / ReliableObservation / BroadcastLiveSnapshot 的 consumer/producer contract；
 - `scene-engine.md`：BaseScene / OverlayCue、scene policy 与 operator override；
 - `radar.md`：MapGeometryProvider、RadarFrame、utility、interpolation/autozoom、renderer/asset 边界；
 - `testing.md`：record/replay、fault injection、slow consumer、source generation、Program/Assist non-leak、visual regression、soak；
