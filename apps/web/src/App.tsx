@@ -85,7 +85,7 @@ export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }
       {surface.realtimeChannel === null ? null : (
         <SurfaceConnectionMarker channel={surface.realtimeChannel} />
       )}
-      <p className="shell__note">工程 shell 已就绪；本页面暂不连接运行时数据。</p>
+      <p className="shell__note">Realtime transport 已连接；Gameplay renderer 属于后续 Issue。</p>
     </main>
   );
 }

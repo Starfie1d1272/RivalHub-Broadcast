@@ -68,7 +68,10 @@ Issue #32 的 production Local Web Host 属于本层：同一 Fastify instance �
 assets 与 Local Protocol V1 WebSocket，普通浏览器、Vite dev proxy 和未来 OBS Browser
 Source 都复用当前 page Origin 推导出的 `ws:`/`wss:` URL。自动化验证应覆盖 static route、
 subprotocol/Origin policy、baseline/reconnect、publisher latest-wins、buffer guard、
-heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。
+heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。`pnpm build` 后还必须运行
+`pnpm local-web:production-smoke`，直接消费真实 `apps/web/dist`，验证 `/program` 返回实际
+Vite HTML、hashed asset 可访问，以及 Program WebSocket 能 upgrade 并发送 baseline；不能用
+Vitest 内部另行构建来替代这一 post-build 组合 smoke。
 
 非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。任何透明 topmost/click-through 桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 

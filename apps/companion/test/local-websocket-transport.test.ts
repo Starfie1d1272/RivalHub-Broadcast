@@ -238,6 +238,22 @@ describe('local WebSocket transport lifecycle', () => {
     expect(publisher.subscriberCount).toBe(0);
   });
 
+  it('cleans the publisher subscription and heartbeat after a remote normal close', async () => {
+    const publisher = new FakePublisher();
+    const scheduler = new FakeHeartbeatScheduler();
+    const socket = new FakeSocket();
+    const transport = createTransport(publisher, scheduler);
+
+    attach(transport, socket);
+    expect(publisher.subscriberCount).toBe(1);
+
+    socket.emit('close', 1000, Buffer.from('remote close'));
+    await flushMicrotasks();
+
+    expect(publisher.subscriberCount).toBe(0);
+    expect(scheduler.cleared).toBe(true);
+  });
+
   it('uses one shared heartbeat timer and terminates only connections that miss two ticks', () => {
     const publisher = new FakePublisher();
     const scheduler = new FakeHeartbeatScheduler();

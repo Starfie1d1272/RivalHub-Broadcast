@@ -53,6 +53,9 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Production Web host smoke
+        run: pnpm local-web:production-smoke
+
   platform:
     name: platform / ${{ matrix.name }}
     runs-on: ${{ matrix.runner }}
@@ -91,6 +94,9 @@ jobs:
 
       - name: Build
         run: pnpm build
+
+      - name: Production Web host smoke
+        run: pnpm local-web:production-smoke
 
   qualification_offline:
     name: qualification / offline / ${{ matrix.name }}
