@@ -18,6 +18,7 @@ import {
 } from './program-safe-runtime.js';
 import type { ProjectionCursor } from './cursor.js';
 import { getProjectionIdentityState, isProjectionIdentityCurrent } from './identity.js';
+import { derivePlayerLifeState, type PlayerLifeState } from './player-life-state.js';
 
 export interface ProgramTeamPresentationCanonical {
   readonly mode: 'canonical';
@@ -81,6 +82,7 @@ export interface ProgramPlayerProjection {
   readonly side: SourceSide;
   readonly observerSlot: number | null;
   readonly activity: string | null;
+  readonly lifeState: PlayerLifeState;
   readonly state: ProgramPlayerStateProjection | null;
   readonly matchStats: ProgramMatchStatsProjection | null;
   readonly weapons: readonly ProgramWeaponProjection[];
@@ -288,6 +290,7 @@ function projectPlayer(
     side: player.side ?? 'unknown',
     observerSlot: nullable(player.observerSlot),
     activity: nullable(player.activity),
+    lifeState: derivePlayerLifeState(player.state?.health),
     state,
     matchStats,
     weapons: [...(player.weapons ?? [])]

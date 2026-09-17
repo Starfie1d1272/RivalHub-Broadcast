@@ -34,4 +34,4 @@ export {
   positiveSafeIntegerSchema,
   projectionCursorSchema,
 } from './shared.js';
-export type { LocalSnapshotV1, ProjectionCursor } from './shared.js';
+export type { LocalSnapshot, LocalSnapshotV1, ProjectionCursor } from './shared.js';

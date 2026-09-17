@@ -1,0 +1,262 @@
+import { appendFileSync, readFileSync } from 'node:fs';
+import { pathToFileURL } from 'node:url';
+
+export const CI_JOB_IDS = Object.freeze([
+  'quality',
+  'visual',
+  'platform',
+  'qualification_offline',
+  'qualification_windows',
+]);
+
+const DOCS_ONLY_PATTERN = /^(?:docs\/.*|.*\.(?:md|mdx))$/;
+const KNOWN_QUALITY_PREFIXES = ['apps/', 'packages/', 'tests/', 'scripts/'];
+const PLATFORM_PREFIXES = [
+  'apps/companion/',
+  'packages/telemetry-gsi/',
+  'packages/telemetry-cstv/',
+  'scripts/',
+];
+const QUALIFICATION_PREFIXES = ['scripts/qualification/', 'apps/companion/src/qualification/'];
+
+function normalizePath(path) {
+  return typeof path === 'string' ? path.replaceAll('\\', '/').replace(/^\.\//, '') : '';
+}
+
+function basename(path) {
+  return path.slice(path.lastIndexOf('/') + 1);
+}
+
+function isForcedFullPath(path) {
+  const name = basename(path);
+  return (
+    path.startsWith('.github/') ||
+    path.startsWith('scripts/ci/') ||
+    name === 'package.json' ||
+    path === 'pnpm-lock.yaml' ||
+    path === 'pnpm-workspace.yaml' ||
+    name.startsWith('tsconfig') ||
+    name.startsWith('eslint.config.') ||
+    name.startsWith('vitest.config.') ||
+    name.startsWith('playwright.config.')
+  );
+}
+
+function isDocsOnlyPath(path) {
+  return DOCS_ONLY_PATTERN.test(path);
+}
+
+function isKnownQualityPath(path) {
+  return (
+    KNOWN_QUALITY_PREFIXES.some((prefix) => path.startsWith(prefix)) || isQualificationPath(path)
+  );
+}
+
+function isVisualPath(path) {
+  return (
+    path.startsWith('apps/web/') ||
+    path.startsWith('tests/visual/') ||
+    path === 'packages/protocol/src/program.ts' ||
+    path === 'packages/protocol/src/version.ts' ||
+    path.includes('program/fixtures/') ||
+    (path.includes('/program/') && path.endsWith('.css'))
+  );
+}
+
+function isPlatformPath(path) {
+  return PLATFORM_PREFIXES.some((prefix) => path.startsWith(prefix));
+}
+
+function isQualificationPath(path) {
+  return (
+    QUALIFICATION_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
+    /(?:^|\/)gamestate_integration[^/]*\.cfg(?:\.template)?$/.test(path)
+  );
+}
+
+function isUnsafeChangeStatus(status) {
+  return !/^[AM]$/.test(status ?? '');
+}
+
+function fullPlan(reason, includeOfflineQualification = false) {
+  return {
+    runQuality: true,
+    runVisual: true,
+    runPlatform: true,
+    runQualification: true,
+    requiredJobs: CI_JOB_IDS.filter(
+      (job) => includeOfflineQualification || job !== 'qualification_offline',
+    ),
+    reason,
+  };
+}
+
+function selectivePlan(changedFiles) {
+  const runQuality = changedFiles.some(({ path }) => isKnownQualityPath(path));
+  const runVisual = changedFiles.some(({ path }) => isVisualPath(path));
+  const runPlatform = changedFiles.some(({ path }) => isPlatformPath(path));
+  const runQualification = changedFiles.some(({ path }) => isQualificationPath(path));
+  const requiredJobs = CI_JOB_IDS.filter((job) => {
+    if (job === 'quality') return runQuality;
+    if (job === 'visual') return runVisual;
+    if (job === 'platform') return runPlatform;
+    if (job === 'qualification_offline') return false;
+    return runQualification;
+  });
+
+  return {
+    runQuality,
+    runVisual,
+    runPlatform,
+    runQualification,
+    requiredJobs,
+    reason: `pull_request changed surface classified (${changedFiles.length} file(s))`,
+  };
+}
+
+/** @typedef {{ path: string, status?: string }} ChangedFile */
+
+/**
+ * Parse `git diff --name-status --find-renames` output without treating a
+ * rename as a safe content-preserving change. The caller can therefore fail
+ * closed before trying to classify either side of the rename.
+ *
+ * @param {string} output
+ * @returns {ChangedFile[]}
+ */
+export function parseGitDiffNameStatus(output) {
+  const changedFiles = [];
+  for (const line of output.split(/\r?\n/)) {
+    if (line.trim() === '') continue;
+    const fields = line.split('\t');
+    const status = fields[0] ?? '';
+    const paths = fields.slice(1).filter((path) => path !== '');
+    if (paths.length === 0) {
+      changedFiles.push({ path: '', status });
+      continue;
+    }
+    for (const path of paths) changedFiles.push({ path: normalizePath(path), status });
+  }
+  return changedFiles;
+}
+
+/**
+ * @param {{ eventName?: string, changedFiles?: Array<ChangedFile | string> }} [options]
+ */
+export function createCiPlan(options = {}) {
+  const eventName = options.eventName ?? 'pull_request';
+  if (eventName !== 'pull_request') return fullPlan(`forced full for ${eventName}`, true);
+
+  const changedFiles = (options.changedFiles ?? []).map((entry) =>
+    typeof entry === 'string'
+      ? { path: normalizePath(entry), status: 'M' }
+      : { path: normalizePath(entry.path), status: entry.status ?? 'M' },
+  );
+
+  if (changedFiles.length === 0) return fullPlan('forced full: missing pull request file list');
+  if (
+    changedFiles.some(
+      ({ path, status }) => path === '' || isUnsafeChangeStatus(status) || isForcedFullPath(path),
+    )
+  ) {
+    return fullPlan('forced full: unsafe, toolchain, workflow, or planner change');
+  }
+  if (changedFiles.every(({ path }) => isDocsOnlyPath(path))) {
+    return {
+      runQuality: false,
+      runVisual: false,
+      runPlatform: false,
+      runQualification: false,
+      requiredJobs: [],
+      reason: 'docs-only change',
+    };
+  }
+
+  const plan = selectivePlan(changedFiles);
+  if (!isKnownQualityPathForAll(changedFiles)) {
+    return fullPlan('forced full: unknown or unclassified path');
+  }
+  return plan;
+}
+
+function isKnownQualityPathForAll(changedFiles) {
+  return changedFiles.every(({ path }) => isDocsOnlyPath(path) || isKnownQualityPath(path));
+}
+
+/**
+ * @param {{ planResult?: string, requiredJobs: unknown, jobResults: Record<string, unknown> }} input
+ */
+export function evaluateCiGate(input) {
+  const failures = [];
+  if (input.planResult !== 'success') failures.push(`plan=${input.planResult ?? 'missing'}`);
+
+  if (!Array.isArray(input.requiredJobs)) {
+    failures.push('required_jobs=invalid');
+  } else {
+    for (const job of input.requiredJobs) {
+      if (!CI_JOB_IDS.includes(job)) {
+        failures.push(`required_job=${String(job)}`);
+        continue;
+      }
+      const result = input.jobResults[job];
+      if (result !== 'success') failures.push(`${job}=${result ?? 'missing'}`);
+    }
+  }
+
+  return { ok: failures.length === 0, failures };
+}
+
+function outputPlan(plan) {
+  return {
+    run_quality: String(plan.runQuality),
+    run_visual: String(plan.runVisual),
+    run_platform: String(plan.runPlatform),
+    run_qualification: String(plan.runQualification),
+    required_jobs: JSON.stringify(plan.requiredJobs),
+    reason: plan.reason,
+  };
+}
+
+function runPlanner() {
+  const changedFiles = process.env.CHANGED_FILES_FILE
+    ? parseGitDiffNameStatus(readFileSync(process.env.CHANGED_FILES_FILE, 'utf8'))
+    : [];
+  const plan = createCiPlan({ eventName: process.env.GITHUB_EVENT_NAME, changedFiles });
+  const outputs = outputPlan(plan);
+  const output = Object.entries(outputs)
+    .map(([key, value]) => `${key}=${value}`)
+    .join('\n');
+  if (process.env.GITHUB_OUTPUT) appendFileSync(process.env.GITHUB_OUTPUT, `${output}\n`);
+  console.log(JSON.stringify(plan));
+}
+
+function runGate() {
+  let requiredJobs;
+  try {
+    requiredJobs = JSON.parse(process.env.REQUIRED_JOBS ?? 'null');
+  } catch {
+    requiredJobs = null;
+  }
+  const result = evaluateCiGate({
+    planResult: process.env.PLAN_RESULT,
+    requiredJobs,
+    jobResults: {
+      quality: process.env.QUALITY_RESULT,
+      visual: process.env.VISUAL_RESULT,
+      platform: process.env.PLATFORM_RESULT,
+      qualification_offline: process.env.QUALIFICATION_OFFLINE_RESULT,
+      qualification_windows: process.env.QUALIFICATION_WINDOWS_RESULT,
+    },
+  });
+  if (!result.ok) {
+    console.error(`ci-gate failed: ${result.failures.join(', ')}`);
+    process.exitCode = 1;
+    return;
+  }
+  console.log('ci-gate passed: all planner-selected jobs succeeded');
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  if (process.argv.includes('--gate')) runGate();
+  else runPlanner();
+}

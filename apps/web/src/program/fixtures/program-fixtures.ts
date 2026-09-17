@@ -123,6 +123,7 @@ function makePlayer(
     side,
     observerSlot,
     activity: 'playing',
+    lifeState: 'alive',
     state: { ...DEFAULT_PLAYER_STATE },
     matchStats: { ...DEFAULT_MATCH_STATS },
     weapons: [],
@@ -333,6 +334,7 @@ const stressPlayers = [
     canonicalPlayerId: `stress-canonical-player-${index + 1}`,
     displayName,
     displayNameSource: 'canonical',
+    lifeState: (['alive', 'alive', 'dead', 'unknown', 'alive'] as const)[index % 5]!,
     state,
     matchStats: {
       kills: [18, 11, 4, null, 22][index % 5] ?? null,

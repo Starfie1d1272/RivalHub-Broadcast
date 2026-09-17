@@ -82,7 +82,7 @@ function snapshot(channelSeq: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('Local Protocol V1 acceptance', () => {
+describe('Local Protocol V1 and Program schema V2 acceptance', () => {
   it('keeps channel schemas independent and strips future fields', () => {
     const parsed = programSnapshotSchema.parse({
       ...snapshot(1),
@@ -91,9 +91,46 @@ describe('Local Protocol V1 acceptance', () => {
     });
 
     expect(LOCAL_PROTOCOL_SUBPROTOCOL).toBe('rivalhub-broadcast.local.v1');
+    expect(LOCAL_PROTOCOL_VERSION).toBe(1);
+    expect(PROGRAM_SCHEMA_VERSION).toBe(2);
     expect(parsed.channel).toBe('program');
     expect(parsed).not.toHaveProperty('lookahead');
     expect(parsed.payload).not.toHaveProperty('futureCue');
+  });
+
+  it('requires the Program v2 player life state and rejects missing values', () => {
+    const player = {
+      sourcePlayerId: 'player-1',
+      canonicalPlayerId: null,
+      displayName: 'Player 1',
+      displayNameSource: 'observed' as const,
+      avatarUrl: null,
+      side: 'CT' as const,
+      observerSlot: 1,
+      activity: 'playing',
+      lifeState: 'alive' as const,
+      state: null,
+      matchStats: null,
+      weapons: [],
+    };
+
+    expect(
+      programSnapshotSchema.parse({
+        ...snapshot(1),
+        payload: { ...payload(), players: [player] },
+      }).payload.players[0]?.lifeState,
+    ).toBe('alive');
+    const missingLifeState: Record<string, unknown> = { ...player };
+    delete missingLifeState.lifeState;
+    expect(() =>
+      programSnapshotSchema.parse({
+        ...snapshot(1),
+        payload: {
+          ...payload(),
+          players: [missingLifeState],
+        },
+      }),
+    ).toThrow();
   });
 
   it('accepts monotonic snapshots, ignores duplicates, and emits epoch reset signals', () => {
@@ -155,7 +192,7 @@ describe('Local Protocol V1 acceptance', () => {
     ).toMatchObject({ kind: 'rejected', reason: 'schema-invalid' });
     expect(
       acceptSnapshot(
-        snapshot(1, { schemaVersion: 2 }),
+        snapshot(1, { schemaVersion: 1 }),
         programSnapshotSchema,
         createSnapshotAcceptanceState(),
       ),

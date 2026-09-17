@@ -3,7 +3,7 @@ import { z } from 'zod';
 import {
   localSnapshotEnvelopeSchema,
   projectionCursorSchema,
-  type LocalSnapshotV1,
+  type LocalSnapshot,
 } from './shared.js';
 import { PROGRAM_SCHEMA_VERSION } from './version.js';
 
@@ -73,6 +73,7 @@ const playerSchema = z.object({
   side: sourceSideSchema,
   observerSlot: nullableNumber,
   activity: nullableString,
+  lifeState: z.enum(['alive', 'dead', 'unknown']),
   state: playerStateSchema.nullable(),
   matchStats: matchStatsSchema.nullable(),
   weapons: z.array(weaponSchema),
@@ -170,7 +171,10 @@ export const programSnapshotSchema = localSnapshotEnvelopeSchema.extend({
 
 export type ProgramPayload = z.infer<typeof programPayloadSchema>;
 export type ProgramSnapshot = z.infer<typeof programSnapshotSchema>;
-export type ProgramSnapshotInput = Omit<LocalSnapshotV1<ProgramPayload>, 'channelSeq'> & {
+export type ProgramSnapshotInput = Omit<
+  LocalSnapshot<ProgramPayload, typeof PROGRAM_SCHEMA_VERSION>,
+  'channelSeq'
+> & {
   readonly channel: 'program';
   readonly schemaVersion: typeof PROGRAM_SCHEMA_VERSION;
 };

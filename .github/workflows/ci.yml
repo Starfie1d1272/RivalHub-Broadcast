@@ -6,6 +6,8 @@ on:
     types: [opened, synchronize, reopened, ready_for_review]
   push:
     branches: [main]
+  schedule:
+    - cron: '0 10 * * *'
   workflow_dispatch:
 
 concurrency:
@@ -16,8 +18,43 @@ permissions:
   contents: read
 
 jobs:
+  plan:
+    name: plan
+    runs-on: ubuntu-24.04
+    outputs:
+      run_quality: ${{ steps.plan.outputs.run_quality }}
+      run_visual: ${{ steps.plan.outputs.run_visual }}
+      run_platform: ${{ steps.plan.outputs.run_platform }}
+      run_qualification: ${{ steps.plan.outputs.run_qualification }}
+      required_jobs: ${{ steps.plan.outputs.required_jobs }}
+      reason: ${{ steps.plan.outputs.reason }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+
+      - name: Collect pull request changed paths
+        shell: bash
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
+            git diff --name-status --find-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files.tsv"
+          else
+            : > "$RUNNER_TEMP/changed-files.tsv"
+          fi
+
+      - name: Plan changed-surface evidence
+        id: plan
+        run: node scripts/ci/plan.mjs
+        env:
+          CHANGED_FILES_FILE: ${{ runner.temp }}/changed-files.tsv
+
   quality:
     name: quality
+    if: ${{ needs.plan.outputs.run_quality == 'true' }}
+    needs: [plan]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -58,6 +95,8 @@ jobs:
 
   visual:
     name: visual
+    if: ${{ needs.plan.outputs.run_visual == 'true' }}
+    needs: [plan]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -93,6 +132,8 @@ jobs:
 
   platform:
     name: platform / ${{ matrix.name }}
+    if: ${{ needs.plan.outputs.run_platform == 'true' }}
+    needs: [plan]
     runs-on: ${{ matrix.runner }}
     strategy:
       fail-fast: false
@@ -133,40 +174,10 @@ jobs:
       - name: Production Web host smoke
         run: pnpm local-web:production-smoke
 
-  qualification_offline:
-    name: qualification / offline / ${{ matrix.name }}
-    runs-on: ${{ matrix.runner }}
-    strategy:
-      fail-fast: false
-      matrix:
-        include:
-          - name: Linux
-            runner: ubuntu-24.04
-          - name: macOS
-            runner: macos-15
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-
-      - name: Set up Node.js 24 and pnpm 12
-        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
-        with:
-          version: 12.3.4
-          runtime: node@24
-          cache: true
-          cache-dependency-path: pnpm-lock.yaml
-          require-lockfile: true
-          install: false
-
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-
-      - name: Run offline qualification
-        run: pnpm qualification:offline
-
   qualification_windows:
     name: qualification / Windows bundle
-    if: needs.quality.result == 'success' && needs.platform.result == 'success' && needs.qualification_offline.result == 'success'
-    needs: [quality, platform, qualification_offline]
+    if: ${{ needs.plan.outputs.run_qualification == 'true' }}
+    needs: [plan]
     runs-on: windows-2025
     env:
       QUALIFICATION_BUILD_ROOT: ${{ github.workspace }}/.agent-tmp/rivalhub-qualification-build
@@ -282,17 +293,53 @@ jobs:
           path: ${{ env.QUALIFICATION_BUILD_ROOT }}/*.zip
           if-no-files-found: error
 
+  qualification_offline:
+    name: qualification / offline / ${{ matrix.name }}
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [plan]
+    runs-on: ${{ matrix.runner }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - name: Linux
+            runner: ubuntu-24.04
+          - name: macOS
+            runner: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run offline qualification
+        run: pnpm qualification:offline
+
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [quality, visual, platform, qualification_offline, qualification_windows]
+    needs: [plan, quality, visual, platform, qualification_offline, qualification_windows]
     runs-on: ubuntu-24.04
     steps:
-      - name: Fail when a required job did not succeed
-        if: ${{ needs.quality.result != 'success' || needs.visual.result != 'success' || needs.platform.result != 'success' || needs.qualification_offline.result != 'success' || needs.qualification_windows.result != 'success' }}
-        run: |
-          echo "quality=${{ needs.quality.result }} visual=${{ needs.visual.result }} platform=${{ needs.platform.result }} qualification_offline=${{ needs.qualification_offline.result }} qualification_windows=${{ needs.qualification_windows.result }}" >&2
-          exit 1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - name: 确认必需 job 均已成功
-        run: echo "quality、visual、platform、offline qualification 和 Windows bundle smoke 均已成功"
+      - name: Validate planner-selected jobs
+        run: node scripts/ci/plan.mjs --gate
+        env:
+          PLAN_RESULT: ${{ needs.plan.result }}
+          REQUIRED_JOBS: ${{ needs.plan.outputs.required_jobs }}
+          QUALITY_RESULT: ${{ needs.quality.result }}
+          VISUAL_RESULT: ${{ needs.visual.result }}
+          PLATFORM_RESULT: ${{ needs.platform.result }}
+          QUALIFICATION_OFFLINE_RESULT: ${{ needs.qualification_offline.result }}
+          QUALIFICATION_WINDOWS_RESULT: ${{ needs.qualification_windows.result }}
