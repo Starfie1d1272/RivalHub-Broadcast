@@ -17,7 +17,7 @@
 - bounded latest-wins delivery；
 - capture / replay / fault injection；
 - Program / Assist 数据隔离；
-- 本地协议与 schema 版本化；
+- Local Protocol 与 schema 版本化；
 - architecture guard；
 - 风险分层 CI。
 
@@ -25,20 +25,20 @@
 
 ## B. 独立 Program 产品
 
-目标：即使不连接 RivalHub，也能作为可用的 CS2 本地 HUD / broadcast tool 运行。
+目标：即使不连接 RivalHub，也能作为可用的 CS2 本地 HUD / broadcast tool 运行。这一阶段对应 ADR-0006 的**独立模式**产品方向；校园赛、社区赛和小型赛事是主要适用场景，但不是独立的运行模式名称。
 
 包括：
 
 - 本地比赛上下文；
 - Gameplay HUD；
-- Radar renderer；
+- Radar Renderer；
 - 基础配置；
 - Program Browser Source；
 - Waiting / Matchup / Gameplay 等最小节目流程；
 - 中文操作界面；
 - 可重复视觉与浏览器回归。
 
-这一步决定 Standalone / Community 模式是否真正成立。
+这一步决定独立模式是否真正成立。
 
 ## C. 完整制播工作区
 
@@ -68,14 +68,14 @@
 - source reconnect 后重新证明 alignment；
 - FutureKillCue；
 - 可配置提前量；
-- 私有 Assist host；
+- 私有 Assist Host；
 - 真实比赛人因验证。
 
 第一层产品保持低信息密度：countdown + killer → victim；只有真实使用证明需要时才增加聚类、推荐焦点或更复杂 cue。
 
 ## E. RivalHub 深度集成
 
-目标：在不牺牲 Standalone 能力的前提下复用 RivalHub 的完整赛事上下文和数据闭环。
+目标：在不牺牲独立模式能力的前提下复用 RivalHub 的完整赛事上下文和数据闭环。
 
 包括：
 
@@ -97,7 +97,7 @@ RivalHub 是更完整的 context provider，不反向成为 Core、Radar 或 Loo
 - Windows packaging / launcher；
 - 配置迁移；
 - 日志与诊断导出；
-- 生产 preset；
+- production preset；
 - 长时间 soak；
 - 安全与凭据边界；
 - 版本兼容与回滚；
@@ -114,4 +114,5 @@ RivalHub 是更完整的 context provider，不反向成为 Core、Radar 或 Loo
 - 共享能力先复用现有 owner；
 - 第二个真实 consumer/provider 出现前不抽象通用插件框架；
 - 用户可见文案中文优先；
+- 开发者文档保留 canonical engineering terms；
 - 真实 Windows + CS2 + OBS evidence 不由 mock 或 CI 代替。
