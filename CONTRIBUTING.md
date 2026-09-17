@@ -19,12 +19,13 @@
 
 必须遵守：
 
-- 标题、按钮、状态、提示、错误说明和辅助文本使用清晰中文；
-- 不直接展示内部状态枚举、组件名或架构术语；
+- 面向赛事工作人员的标题、按钮、状态、提示、错误说明和辅助文本使用清晰中文；
+- 用户界面不直接展示内部状态枚举、组件名或架构术语；
 - 代码符号、环境变量、协议字段、精确协议字符串和第三方专名保持原文；
 - HTTP、WebSocket、OBS、GSI、CSTV 等标准专名可以保留；
-- `host`、`renderer`、`baseline`、`allowlist`、`loopback`、`qualification` 等普通工程词在自然语言中优先使用中文；
-- Debug 页可以展示原始 JSON，但其标题、解释和操作提示必须中文化。
+- 开发者文档以中文句子为主，但 `RuntimeState`、`Projection → Renderer → Host`、`mapEpoch`、`Capture V1`、`Local Protocol` 等已经承担代码/架构索引作用的 canonical term 应保留；
+- `host`、`renderer`、`baseline`、`allowlist`、`loopback`、`qualification` 等词只有在作为普通自然语言、且不会损失精确指代时才优先使用稳定中文表达；不得机械全局替换；
+- Debug 页可以展示原始 JSON，但其标题、解释和操作提示必须中文化；开发者诊断与维护型 CLI 可以保留必要机器状态和 canonical term，并提供中文解释。
 
 ## 工作单
 
