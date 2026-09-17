@@ -61,6 +61,23 @@ function connectionStateLabel(state: LocalChannelConnectionState): string {
   }
 }
 
+function recorderStateLabel(state: string | undefined): string {
+  switch (state) {
+    case 'recording':
+      return '正在记录';
+    case 'degraded':
+      return '已降级';
+    case 'failed':
+      return '故障';
+    case 'finalizing':
+      return '正在收尾';
+    case 'closed':
+      return '已关闭';
+    default:
+      return '未知';
+  }
+}
+
 function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }) {
   const client = useMemo(() => createLocalChannelClient(channel), [channel]);
   useEffect(() => {
@@ -127,6 +144,14 @@ function freshnessLabel(freshness: DebugFreshness): string {
   }
 }
 
+function userVisibleDebugError(error: unknown): string {
+  if (error instanceof Error && error.message.startsWith('本地制播服务返回 HTTP ')) {
+    return error.message;
+  }
+  if (error instanceof Error && error.message === '响应结构无法识别') return error.message;
+  return '无法连接本地制播服务';
+}
+
 function useDebugRuntime(): DebugFetchState {
   const [state, setState] = useState<DebugFetchState>({ kind: 'loading' });
 
@@ -145,10 +170,7 @@ function useDebugRuntime(): DebugFetchState {
         if (active) setState({ kind: 'ready', data: parsed });
       } catch (error: unknown) {
         if (active) {
-          setState({
-            kind: 'error',
-            message: error instanceof Error ? error.message : '无法连接本地制播服务',
-          });
+          setState({ kind: 'error', message: userVisibleDebugError(error) });
         }
       } finally {
         if (active) timer = window.setTimeout(() => void poll(), DEBUG_POLL_INTERVAL_MS);
@@ -250,7 +272,7 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
         <DebugMetric label="当前地图" note="正式节目源" value={mapName} />
         <DebugMetric
           label="接收序号"
-          note={`记录器 ${stringValue(recorder, 'state') ?? '未知'}`}
+          note={`记录器 ${recorderStateLabel(stringValue(recorder, 'state'))}`}
           value={receiveSequence === undefined ? '—' : String(receiveSequence)}
         />
       </section>
@@ -300,7 +322,7 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
       </section>
 
       <p className="debug-footer-note">
-        生产实例 <code>{data.producerInstanceId ?? '未创建'}</code>
+        运行实例 <code>{data.producerInstanceId ?? '未创建'}</code>
         <span aria-hidden="true"> · </span>
         原始数据、标准化数据与运行状态均只保留当前有界证据；此页面不保存历史快照。
       </p>
