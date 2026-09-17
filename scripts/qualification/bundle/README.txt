@@ -9,7 +9,7 @@ RivalHub Broadcast Windows 现场验收包
    安装器会读取 Steam 库信息并寻找 CS2。若无法唯一定位，请使用 `-Cs2Root <path>` 指定 CS2 安装根目录或 `game\csgo\cfg`。
 3. 执行：`powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`
 4. 打开 http://127.0.0.1:3000/qualification。
-5. 按页面依次完成：播放 Demo A → 在 CS2 中执行 `quit` → 等待页面确认比赛数据停止 → 确认已退出 CS2 → 开始下一场 → 重开 CS2 → 播放 Demo B → 导出结果。
+5. 按页面依次完成：播放 Demo A → 在 CS2 中执行 `quit` → 等待页面显示比赛数据已过期（即一段时间未收到新的有效数据）→ 确认已退出 CS2 → 开始下一场 → 重开 CS2 → 播放 Demo B → 导出结果。
 6. 页面会自动整理并验证验收证据、恢复原 GSI 配置，然后显示“通过”“失败”或“证据不足”以及报告路径。
 7. 最终证据写入 `evidence\<runId>\`；`REPORT.md` 是便于人工阅读的报告，`qualification.json` 是机器可读结果。
 
