@@ -15,11 +15,14 @@
     "@rivalhub-broadcast/rivalhub": "workspace:*",
     "@rivalhub-broadcast/telemetry-cstv": "workspace:*",
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*",
+    "@fastify/static": "catalog:",
+    "@fastify/websocket": "catalog:",
     "fastify": "catalog:"
   },
   "devDependencies": {
     "@rivalhub-broadcast/testkit": "workspace:*",
     "@types/node": "catalog:",
+    "@types/ws": "catalog:",
     "@typescript/native": "catalog:",
     "tsx": "catalog:",
     "vitest": "catalog:"

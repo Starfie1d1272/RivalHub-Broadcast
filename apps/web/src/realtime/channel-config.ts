@@ -1,0 +1,54 @@
+import { assistSnapshotSchema, type AssistSnapshot } from '@rivalhub-broadcast/protocol/assist';
+import {
+  operatorSnapshotSchema,
+  type OperatorSnapshot,
+} from '@rivalhub-broadcast/protocol/operator';
+import { programSnapshotSchema, type ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
+import type { SnapshotEnvelopeLike, SnapshotSchema } from '@rivalhub-broadcast/protocol/acceptance';
+import {
+  LOCAL_PROTOCOL_SUBPROTOCOL,
+  type LocalChannel,
+} from '@rivalhub-broadcast/protocol/version';
+
+export { LOCAL_PROTOCOL_SUBPROTOCOL };
+
+export type LocalChannelSnapshot<C extends LocalChannel> = C extends 'program'
+  ? ProgramSnapshot
+  : C extends 'radar'
+    ? RadarSnapshot
+    : C extends 'operator'
+      ? OperatorSnapshot
+      : AssistSnapshot;
+
+export interface LocalChannelConfig<TSnapshot extends SnapshotEnvelopeLike> {
+  readonly path: string;
+  readonly schema: SnapshotSchema<TSnapshot>;
+}
+
+export const localChannelConfigs = {
+  program: {
+    path: '/local/v1/program',
+    schema: programSnapshotSchema,
+  },
+  radar: {
+    path: '/local/v1/radar',
+    schema: radarSnapshotSchema,
+  },
+  operator: {
+    path: '/local/v1/operator',
+    schema: operatorSnapshotSchema,
+  },
+  assist: {
+    path: '/local/v1/assist',
+    schema: assistSnapshotSchema,
+  },
+} satisfies {
+  readonly [C in LocalChannel]: LocalChannelConfig<LocalChannelSnapshot<C>>;
+};
+
+export function getLocalChannelConfig<C extends LocalChannel>(
+  channel: C,
+): LocalChannelConfig<LocalChannelSnapshot<C>> {
+  return localChannelConfigs[channel] as unknown as LocalChannelConfig<LocalChannelSnapshot<C>>;
+}

@@ -16,9 +16,13 @@ import {
   type CstvSourceManagers,
 } from './telemetry/cstv-source-manager.js';
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
+import { parseAllowedOrigins } from './local-web/origin-policy.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
+const webRoot = process.env.WEB_ROOT;
+const localWebLanMode = /^(?:1|true)$/i.test(process.env.LOCAL_WEB_LAN_MODE ?? '');
+const localWebAllowedOrigins = parseAllowedOrigins(process.env.LOCAL_WEB_ALLOWED_ORIGINS);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
@@ -99,6 +103,10 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     gsiToken,
     recorder,
     programRuntime,
+    ...(webRoot === undefined ? {} : { webRoot }),
+    host,
+    localWebLanMode,
+    localWebAllowedOrigins,
     ...(cstvSourceConfig === undefined ? {} : { cstvSources: cstvSourceConfig }),
     qualificationMode,
     ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),

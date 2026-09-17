@@ -8,6 +8,7 @@
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
+    "@rivalhub-broadcast/protocol": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
   },

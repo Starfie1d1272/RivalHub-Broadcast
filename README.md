@@ -176,7 +176,21 @@ production recorder 属于 Companion/telemetry runtime；`testkit` 只消费 cap
 - [`AGENTS.md`](AGENTS.md)：面向开发 Agent 的仓库工作原则。
 - [`CONTRIBUTING.md`](CONTRIBUTING.md)：Issue-driven / agent-assisted 开发与 PR 交付规范。
 
-仓库的一手文档默认使用中文。长期文档记录稳定产品语义、架构 invariant、evidence-backed source facts 与阶段目标；单个 PR 的临时实现过程、当前机器状态、短期排期和一次性调试记录留在 Issue/PR/Project，不沉淀为长期规范。代码或 contract 改变了文档描述的事实时，同一 PR 必须同步更新相关文档。
+仓库的一手文档默认使用中文。正文应优先使用清晰中文描述概念和操作；代码符号、配置项、协议字段、标准专名与第三方项目名可原样保留，并使用反引号或在首次出现时给出中文说明。不得用内部实现术语或整段英文替代面向用户、导播或开发者本可直接理解的中文表述。长期文档记录稳定产品语义、架构约束、基于证据确认的源事实与阶段目标；单个 PR 的临时实现过程、当前机器状态、短期排期和一次性调试记录留在 Issue/PR/Project，不沉淀为长期规范。代码或契约改变了文档描述的事实时，同一 PR 必须同步更新相关文档。
+
+## 本地网页服务
+
+生产环境下，Companion 与网页构建产物由同一个 HTTP 服务提供：
+
+```text
+生产环境: http://127.0.0.1:3000/program
+开发环境: http://127.0.0.1:4173/program
+```
+
+默认 Companion 只监听 `127.0.0.1`。需要局域网访问时，必须显式设置
+`LOCAL_WEB_LAN_MODE=1`，并通过 `LOCAL_WEB_ALLOWED_ORIGINS` 提供逗号分隔的完整
+HTTP(S) `Origin` 允许列表；非回环 `HOST` 未启用该模式时会拒绝启动。
+`WEB_ROOT` 可覆盖生产环境默认的 `apps/web/dist` 目录，但显式目录必须包含 `index.html`。
 
 ## 许可证
 

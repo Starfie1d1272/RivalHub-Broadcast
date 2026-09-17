@@ -1,4 +1,4 @@
-# Contributing to RivalHub Broadcast
+# RivalHub Broadcast 贡献指南
 
 RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。任何实现都应先理解仓库里的产品与架构约束，再修改代码。
 
@@ -14,6 +14,17 @@ RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。
 6. `docs/decisions/`
 7. `AGENTS.md`
 8. 当前 Issue 直接引用的专题文档
+
+## 文档与界面语言
+
+仓库一手文档和产品界面默认使用中文。目标不是机械翻译代码，而是让读者在不理解内部实现术语的情况下也能正确操作和判断状态。
+
+- 面向用户、导播或赛事工作人员的标题、按钮、状态、提示、错误说明和辅助文本必须使用清晰中文；不得直接展示内部状态枚举、组件名或架构术语。
+- 开发文档正文优先使用中文。代码符号、环境变量、协议字段、标准专名、第三方项目名和必须精确搜索的协议字符串可保留原文，并应使用反引号或在首次出现时给出中文说明。
+- `WebSocket`、HTTP、OBS、GSI、Vite 等标准专名可以保留；`host`、`production`、`baseline`、`allowlist`、`loopback`、`renderer` 等存在稳定中文表达的普通工程词，不应在自然语言正文中无必要混用。
+- Debug 页面可以展示原始 JSON 字段和值，但包围这些数据的页面标题、状态解释和操作提示仍应使用中文。
+- 协议冻结的 exact string（例如 WebSocket subprotocol、close reason）、代码测试名和第三方 API 名不因界面本地化而改写。
+- 修改用户可见页面或长期文档时，评审必须同时检查语义正确性和语言边界；不能以“只是开发者页面”为理由长期积累中英混排。
 
 ## 工作单元
 

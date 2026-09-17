@@ -15,9 +15,11 @@
 
 如果当前 Issue 标记为 implementation-ready / `agent-ready`，其 `Canonical decisions`、Scope、Non-goals、Acceptance criteria、platform/validation gate 是本次实现的直接执行规格；不得在实现过程中擅自重新设计这些已冻结内容。
 
-## 文档语言
+## 文档与界面语言
 
-仓库一手文档默认中文。代码 symbol、schema 字段、行业术语和第三方项目名可保留英文。
+仓库一手文档和产品界面默认使用中文。代码符号、schema 字段、环境变量、协议精确字符串、标准专名和第三方项目名可以保留原文，并用反引号或在首次出现时给出中文说明；不要把普通工程词汇直接当成自然语言文案。
+
+面向用户、导播或赛事工作人员的标题、状态、提示和错误信息不得直接展示内部枚举、组件名或架构术语。Debug 页面可以展示原始 JSON 字段和值，但周围的解释和操作文案仍应使用中文。具体语言边界以 `CONTRIBUTING.md` 为准。
 
 ## 不可破坏的边界
 
