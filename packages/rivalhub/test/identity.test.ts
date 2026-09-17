@@ -307,7 +307,7 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     expect(issueCodes(degraded)).toContain('allplayers_degraded');
   });
 
-  it('lets a duplicate observed Steam64 contradict a previous proof even on a degraded frame', async () => {
+  it('deduplicates a duplicate observed Steam64 without revoking the previous proof', async () => {
     const context = toMatchContext(await readManifest());
     const resolver = createIdentityResolver(context);
     const matched = resolver.resolve(evidence(observedPlayers(context)));
@@ -317,9 +317,9 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     const resolution = resolver.resolve(evidence(duplicate, { allPlayersCoverage: 'degraded' }));
 
     expect(matched.state).toBe('matched');
-    expect(resolution.state).toBe('mismatch');
+    expect(resolution.state).toBe('matched');
     expect(issueCodes(resolution)).toContain('duplicate_observed_identity');
-    expect(resolution.capabilities.canonicalTeamBranding).toBe(false);
+    expect(resolution.capabilities.canonicalTeamBranding).toBe(true);
   });
 
   it('does not reuse old proof across source generation or map epoch baselines', async () => {
@@ -340,7 +340,7 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
     expect(issueCodes(newMap)).toContain('map_epoch_changed');
   });
 
-  it('fails closed for unexpected or duplicated human Steam64 while keeping neutral telemetry', async () => {
+  it('degrades for an unexpected or duplicated Steam64 while keeping neutral telemetry', async () => {
     const context = toMatchContext(await readManifest());
     const unexpected = observedPlayers(context);
     unexpected[0] = { ...unexpected[0]!, sourcePlayerId: '76561198000000099' };
@@ -350,12 +350,12 @@ describe('Steam64 identity resolver and dynamic side mapping', () => {
       evidence([...observedPlayers(context), observedPlayers(context)[0]!]),
     );
 
-    expect(mismatch.state).toBe('mismatch');
-    expect(mismatch.capabilities.canonicalTeamBranding).toBe(false);
+    expect(mismatch.state).toBe('degraded');
+    expect(mismatch.capabilities.canonicalTeamBranding).toBe(true);
     expect(mismatch.capabilities.identityDependentResult).toBe(false);
     expect(mismatch.capabilities.neutralTelemetry).toBe(true);
     expect(issueCodes(mismatch)).toContain('unexpected_human_steam64');
-    expect(duplicate.state).toBe('mismatch');
+    expect(duplicate.state).toBe('degraded');
     expect(issueCodes(duplicate)).toContain('duplicate_observed_identity');
   });
 

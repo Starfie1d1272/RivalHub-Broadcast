@@ -1,6 +1,10 @@
 import {
+  emptyActiveLineup,
   identityEvidenceFromObservation,
   createIdentityResolver,
+  resolveActiveLineup,
+  type ActiveLineupOverride,
+  type ActiveLineupResolution,
   type IdentityResolution,
   type IdentityResolver,
 } from '@rivalhub-broadcast/core/identity';
@@ -61,6 +65,7 @@ export interface ProjectionCoordinatorOptions {
   readonly programRuntime: ProgramRuntime;
   readonly cstvSources: CstvSourceManagers;
   readonly identityResolver?: IdentityResolver;
+  readonly activeLineupOverride?: ActiveLineupOverride;
   readonly matchContextBinding?: MatchContextBinding;
   readonly nowMonotonicMs?: () => number;
   readonly scheduler?: ProjectionScheduler;
@@ -141,6 +146,7 @@ export class ProjectionCoordinator {
   private readonly programRuntime: ProgramRuntime;
   private readonly cstvSources: CstvSourceManagers;
   private readonly identityResolver: IdentityResolver;
+  private readonly activeLineupOverride: ActiveLineupOverride | undefined;
   private readonly nowMonotonicMs: () => number;
   private readonly scheduler: ProjectionScheduler;
   private readonly publishers: Required<ProjectionPublishers>;
@@ -152,6 +158,7 @@ export class ProjectionCoordinator {
   private lastIdentityEvidence:
     { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined;
   private current: ProjectionBundle;
+  private activeLineup: ActiveLineupResolution;
   private staleTimer: unknown;
   private staleTimerKey:
     { readonly sourceGeneration: number; readonly receiveSequence: number } | undefined;
@@ -166,6 +173,7 @@ export class ProjectionCoordinator {
     this.programRuntime = options.programRuntime;
     this.cstvSources = options.cstvSources;
     this.identityResolver = options.identityResolver ?? createIdentityResolver();
+    this.activeLineupOverride = options.activeLineupOverride;
     this.nowMonotonicMs = options.nowMonotonicMs ?? defaultNowMonotonicMs;
     this.scheduler = options.scheduler ?? defaultScheduler;
     this.onDiagnostic = options.onDiagnostic;
@@ -176,6 +184,7 @@ export class ProjectionCoordinator {
       this.identityResolver.bind(this.contextBinding.context);
       this.boundMatchId = this.contextBinding.context.matchId;
     }
+    this.activeLineup = emptyActiveLineup();
     this.current = this.refresh();
     this.sourceUnsubscribers = [
       this.cstvSources.program.subscribe(() => this.refreshOperator()),
@@ -191,7 +200,13 @@ export class ProjectionCoordinator {
       this.boundMatchId = undefined;
       this.lastIdentityEvidence = undefined;
       this.identityResolver.unbind();
+      this.activeLineup = emptyActiveLineup(
+        this.programRuntime.getSnapshot().current.programSource.generation,
+        this.programRuntime.getSnapshot().current.map.epoch,
+      );
     } else {
+      const matchChanged =
+        this.boundMatchId !== undefined && this.boundMatchId !== binding.context.matchId;
       const contextChanged =
         this.boundContext !== binding.context || this.boundMatchId !== binding.context.matchId;
       this.boundContext = binding.context;
@@ -199,6 +214,13 @@ export class ProjectionCoordinator {
       if (contextChanged) {
         this.identityResolver.bind(binding.context);
         this.lastIdentityEvidence = undefined;
+        if (matchChanged) {
+          const runtime = this.programRuntime.getSnapshot().current;
+          this.activeLineup = emptyActiveLineup(
+            runtime.programSource.generation,
+            runtime.map.epoch,
+          );
+        }
       }
     }
     return this.refresh();
@@ -230,6 +252,7 @@ export class ProjectionCoordinator {
       const runtimeState = runtimeSnapshot.current;
       const runtimeView = selectProgramSafeRuntimeView(runtimeState);
       const identity = this.resolveIdentity(runtimeSnapshot);
+      const activeLineup = this.resolveActiveLineup(runtimeSnapshot, identity);
       const nowMonotonicMs = this.nowMonotonicMs();
       const context = this.contextBinding?.context;
       const program = projectProgram({
@@ -239,6 +262,7 @@ export class ProjectionCoordinator {
           ? {}
           : { contextFreshness: this.contextBinding.freshness }),
         identity,
+        activeLineup,
         nowMonotonicMs,
         continuityPolicy: runtimeSnapshot.continuityPolicy,
       });
@@ -252,6 +276,7 @@ export class ProjectionCoordinator {
         runtime: runtimeSnapshot,
         context: this.contextBinding,
         identity,
+        activeLineup,
         cstvSources: this.cstvSources,
         nowMonotonicMs,
       });
@@ -363,6 +388,29 @@ export class ProjectionCoordinator {
     return resolution;
   }
 
+  private resolveActiveLineup(
+    runtimeSnapshot: ReturnType<ProgramRuntime['getSnapshot']>,
+    identity: IdentityResolution,
+  ): ActiveLineupResolution {
+    const runtime = runtimeSnapshot.current;
+    const observation = selectProgramSafeRuntimeView(runtime).telemetry;
+    this.activeLineup = resolveActiveLineup({
+      sourceGeneration: runtime.programSource.generation,
+      mapEpoch: runtime.map.epoch,
+      ...(observation?.telemetry.allPlayers === undefined
+        ? {}
+        : { allPlayers: observation.telemetry.allPlayers }),
+      ...(observation === null ? {} : { allPlayersCoverage: observation.coverage.allPlayers }),
+      ...(this.contextBinding?.context === undefined
+        ? {}
+        : { context: this.contextBinding.context }),
+      identity,
+      previous: this.activeLineup,
+      ...(this.activeLineupOverride === undefined ? {} : { override: this.activeLineupOverride }),
+    });
+    return this.activeLineup;
+  }
+
   private publish(
     program: ProgramProjection,
     radar: RadarFrame,
@@ -411,6 +459,7 @@ export class ProjectionCoordinator {
         runtime: runtimeSnapshot,
         context: this.contextBinding,
         identity: this.current.identity,
+        activeLineup: this.activeLineup,
         cstvSources: this.cstvSources,
         nowMonotonicMs: this.nowMonotonicMs(),
       });

@@ -35,10 +35,19 @@ function sideMappingUnknown(): IdentitySideMapping {
 function capabilitiesFor(
   state: IdentityState,
   players: readonly ResolvedIdentityPlayer[],
+  sideMapping: IdentitySideMapping,
 ): IdentityResolution['capabilities'] {
+  const hasCompleteSideMapping =
+    sideMapping.a !== 'unknown' && sideMapping.b !== 'unknown' && sideMapping.a !== sideMapping.b;
+  const hasObservedProofForBothEntries =
+    new Set(players.map((player) => player.entryId)).size === 2;
   return {
     canonicalPlayerMapping: state !== 'mismatch' && players.length > 0,
-    canonicalTeamBranding: state === 'matched',
+    // A soft roster mismatch may leave one live player unresolved while the
+    // remaining Steam64/side evidence still proves which entrant is CT/T.
+    canonicalTeamBranding:
+      state === 'matched' ||
+      (state === 'degraded' && hasCompleteSideMapping && hasObservedProofForBothEntries),
     identityDependentResult: state === 'matched',
     neutralTelemetry: true,
   };
@@ -60,7 +69,7 @@ function createResolution(
     unresolved,
     sideMapping,
     issues,
-    capabilities: capabilitiesFor(state, players),
+    capabilities: capabilitiesFor(state, players, sideMapping),
   };
 }
 
@@ -239,8 +248,6 @@ function unresolvedFromObserved(observed: ObservedPlayer): UnresolvedObservedPla
 function resolveCurrentPlayers(
   currentPlayers: readonly ObservedPlayer[],
   canonical: CanonicalIndex,
-  fullEvidenceCandidate: boolean,
-  completeCanonicalSteam64: boolean,
   issues: IdentityIssue[],
 ): {
   readonly currentResolved: readonly ResolvedIdentityPlayer[];
@@ -250,7 +257,7 @@ function resolveCurrentPlayers(
 } {
   const resolvedByCanonicalId = new Map<string, ResolvedIdentityPlayer>();
   const unresolved: UnresolvedObservedPlayer[] = [];
-  const seenObservedSteam64 = new Set<string>();
+  const seenObservedSourceIds = new Set<string>();
   let duplicateObserved = false;
   let unexpectedHuman = false;
 
@@ -274,18 +281,18 @@ function resolveCurrentPlayers(
       continue;
     }
 
-    if (seenObservedSteam64.has(sourcePlayerId)) {
-      duplicateObserved = true;
+    if (seenObservedSourceIds.has(sourcePlayerId)) {
       issues.push(
         issue(
           'duplicate_observed_identity',
-          'error',
-          `当前 evidence 重复出现 Steam64 ${sourcePlayerId}。`,
+          'warning',
+          `当前 evidence 重复出现 Steam64 ${sourcePlayerId}；按同一 logical participant 去重。`,
           { sourcePlayerId, steam64: sourcePlayerId },
         ),
       );
+      continue;
     }
-    seenObservedSteam64.add(sourcePlayerId);
+    seenObservedSourceIds.add(sourcePlayerId);
 
     const canonicalPlayer = canonical.bySteam64.get(sourcePlayerId);
     if (canonicalPlayer === undefined) {
@@ -293,7 +300,7 @@ function resolveCurrentPlayers(
       issues.push(
         issue(
           'unexpected_human_steam64',
-          fullEvidenceCandidate && completeCanonicalSteam64 ? 'error' : 'warning',
+          'warning',
           `观察到的 Steam64 ${sourcePlayerId} 不在当前完整 MatchRoster 中。`,
           { sourcePlayerId, steam64: sourcePlayerId },
         ),
@@ -407,19 +414,6 @@ export function resolveIdentity(
     [context.entrants.a, context.entrants.b].every(
       (entrant) => (canonicalSteam64ByEntry.get(entrant.entryId) ?? 0) >= 5,
     );
-  const completeCanonicalSteam64 =
-    canonical.duplicateSteam64.size === 0 &&
-    canonical.all.length > 0 &&
-    canonical.all.every(
-      (player) => player.steam64 !== null && STEAM64_PATTERN.test(player.steam64),
-    );
-  // This is deliberately independent from isStarter. That flag is an
-  // expected-lineup hint only; identity authorization is based on the
-  // canonical roster and current observed Steam64/side evidence.
-  const fullEvidenceCandidate =
-    evidence.allPlayersCoverage === 'present' &&
-    currentPlayers.length === 10 &&
-    canonicalRosterComplete;
   const mapMismatch = knownMapIssue(context, evidence, hasCurrentEvidence, issues);
 
   if (!hasCurrentEvidence || evidence.allPlayersCoverage === 'absent') {
@@ -459,13 +453,7 @@ export function resolveIdentity(
     issues.push(issue('allplayers_degraded', 'warning', 'allplayers evidence 已标记为 degraded。'));
   }
 
-  const resolved = resolveCurrentPlayers(
-    currentPlayers,
-    canonical,
-    fullEvidenceCandidate,
-    completeCanonicalSteam64,
-    issues,
-  );
+  const resolved = resolveCurrentPlayers(currentPlayers, canonical, issues);
   const resolvedCountsByEntry = new Map<string, number>();
   for (const player of resolved.currentResolved) {
     resolvedCountsByEntry.set(player.entryId, (resolvedCountsByEntry.get(player.entryId) ?? 0) + 1);
@@ -482,18 +470,23 @@ export function resolveIdentity(
   );
   const sideComplete =
     sideMapping.a !== 'unknown' && sideMapping.b !== 'unknown' && sideMapping.a !== sideMapping.b;
-  const currentFiveVsFiveEvidence =
+  const currentObservedFiveVsFiveEvidence =
     evidence.allPlayersCoverage === 'present' &&
     currentPlayers.length === 10 &&
+    !resolved.duplicateObserved &&
+    currentPlayers.every((player) => player.side === 'CT' || player.side === 'T') &&
+    currentPlayers.filter((player) => player.side === 'CT').length === 5 &&
+    currentPlayers.filter((player) => player.side === 'T').length === 5;
+  const currentCanonicalFiveVsFiveEvidence =
+    currentObservedFiveVsFiveEvidence &&
     resolved.currentResolved.length === 10 &&
     resolved.unresolved.length === 0 &&
-    !resolved.duplicateObserved &&
     (resolvedCountsByEntry.get(context.entrants.a.entryId) ?? 0) === 5 &&
     (resolvedCountsByEntry.get(context.entrants.b.entryId) ?? 0) === 5 &&
     resolved.currentResolved.every((player) => player.side !== 'unknown') &&
     sideComplete;
 
-  if (!currentFiveVsFiveEvidence) {
+  if (!currentObservedFiveVsFiveEvidence) {
     issues.push(
       issue(
         'partial_roster_evidence',
@@ -506,7 +499,7 @@ export function resolveIdentity(
   const currentPositiveContradiction =
     resolved.duplicateObserved ||
     mapMismatch ||
-    (resolved.unexpectedHuman && fullEvidenceCandidate && completeCanonicalSteam64) ||
+    issues.some((item) => item.code === 'ambiguous_side_mapping' && item.severity === 'error') ||
     canonical.duplicatePlayerIds.size > 0 ||
     canonical.duplicateSteam64.size > 0;
 
@@ -533,7 +526,7 @@ export function resolveIdentity(
   if (
     compatiblePrevious &&
     previous !== undefined &&
-    !currentFiveVsFiveEvidence &&
+    !currentObservedFiveVsFiveEvidence &&
     !currentPositiveContradiction
   ) {
     for (const player of previous.players) {
@@ -547,7 +540,7 @@ export function resolveIdentity(
   }
   const allResolved = sortResolvedPlayers(resolvedByCanonicalId.values());
 
-  if (currentFiveVsFiveEvidence) {
+  if (currentCanonicalFiveVsFiveEvidence) {
     const expectedStarterIds = new Set(
       canonical.all.filter((player) => player.isStarter).map((player) => player.playerId),
     );
@@ -574,7 +567,11 @@ export function resolveIdentity(
   let state: IdentityState;
   if (currentPositiveContradiction) {
     state = 'mismatch';
-  } else if (canonicalRosterComplete && canonicalFiveSteam64Ready && currentFiveVsFiveEvidence) {
+  } else if (
+    canonicalRosterComplete &&
+    canonicalFiveSteam64Ready &&
+    currentCanonicalFiveVsFiveEvidence
+  ) {
     state = 'matched';
   } else {
     state = 'degraded';

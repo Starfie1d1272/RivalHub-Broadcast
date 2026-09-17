@@ -1,5 +1,6 @@
 import type { SourceSide } from '../telemetry/map.js';
 import type { TelemetryObservation } from '../telemetry/observation.js';
+import { createMapPlayerStatsAccumulator, type MapPlayerStatsAccumulator } from './player-stats.js';
 
 export interface RuntimeTime {
   readonly monotonicMs: number;
@@ -33,6 +34,7 @@ export interface RuntimeState {
   readonly runtimeSeq: number;
   readonly programSource: RuntimeProgramSourceState;
   readonly map: RuntimeMapState;
+  readonly playerStats: MapPlayerStatsAccumulator;
   readonly programTelemetry?: TelemetryObservation;
 }
 
@@ -165,5 +167,6 @@ export function createInitialRuntimeState(
     map: {
       epoch: 0,
     },
+    playerStats: createMapPlayerStatsAccumulator(0),
   };
 }

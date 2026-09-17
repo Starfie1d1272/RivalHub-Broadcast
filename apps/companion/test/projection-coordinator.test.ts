@@ -221,6 +221,43 @@ describe('ProjectionCoordinator', () => {
     await coordinator.close();
   });
 
+  it('retains the resolved 10-person Program lineup across same-map source reconnect', async () => {
+    const manifest = await readManifest();
+    const runtime = createProgramRuntime('coordinator-lineup-reconnect');
+    const coordinator = createProjectionCoordinator({
+      programRuntime: runtime,
+      cstvSources: createCstvSourceManagers({}),
+      nowMonotonicMs: () => 0,
+    });
+    const initialObservation = matchedObservation(manifest);
+
+    coordinator.afterRuntimeMutation(runtime.acceptObservation(initialObservation));
+    expect(coordinator.getCurrent().program.players).toHaveLength(10);
+
+    const reconnect = runtime.advanceProgramSourceGeneration({
+      monotonicMs: 1,
+      utc: '2026-09-16T00:00:00.001Z',
+    });
+    coordinator.afterRuntimeMutation(reconnect);
+
+    const retained = coordinator.getCurrent().program;
+    expect(retained.players).toHaveLength(10);
+    expect(retained.players.every((player) => player.lineupEvidence === 'retained')).toBe(true);
+    expect(
+      retained.players.every(
+        (player) =>
+          player.state === null &&
+          player.matchStats === null &&
+          player.weapons.length === 0 &&
+          player.activity === null &&
+          player.observerSlot === null &&
+          player.lifeState === 'unknown',
+      ),
+    ).toBe(true);
+
+    await coordinator.close();
+  });
+
   it('publishes one time-driven stale transition and reschedules only for a new frame', async () => {
     let now = 0;
     const scheduler = new ManualProjectionScheduler();

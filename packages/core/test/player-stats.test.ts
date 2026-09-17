@@ -1,0 +1,221 @@
+import { describe, expect, it } from 'vitest';
+
+import {
+  createInitialRuntimeState,
+  getPlayerCompletedAdr,
+  getPlayerLiveAdr,
+  reduceRuntime,
+  type RuntimeState,
+} from '../src/runtime/index.js';
+import type { ObservedPlayer, TelemetryObservation } from '../src/telemetry/index.js';
+
+const POLICY = { staleAfterMs: 100 } as const;
+const PLAYER_A = '76561198000000001';
+const PLAYER_B = '76561198000000002';
+
+function player(sourcePlayerId: string, damage: number): ObservedPlayer {
+  return {
+    sourcePlayerId,
+    side: sourcePlayerId === PLAYER_A ? 'CT' : 'T',
+    activity: 'playing',
+    state: { health: damage === 0 ? 0 : 100, roundTotalDamage: damage },
+  };
+}
+
+function frame(
+  sequence: number,
+  receivedMonotonicMs: number,
+  phase: 'freezetime' | 'live' | 'over',
+  roundNumber: number,
+  damage = 0,
+  allPlayersCoverage: 'present' | 'absent' | 'degraded' = 'present',
+): TelemetryObservation {
+  const allPlayers = [player(PLAYER_A, damage), player(PLAYER_B, 0)];
+  return {
+    receive: {
+      sequence,
+      receivedAt: new Date(
+        Date.parse('2026-09-17T00:00:00.000Z') + receivedMonotonicMs,
+      ).toISOString(),
+      receivedMonotonicMs,
+    },
+    source: { kind: 'cs2-gsi' },
+    coverage: {
+      provider: 'present',
+      map: 'present',
+      round: 'present',
+      phaseCountdowns: 'absent',
+      player: 'absent',
+      allPlayers: allPlayersCoverage,
+      bomb: 'absent',
+      grenades: 'absent',
+    },
+    telemetry: {
+      map: { name: 'de_mirage', phase: 'live', roundNumber },
+      round: { phase },
+      ...(allPlayersCoverage === 'absent' ? {} : { allPlayers }),
+    },
+  };
+}
+
+function accept(state: RuntimeState, observation: TelemetryObservation, sourceGeneration = 0) {
+  return reduceRuntime(state, { kind: 'program-telemetry', sourceGeneration, observation }, POLICY);
+}
+
+function completeRound(
+  state: RuntimeState,
+  startSequence: number,
+  roundNumber: number,
+  damage: number,
+) {
+  let next = accept(state, frame(startSequence, startSequence, 'freezetime', roundNumber)).state;
+  next = accept(
+    next,
+    frame(startSequence + 1, startSequence + 1, 'live', roundNumber, damage),
+  ).state;
+  return accept(next, frame(startSequence + 2, startSequence + 2, 'over', roundNumber, 0)).state;
+}
+
+describe('map-scoped player stats accumulator', () => {
+  it('starts counting from a complete freezetime → live round and includes current damage', () => {
+    let state = createInitialRuntimeState('stats-test');
+    state = accept(state, frame(1, 1, 'freezetime', 1)).state;
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBeNull();
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBeNull();
+
+    state = accept(state, frame(2, 2, 'live', 1, 80)).state;
+    expect(state.playerStats.currentRound?.eligible).toBe(true);
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(80);
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBeNull();
+
+    state = accept(state, frame(3, 3, 'live', 1, 0)).state;
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(80);
+    state = accept(state, frame(4, 4, 'over', 1, 0)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(1);
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(80);
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBe(80);
+  });
+
+  it('does not count a mid-round baseline, then resumes on the next complete round', () => {
+    let state = createInitialRuntimeState('stats-mid-join');
+    state = accept(state, frame(1, 1, 'live', 6, 90)).state;
+    state = accept(state, frame(2, 2, 'over', 6, 0)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(0);
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBeNull();
+
+    state = accept(state, frame(3, 3, 'freezetime', 7)).state;
+    state = accept(state, frame(4, 4, 'live', 7, 50)).state;
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(50);
+  });
+
+  it('keeps the per-round maximum when a dead player reports round damage zero', () => {
+    let state = createInitialRuntimeState('stats-death-reset');
+    state = accept(state, frame(1, 1, 'freezetime', 1)).state;
+    state = accept(state, frame(2, 2, 'live', 1, 80)).state;
+    state = accept(state, frame(3, 3, 'live', 1, 0)).state;
+    expect(state.playerStats.currentRound?.damageBySteam64[PLAYER_A]).toBe(80);
+    state = accept(state, frame(4, 4, 'over', 1, 0)).state;
+    expect(state.playerStats.completedDamageBySteam64[PLAYER_A]).toBe(80);
+  });
+
+  it('finalizes when map.round advances at phase=over', () => {
+    let state = createInitialRuntimeState('stats-round-hint');
+    state = accept(state, frame(1, 1, 'freezetime', 0)).state;
+    state = accept(state, frame(2, 2, 'live', 0, 80)).state;
+    state = accept(state, frame(3, 3, 'over', 1, 0)).state;
+
+    expect(state.playerStats.countedCompletedRounds).toBe(1);
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBe(80);
+  });
+
+  it('excludes the in-flight round after a gap and does not double-finalize an over frame', () => {
+    let state = createInitialRuntimeState('stats-gap');
+    state = accept(state, frame(1, 1, 'freezetime', 1)).state;
+    state = accept(state, frame(2, 2, 'live', 1, 80)).state;
+    state = accept(state, frame(4, 4, 'over', 1, 80)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(0);
+
+    state = accept(state, frame(5, 5, 'freezetime', 2)).state;
+    state = accept(state, frame(6, 6, 'live', 2, 40)).state;
+    state = accept(state, frame(7, 7, 'over', 2, 40)).state;
+    state = accept(state, frame(8, 8, 'over', 2, 0)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(1);
+    expect(state.playerStats.completedDamageBySteam64[PLAYER_A]).toBe(40);
+  });
+
+  it('invalidates the current ADR round when allplayers evidence has a gap', () => {
+    let state = createInitialRuntimeState('stats-evidence-gap');
+    state = accept(state, frame(1, 1, 'freezetime', 1)).state;
+    state = accept(state, frame(2, 2, 'live', 1, 40)).state;
+    state = accept(state, frame(3, 3, 'live', 1, 0, 'absent')).state;
+    expect(state.playerStats.currentRound).toMatchObject({
+      invalidated: true,
+      eligible: false,
+      hasCompleteEvidence: false,
+    });
+    state = accept(state, frame(4, 4, 'live', 1, 0)).state;
+    state = accept(state, frame(5, 5, 'over', 1, 0)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(0);
+
+    state = accept(state, frame(6, 6, 'freezetime', 2)).state;
+    state = accept(state, frame(7, 7, 'live', 2, 20)).state;
+    state = accept(state, frame(8, 8, 'over', 2, 0)).state;
+    expect(state.playerStats.countedCompletedRounds).toBe(1);
+  });
+
+  it('keeps completedAdr stable while liveAdr includes the eligible current round', () => {
+    let state = createInitialRuntimeState('stats-two-views');
+    state = completeRound(state, 1, 1, 80);
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBe(80);
+
+    state = accept(state, frame(4, 4, 'freezetime', 1)).state;
+    state = accept(state, frame(5, 5, 'live', 1, 20)).state;
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBe(80);
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(50);
+
+    state = accept(state, frame(6, 6, 'over', 1, 0)).state;
+    expect(getPlayerCompletedAdr(state.playerStats, PLAYER_A)).toBe(50);
+    expect(getPlayerLiveAdr(state.playerStats, PLAYER_A)).toBe(50);
+  });
+
+  it('preserves completed stats across source reconnect but clears them at map execution reset', () => {
+    let state = completeRound(createInitialRuntimeState('stats-continuity'), 1, 1, 30);
+    state = accept(
+      state,
+      { ...frame(4, 4, 'freezetime', 2), receive: { ...frame(4, 4, 'freezetime', 2).receive } },
+      0,
+    ).state;
+    const advanced = reduceRuntime(
+      state,
+      {
+        kind: 'advance-program-source-generation',
+        nextGeneration: 1,
+        at: { monotonicMs: 5, utc: '2026-09-17T00:00:00.005Z' },
+      },
+      POLICY,
+    ).state;
+    expect(advanced.playerStats.countedCompletedRounds).toBe(1);
+
+    const recovered = accept(advanced, frame(1, 6, 'freezetime', 2), 1).state;
+    expect(recovered.playerStats.countedCompletedRounds).toBe(1);
+
+    const reset = reduceRuntime(
+      recovered,
+      {
+        kind: 'reset-map-execution',
+        reason: 'same-map-restart',
+        at: { monotonicMs: 7, utc: '2026-09-17T00:00:00.007Z' },
+      },
+      POLICY,
+    ).state;
+    expect(reset.playerStats.mapEpoch).toBe(reset.map.epoch);
+    expect(reset.playerStats.countedCompletedRounds).toBe(0);
+    expect(reset.playerStats.completedDamageBySteam64).toEqual({});
+  });
+
+  it('does not invent ADR for a non-Steam64 source id', () => {
+    expect(
+      getPlayerLiveAdr(createInitialRuntimeState('stats-non-steam').playerStats, 'bot-1'),
+    ).toBeNull();
+  });
+});

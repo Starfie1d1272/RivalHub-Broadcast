@@ -1,4 +1,8 @@
-import type { RuntimeContinuityPolicy, RuntimeState } from '../runtime/types.js';
+import type {
+  MapPlayerStatsAccumulator,
+  RuntimeContinuityPolicy,
+  RuntimeState,
+} from '../runtime/index.js';
 import type { TelemetryObservation } from '../telemetry/observation.js';
 import { projectionCursorFromRuntimeState, type ProjectionCursor } from './cursor.js';
 
@@ -10,6 +14,7 @@ export interface ProgramSafeRuntimeView {
     readonly receivedAt: string;
     readonly receivedMonotonicMs: number;
   };
+  readonly playerStats: MapPlayerStatsAccumulator;
   readonly telemetry: TelemetryObservation | null;
 }
 
@@ -26,6 +31,7 @@ export function selectProgramSafeRuntimeView(state: RuntimeState): ProgramSafeRu
             receivedAt: currentGenerationLastAccepted.receivedAt,
             receivedMonotonicMs: currentGenerationLastAccepted.receivedMonotonicMs,
           },
+    playerStats: state.playerStats,
     telemetry:
       currentGenerationLastAccepted === undefined ? null : (state.programTelemetry ?? null),
   };

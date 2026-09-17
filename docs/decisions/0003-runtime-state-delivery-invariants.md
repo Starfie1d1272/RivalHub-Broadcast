@@ -7,6 +7,8 @@
 
 > 2026-09-12 clarification：本次仅消除 ADR-0002/0003 之间的术语冲突，并明确 ReliableObservation 的派生方式；不改变本 ADR 已接受的 runtime architecture 决策。
 
+> 2026-09-17 clarification：Issue #46 将 `ActiveLineupResolution` 与 map-scoped player stats 落为 Core Foundation seam。Raw `allplayers` 仍属于 telemetry observation；Core 维护一份 map-scoped stable membership/side assignment 与 accumulator，ProgramProjection 只消费由 Coordinator 解析并绑定到当前 source generation 的 resolved cohort。只有 `allplayers = present` 且唯一 Steam64 的无歧义 5+5 才能建立或替换 baseline；`absent` / `degraded` 只允许保留既有 membership，不能把旧 generation 的 volatile telemetry 当作当前值。Accumulator 由 phase transition、continuity、map epoch 与 evidence completeness 驱动，`map.round` 只作 sanity hint；当前回合 evidence gap 使该回合 fail closed，而同一 accumulator 提供 `liveAdr` 与 `completedAdr` 两个 read view。该 clarification 不新增第二份 `RuntimeState`，也不改变 ADR-0003 关于 projection ownership、map epoch 和 latest-wins 的决定。
+
 ## 背景
 
 ADR-0002 已冻结 Runtime / Workspace 技术栈，但在正式实现 Core 前，还需要把实时系统最容易走偏的语义边界固定下来：

@@ -147,6 +147,24 @@ TelemetryObservation
 
 GSI-specific diagnostics 与 `TelemetryObservation` 并列返回，不塞进 Core domain。
 
+### 5.1 Active lineup 与 map-scoped player stats
+
+`telemetry.allPlayers` 是当前 source observation，不是已经筛选好的正式节目名单。Core 在 identity 与 continuity 之后派生两个独立结果：
+
+```text
+allPlayers observation
+  ├─ ActiveLineupResolution → Program Player Rails 的稳定 5+5 cohort
+  └─ MapPlayerStatsAccumulator → map-scoped ADR
+```
+
+Active lineup 只在 `coverage.allPlayers = present`、10 个唯一稳定 Steam64、CT 5 人 + T 5 人且无歧义时建立或替换 baseline。observer、coach、spectator 和 transient extra 不进入 cohort；稳定 baseline 遇到单帧缺失、extra 或 `degraded` evidence 时保留原 logical participants，并以 `lineupEvidence: retained` 与 `degraded` 表达证据质量。没有 previous baseline 时，degraded 的 clean-looking 5+5 仍不得晋升。`coverage.allPlayers = absent` 不触发 lineup transition。Stable Steam64 membership 与 CT/T side assignment 分离，halftime / overtime 换边只更新 side。same-map source generation 变化时，retained membership 使用当前 generation 的 resolution cursor，但不复用旧 entry 的 volatile telemetry。连接模式的 MatchRoster / gameplay identity 用于排序、消歧和 canonical mapping，不作为未知 Steam64 active player 的硬 allowlist。
+
+`retained` 只表示节目 membership 仍然成立，不表示 source 仍提供该 entry 的当前状态。缺失成员的 health、equipment、weapons、observer slot 等 volatile telemetry 必须保持 unavailable/null；Raw source observation 不能为了填满 HUD card 而回写上一帧数值。
+
+ADR 只使用 Steam64 keyed player state 的 `roundTotalDamage`，每个 counted round 保存该字段的最大值，避免死亡后 source 把累计值回报为零。round phase transition、continuity 和 `mapEpoch` 驱动生命周期；`map.round` 只作 sanity hint，因此 `freezetime/live round=N → over round=N+1` 仍可 finalize 当前有效回合。完整观察到 freezetime → live 的回合才进入 counted rounds；当前 counted round 任意时刻出现 `coverage.allPlayers != present` 时立即 `invalidated=true`、`eligible=false`，不对有洞的回合插值；已完成历史保留，后续新的完整回合可以重新开始统计。`liveAdr` 包含当前 eligible round，`completedAdr` 只包含已完成 counted rounds；`mapEpoch` 改变才清空 map-level history。
+
+这些都是 Core 派生语义。Renderer 不负责 roster inference、identity binding 或 ADR history；Raw GSI `previously` / `added` 仍只作为 adapter diagnostics 和 regression evidence。
+
 ## 6. GSI ingress
 
 Companion 的 GSI ingress 只负责：

@@ -1,4 +1,9 @@
-import type { IdentityResolution, IdentityState } from '../identity/index.js';
+import {
+  type ActiveLineupPlayer,
+  type ActiveLineupResolution,
+  type IdentityResolution,
+  type IdentityState,
+} from '../identity/index.js';
 import type { MatchContext, MatchFormat } from '../match-context/index.js';
 import type {
   BombState,
@@ -7,10 +12,13 @@ import type {
   RoundPhase,
   SourceSide,
   TelemetryCoverageStatus,
-  TelemetryObservation,
   WeaponState,
 } from '../telemetry/index.js';
-import type { RuntimeContinuityPolicy } from '../runtime/types.js';
+import {
+  getPlayerCompletedAdr,
+  getPlayerLiveAdr,
+  type RuntimeContinuityPolicy,
+} from '../runtime/index.js';
 import {
   getProgramSafeRuntimeFreshness,
   type ProgramSafeRuntimeFreshness,
@@ -76,6 +84,8 @@ export interface ProgramWeaponProjection {
 export interface ProgramPlayerProjection {
   readonly sourcePlayerId: string;
   readonly canonicalPlayerId: string | null;
+  readonly identityEvidence: 'canonical' | 'observed' | 'unresolved';
+  readonly lineupEvidence: 'current' | 'retained';
   readonly displayName: string | null;
   readonly displayNameSource: 'canonical' | 'observed' | 'unavailable';
   readonly avatarUrl: string | null;
@@ -83,6 +93,8 @@ export interface ProgramPlayerProjection {
   readonly observerSlot: number | null;
   readonly activity: string | null;
   readonly lifeState: PlayerLifeState;
+  readonly liveAdr: number | null;
+  readonly completedAdr: number | null;
   readonly state: ProgramPlayerStateProjection | null;
   readonly matchStats: ProgramMatchStatsProjection | null;
   readonly weapons: readonly ProgramWeaponProjection[];
@@ -153,6 +165,7 @@ export interface ProgramProjectionInput {
   readonly context?: MatchContext;
   readonly contextFreshness?: 'fresh' | 'stale';
   readonly identity: IdentityResolution;
+  readonly activeLineup: ActiveLineupResolution;
   readonly nowMonotonicMs: number;
   readonly continuityPolicy: RuntimeContinuityPolicy;
 }
@@ -238,12 +251,14 @@ function canonicalPlayerFor(
 }
 
 function projectPlayer(
-  player: NonNullable<TelemetryObservation['telemetry']['allPlayers']>[number],
+  lineupPlayer: ActiveLineupPlayer,
   identity: IdentityResolution,
   identityIsCurrent: boolean,
+  playerStats: ProgramSafeRuntimeView['playerStats'],
 ): ProgramPlayerProjection {
-  const canonical = canonicalPlayerFor(player.sourcePlayerId, identity, identityIsCurrent);
-  const observedDisplayName = nullable(player.displayName);
+  const player = lineupPlayer.observed;
+  const canonical = canonicalPlayerFor(lineupPlayer.sourcePlayerId, identity, identityIsCurrent);
+  const observedDisplayName = player === null ? null : nullable(player.displayName);
   const canonicalDisplayName = canonical?.displayName ?? null;
   const displayName = canonicalDisplayName ?? observedDisplayName;
   const displayNameSource =
@@ -254,7 +269,7 @@ function projectPlayer(
         : 'unavailable';
 
   const state =
-    player.state === undefined
+    player === null || player.state === undefined
       ? null
       : {
           health: nullable(player.state.health),
@@ -271,7 +286,7 @@ function projectPlayer(
           equipValue: nullable(player.state.equipValue),
         };
   const matchStats =
-    player.matchStats === undefined
+    player === null || player.matchStats === undefined
       ? null
       : {
           kills: nullable(player.matchStats.kills),
@@ -282,18 +297,25 @@ function projectPlayer(
         };
 
   return {
-    sourcePlayerId: player.sourcePlayerId,
+    sourcePlayerId: lineupPlayer.sourcePlayerId,
     canonicalPlayerId: canonical?.canonicalPlayerId ?? null,
+    identityEvidence:
+      canonical === undefined && lineupPlayer.identityEvidence === 'canonical'
+        ? 'unresolved'
+        : lineupPlayer.identityEvidence,
+    lineupEvidence: lineupPlayer.lineupEvidence,
     displayName,
     displayNameSource,
     avatarUrl: canonical?.avatarUrl ?? null,
-    side: player.side ?? 'unknown',
-    observerSlot: nullable(player.observerSlot),
-    activity: nullable(player.activity),
-    lifeState: derivePlayerLifeState(player.state?.health),
+    side: lineupPlayer.side,
+    observerSlot: player === null ? null : nullable(player.observerSlot),
+    activity: player === null ? null : nullable(player.activity),
+    lifeState: player === null ? 'unknown' : derivePlayerLifeState(player.state?.health),
+    liveAdr: getPlayerLiveAdr(playerStats, lineupPlayer.sourcePlayerId),
+    completedAdr: getPlayerCompletedAdr(playerStats, lineupPlayer.sourcePlayerId),
     state,
     matchStats,
-    weapons: [...(player.weapons ?? [])]
+    weapons: [...(player?.weapons ?? [])]
       .sort((left, right) => left.sourceWeaponId.localeCompare(right.sourceWeaponId))
       .map((weapon) => ({
         sourceWeaponId: weapon.sourceWeaponId,
@@ -321,7 +343,15 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
   const map = telemetry?.telemetry.map;
   const round = telemetry?.telemetry.round;
   const countdown = telemetry?.telemetry.phaseCountdowns;
-  const players = telemetry?.telemetry.allPlayers ?? [];
+  const activeLineup = input.activeLineup;
+  const activeLineupIsCurrent =
+    activeLineup.sourceGeneration === input.runtime.cursor.programSourceGeneration &&
+    activeLineup.mapEpoch === input.runtime.cursor.mapEpoch;
+  const players = activeLineupIsCurrent
+    ? [...activeLineup.ct, ...activeLineup.t].sort((left, right) =>
+        left.sourcePlayerId.localeCompare(right.sourcePlayerId),
+      )
+    : [];
 
   return {
     cursor: input.runtime.cursor,
@@ -363,9 +393,9 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
         ? null
         : { phase: nullable(countdown.phase), endsInSeconds: nullable(countdown.endsInSeconds) },
     observedPlayerSourceId: telemetry?.telemetry.player?.sourcePlayerId ?? null,
-    players: [...players]
-      .sort((left, right) => left.sourcePlayerId.localeCompare(right.sourcePlayerId))
-      .map((player) => projectPlayer(player, input.identity, identityIsCurrent)),
+    players: players.map((player) =>
+      projectPlayer(player, input.identity, identityIsCurrent, input.runtime.playerStats),
+    ),
     bomb:
       telemetry?.telemetry.bomb === undefined
         ? null

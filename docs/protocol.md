@@ -184,9 +184,9 @@ Companion → Program 的短生命周期 transient cue。两类消息共享 WebS
 
 ```text
 localProtocolVersion = 1
-programSchemaVersion  = 2
+programSchemaVersion  = 4
 radarSchemaVersion    = 1
-operatorSchemaVersion = 1
+operatorSchemaVersion = 2
 assistSchemaVersion   = 1
 programCueSchemaVersion = 1
 subprotocol = rivalhub-broadcast.local.v1
@@ -269,7 +269,7 @@ CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、sou
 delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
 `programReceiveSequence`。
 
-### 4.4 Program schema v2
+### 4.4 Program schema v4
 
 Program payload 只包含正式节目允许显示的信息：
 
@@ -277,7 +277,12 @@ Program payload 只包含正式节目允许显示的信息：
 - 比赛、赛事和 BO 信息；
 - canonical 或 neutral team presentation；
 - 地图、比分、回合与时钟；
+- Core 解析后的稳定 5+5 on-air player cohort；raw `allplayers` 中未进入 cohort 的 extra 不进入 Player Rails；
 - 选手显示身份和装备状态；
+- `identityEvidence: canonical | observed | unresolved`，表达 canonical identity 是否已核验；
+- `lineupEvidence: current | retained`，表达当前 entry 是否来自本帧或稳定 baseline；`retained` 不等于已确认掉线；
+- `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
+- `completedAdr`，只按已完成 counted rounds 的 damage / rounds 计算；在当前回合进行中保持稳定，尚无 counted round 时为 `null`；
 - ``lifeState: alive | dead | unknown``；
 - C4；
 - 数据覆盖状态。
@@ -294,13 +299,17 @@ Program 不包含：
 
 ``lifeState`` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
 
+`ProgramProjection` 不从 renderer 侧推断 active player，也不累计 ADR。Active lineup 只有在 `coverage.allPlayers = present`、10 个唯一稳定 Steam64、CT 5 人 + T 5 人且无歧义时才建立或替换 baseline；稳定 baseline 遇到 transient missing/extra 或 `degraded` evidence 时可以保留并标记 `retained` / `degraded`。没有 previous baseline 时，degraded 的 clean-looking 5+5 仍不得晋升。same-map source generation 变化时，retained membership 重新挂到当前 generation；generation continuity 由 resolution cursor 表达，证据质量由 `lineupEvidence` 表达。RivalHub roster 是 connected mode 的 strongest prior，但未知 Steam64 的稳定 active player 仍可进入节目，canonical identity 保留为 `null` 并通过 Operator/diagnostics 报告 warning。
+
+Stable membership（Steam64 集合）与当前 CT/T side assignment 分离：halftime / overtime 换边只更新 side，不重置 membership。`coverage.allPlayers = absent` 表示没有新的 lineup evidence，不触发 lineup transition；如果成员暂时缺失，`retained` 只保留节目槽位和 identity metadata，缺失成员的当前 health、equipment、weapons、observer slot 等 volatile telemetry 以 unavailable/null 表达，不从上一帧伪造。
+
 ### 4.5 Radar schema v1
 
 Radar 快照包含当前雷达领域所需的比赛游标、新鲜度、身份状态、地图、选手、C4 和手雷等信息。雷达 schema 表达 domain frame，不承诺 React / SVG / Canvas 等具体渲染实现。
 
-### 4.6 Operator schema v1
+### 4.6 Operator schema v2
 
-Operator 快照包含制作控制需要的比赛上下文、运行转换、身份和 source health。它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源。
+Operator 快照包含制作控制需要的比赛上下文、运行转换、身份、ActiveLineup diagnostics 和 source health。它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源；`activeLineup.extras` 与 resolver issues 只用于 Operator/debug，不进入正式 Player Rails。
 
 ### 4.7 Assist schema v1
 

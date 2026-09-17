@@ -83,12 +83,13 @@ HUD 至少能够表达：
 
 - 地图、BO 格式、系列赛比分；
 - CT/T 当前比分、回合、阶段和时钟；
-- 10 名选手及其赛事身份；
+- 稳定的 5+5 active lineup；raw `allplayers` 中的 observer、coach、extra 或暂时缺失 entry 不直接决定 Player Rails；
+- 选手的赛事身份与 `canonical | observed | unresolved` 证据状态；
 - 存活状态；
 - HP、护甲、头盔、拆弹器；
 - 金钱、装备价值；
 - 当前武器、弹药和手雷；
-- K / A / D 等直播统计；
+- K / A / D 等直播统计，以及由 Core 按 counted damage / counted rounds 计算的 `liveAdr` 与 `completedAdr`；前者可包含当前 eligible round，后者只包含已完成 counted rounds；
 - C4 状态；
 - 回合历史；
 - 当前观察选手。
@@ -151,7 +152,7 @@ Lookahead 读取的是较早时间轴中已经发生的事件，不是对游戏�
 - 地图和官方赛果；
 - 解说、直播与品牌上下文。
 
-身份匹配只把稳定赛事身份当作权威依据。Steam64 是运行时玩家匹配的稳定键；昵称、CT/T 和 observer slot 只作为显示或辅助证据。
+身份匹配只把稳定赛事身份当作权威依据。Steam64 是运行时玩家匹配与 map-scoped stats 的稳定键；昵称、CT/T 和 observer slot 只作为显示或辅助证据。连接模式下，未知 Steam64 只产生 warning/degraded identity，不会因为稳定形成 5+5 active lineup 就隐藏真实上场选手；无法排除硬矛盾时才 fail closed 到中性 presentation。
 
 身份状态至少区分：
 
