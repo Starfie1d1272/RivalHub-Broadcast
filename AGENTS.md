@@ -15,12 +15,12 @@ Agent 的首要职责是在既有产品与架构边界内完成可验证实现�
 
 ## 语言
 
-一手文档和用户可见界面默认中文。代码符号、协议字段、环境变量和标准专名保持原文；普通工程词不要直接变成用户文案。具体规则见 `docs/terminology.md`。
+一手文档和用户可见界面默认中文。用户界面优先自然中文；开发者文档可以保留能精确对应代码、协议和架构的 canonical term。代码符号、协议字段、环境变量和标准专名保持原文。具体规则见 `docs/terminology.md`。
 
 ## 不可破坏的架构边界
 
 - 官方赛事事实与 Broadcast observation 分权。
-- Standalone 模式与 RivalHub 连接模式共享同一 Runtime；RivalHub 不是 Core / Radar / Lookahead 的运行前置条件。
+- 独立模式与 RivalHub 连接模式共享同一 Runtime；RivalHub 不是 Core / Radar / Lookahead 的运行前置条件。
 - Broadcast 不建立第二套官方赛事数据库，不直连 RivalHub / Supabase 内部表。
 - Raw GSI 只存在于 telemetry adapter / capture 边界。
 - GSI frame 按 current source observation 解释；禁止通用 retain-on-omit deep merge。
