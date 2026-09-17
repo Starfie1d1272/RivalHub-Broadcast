@@ -21,15 +21,15 @@ export const surfaceDefinitions = [
   {
     id: 'program',
     path: '/program',
-    title: '节目输出',
+    title: '正式节目',
     description: '透明 1920×1080 节目画布，用于承载正式节目图形。',
     realtimeChannel: 'program',
   },
   {
     id: 'operator',
     path: '/operator',
-    title: '导播控制',
-    description: '本地导播控制入口；当前提供实时通道与运行状态基础。',
+    title: '制作控制',
+    description: '本地制作控制入口；当前提供实时通道与运行状态基础。',
     realtimeChannel: 'operator',
   },
   {
