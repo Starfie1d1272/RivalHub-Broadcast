@@ -57,7 +57,7 @@ Observer Assist 可以是透明置顶窗口，也可以是 Broadcast Workspace �
 - Assist 数据不得先发给 Program 再靠 CSS / crop / visibility 隐藏；
 - Program 与 Assist 使用独立 schema / projection；
 - OBS capture selection 只是第二道部署防线；
-- #615 等公共 live output 只能消费 Program-safe timeline。
+- 公共实时输出只能消费 Program-safe timeline。
 
 ### Source-local continuity
 
