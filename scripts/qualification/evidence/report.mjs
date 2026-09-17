@@ -7,9 +7,9 @@ function resultLabel(result) {
 }
 
 function freshnessLabel(value) {
-  if (value === 'fresh') return '正常';
-  if (value === 'stale') return '已停止';
-  if (value === 'awaiting') return '等待数据';
+  if (value === 'fresh') return '正常（fresh）';
+  if (value === 'stale') return '已过期（stale）';
+  if (value === 'awaiting') return '等待数据（awaiting）';
   return value ?? '未知';
 }
 
@@ -59,7 +59,7 @@ export function renderReport({
     '',
     finalRuntime === undefined
       ? '- `final-runtime.json` 不可用'
-      : `- 数据状态：**${freshnessLabel(finalRuntime.freshness)}**`,
+      : `- Runtime freshness：**${freshnessLabel(finalRuntime.freshness)}**`,
     '',
     '本报告不包含原始 GSI Token 或账户身份信息。',
   );
