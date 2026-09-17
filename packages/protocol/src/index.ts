@@ -2,13 +2,16 @@ export {};
 export {
   ASSIST_SCHEMA_VERSION,
   LOCAL_CHANNELS,
+  LOCAL_SNAPSHOT_CHANNELS,
+  LOCAL_TRANSIENT_CHANNELS,
   LOCAL_PROTOCOL_SUBPROTOCOL,
   LOCAL_PROTOCOL_VERSION,
   OPERATOR_SCHEMA_VERSION,
+  PROGRAM_CUE_SCHEMA_VERSION,
   PROGRAM_SCHEMA_VERSION,
   RADAR_SCHEMA_VERSION,
 } from './version.js';
-export type { LocalChannel } from './version.js';
+export type { LocalChannel, LocalSnapshotChannel, LocalTransientChannel } from './version.js';
 export {
   acceptLocalSnapshot,
   acceptSnapshot,
@@ -35,3 +38,39 @@ export {
   projectionCursorSchema,
 } from './shared.js';
 export type { LocalSnapshot, LocalSnapshotV1, ProjectionCursor } from './shared.js';
+export {
+  ProgramCueBaselineSchema,
+  ProgramCueEnvelopeSchema,
+  ProgramCueLaneCursorSchema,
+  ProgramCueMessageSchema,
+  ProgramCueSchema,
+  programCueBaselineSchema,
+  programCueEnvelopeSchema,
+  programCueLaneCursorSchema,
+  programCueMessageSchema,
+  programCueSchema,
+} from './program-cue.js';
+export {
+  acceptProgramCue,
+  createProgramCueAcceptance,
+  createProgramCueAcceptanceState,
+  PROGRAM_CUE_DEDUPE_MAX,
+} from './program-cue-acceptance.js';
+export type {
+  ProgramCueAcceptance,
+  ProgramCueAcceptanceResult,
+  ProgramCueAcceptanceResultKind,
+  ProgramCueAcceptanceState,
+  ProgramCueAccepted,
+  ProgramCueIgnored,
+  ProgramCueRejected,
+} from './program-cue-acceptance.js';
+export type {
+  ProgramCueBaselineInput,
+  ProgramCueBaselineV1,
+  ProgramCueLaneCursor,
+  ProgramCueLaneMessage,
+  ProgramCueMessageInput,
+  ProgramCueMessageV1,
+  ProgramCueWire,
+} from './program-cue.js';

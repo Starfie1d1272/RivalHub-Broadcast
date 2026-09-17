@@ -10,6 +10,7 @@ export const LOCAL_WEB_ROUTES = {
   radar: '/local/v1/radar',
   operator: '/local/v1/operator',
   assist: '/local/v1/assist',
+  'program-cue': '/local/v1/program-cue',
 } as const;
 
 export type LocalWebChannel = keyof typeof LOCAL_WEB_ROUTES;

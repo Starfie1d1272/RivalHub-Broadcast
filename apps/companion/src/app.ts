@@ -10,6 +10,10 @@ import {
   createProjectionCoordinator,
   type ProjectionCoordinator,
 } from './projections/projection-coordinator.js';
+import {
+  createProgramCueCoordinator,
+  type ProgramCueCoordinator,
+} from './projections/program-cue-coordinator.js';
 import type { MatchContextBinding } from './match-context/index.js';
 import {
   registerQualificationRoutes,
@@ -50,6 +54,7 @@ export interface CompanionAppOptions {
   readonly gsiSequenceSource?: GsiSequenceSource;
   readonly programRuntime?: ProgramRuntime;
   readonly projectionCoordinator?: ProjectionCoordinator;
+  readonly programCueCoordinator?: ProgramCueCoordinator;
   readonly matchContextBinding?: MatchContextBinding;
   readonly projectionNowMonotonicMs?: () => number;
   readonly debugEvidenceStore?: DebugEvidenceStore;
@@ -134,8 +139,19 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       onDiagnostic: ({ code }) =>
         recordRuntimeDiagnostic(code, 'projection', projectionDiagnosticDegradesRuntime(code)),
     });
+  const programCueCoordinator =
+    options.programCueCoordinator ??
+    createProgramCueCoordinator({
+      programSource: cstvSources.program,
+      programRuntime,
+      nowMonotonicMs: projectionNowMonotonicMs,
+      onDiagnostic: ({ code }) => recordRuntimeDiagnostic(code, 'projection', false),
+    });
   const localWebTransport = createLocalWebSocketTransport({
-    getPublisher: (channel) => projectionCoordinator.getPublisher(channel),
+    getPublisher: (channel) =>
+      channel === 'program-cue'
+        ? programCueCoordinator.getPublisher()
+        : projectionCoordinator.getPublisher(channel),
     originPolicyOptions: {
       ...(options.host === undefined ? {} : { host: options.host }),
       ...(options.localWebLanMode === undefined ? {} : { lanMode: options.localWebLanMode }),
@@ -206,6 +222,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       onObservation: (observation) => {
         const result = programRuntime.acceptObservation(observation);
         projectionCoordinator.afterRuntimeMutation(result);
+        programCueCoordinator.afterRuntimeMutation(result);
         debugEvidenceStore.recordNormalizedObservation(observation);
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
         options.onObservation?.(observation);
@@ -258,6 +275,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         debugEvidenceStore.clearCurrentTelemetry();
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
         projectionCoordinator.afterRuntimeMutation();
+        programCueCoordinator.afterRuntimeMutation();
       },
       ...(options.onQualificationFinish === undefined
         ? {}
@@ -273,7 +291,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       ...deliveryConsumers.map((consumer) => consumer.close()),
     ]);
     await localWebTransport.close();
-    await projectionCoordinator.close();
+    await Promise.all([projectionCoordinator.close(), programCueCoordinator.close()]);
     await recorder.finalize();
   });
 

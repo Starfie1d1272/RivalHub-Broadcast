@@ -1,4 +1,4 @@
-import type { LocalChannel } from './version.js';
+import type { LocalSnapshotChannel } from './version.js';
 
 export interface SnapshotCursorLike {
   readonly producerInstanceId: string;
@@ -12,7 +12,7 @@ export interface SnapshotCursorLike {
 export interface SnapshotEnvelopeLike {
   readonly type: 'snapshot';
   readonly protocolVersion: number;
-  readonly channel: LocalChannel;
+  readonly channel: LocalSnapshotChannel;
   readonly schemaVersion: number;
   readonly channelSeq: number;
   readonly cursor: SnapshotCursorLike;
@@ -20,7 +20,7 @@ export interface SnapshotEnvelopeLike {
 }
 
 export interface SnapshotAcceptanceState {
-  readonly channel: LocalChannel | null;
+  readonly channel: LocalSnapshotChannel | null;
   readonly producerInstanceId: string | null;
   readonly lastAcceptedChannelSeq: number | null;
   readonly lastAcceptedRuntimeSeq: number | null;

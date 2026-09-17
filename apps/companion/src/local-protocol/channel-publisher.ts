@@ -14,7 +14,17 @@ export interface LocalSubscription {
   getHealth(): LatestWinsConsumerHealth;
 }
 
-export interface LocalChannelPublisher<TSnapshot extends { readonly channelSeq: number }> {
+export interface LocalOutboundSubscription {
+  close(): Promise<void>;
+}
+
+export interface LocalWebOutboundPublisher<TMessage extends { readonly channelSeq: number }> {
+  subscribe(send: (message: TMessage) => Promise<void>): LocalOutboundSubscription;
+}
+
+export interface LocalChannelPublisher<
+  TSnapshot extends { readonly channelSeq: number },
+> extends LocalWebOutboundPublisher<TSnapshot> {
   publish(snapshot: Omit<TSnapshot, 'channelSeq'>): void;
   getCurrent(): TSnapshot | null;
   subscribe(send: (snapshot: TSnapshot) => Promise<void>): LocalSubscription;

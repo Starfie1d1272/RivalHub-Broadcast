@@ -21,3 +21,17 @@ export {
   LOCAL_PROTOCOL_SUBPROTOCOL,
 } from './channel-config';
 export type { LocalChannelConfig, LocalChannelSnapshot } from './channel-config';
+export {
+  createProgramCueClient,
+  ProgramCueClient,
+  PROGRAM_CUE_RECONNECT_BACKOFF_MS,
+} from './program-cue-client';
+export type {
+  ProgramCueClientOptions,
+  ProgramCueClientSnapshot,
+  ProgramCueConnectionState,
+  ProgramCueEventListener,
+  ProgramCueListener,
+  ProgramCueResetListener,
+  ProgramCueResetReason,
+} from './program-cue-client';

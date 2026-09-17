@@ -74,18 +74,21 @@ DAK、OCR 或其它赛后来源属于 evidence / reconciliation 链，不进入�
 apps/companion
   本地服务与 composition root。
   组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、capture 与 qualification tooling。
+  拥有 ProgramCueCoordinator 与 transient delivery publisher。
 
 apps/web
   Program、Operator 与 Debug 的 Web Renderer / Host。
-  不拥有 RuntimeState，也不直接解释 Raw GSI。
+  拥有 ProgramCueClient 与 Renderer-local ephemeral cue state；不拥有 RuntimeState，也不直接解释
+  Raw GSI / Raw CSTV。
 
 packages/core
   纯 TypeScript Runtime domain。
-  拥有 continuity、identity、RuntimeState、RuntimeTransition、accumulator、Projection。
+  拥有 continuity、identity、RuntimeState、RuntimeTransition、accumulator、Projection 和
+  framework-neutral ProgramCue projector。
 
 packages/protocol
   Broadcast 自有的 Local Protocol、schema 和 acceptance rules。
-  不拥有 RuntimeState 或业务状态机。
+  拥有 snapshot 与 `program-cue` transient wire contract；不拥有 RuntimeState 或业务状态机。
 
 packages/telemetry-gsi
   Raw GSI parsing、source semantics、diagnostics 和 normalization。
@@ -214,6 +217,15 @@ Delayed Program source
 ```
 
 ```text
+Delayed Program CSTV
+  → role-scoped GameEventObservation
+  → ProgramCueCoordinator / Program-safe semantic cue
+  → program-cue transient channel
+  → ProgramCueClient
+  → Renderer-local ephemeral effect
+```
+
+```text
 Lookahead source
   → Assist-private evidence
   → timeline alignment
@@ -263,9 +275,13 @@ program
 radar
 operator
 assist
+program-cue (transient, Program-only)
 ```
 
-每个 channel 有自己的 schema version、publisher 和 acceptance state。protocol version 与 channel schema version 分离，因此单个 payload 演进不要求整个 Local Protocol 同步升级。
+Snapshot channel 与 `program-cue` transient channel 各自有 schema version、publisher 和 acceptance
+state。Program cue 只来自 delayed Program CSTV，不进入 snapshot `LocalChannelStore`，也不共享
+Lookahead source 或通用 event bus。protocol version 与 channel schema version 分离，因此单个 payload
+演进不要求整个 Local Protocol 同步升级。
 
 连接建立后立即发送当前 baseline；断线重连重新取得 current baseline，不补发历史 snapshot。
 
@@ -277,6 +293,11 @@ in-flight
 ```
 
 新 snapshot 覆盖旧 pending snapshot。slow consumer 不能让内存 queue 随运行时间增长。
+
+Transient cue 不使用 latest-wins 覆盖：每个 subscriber 保留 1 个 in-flight、最多 32 个 pending cue
+FIFO 和 1 个 pending reset barrier。旧 pending cue 可因 overflow 或超过 1000 ms monotonic delivery
+age 丢弃；baseline/reset 会清空旧上下文。断线、刷新或 reset 不补播历史 cue，Renderer TTL 不属于
+Core 或 wire。
 
 ## 10. 本地安全
 

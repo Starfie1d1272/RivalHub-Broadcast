@@ -9,13 +9,19 @@ import {
   type DebugFreshness,
   type DebugRuntimeResponse,
 } from './debug/runtime';
+import { ProgramCueRendererBridge } from './program/ProgramCueRendererBridge';
 import { ProgramPage } from './program/ProgramPage';
 import {
   ProgramVisualFixtureNotFound,
   ProgramVisualFixturePage,
 } from './program/testing/ProgramVisualFixturePage';
-import { createLocalChannelClient, type LocalChannelConnectionState } from './realtime';
-import type { LocalChannel } from '@rivalhub-broadcast/protocol/version';
+import {
+  createLocalChannelClient,
+  createProgramCueClient,
+  type LocalChannelClient,
+  type LocalChannelConnectionState,
+} from './realtime';
+import type { LocalSnapshotChannel } from '@rivalhub-broadcast/protocol/version';
 
 export const surfaceDefinitions = [
   {
@@ -83,7 +89,9 @@ function recorderStateLabel(state: string | undefined): string {
   }
 }
 
-function useLocalChannelConnection(channel: LocalChannel) {
+function useLocalChannelConnection<C extends LocalSnapshotChannel>(
+  channel: C,
+): LocalChannelClient<C> {
   const client = useMemo(() => createLocalChannelClient(channel), [channel]);
   useEffect(() => {
     client.start();
@@ -92,7 +100,7 @@ function useLocalChannelConnection(channel: LocalChannel) {
   return client;
 }
 
-function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }) {
+function SurfaceConnectionMarker({ channel }: { readonly channel: LocalSnapshotChannel }) {
   const client = useLocalChannelConnection(channel);
   const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
 
@@ -108,8 +116,32 @@ function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }
 }
 
 function ProgramRoute() {
-  useLocalChannelConnection('program');
-  return <ProgramPage />;
+  const programClient = useLocalChannelConnection('program');
+  const cueClient = useMemo(
+    () =>
+      createProgramCueClient({
+        getProgramSnapshot: () => programClient.getSnapshot().current,
+      }),
+    [programClient],
+  );
+  useEffect(() => {
+    const observeProgramSnapshot = () =>
+      cueClient.observeProgramSnapshot(programClient.getSnapshot().current);
+    observeProgramSnapshot();
+    const unsubscribe = programClient.subscribe(observeProgramSnapshot);
+    cueClient.start();
+    return () => {
+      unsubscribe();
+      cueClient.dispose();
+    };
+  }, [cueClient, programClient]);
+
+  return (
+    <>
+      <ProgramCueRendererBridge client={cueClient} />
+      <ProgramPage />
+    </>
+  );
 }
 
 export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }) {

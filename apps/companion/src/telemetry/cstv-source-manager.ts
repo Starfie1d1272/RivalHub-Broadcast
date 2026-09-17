@@ -1,11 +1,12 @@
 import type {
-  GameEventObservation,
+  RoleScopedGameEventObservation,
   GameEventSourceRole,
 } from '@rivalhub-broadcast/core/game-events';
 import {
   createCstvLiveSession,
   type CstvDiagnostic,
   type CstvDiagnosticCode,
+  type CstvLiveSession,
   type CstvObservationClock,
   type CstvParserSessionFactory,
   type CstvSessionTerminalStatus,
@@ -19,8 +20,8 @@ export const CSTV_RECONNECT_BACKOFF_MS = [1_000, 2_000, 4_000, 8_000, 10_000] as
 export type CstvSourceState =
   'disabled' | 'connecting' | 'live' | 'reconnecting' | 'ended' | 'stopped' | 'failed';
 
-export interface CstvSourceHealth {
-  readonly role: GameEventSourceRole;
+export interface CstvSourceHealth<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly role: R;
   readonly state: CstvSourceState;
   readonly generation: number;
   readonly reconnectAttempt: number;
@@ -33,9 +34,9 @@ export interface CstvSourceHealth {
   readonly lastTerminalStatus?: CstvSessionTerminalStatus;
 }
 
-export interface CstvSourceSnapshot {
-  readonly health: CstvSourceHealth;
-  readonly recentGameEvents: readonly GameEventObservation[];
+export interface CstvSourceSnapshot<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly health: CstvSourceHealth<R>;
+  readonly recentGameEvents: readonly RoleScopedGameEventObservation<R>[];
   readonly recentDiagnostics: readonly CstvDiagnostic[];
 }
 
@@ -44,23 +45,24 @@ export interface CstvScheduler {
   clearTimeout(handle: unknown): void;
 }
 
-export interface CstvSourceManagerOptions {
-  readonly role: GameEventSourceRole;
+export interface CstvSourceManagerOptions<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly role: R;
   readonly url?: string;
   readonly parserSessionFactory?: CstvParserSessionFactory;
   readonly clock?: CstvObservationClock;
   readonly scheduler?: CstvScheduler;
 }
 
-export interface CstvSourceManager {
-  readonly role: GameEventSourceRole;
+export interface CstvSourceManager<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly role: R;
   start(): void;
   stop(): Promise<void>;
-  getHealth(): CstvSourceHealth;
-  getRecentGameEvents(): readonly GameEventObservation[];
+  getHealth(): CstvSourceHealth<R>;
+  getRecentGameEvents(): readonly RoleScopedGameEventObservation<R>[];
   getRecentDiagnostics(): readonly CstvDiagnostic[];
-  getSnapshot(): CstvSourceSnapshot;
+  getSnapshot(): CstvSourceSnapshot<R>;
   subscribe(listener: () => void): () => void;
+  subscribeLiveGameEvents(listener: (event: RoleScopedGameEventObservation<R>) => void): () => void;
 }
 
 const defaultScheduler: CstvScheduler = {
@@ -93,17 +95,20 @@ function appendBounded<T>(items: T[], item: T, max: number): void {
   if (overflow > 0) items.splice(0, overflow);
 }
 
-class DefaultCstvSourceManager implements CstvSourceManager {
-  readonly role: GameEventSourceRole;
+class DefaultCstvSourceManager<R extends GameEventSourceRole> implements CstvSourceManager<R> {
+  readonly role: R;
 
   private readonly url: string | undefined;
   private readonly parserSessionFactory: CstvParserSessionFactory | undefined;
   private readonly clock: CstvObservationClock | undefined;
   private readonly scheduler: CstvScheduler;
-  private readonly recentGameEvents: GameEventObservation[] = [];
+  private readonly recentGameEvents: RoleScopedGameEventObservation<R>[] = [];
   private readonly recentDiagnostics: CstvDiagnostic[] = [];
   private readonly listeners = new Set<() => void>();
-  private activeSession: ReturnType<typeof createCstvLiveSession> | undefined;
+  private readonly liveGameEventListeners = new Set<
+    (event: RoleScopedGameEventObservation<R>) => void
+  >();
+  private activeSession: CstvLiveSession<R> | undefined;
   private activeAttempt: Promise<void> | undefined;
   private reconnectTimer: unknown;
   private reconnectScheduled = false;
@@ -122,7 +127,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   private started = false;
   private stopRequested = false;
 
-  constructor(options: CstvSourceManagerOptions) {
+  constructor(options: CstvSourceManagerOptions<R>) {
     this.role = options.role;
     this.url = options.url;
     this.parserSessionFactory = options.parserSessionFactory;
@@ -161,7 +166,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     return this.stopPromise;
   }
 
-  getHealth(): CstvSourceHealth {
+  getHealth(): CstvSourceHealth<R> {
     if (this.refreshTailTick()) this.notifySnapshotChanged();
     return {
       role: this.role,
@@ -184,7 +189,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     };
   }
 
-  getRecentGameEvents(): readonly GameEventObservation[] {
+  getRecentGameEvents(): readonly RoleScopedGameEventObservation<R>[] {
     return this.recentGameEvents.slice();
   }
 
@@ -192,7 +197,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     return this.recentDiagnostics.slice();
   }
 
-  getSnapshot(): CstvSourceSnapshot {
+  getSnapshot(): CstvSourceSnapshot<R> {
     return {
       health: this.getHealth(),
       recentGameEvents: this.getRecentGameEvents(),
@@ -203,6 +208,13 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   subscribe(listener: () => void): () => void {
     this.listeners.add(listener);
     return () => this.listeners.delete(listener);
+  }
+
+  subscribeLiveGameEvents(
+    listener: (event: RoleScopedGameEventObservation<R>) => void,
+  ): () => void {
+    this.liveGameEventListeners.add(listener);
+    return () => this.liveGameEventListeners.delete(listener);
   }
 
   private connect(): void {
@@ -222,7 +234,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
 
     let attempt: Promise<void>;
     try {
-      const session = createCstvLiveSession({
+      const session = createCstvLiveSession<R>({
         role: this.role,
         generation,
         url: this.url,
@@ -250,10 +262,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     });
   }
 
-  private async runAttempt(
-    generation: number,
-    session: ReturnType<typeof createCstvLiveSession>,
-  ): Promise<void> {
+  private async runAttempt(generation: number, session: CstvLiveSession<R>): Promise<void> {
     let phase: 'start' | 'run' = 'start';
     try {
       const started = await session.start();
@@ -279,10 +288,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     }
   }
 
-  private isCurrent(
-    generation: number,
-    session: ReturnType<typeof createCstvLiveSession>,
-  ): boolean {
+  private isCurrent(generation: number, session: CstvLiveSession<R>): boolean {
     return !this.stopRequested && this.generation === generation && this.activeSession === session;
   }
 
@@ -294,13 +300,24 @@ class DefaultCstvSourceManager implements CstvSourceManager {
     this.notifySnapshotChanged();
   }
 
-  private handleObservation(generation: number, observation: GameEventObservation): void {
+  private handleObservation(
+    generation: number,
+    observation: RoleScopedGameEventObservation<R>,
+  ): void {
     if (!this.isCurrentGeneration(generation)) return;
     appendBounded(this.recentGameEvents, observation, CSTV_RECENT_GAME_EVENTS_MAX);
     this.lastEventTick = observation.cursor.tick;
     this.lastEventSequence = observation.cursor.sequence;
     this.lastEventObservedAt = observation.cursor.observedAt;
     this.notifySnapshotChanged();
+    if (this.state !== 'live') return;
+    for (const listener of [...this.liveGameEventListeners]) {
+      try {
+        listener(observation);
+      } catch {
+        this.recordDiagnostic({ code: 'event-sink-failed' });
+      }
+    }
   }
 
   private handleDiagnostic(generation: number, diagnostic: CstvDiagnostic): void {
@@ -320,7 +337,7 @@ class DefaultCstvSourceManager implements CstvSourceManager {
 
   private handleTerminal(
     generation: number,
-    session: ReturnType<typeof createCstvLiveSession>,
+    session: CstvLiveSession<R>,
     status: 'complete' | 'timeout' | 'cancelled',
   ): void {
     if (!this.isCurrent(generation, session)) return;
@@ -375,16 +392,18 @@ class DefaultCstvSourceManager implements CstvSourceManager {
   }
 }
 
-export function createCstvSourceManager(options: CstvSourceManagerOptions): CstvSourceManager {
+export function createCstvSourceManager<R extends GameEventSourceRole>(
+  options: CstvSourceManagerOptions<R>,
+): CstvSourceManager<R> {
   if (options.url !== undefined && !isValidHttpUrl(options.url)) {
     throw new Error('CSTV source URL must be a valid http(s) URL');
   }
-  return new DefaultCstvSourceManager(options);
+  return new DefaultCstvSourceManager<R>(options);
 }
 
 export interface CstvSourceManagers {
-  readonly program: CstvSourceManager;
-  readonly lookahead: CstvSourceManager;
+  readonly program: CstvSourceManager<'program'>;
+  readonly lookahead: CstvSourceManager<'lookahead'>;
 }
 
 export function createCstvSourceManagers(options: {

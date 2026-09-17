@@ -4,7 +4,7 @@ import fastifyWebsocket from '@fastify/websocket';
 import type { FastifyBaseLogger, FastifyInstance } from 'fastify';
 import type { WebSocket as WsSocket } from 'ws';
 
-import type { LocalChannelPublisher } from '../local-protocol/channel-publisher.js';
+import type { LocalWebOutboundPublisher } from '../local-protocol/channel-publisher.js';
 import {
   HEARTBEAT_INTERVAL_MS,
   LOCAL_WEB_ROUTES,
@@ -25,7 +25,7 @@ const OPEN_STATE = 1;
 const READ_ONLY_CLOSE_CODE = 1008;
 const SNAPSHOT_TOO_LARGE_CLOSE_CODE = 1009;
 
-type LocalSnapshot = { readonly channel: string; readonly channelSeq: number };
+type LocalWebMessage = { readonly channel: string; readonly channelSeq: number };
 
 export interface LocalWebSocketLike extends Pick<
   WsSocket,
@@ -72,9 +72,7 @@ export interface LocalWebSocketDiagnostic {
 }
 
 export interface LocalWebSocketTransportOptions {
-  readonly getPublisher: (
-    channel: LocalWebChannel,
-  ) => LocalChannelPublisher<LocalSnapshot & { readonly channel: LocalWebChannel }>;
+  readonly getPublisher: (channel: LocalWebChannel) => LocalWebOutboundPublisher<LocalWebMessage>;
   readonly originPolicy?: LocalWebOriginPolicy;
   readonly originPolicyOptions?: LocalWebOriginPolicyOptions;
   readonly logger?: Pick<FastifyBaseLogger, 'info' | 'warn'>;
@@ -89,7 +87,7 @@ interface Connection {
   readonly channel: LocalWebChannel;
   readonly socket: LocalWebSocketLike;
   readonly origin: string | undefined;
-  readonly publisher: LocalChannelPublisher<LocalSnapshot & { readonly channel: LocalWebChannel }>;
+  readonly publisher: LocalWebOutboundPublisher<LocalWebMessage>;
   subscription?: { close(): Promise<void> };
   alive: boolean;
   closed: boolean;
@@ -295,7 +293,7 @@ export class LocalWebSocketTransport {
     unref?.call(timer);
   }
 
-  private async sendSnapshot(connection: Connection, snapshot: LocalSnapshot): Promise<void> {
+  private async sendSnapshot(connection: Connection, snapshot: LocalWebMessage): Promise<void> {
     if (connection.closed || connection.socket.readyState !== OPEN_STATE) {
       throw new Error('local WebSocket is not open');
     }

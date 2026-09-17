@@ -321,6 +321,65 @@ describe('CSTV source manager', () => {
     await manager.stop();
   });
 
+  it('keeps start bootstrap events in debug evidence but only delivers run events live', async () => {
+    const sessions: FakeSession[] = [];
+    const liveEvents: number[] = [];
+    const manager = createCstvSourceManager({
+      role: 'program',
+      url: 'https://example.test/program/',
+      parserSessionFactory: (options) => {
+        const session: FakeSession = {
+          options,
+          resolveRun: () => {},
+          rejectRun: () => {},
+          setTailTick: () => {},
+        };
+        sessions.push(session);
+        return {
+          sync: null,
+          tailTick: 0,
+          start: () => {
+            options.onEvent(
+              'weapon_fire',
+              {
+                userid: 1,
+                player: { steamId: '76561198000000001', name: 'Bootstrap', teamNumber: 3 },
+                weapon: 'm4a1',
+                silenced: false,
+              },
+              10,
+            );
+            return Promise.resolve({ status: 'ready' as const });
+          },
+          run: () => {
+            options.onEvent(
+              'weapon_fire',
+              {
+                userid: 2,
+                player: { steamId: '76561198000000002', name: 'Live', teamNumber: 2 },
+                weapon: 'ak47',
+                silenced: false,
+              },
+              11,
+            );
+            return Promise.resolve({ status: 'complete' as const });
+          },
+          stop: () => {},
+        };
+      },
+    });
+    manager.subscribeLiveGameEvents((event) => liveEvents.push(event.cursor.sequence));
+
+    manager.start();
+    await flush();
+    await flush();
+
+    expect(sessions).toHaveLength(1);
+    expect(manager.getHealth().state).toBe('ended');
+    expect(manager.getRecentGameEvents().map((event) => event.cursor.sequence)).toEqual([0, 1]);
+    expect(liveEvents).toEqual([1]);
+  });
+
   it('does not schedule reconnect after stop and validates explicit source URLs', async () => {
     const sessions: FakeSession[] = [];
     const scheduler = new FakeScheduler();
