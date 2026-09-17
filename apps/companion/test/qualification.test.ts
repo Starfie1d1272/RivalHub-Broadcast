@@ -247,7 +247,7 @@ describe('qualification-only Companion surface', () => {
     const page = qualificationPageHtml(CONTROL_TOKEN);
     expect(page).not.toContain('stopdemo');
     expect(page).not.toContain('Qualification workflow');
-    expect(page).toContain('<title>Qualification 验收 · RivalHub Broadcast</title>');
+    expect(page).toContain('<title>现场验收 · RivalHub Broadcast</title>');
     expect(page).toContain('data-action="cs2-closed">我已退出 CS2</button>');
     expect(page).toContain(
       "byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
