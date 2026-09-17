@@ -114,7 +114,7 @@ describe('web surface shell', () => {
       container = mountDebugPage();
     });
 
-    expect(container!.textContent).toContain('正在连接 Companion');
+    expect(container!.textContent).toContain('正在连接本地制播服务');
     expect(container!.querySelector('[aria-live="polite"]')).not.toBeNull();
   });
 
@@ -136,7 +136,7 @@ describe('web surface shell', () => {
       await Promise.resolve();
     });
 
-    expect(container!.textContent).toContain('Awaiting GSI');
+    expect(container!.textContent).toContain('等待 GSI 数据');
     expect(container!.textContent).toContain('暂无证据');
     expect(container!.textContent).toContain('未建立');
   });
@@ -159,11 +159,11 @@ describe('web surface shell', () => {
       await Promise.resolve();
     });
 
-    expect(container!.textContent).toContain('Fresh');
+    expect(container!.textContent).toContain('正常');
     expect(container!.textContent).toContain('de_ancient');
-    expect(container!.textContent).toContain('Accepted raw');
-    expect(container!.textContent).toContain('Normalized observation');
-    expect(container!.textContent).toContain('Runtime state');
+    expect(container!.textContent).toContain('已接收原始数据');
+    expect(container!.textContent).toContain('标准化观测');
+    expect(container!.textContent).toContain('当前运行状态');
   });
 
   it('renders a degraded error state when Companion is unavailable', async () => {
@@ -179,7 +179,9 @@ describe('web surface shell', () => {
       await Promise.resolve();
     });
 
-    expect(container!.querySelector('[role="alert"]')?.textContent).toContain('Companion 暂不可用');
+    expect(container!.querySelector('[role="alert"]')?.textContent).toContain(
+      '本地制播服务暂不可用',
+    );
     expect(container!.textContent).toContain('network down');
   });
 });
