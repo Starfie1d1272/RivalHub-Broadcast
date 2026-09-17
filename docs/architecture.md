@@ -129,6 +129,8 @@ Core 只有一份内部 `RuntimeState`，但它不是所有消费面的万能 pa
 RuntimeState
 ├─ match context
 ├─ program-safe runtime data
+│  ├─ map-scoped player stats accumulator
+│  └─ ActiveLineupResolution input seam
 ├─ assist-private runtime data
 └─ operational health / incidents
 ```
@@ -149,6 +151,13 @@ RuntimeState
 - Projection 不能反向成为第二份 domain truth；
 - Renderer 不读取整个 RuntimeState；
 - ProgramProjection 不包含 Lookahead future 字段；
+- Raw `allplayers` 只作为 telemetry observation 输入；Core 的 `ActiveLineupResolution` 负责确定稳定的 on-air 5+5 cohort，Program 不机械透传 raw collection；
+- Steam64 是 player logical identity 与 map-scoped stats 的 key；observer slot、昵称和数组位置不能建立或分裂 identity；
+- Stable membership 与 CT/T side assignment 分离；halftime / overtime 换边只更新 side，不重置同一 `mapEpoch` 的 logical participants；`allPlayers` absent 不产生 lineup transition；
+- `lineupEvidence: retained` 只保留 membership/identity metadata，不复制缺失 entry 的上一帧 volatile telemetry；
+- 只有 `allPlayers = present` 且能无歧义证明唯一 Steam64 的 5+5 才能建立或替换 stable baseline；`degraded` / `absent` evidence 不能建立“看起来干净”的新 baseline。same-map source generation 变化只更新 resolution cursor，不清除 stable membership；Program 只消费当前 generation 的 resolved lineup。
+- map-scoped accumulator 由 `mapEpoch` 负责 reset。source gap/reconnect 只使无法证明的当前回合失效，不清除同一 map execution 已完成的统计；
+- ADR 的 `liveAdr` 与 `completedAdr` 是同一 accumulator 的两个 pure read views；当前回合出现 `allPlayers != present` 时 invalidated，不得把有 evidence gap 的回合 finalize。
 - DebugProjection 可以更宽，但不因此成为其它消费面的数据源；
 - domain interpretation 在 Projection 结束，例如 `lifeState` 由 Core 统一推导，Renderer 不重复根据 HP 猜测。
 

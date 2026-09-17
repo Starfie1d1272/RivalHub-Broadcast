@@ -67,6 +67,8 @@ const weaponSchema = z.object({
 const playerSchema = z.object({
   sourcePlayerId: z.string(),
   canonicalPlayerId: nullableString,
+  identityEvidence: z.enum(['canonical', 'observed', 'unresolved']),
+  lineupEvidence: z.enum(['current', 'retained']),
   displayName: nullableString,
   displayNameSource: z.enum(['canonical', 'observed', 'unavailable']),
   avatarUrl: nullableString,
@@ -74,6 +76,8 @@ const playerSchema = z.object({
   observerSlot: nullableNumber,
   activity: nullableString,
   lifeState: z.enum(['alive', 'dead', 'unknown']),
+  liveAdr: nullableNumber,
+  completedAdr: nullableNumber,
   state: playerStateSchema.nullable(),
   matchStats: matchStatsSchema.nullable(),
   weapons: z.array(weaponSchema),

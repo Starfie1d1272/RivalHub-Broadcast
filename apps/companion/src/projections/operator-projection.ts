@@ -6,6 +6,7 @@ import {
   type ProjectionCursor,
 } from '@rivalhub-broadcast/core/projection';
 import type {
+  ActiveLineupResolution,
   IdentityCapabilities,
   IdentityIssue,
   IdentityResolution,
@@ -55,6 +56,21 @@ export interface OperatorProjection {
     readonly resolvedCount: number;
     readonly unresolved: readonly UnresolvedObservedPlayer[];
   };
+  readonly activeLineup: {
+    readonly state: ActiveLineupResolution['state'];
+    readonly sourceGeneration: number;
+    readonly mapEpoch: number;
+    readonly ctCount: number;
+    readonly tCount: number;
+    readonly retainedCount: number;
+    readonly extras: readonly {
+      readonly sourcePlayerId: string;
+      readonly displayName: string | null;
+      readonly side: 'CT' | 'T' | 'unknown';
+      readonly activity: string | null;
+    }[];
+    readonly issues: ActiveLineupResolution['issues'];
+  };
   readonly sources: {
     readonly cstvProgram: CstvSourceHealth;
     readonly cstvLookahead: CstvSourceHealth;
@@ -65,6 +81,7 @@ export interface OperatorProjectionInput {
   readonly runtime: ProgramRuntimeSnapshot;
   readonly context: MatchContextBinding | undefined;
   readonly identity: IdentityResolution;
+  readonly activeLineup: ActiveLineupResolution;
   readonly cstvSources: CstvSourceManagers;
   readonly nowMonotonicMs: number;
 }
@@ -74,6 +91,7 @@ export function projectOperator(input: OperatorProjectionInput): OperatorProject
   const safeRuntime = selectProgramSafeRuntimeView(state);
   const context = projectionContextFromBinding(input.context);
   const lastAccepted = safeRuntime.programSourceLastAccepted;
+  const lineupPlayers = [...input.activeLineup.ct, ...input.activeLineup.t];
 
   return {
     cursor: safeRuntime.cursor,
@@ -119,6 +137,21 @@ export function projectOperator(input: OperatorProjectionInput): OperatorProject
       issues: input.identity.issues.map((issue) => ({ ...issue })),
       resolvedCount: input.identity.players.length,
       unresolved: input.identity.unresolved.map((player) => ({ ...player })),
+    },
+    activeLineup: {
+      state: input.activeLineup.state,
+      sourceGeneration: input.activeLineup.sourceGeneration,
+      mapEpoch: input.activeLineup.mapEpoch,
+      ctCount: input.activeLineup.ct.length,
+      tCount: input.activeLineup.t.length,
+      retainedCount: lineupPlayers.filter((player) => player.lineupEvidence === 'retained').length,
+      extras: input.activeLineup.extras.map((player) => ({
+        sourcePlayerId: player.sourcePlayerId,
+        displayName: player.displayName ?? null,
+        side: player.side ?? 'unknown',
+        activity: player.activity ?? null,
+      })),
+      issues: input.activeLineup.issues.map((issue) => ({ ...issue })),
     },
     sources: {
       cstvProgram: { ...input.cstvSources.program.getHealth() },

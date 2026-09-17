@@ -82,7 +82,7 @@ export interface IdentitySideMapping {
 export interface IdentityCapabilities {
   /** A partial mapping may still be used by diagnostics and local presentation. */
   readonly canonicalPlayerMapping: boolean;
-  /** Branding is enabled only after the complete identity proof is matched. */
+  /** Branding may survive a soft player mismatch when current side proof is complete. */
   readonly canonicalTeamBranding: boolean;
   /** Automatic identity-dependent result behavior is fail-closed. */
   readonly identityDependentResult: boolean;

@@ -171,6 +171,22 @@ export function mapOperatorProjection(projection: OperatorProjection): OperatorP
         observerSlot: player.observerSlot,
       })),
     },
+    activeLineup: {
+      state: projection.activeLineup.state,
+      sourceGeneration: projection.activeLineup.sourceGeneration,
+      mapEpoch: projection.activeLineup.mapEpoch,
+      ctCount: projection.activeLineup.ctCount,
+      tCount: projection.activeLineup.tCount,
+      retainedCount: projection.activeLineup.retainedCount,
+      extras: projection.activeLineup.extras.map((player) => ({ ...player })),
+      issues: projection.activeLineup.issues.map((issue) => ({
+        code: issue.code,
+        severity: issue.severity,
+        message: issue.message,
+        sourcePlayerId: issue.sourcePlayerId ?? null,
+        side: issue.side ?? null,
+      })),
+    },
     sources: {
       cstvProgram: mapSourceHealth(projection.sources.cstvProgram),
       cstvLookahead: mapSourceHealth(projection.sources.cstvLookahead),

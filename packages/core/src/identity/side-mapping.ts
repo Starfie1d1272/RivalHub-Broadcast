@@ -10,8 +10,9 @@ function issue(
   code: IdentityIssue['code'],
   message: string,
   details: Omit<IdentityIssue, 'code' | 'severity' | 'message'> = {},
+  severity: IdentityIssue['severity'] = 'warning',
 ): IdentityIssue {
-  return { code, severity: 'warning', message, ...details };
+  return { code, severity, message, ...details };
 }
 
 function previousSide(previous: IdentityResolution | undefined, entry: 'a' | 'b'): SourceSide {
@@ -57,6 +58,7 @@ function deriveSideFromPlayers(
         'ambiguous_side_mapping',
         `参赛方 ${entryId} 在当前 evidence 中同时出现 CT 与 T，暂不信任 side mapping。`,
         { entryId },
+        'error',
       ),
     );
     return 'unknown';
@@ -129,7 +131,12 @@ export function deriveSideMapping(
     sideMapping.a === sideMapping.b
   ) {
     issues.push(
-      issue('ambiguous_side_mapping', '双方当前 side 相同，不能安全推导 A/B side mapping.'),
+      issue(
+        'ambiguous_side_mapping',
+        '双方当前 side 相同，不能安全推导 A/B side mapping.',
+        {},
+        'error',
+      ),
     );
   }
   return sideMapping;

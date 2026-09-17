@@ -9,6 +9,13 @@ import { OPERATOR_SCHEMA_VERSION } from './version.js';
 
 const nullableString = z.string().nullable();
 const sourceSideSchema = z.enum(['CT', 'T', 'unknown']);
+const activeLineupIssueSchema = z.object({
+  code: z.string(),
+  severity: z.enum(['info', 'warning']),
+  message: z.string(),
+  sourcePlayerId: nullableString,
+  side: sourceSideSchema.nullable(),
+});
 
 const runtimeTimeSchema = z.object({ monotonicMs: z.number(), utc: z.string() });
 const liveSessionSchema = z.discriminatedUnion('kind', [
@@ -163,6 +170,23 @@ export const operatorPayloadSchema = z.object({
     issues: z.array(identityIssueSchema),
     resolvedCount: z.number().int().nonnegative(),
     unresolved: z.array(unresolvedSchema),
+  }),
+  activeLineup: z.object({
+    state: z.enum(['resolving', 'complete', 'degraded']),
+    sourceGeneration: z.number().int().nonnegative(),
+    mapEpoch: z.number().int().nonnegative(),
+    ctCount: z.number().int().nonnegative().max(5),
+    tCount: z.number().int().nonnegative().max(5),
+    retainedCount: z.number().int().nonnegative().max(10),
+    extras: z.array(
+      z.object({
+        sourcePlayerId: z.string(),
+        displayName: nullableString,
+        side: sourceSideSchema,
+        activity: nullableString,
+      }),
+    ),
+    issues: z.array(activeLineupIssueSchema),
   }),
   sources: z.object({
     cstvProgram: sourceHealthSchema,

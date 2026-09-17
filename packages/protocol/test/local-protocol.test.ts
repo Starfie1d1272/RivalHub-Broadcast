@@ -82,7 +82,7 @@ function snapshot(channelSeq: number, overrides: Record<string, unknown> = {}) {
   };
 }
 
-describe('Local Protocol V1 and Program schema V2 acceptance', () => {
+describe('Local Protocol V1 and channel schema acceptance', () => {
   it('keeps channel schemas independent and strips future fields', () => {
     const parsed = programSnapshotSchema.parse({
       ...snapshot(1),
@@ -92,16 +92,18 @@ describe('Local Protocol V1 and Program schema V2 acceptance', () => {
 
     expect(LOCAL_PROTOCOL_SUBPROTOCOL).toBe('rivalhub-broadcast.local.v1');
     expect(LOCAL_PROTOCOL_VERSION).toBe(1);
-    expect(PROGRAM_SCHEMA_VERSION).toBe(2);
+    expect(PROGRAM_SCHEMA_VERSION).toBe(4);
     expect(parsed.channel).toBe('program');
     expect(parsed).not.toHaveProperty('lookahead');
     expect(parsed.payload).not.toHaveProperty('futureCue');
   });
 
-  it('requires the Program v2 player life state and rejects missing values', () => {
+  it('requires the Program v4 player evidence, ADR views, and life state fields', () => {
     const player = {
       sourcePlayerId: 'player-1',
       canonicalPlayerId: null,
+      identityEvidence: 'observed' as const,
+      lineupEvidence: 'current' as const,
       displayName: 'Player 1',
       displayNameSource: 'observed' as const,
       avatarUrl: null,
@@ -109,6 +111,8 @@ describe('Local Protocol V1 and Program schema V2 acceptance', () => {
       observerSlot: 1,
       activity: 'playing',
       lifeState: 'alive' as const,
+      liveAdr: null,
+      completedAdr: null,
       state: null,
       matchStats: null,
       weapons: [],
@@ -131,6 +135,17 @@ describe('Local Protocol V1 and Program schema V2 acceptance', () => {
         },
       }),
     ).toThrow();
+
+    for (const field of ['liveAdr', 'completedAdr'] as const) {
+      const missingAdrView: Record<string, unknown> = { ...player };
+      delete missingAdrView[field];
+      expect(() =>
+        programSnapshotSchema.parse({
+          ...snapshot(1),
+          payload: { ...payload(), players: [missingAdrView] },
+        }),
+      ).toThrow();
+    }
   });
 
   it('accepts monotonic snapshots, ignores duplicates, and emits epoch reset signals', () => {

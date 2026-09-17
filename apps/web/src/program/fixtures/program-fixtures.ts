@@ -117,6 +117,8 @@ function makePlayer(
   return {
     sourcePlayerId,
     canonicalPlayerId: null,
+    identityEvidence: 'observed',
+    lineupEvidence: 'current',
     displayName: sourcePlayerId,
     displayNameSource: 'observed',
     avatarUrl: null,
@@ -124,6 +126,8 @@ function makePlayer(
     observerSlot,
     activity: 'playing',
     lifeState: 'alive',
+    liveAdr: null,
+    completedAdr: null,
     state: { ...DEFAULT_PLAYER_STATE },
     matchStats: { ...DEFAULT_MATCH_STATS },
     weapons: [],
@@ -149,6 +153,7 @@ function canonicalPlayers(): ProgramPlayer[] {
     const name = names[index % names.length] ?? 'Player';
     return makePlayer(player.sourcePlayerId, playerSide, index + 1, {
       canonicalPlayerId: `fixture-canonical-${side}-${index % 5}`,
+      identityEvidence: 'canonical',
       displayName: `${name} ${player.side}`,
       displayNameSource: 'canonical',
       state: player.state,
@@ -293,6 +298,7 @@ const degradedPlayers = observedPlayers().map((player, index) => {
   const playerSide = index < 5 ? 'CT' : 'T';
   return makePlayer(player.sourcePlayerId, playerSide, index + 1, {
     canonicalPlayerId: `fixture-canonical-${side}-${index}`,
+    identityEvidence: 'canonical',
     displayName: `Partially verified ${player.side} ${index + 1}`,
     displayNameSource: 'canonical',
     state: player.state,
@@ -332,6 +338,7 @@ const stressPlayers = [
   };
   return makePlayer(`stress-player-${index + 1}`, side, index + 1, {
     canonicalPlayerId: `stress-canonical-player-${index + 1}`,
+    identityEvidence: 'canonical',
     displayName,
     displayNameSource: 'canonical',
     lifeState: (['alive', 'alive', 'dead', 'unknown', 'alive'] as const)[index % 5]!,

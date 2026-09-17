@@ -1,6 +1,11 @@
 import { assertRuntimeContinuityPolicy } from './freshness.js';
 import { classifyProgramTelemetry, type ProgramTelemetryInput } from './continuity.js';
 import {
+  createMapPlayerStatsAccumulator,
+  invalidateMapPlayerStats,
+  reduceMapPlayerStats,
+} from './player-stats.js';
+import {
   buildTelemetryTransitions,
   explicitMapExecutionChangedTransition,
   NO_TRANSITIONS,
@@ -133,6 +138,11 @@ function reduceProgramTelemetry(
       },
     },
     map: mapResult.map,
+    playerStats: reduceMapPlayerStats(state.playerStats, {
+      mapEpoch: mapResult.map.epoch,
+      observation: input.observation,
+      continuity: continuity.staleRecovery ? 'stale-recovery' : continuity.sequenceReason,
+    }),
     programTelemetry: input.observation,
   };
 
@@ -167,6 +177,7 @@ function reduceGenerationAdvance(
       generation: input.nextGeneration,
     },
     map: state.map,
+    playerStats: invalidateMapPlayerStats(state.playerStats),
   };
   return accepted(nextState, { kind: 'accepted', reason: 'source-generation-advanced' });
 }
@@ -186,6 +197,7 @@ function reduceMapReset(state: RuntimeState, input: MapResetInput): RuntimeReduc
       ...state.map,
       epoch: state.map.epoch + 1,
     },
+    playerStats: createMapPlayerStatsAccumulator(state.map.epoch + 1),
   };
   const transition = explicitMapExecutionChangedTransition(
     state,

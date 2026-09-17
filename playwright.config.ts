@@ -4,7 +4,7 @@ export default defineConfig({
   testDir: 'tests/visual',
   fullyParallel: false,
   workers: 1,
-  snapshotPathTemplate: '{testDir}/__screenshots__/{testFilePath}/{arg}{ext}',
+  snapshotPathTemplate: '{testDir}/__screenshots__/{platform}/{testFilePath}/{arg}{ext}',
   reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]],
   expect: {
     toHaveScreenshot: {

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   identityEvidenceFromObservation,
+  resolveActiveLineup,
   resolveIdentity,
   unboundIdentityResolution,
   type IdentityResolution,
@@ -172,6 +173,22 @@ function matchedIdentity(context: MatchContext, input: TelemetryObservation): Id
   return resolveIdentity(context, identityEvidenceFromObservation(input, 0, state.map.epoch));
 }
 
+function resolvedLineup(
+  state: RuntimeState,
+  input: TelemetryObservation,
+  identity: IdentityResolution,
+  context?: MatchContext,
+) {
+  return resolveActiveLineup({
+    sourceGeneration: state.programSource.generation,
+    mapEpoch: state.map.epoch,
+    ...(input.telemetry.allPlayers === undefined ? {} : { allPlayers: input.telemetry.allPlayers }),
+    allPlayersCoverage: input.coverage.allPlayers,
+    ...(context === undefined ? {} : { context }),
+    identity,
+  });
+}
+
 describe('Program-safe projections', () => {
   it('projects deterministic canonical Program data without mutating RuntimeState', () => {
     const context = contextFixture();
@@ -179,12 +196,14 @@ describe('Program-safe projections', () => {
     const state = acceptedState(input);
     const before = structuredClone(state);
     const identity = matchedIdentity(context, input);
+    const activeLineup = resolvedLineup(state, input, identity, context);
     const runtime = selectProgramSafeRuntimeView(state);
 
     const first = projectProgram({
       runtime,
       context,
       identity,
+      activeLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -192,6 +211,7 @@ describe('Program-safe projections', () => {
       runtime,
       context,
       identity,
+      activeLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -241,11 +261,13 @@ describe('Program-safe projections', () => {
     const input = observation();
     const state = acceptedState(input);
     const identity = matchedIdentity(context, input);
+    const activeLineup = resolvedLineup(state, input, identity, context);
     const projection = projectProgram({
       runtime: selectProgramSafeRuntimeView(state),
       context,
       contextFreshness: 'stale',
       identity,
+      activeLineup,
       nowMonotonicMs: 108,
       continuityPolicy: POLICY,
     });
@@ -258,7 +280,7 @@ describe('Program-safe projections', () => {
     expect(projection.clock?.endsInSeconds).toBe(42);
   });
 
-  it('keeps proven player enrichment while degraded identity forces neutral teams', () => {
+  it('does not guess a Player Rails cohort from partial allplayers evidence', () => {
     const context = contextFixture();
     const input = observation();
     const state = acceptedState(input);
@@ -273,10 +295,18 @@ describe('Program-safe projections', () => {
       context,
       identityEvidenceFromObservation(partialInput, 0, state.map.epoch),
     );
+    const partialState = state.programTelemetry
+      ? {
+          ...state,
+          programTelemetry: { ...state.programTelemetry, telemetry: partialInput.telemetry },
+        }
+      : state;
+    const partialLineup = resolvedLineup(partialState, partialInput, identity, context);
     const projection = projectProgram({
-      runtime: selectProgramSafeRuntimeView(state),
+      runtime: selectProgramSafeRuntimeView(partialState),
       context,
       identity,
+      activeLineup: partialLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -284,14 +314,14 @@ describe('Program-safe projections', () => {
     expect(identity.state).toBe('degraded');
     expect(identity.capabilities.canonicalPlayerMapping).toBe(true);
     expect(projection.teams.ct.mode).toBe('neutral');
-    expect(projection.players[0]?.canonicalPlayerId).not.toBeNull();
-    expect(projection.players[1]?.canonicalPlayerId).toBeNull();
+    expect(projection.players).toEqual([]);
   });
 
-  it('keeps neutral telemetry but removes canonical enrichment for mismatch and unbound identity', () => {
+  it('keeps live players visible for a soft roster mismatch', () => {
     const context = contextFixture();
     const input = observation();
     const state = acceptedState(input);
+    const identity = matchedIdentity(context, input);
     const unexpected = player(20, 'T');
     const mismatchInput: TelemetryObservation = {
       ...input,
@@ -304,10 +334,12 @@ describe('Program-safe projections', () => {
       context,
       identityEvidenceFromObservation(mismatchInput, 0, state.map.epoch),
     );
+    const activeLineup = resolvedLineup(state, input, identity, context);
     const mismatchProjection = projectProgram({
       runtime: selectProgramSafeRuntimeView(state),
       context,
       identity: mismatchIdentity,
+      activeLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -315,16 +347,72 @@ describe('Program-safe projections', () => {
       runtime: selectProgramSafeRuntimeView(state),
       context,
       identity: unboundIdentityResolution(),
+      activeLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
 
-    expect(mismatchIdentity.state).toBe('mismatch');
+    expect(mismatchIdentity.state).toBe('degraded');
     expect(mismatchProjection.map.name).toBe('de_mirage');
-    expect(mismatchProjection.players.every((item) => item.canonicalPlayerId === null)).toBe(true);
+    expect(mismatchProjection.teams.ct.mode).toBe('canonical');
+    expect(
+      mismatchProjection.players.filter((item) => item.canonicalPlayerId === null),
+    ).toHaveLength(1);
+    expect(
+      mismatchProjection.players.filter((item) => item.canonicalPlayerId !== null),
+    ).toHaveLength(9);
     expect(unboundProjection.status.identity).toBe('unbound');
     expect(unboundProjection.teams.ct.mode).toBe('neutral');
     expect(unboundProjection.players[0]?.displayName).toBe('Observed 1');
+  });
+
+  it('retains a missing lineup member without fabricating its volatile telemetry', () => {
+    const context = contextFixture();
+    const input = observation();
+    const state = acceptedState(input);
+    const identity = matchedIdentity(context, input);
+    const baseline = resolveActiveLineup({
+      sourceGeneration: 0,
+      mapEpoch: state.map.epoch,
+      allPlayers: input.telemetry.allPlayers!,
+      allPlayersCoverage: 'present',
+      context,
+      identity,
+    });
+    const missingSourcePlayerId = baseline.ct[0]!.sourcePlayerId;
+    const currentPlayers = input.telemetry.allPlayers!.filter(
+      (player) => player.sourcePlayerId !== missingSourcePlayerId,
+    );
+    const retained = resolveActiveLineup({
+      sourceGeneration: 0,
+      mapEpoch: state.map.epoch,
+      allPlayers: currentPlayers,
+      allPlayersCoverage: 'present',
+      context,
+      identity,
+      previous: baseline,
+    });
+    const projection = projectProgram({
+      runtime: selectProgramSafeRuntimeView(state),
+      context,
+      identity,
+      activeLineup: retained,
+      nowMonotonicMs: 7,
+      continuityPolicy: POLICY,
+    });
+    const missing = projection.players.find(
+      (player) => player.sourcePlayerId === missingSourcePlayerId,
+    );
+
+    expect(missing).toMatchObject({
+      lineupEvidence: 'retained',
+      observerSlot: null,
+      activity: null,
+      lifeState: 'unknown',
+      state: null,
+      matchStats: null,
+      weapons: [],
+    });
   });
 
   it('fails closed to neutral teams and player ids across an identity epoch change', () => {
@@ -332,10 +420,12 @@ describe('Program-safe projections', () => {
     const input = observation();
     const state = acceptedState(input);
     const identity = matchedIdentity(context, input);
+    const activeLineup = resolvedLineup(state, input, identity, context);
     const projection = projectProgram({
       runtime: selectProgramSafeRuntimeView(state),
       context,
       identity: { ...identity, sourceGeneration: 1 },
+      activeLineup,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -410,6 +500,16 @@ describe('Program-safe projections', () => {
       }),
       context,
       identity,
+      activeLineup: resolvedLineup(
+        state,
+        {
+          ...input,
+          coverage: { ...input.coverage, allPlayers: 'absent' },
+          telemetry: telemetryWithoutPlayers,
+        },
+        identity,
+        context,
+      ),
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -423,6 +523,12 @@ describe('Program-safe projections', () => {
       }),
       context,
       identity,
+      activeLineup: resolvedLineup(
+        state,
+        { ...input, coverage: { ...input.coverage, allPlayers: 'degraded' } },
+        identity,
+        context,
+      ),
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -430,6 +536,6 @@ describe('Program-safe projections', () => {
     expect(absent.coverage.allPlayers).toBe('absent');
     expect(absent.players).toEqual([]);
     expect(degraded.coverage.allPlayers).toBe('degraded');
-    expect(degraded.players).toHaveLength(10);
+    expect(degraded.players).toEqual([]);
   });
 });
