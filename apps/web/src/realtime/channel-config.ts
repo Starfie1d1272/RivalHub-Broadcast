@@ -8,12 +8,12 @@ import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/pro
 import type { SnapshotEnvelopeLike, SnapshotSchema } from '@rivalhub-broadcast/protocol/acceptance';
 import {
   LOCAL_PROTOCOL_SUBPROTOCOL,
-  type LocalChannel,
+  type LocalSnapshotChannel,
 } from '@rivalhub-broadcast/protocol/version';
 
 export { LOCAL_PROTOCOL_SUBPROTOCOL };
 
-export type LocalChannelSnapshot<C extends LocalChannel> = C extends 'program'
+export type LocalChannelSnapshot<C extends LocalSnapshotChannel> = C extends 'program'
   ? ProgramSnapshot
   : C extends 'radar'
     ? RadarSnapshot
@@ -44,10 +44,10 @@ export const localChannelConfigs = {
     schema: assistSnapshotSchema,
   },
 } satisfies {
-  readonly [C in LocalChannel]: LocalChannelConfig<LocalChannelSnapshot<C>>;
+  readonly [C in LocalSnapshotChannel]: LocalChannelConfig<LocalChannelSnapshot<C>>;
 };
 
-export function getLocalChannelConfig<C extends LocalChannel>(
+export function getLocalChannelConfig<C extends LocalSnapshotChannel>(
   channel: C,
 ): LocalChannelConfig<LocalChannelSnapshot<C>> {
   return localChannelConfigs[channel] as unknown as LocalChannelConfig<LocalChannelSnapshot<C>>;

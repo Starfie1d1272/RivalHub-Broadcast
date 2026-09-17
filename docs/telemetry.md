@@ -26,9 +26,9 @@ CSTV / playcast
 packages/telemetry-cstv
   third-party parser binding
     ↓
-GameEventObservation
+      GameEventObservation (role-scoped)
     ↓
-Core / source manager / Lookahead alignment
+Core / source manager / ProgramCue or Lookahead alignment
 ```
 
 Raw GSI 和第三方 parser object 都必须在各自 adapter 边界内终止。
@@ -221,6 +221,25 @@ recorded raw input
 - 决定 canonical 比赛事实。
 
 Program 与 Lookahead 具有独立 source-local continuity。Lookahead reconnect 必须让旧 timeline alignment 失效，但不能仅因为连接重建就改变 Program `mapEpoch`。
+
+### 9.1 Program CSTV live-only consumer
+
+`CstvSourceManager<R>` 在类型边界固定 source role，并提供 live-only event subscription：
+
+```ts
+subscribeLiveGameEvents(
+  listener: (event: RoleScopedGameEventObservation<R>) => void,
+): () => void
+```
+
+事件在 `session.start()` / `connecting` 阶段仍会进入有界 `recentGameEvents`，只作为 Debug/Operator
+evidence；只有 `start()` 返回 `ready`、manager 进入 `live` 后，`run()` 阶段的新事件才会通知 live
+listener。因此 reconnect 的 bootstrap/catch-up event 不会被当作新的 Program edge 补播。
+
+`ProgramCueCoordinator` 只能接收 `CstvSourceManager<'program'>`，在 event 到达时读取当前
+Program Runtime 的 freshness、`mapEpoch` 和已知 map name。stale/awaiting telemetry、明确错地图、
+缺少 target/victim stable source player id 或非 live source 的 event 立即 drop，不进入等待队列。
+Lookahead manager 没有进入 Program cue 的类型或 assembly 路径。
 
 ## 10. 时间与序列
 

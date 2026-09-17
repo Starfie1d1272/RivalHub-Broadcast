@@ -28,4 +28,9 @@ export type GameEventObservation =
   | GrenadeThrownGameEvent
   | BombGameEventObservation;
 
+/** A game-event observation whose source role is fixed at the type boundary. */
+export type RoleScopedGameEventObservation<R extends GameEventSourceRole> = GameEventObservation & {
+  readonly cursor: GameEventSourceCursor & { readonly role: R };
+};
+
 export type GameEventKind = GameEventObservation['kind'];

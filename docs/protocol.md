@@ -1,9 +1,10 @@
 # 协议与本地数据契约
 
-本文记录当前有效的两类协议边界：
+本文记录当前有效的三类协议边界：
 
 1. Broadcast 从赛事上下文提供方读取的比赛只读契约；
-2. Companion 向本地 Program、Radar、Operator 和 Assist 提供的 WebSocket 快照协议。
+2. Companion 向本地 Program、Radar、Operator 和 Assist 提供的 WebSocket 快照协议；
+3. Companion 向 Program 提供的短生命周期 transient cue 协议。
 
 协议字段与精确字符串以代码 schema 为最终机器来源；本文负责解释语义、ownership 和兼容规则。
 
@@ -173,7 +174,9 @@ MatchContext 与 ScheduleWindow 分别维护独立的 Last Known Good（LKG）�
 
 ## 4. Local Protocol V1
 
-Broadcast 本地协议用于 Companion → Program / Radar / Operator / Assist 的只读快照。
+Broadcast 本地协议用于 Companion → Program / Radar / Operator / Assist 的只读快照，以及
+Companion → Program 的短生命周期 transient cue。两类消息共享 WebSocket 承载和安全策略，
+但不共享 snapshot 的 latest-wins 语义。
 
 ### 4.1 版本
 
@@ -185,6 +188,7 @@ programSchemaVersion  = 2
 radarSchemaVersion    = 1
 operatorSchemaVersion = 1
 assistSchemaVersion   = 1
+programCueSchemaVersion = 1
 subprotocol = rivalhub-broadcast.local.v1
 ```
 
@@ -197,9 +201,12 @@ Local Protocol 版本与各 channel schema 版本独立。单个 channel payload
 /local/v1/radar
 /local/v1/operator
 /local/v1/assist
+/local/v1/program-cue
 ```
 
-每个 channel 有独立 Zod schema、DTO、发布器和接收状态，不存在一个包含全部字段的万能 union payload。
+`program`、`radar`、`operator`、`assist` 是 snapshot channel；`program-cue` 是独立 transient
+channel。每个 channel 有独立 Zod schema、DTO、发布器和接收状态，不存在一个包含全部字段的万能
+union payload。
 
 ### 4.3 快照 envelope
 
@@ -227,6 +234,40 @@ Local Protocol 版本与各 channel schema 版本独立。单个 channel payload
 ``schemaVersion`` 由具体 channel schema 决定，不能假定所有 channel 都是 1。
 
 ``channelSeq`` 在 ``producerInstanceId + channel`` 范围内单调递增。``runtimeSeq``、``programSourceGeneration`` 与 ``mapEpoch`` 分别表达不同的连续性语义，不能互相替代。
+
+### 4.3.1 Program transient cue envelope
+
+`program-cue` 不伪装成 `type: "snapshot"`，也不进入 `ProgramSnapshot`。它只有自己的 schema
+version 和最小 CSTV continuity cursor：
+
+```ts
+{
+  type: "cue-baseline" | "cue",
+  protocolVersion: 1,
+  channel: "program-cue",
+  schemaVersion: 1,
+  channelSeq: number,
+  cursor: {
+    producerInstanceId: string,
+    liveSessionId: string | null,
+    mapEpoch: number,
+    cstvProgramGeneration: number
+  },
+  cue?: {
+    id: string,
+    mapEpoch: number,
+    source: { generation: number, sequence: number, tick: number },
+    kind: "player-impact" | "player-elimination",
+    // kind-specific Program-safe semantic fields
+  }
+}
+```
+
+`cue-baseline` 是每个新连接的第一条业务基线，也是 reset barrier；它只建立“从现在开始”的
+接收上下文，不携带旧 cue。`cue` 每条只承载一个 semantic edge。`cstvProgramGeneration`、
+CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、source ordering 和
+delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
+`programReceiveSequence`。
 
 ### 4.4 Program schema v2
 
@@ -267,7 +308,9 @@ Operator 快照包含制作控制需要的比赛上下文、运行转换、身�
 
 ## 5. 接收规则
 
-每个 WebSocket connection 使用独立 acceptance state。
+每个 WebSocket connection 使用独立 acceptance state。Snapshot connection 使用 snapshot
+acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把 transient message
+写入当前 snapshot store。
 
 接收方必须：
 
@@ -275,13 +318,15 @@ Operator 快照包含制作控制需要的比赛上下文、运行转换、身�
 - 忽略重复或倒序 ``channelSeq``；
 - 拒绝同一 producer 下 ``runtimeSeq`` 回退；
 - 拒绝一个连接中途切换 ``producerInstanceId``；
-- 在 ``liveSessionId``、``programSourceGeneration`` 或 ``mapEpoch`` 改变时重置对应连续性证明。
+- 在 ``liveSessionId``、``programSourceGeneration`` 或 ``mapEpoch`` 改变时重置对应连续性证明；
+- `program-cue` 连接在 baseline 前不接受 cue；重复或倒序 `channelSeq` 忽略，允许 sequence gap；
+  每个 baseline 最多保留最近 128 个 cue id 做 bounded dedupe。
 
 新 producer 必须建立新连接和新 acceptance state。
 
 ## 6. 投递与背压
 
-每条 channel 都是完整快照，不发送 delta、历史快照 ACK 或离线 history queue。
+Snapshot channel 每条消息都是完整快照，不发送 delta、历史快照 ACK 或离线 history queue。
 
 每个 subscriber 只保留：
 
@@ -294,6 +339,12 @@ Operator 快照包含制作控制需要的比赛上下文、运行转换、身�
 
 连接建立或重连后立即发送当前基线，不重放断线期间的旧快照。
 
+`program-cue` 使用独立的 bounded delivery：每个 subscriber 保留 1 个 in-flight、最多 32 个
+按 source order 排列的 pending cue FIFO，以及最多 1 个 pending baseline/reset barrier。队列溢出丢弃
+最旧 pending cue 并记录 diagnostic；pending cue 超过 1000 ms monotonic age 在发送前丢弃。baseline
+会清空旧 pending cue 并成为下一条 control message。没有 subscriber 时不保留 cue history；visual
+TTL 不进入 wire，由 Renderer 自己管理。
+
 ## 7. WebSocket 承载与安全
 
 Companion 使用同一 Fastify 实例提供网页静态资源和 Local Protocol WebSocket。
@@ -305,14 +356,18 @@ Companion 使用同一 Fastify 实例提供网页静态资源和 Local Protocol 
 - 本机回环模式只接受本机 HTTP(S) Origin；
 - 非回环监听必须显式开启 ``LOCAL_WEB_LAN_MODE=1``；
 - ``LOCAL_WEB_ALLOWED_ORIGINS`` 使用精确 Origin 允许列表；
-- 本地 snapshot channel 为 server → browser 只读；
+- 本地 snapshot 与 transient channel 均为 server → browser 只读；
 - 浏览器发送业务消息时以 close code ``1008`` 关闭；
 - ``perMessageDeflate`` 关闭；
 - 单条 WebSocket payload 上限 64 KiB；
 - ``bufferedAmount`` 与序列化快照使用 256 KiB hard guard；
 - ping/pong heartbeat 周期 15 秒，约 30 秒无 pong 时清理连接。
 
-浏览器从当前页面 Origin 推导 ``ws:`` / ``wss:`` 地址。每次新连接建立独立 acceptance state；收到第一份有效基线后重连退避重新计时。
+浏览器从当前页面 Origin 推导 ``ws:`` / ``wss:`` 地址。每次新连接建立独立 acceptance state；
+收到第一份有效基线后重连退避重新计时。Program cue 还必须与当前 Program snapshot 的
+`producerInstanceId`、`liveSessionId` 和 `mapEpoch` 相同；不一致时立即丢弃，不等待未来 snapshot，
+也不比较 CSTV generation 与 GSI source generation。断线、刷新、baseline 或 Program continuity
+reset 都从当前时刻重新开始，不补播旧动画。
 
 ## 8. 协议维护原则
 

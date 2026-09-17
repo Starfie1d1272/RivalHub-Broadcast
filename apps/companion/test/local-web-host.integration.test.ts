@@ -200,7 +200,10 @@ describe('production local web host', () => {
         readonly channel: string;
         readonly channelSeq: number;
       };
-      expect(snapshot).toMatchObject({ type: 'snapshot', channelSeq: 1 });
+      expect(snapshot).toMatchObject({
+        type: _channel === 'program-cue' ? 'cue-baseline' : 'snapshot',
+        channelSeq: 1,
+      });
       expect(snapshot.channel).toBe(_channel);
       connection.socket.destroy();
     },

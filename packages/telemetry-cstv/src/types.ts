@@ -1,6 +1,6 @@
 import type {
-  GameEventObservation,
   GameEventSourceRole,
+  RoleScopedGameEventObservation,
 } from '@rivalhub-broadcast/core/game-events';
 
 export const SUPPORTED_CSTV_GAME_EVENT_NAMES = [
@@ -94,19 +94,19 @@ export type CstvParserSessionFactory = (
   options: CstvParserSessionFactoryOptions,
 ) => CstvParserSession;
 
-export interface CstvLiveSessionOptions {
-  readonly role: GameEventSourceRole;
+export interface CstvLiveSessionOptions<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly role: R;
   readonly generation: number;
   readonly url: string;
   readonly parserSessionFactory?: CstvParserSessionFactory;
   readonly clock?: CstvObservationClock;
-  readonly onObservation: (observation: GameEventObservation) => void;
+  readonly onObservation: (observation: RoleScopedGameEventObservation<R>) => void;
   readonly onSync?: (sync: CstvSyncMetadata) => void;
   readonly onDiagnostic?: (diagnostic: CstvDiagnostic) => void;
 }
 
-export interface CstvLiveSession {
-  readonly role: GameEventSourceRole;
+export interface CstvLiveSession<R extends GameEventSourceRole = GameEventSourceRole> {
+  readonly role: R;
   readonly generation: number;
   readonly sync: CstvSyncMetadata | null;
   readonly tailTick: number;

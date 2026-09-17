@@ -13,6 +13,7 @@ import {
   type CstvSessionStartResult,
   type CstvSyncMetadata,
 } from './types.js';
+import type { RoleScopedGameEventObservation } from '@rivalhub-broadcast/core/game-events';
 
 function defaultClock(): CstvObservationClock {
   return {
@@ -34,7 +35,9 @@ function copyDiagnostic(diagnostic: CstvDiagnostic): CstvDiagnostic {
 }
 
 /** Adapt one parser session into the parser-neutral Core observation contract. */
-export function createCstvLiveSession(options: CstvLiveSessionOptions): CstvLiveSession {
+export function createCstvLiveSession<R extends CstvLiveSessionOptions['role']>(
+  options: CstvLiveSessionOptions<R>,
+): CstvLiveSession<R> {
   const clock = options.clock ?? defaultClock();
   const diagnostics: CstvDiagnostic[] = [];
   let suppressedDiagnosticCount = 0;
@@ -92,7 +95,7 @@ export function createCstvLiveSession(options: CstvLiveSessionOptions): CstvLive
         });
         sequence += 1;
         try {
-          options.onObservation(observation);
+          options.onObservation(observation as RoleScopedGameEventObservation<R>);
         } catch {
           reportDiagnostic({ code: 'event-sink-failed', eventName });
         }
@@ -103,7 +106,7 @@ export function createCstvLiveSession(options: CstvLiveSessionOptions): CstvLive
     onDiagnostic: reportDiagnostic,
   });
 
-  const liveSession: CstvLiveSession & { readonly diagnostics: () => CstvDiagnosticBatch } = {
+  const liveSession: CstvLiveSession<R> & { readonly diagnostics: () => CstvDiagnosticBatch } = {
     role: options.role,
     generation: options.generation,
     get sync() {

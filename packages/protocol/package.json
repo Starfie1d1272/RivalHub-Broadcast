@@ -34,6 +34,14 @@
       "types": "./dist/assist.d.ts",
       "import": "./dist/assist.js"
     },
+    "./program-cue": {
+      "types": "./dist/program-cue.d.ts",
+      "import": "./dist/program-cue.js"
+    },
+    "./program-cue-acceptance": {
+      "types": "./dist/program-cue-acceptance.d.ts",
+      "import": "./dist/program-cue-acceptance.js"
+    },
     "./acceptance": {
       "types": "./dist/acceptance.d.ts",
       "import": "./dist/acceptance.js"

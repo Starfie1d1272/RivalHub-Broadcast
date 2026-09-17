@@ -24,4 +24,15 @@ export type {
   GameEventObservationBase,
   GameEventSourceCursor,
   GameEventSourceRole,
+  RoleScopedGameEventObservation,
 } from './observation.js';
+export { classifyProgramWeapon, projectProgramCue } from './program-cue.js';
+export type {
+  ProgramCue,
+  ProgramCueBase,
+  ProgramCueProjectorInput,
+  ProgramEliminationWeaponFamily,
+  ProgramPlayerEliminationCue,
+  ProgramPlayerImpactCue,
+  ProgramPlayerImpactEffect,
+} from './program-cue.js';

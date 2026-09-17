@@ -129,9 +129,9 @@ function observableCstvSources(): {
   readonly sources: CstvSourceManagers;
   readonly emitLookahead: () => void;
 } {
-  const createSource = (role: 'program' | 'lookahead') => {
+  const createSource = <R extends 'program' | 'lookahead'>(role: R) => {
     const listeners = new Set<() => void>();
-    const source: CstvSourceManager & { emit(): void } = {
+    const source: CstvSourceManager<R> & { emit(): void } = {
       role,
       start: () => {},
       stop: async () => {},
@@ -147,6 +147,7 @@ function observableCstvSources(): {
         listeners.add(listener);
         return () => listeners.delete(listener);
       },
+      subscribeLiveGameEvents: () => () => {},
       emit: () => {
         for (const listener of listeners) listener();
       },

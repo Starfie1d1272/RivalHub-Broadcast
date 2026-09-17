@@ -2,7 +2,7 @@ import {
   createSnapshotAcceptance,
   type SnapshotAcceptance,
 } from '@rivalhub-broadcast/protocol/acceptance';
-import type { LocalChannel } from '@rivalhub-broadcast/protocol/version';
+import type { LocalSnapshotChannel } from '@rivalhub-broadcast/protocol/version';
 
 import {
   getLocalChannelConfig,
@@ -65,7 +65,7 @@ export function localWebSocketUrl(path: string, location: BrowserLocationLike): 
   return `${protocol}//${location.host}${path}`;
 }
 
-export class LocalChannelClient<C extends LocalChannel> {
+export class LocalChannelClient<C extends LocalSnapshotChannel> {
   readonly channel: C;
 
   private readonly config: ReturnType<typeof getLocalChannelConfig<C>>;
@@ -241,7 +241,7 @@ export class LocalChannelClient<C extends LocalChannel> {
   }
 }
 
-export function createLocalChannelClient<C extends LocalChannel>(
+export function createLocalChannelClient<C extends LocalSnapshotChannel>(
   channel: C,
   options: LocalChannelClientOptions = {},
 ): LocalChannelClient<C> {

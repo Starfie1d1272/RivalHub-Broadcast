@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { LOCAL_PROTOCOL_VERSION, type LocalChannel } from './version.js';
+import { LOCAL_PROTOCOL_VERSION, type LocalSnapshotChannel } from './version.js';
 
 export const nonNegativeSafeIntegerSchema = z
   .number()
@@ -34,7 +34,7 @@ export const localSnapshotEnvelopeSchema = z.object({
 export interface LocalSnapshot<TPayload, TSchemaVersion extends number> {
   readonly type: 'snapshot';
   readonly protocolVersion: typeof LOCAL_PROTOCOL_VERSION;
-  readonly channel: LocalChannel;
+  readonly channel: LocalSnapshotChannel;
   readonly schemaVersion: TSchemaVersion;
   readonly channelSeq: number;
   readonly cursor: ProjectionCursor;
