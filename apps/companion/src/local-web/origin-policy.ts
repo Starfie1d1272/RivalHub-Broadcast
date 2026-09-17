@@ -38,7 +38,7 @@ export function isLoopbackBindHost(host: string): boolean {
 function normalizeAllowedOrigin(origin: string): string {
   const parsed = new URL(origin.trim());
   if (parsed.protocol !== 'http:' && parsed.protocol !== 'https:') {
-    throw new Error(`LOCAL_WEB_ALLOWED_ORIGINS 只允许 http/https origin：${origin}`);
+    throw new Error(`LOCAL_WEB_ALLOWED_ORIGINS 只允许 HTTP(S) Origin（来源）：${origin}`);
   }
   if (
     parsed.username !== '' ||
@@ -48,7 +48,7 @@ function normalizeAllowedOrigin(origin: string): string {
     parsed.hash !== ''
   ) {
     throw new Error(
-      `LOCAL_WEB_ALLOWED_ORIGINS 必须是完整 origin（不含 path/query/fragment）：${origin}`,
+      `LOCAL_WEB_ALLOWED_ORIGINS 必须是完整 Origin（来源），不能包含路径、查询参数或片段：${origin}`,
     );
   }
   return parsed.origin;
@@ -64,11 +64,13 @@ export function createLocalWebOriginPolicy(
 
   if (!loopback && !lanMode) {
     throw new Error(
-      `HOST=${bindHost} 不是 loopback；必须显式启用 LOCAL_WEB_LAN_MODE=1 才能启动本地 Web host`,
+      `HOST=${bindHost} 不是回环地址；必须显式启用 LOCAL_WEB_LAN_MODE=1 才能启动本地网页服务`,
     );
   }
   if (lanMode && allowedOrigins.length === 0) {
-    throw new Error('LOCAL_WEB_LAN_MODE=1 时必须提供至少一个 LOCAL_WEB_ALLOWED_ORIGINS origin');
+    throw new Error(
+      'LOCAL_WEB_LAN_MODE=1 时必须通过 LOCAL_WEB_ALLOWED_ORIGINS 提供至少一个允许的 Origin（来源）',
+    );
   }
 
   return {
