@@ -20,13 +20,16 @@ const laneCursor: ProgramCueLaneCursor = {
   cstvProgramGeneration: 9,
 };
 
-function baseline(cursor: ProgramCueLaneCursor = laneCursor): ProgramCueBaselineV1 {
+function baseline(
+  cursor: ProgramCueLaneCursor = laneCursor,
+  channelSeq = 1,
+): ProgramCueBaselineV1 {
   return {
     type: 'cue-baseline',
     protocolVersion: 1,
     channel: 'program-cue',
     schemaVersion: 1,
-    channelSeq: 1,
+    channelSeq,
     cursor,
   };
 }
@@ -219,7 +222,7 @@ describe('ProgramCueClient and renderer seam', () => {
     client.dispose();
   });
 
-  it('drops an in-flight old cue across a Program GSI generation reset until a new baseline', () => {
+  it('drops an in-flight old cue across a Program GSI generation reset until a fresh subscription baseline', () => {
     const sockets = socketFactory();
     let currentProgram = programSnapshot({});
     const received: string[] = [];
@@ -240,15 +243,56 @@ describe('ProgramCueClient and renderer seam', () => {
     currentProgram = programSnapshot({ programSourceGeneration: 2 });
     client.observeProgramSnapshot(currentProgram);
 
-    expect(client.getSnapshot()).toMatchObject({ state: 'awaiting-baseline', baseline: null });
+    expect(sockets.sockets).toHaveLength(2);
+    expect(client.getSnapshot()).toMatchObject({ state: 'connecting', baseline: null });
     expect(resets).toContain('program-snapshot-reset');
     sockets.sockets[0]!.message(oldInFlightCue);
     expect(received).toEqual([]);
 
-    sockets.sockets[0]!.message(baseline());
-    sockets.sockets[0]!.message(cue(3, 3));
+    sockets.sockets[1]!.open();
+    sockets.sockets[1]!.message(baseline());
+    sockets.sockets[1]!.message(cue(3, 3));
     expect(client.getSnapshot().state).toBe('live');
     expect(received).toEqual(['pc:fixture-producer:9:3']);
+    client.dispose();
+  });
+
+  it('recovers when the cue baseline races ahead of the Program reset snapshot', () => {
+    const sockets = socketFactory();
+    let currentProgram = programSnapshot({});
+    const received: string[] = [];
+    const client = createProgramCueClient({
+      location: { protocol: 'http:', host: '127.0.0.1:4173' },
+      webSocketFactory: sockets.factory,
+      getProgramSnapshot: () => currentProgram,
+      onCue: (value) => received.push(value.id),
+    });
+    client.observeProgramSnapshot(currentProgram);
+    client.start();
+    sockets.sockets[0]!.open();
+    sockets.sockets[0]!.message(baseline());
+
+    // The cue socket sees the producer's new reset barrier before the independent
+    // Program WebSocket delivers the corresponding GSI-generation reset.
+    sockets.sockets[0]!.message(baseline(laneCursor, 2));
+    expect(client.getSnapshot().state).toBe('live');
+
+    currentProgram = programSnapshot({ programSourceGeneration: 2 });
+    client.observeProgramSnapshot(currentProgram);
+
+    expect(sockets.sockets).toHaveLength(2);
+    expect(client.getSnapshot()).toMatchObject({ state: 'connecting', baseline: null });
+
+    // Any late application message from the invalidated socket must be ignored.
+    sockets.sockets[0]!.message(cue(3, 3));
+    expect(received).toEqual([]);
+
+    // A new subscription is guaranteed to receive the publisher's current baseline.
+    sockets.sockets[1]!.open();
+    sockets.sockets[1]!.message(baseline(laneCursor, 3));
+    sockets.sockets[1]!.message(cue(4, 4));
+    expect(client.getSnapshot().state).toBe('live');
+    expect(received).toEqual(['pc:fixture-producer:9:4']);
     client.dispose();
   });
 
