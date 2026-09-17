@@ -84,7 +84,7 @@ CI 绿灯不能替代 D 层。
 
 PR 使用 changed-surface planner，只运行与改动面匹配的证据。
 
-### 文档-only
+### 仅文档改动
 
 只修改 ``docs/**`` 或 Markdown / MDX：
 
@@ -209,17 +209,17 @@ INCONCLUSIVE
 - 时间与完整性哈希；
 - 对应报告。
 
-真实平台 validator 使用仓库产生的 artifact，不在目标机临时改代码后把结果归因给另一个 revision。
+真实平台验证者使用仓库产生的 artifact，不在目标机临时改代码后把结果归因给另一个 revision。
 
 ## 8. 协作模型
 
 默认使用：
 
 ```text
-Feature owner
-+ Platform validator
+功能负责人
++ 平台验证者
 ```
 
-平台 validator 负责提供真实环境证据，不因此成为整个 telemetry/runtime 模块的代码 owner。
+平台验证者负责提供真实环境证据，不因此成为整个 telemetry/runtime 模块的代码 owner。
 
 只有 installer、Windows packaging、topmost/click-through window 等平台本身就是功能语义的工作，才适合把实现 ownership 整体交给 Windows-specific contributor。
