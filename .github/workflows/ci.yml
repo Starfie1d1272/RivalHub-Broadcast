@@ -40,7 +40,7 @@ jobs:
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
         run: |
           if [ "$GITHUB_EVENT_NAME" = "pull_request" ]; then
-            git diff --name-status --find-renames "$BASE_SHA" "$HEAD_SHA" > "$RUNNER_TEMP/changed-files.tsv"
+            git diff --name-status --find-renames "$BASE_SHA...$HEAD_SHA" > "$RUNNER_TEMP/changed-files.tsv"
           else
             : > "$RUNNER_TEMP/changed-files.tsv"
           fi
