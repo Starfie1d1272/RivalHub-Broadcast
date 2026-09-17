@@ -166,7 +166,7 @@ describe('web surface shell', () => {
     expect(container!.textContent).toContain('当前运行状态');
   });
 
-  it('renders a degraded error state when Companion is unavailable', async () => {
+  it('renders a Chinese degraded error state without leaking raw network errors', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(() => Promise.reject(new Error('network down'))),
@@ -182,6 +182,7 @@ describe('web surface shell', () => {
     expect(container!.querySelector('[role="alert"]')?.textContent).toContain(
       '本地制播服务暂不可用',
     );
-    expect(container!.textContent).toContain('network down');
+    expect(container!.textContent).toContain('无法连接本地制播服务');
+    expect(container!.textContent).not.toContain('network down');
   });
 });
