@@ -62,6 +62,7 @@ GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行�
 - reconnect / baseline snapshot；
 - local cache；
 - OBS Browser Source 基础兼容测试；
+- Program 截图回归：以 `ubuntu-24.04` + 固定版本 Playwright Chromium 作为唯一基准环境；
 - Program renderer 不依赖具体 browser/desktop host 才能表达正确业务语义。
 
 Issue #32 的 production Local Web Host 属于本层：同一 Fastify instance 提供 Vite static
@@ -73,7 +74,7 @@ heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。`pnpm
 Vite HTML、hashed asset 可访问，以及 Program WebSocket 能 upgrade 并发送 baseline；不能用
 Vitest 内部另行构建来替代这一 post-build 组合 smoke。
 
-非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。任何透明 topmost/click-through 桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
+非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。Program 视觉回归只维护一套正式基准：`ubuntu-24.04` 上由固定版本 Playwright 提供的 Chromium。本地 macOS/Windows 运行视觉测试只用于冒烟检查，不得更新正式基准。需要有意更新基准时使用 `pnpm visual:update`，并在提交前人工审阅 PNG 差异。视觉回归通过不能替代 Windows + CS2 + OBS 生产验收。任何透明置顶/鼠标穿透桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 
 因此 #32 的 Real-environment acceptance gate 为 `Not required`。真实 Windows + CS2 + OBS
 Browser Source 的 reload、长时 soak、Program/Assist capture isolation 与生产路径关闭仍由

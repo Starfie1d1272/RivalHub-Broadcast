@@ -666,6 +666,8 @@ Lookahead CSTV/playcast URL、token 等可能属于赛事凭据，不能进入�
 
 Renderer 消费 consumer-specific normalized projection，不消费 Raw GSI，不直接调用 RivalHub API。
 
+Program V1 渲染器使用 1920×1080 逻辑画布；Web 测试场景直接消费带版本的 `ProgramSnapshot`；响应式布局与宿主缩放只负责显示适配，不属于渲染器的领域事实。
+
 React 负责 scene composition、结构布局与低频 UI；Radar marker、utility movement 等高频动画使用适合的 rAF/imperative hot path，避免把每个 GSI tick 等价为整棵 React rerender。
 
 OBS Browser Source 的 CEF 版本不能假定与 Chrome Stable 同步。较新 Web API 必须 feature-detect/fallback；真实 OBS 是 `/program` 的生产验收环境。
