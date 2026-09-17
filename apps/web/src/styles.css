@@ -1,6 +1,6 @@
 :root {
   color: #e8edf5;
-  background: #10151d;
+  background: transparent;
   font-family:
     Inter,
     ui-sans-serif,
@@ -18,7 +18,18 @@ body {
   min-width: 320px;
 }
 
+html,
+body,
+#root {
+  background: transparent;
+}
+
+#root {
+  min-height: 100%;
+}
+
 .shell {
+  background: #10151d;
   box-sizing: border-box;
   display: grid;
   gap: 2rem;
