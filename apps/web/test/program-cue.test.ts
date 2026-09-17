@@ -20,10 +20,7 @@ const laneCursor: ProgramCueLaneCursor = {
   cstvProgramGeneration: 9,
 };
 
-function baseline(
-  cursor: ProgramCueLaneCursor = laneCursor,
-  channelSeq = 1,
-): ProgramCueBaselineV1 {
+function baseline(cursor: ProgramCueLaneCursor = laneCursor, channelSeq = 1): ProgramCueBaselineV1 {
   return {
     type: 'cue-baseline',
     protocolVersion: 1,
