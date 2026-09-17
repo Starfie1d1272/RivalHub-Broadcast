@@ -47,7 +47,7 @@ export function registerStaticHost(app: FastifyInstance, options: StaticHostOpti
     if (explicitRoot) {
       throw new Error(`WEB_ROOT 必须是包含 index.html 的目录：${root}`);
     }
-    app.log.warn({ root }, 'Companion Web dist 不存在；继续提供 HTTP API 与 WebSocket');
+    app.log.warn({ root }, '网页构建产物不存在；继续提供 HTTP API 与 WebSocket 服务');
     return false;
   }
 
