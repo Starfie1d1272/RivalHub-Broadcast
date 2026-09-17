@@ -65,20 +65,11 @@ GitHub-hosted Windows runner 只能证明自动化脚本在该 runner 上运行�
 - Program 截图回归：以 `ubuntu-24.04` + 固定版本 Playwright Chromium 作为唯一基准环境；
 - Program renderer 不依赖具体 browser/desktop host 才能表达正确业务语义。
 
-Issue #32 的 production Local Web Host 属于本层：同一 Fastify instance 提供 Vite static
-assets 与 Local Protocol V1 WebSocket，普通浏览器、Vite dev proxy 和未来 OBS Browser
-Source 都复用当前 page Origin 推导出的 `ws:`/`wss:` URL。自动化验证应覆盖 static route、
-subprotocol/Origin policy、baseline/reconnect、publisher latest-wins、buffer guard、
-heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。`pnpm build` 后还必须运行
-`pnpm local-web:production-smoke`，直接消费真实 `apps/web/dist`，验证 `/program` 返回实际
-Vite HTML、hashed asset 可访问，以及 Program WebSocket 能 upgrade 并发送 baseline；不能用
-Vitest 内部另行构建来替代这一 post-build 组合 smoke。
+Issue #32 的生产本地网页服务属于本层：同一 Fastify 实例提供 Vite 静态资源与 Local Protocol V1 WebSocket。普通浏览器、Vite 开发代理和未来 OBS Browser Source 都从当前页面 Origin 推导 `ws:`/`wss:` 地址。自动化验证应覆盖静态路由、子协议与 Origin 策略、初始状态与重连、发布端只保留最新状态（latest-wins）、缓冲区保护、心跳与关闭清理；这些测试不需要真实 CS2 或 OBS。`pnpm build` 后还必须运行 `pnpm local-web:production-smoke`，直接消费真实 `apps/web/dist`，验证 `/program` 返回实际 Vite HTML、带哈希的资源可访问，以及 Program WebSocket 能完成升级连接并发送初始状态；不能用 Vitest 内部另行构建来替代这一构建后组合冒烟检查。
 
 非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。Program 视觉回归只维护一套正式基准：`ubuntu-24.04` 上由固定版本 Playwright 提供的 Chromium。本地 macOS/Windows 运行视觉测试只用于冒烟检查，不得更新正式基准。需要有意更新基准时使用 `pnpm visual:update`，并在提交前人工审阅 PNG 差异。视觉回归通过不能替代 Windows + CS2 + OBS 生产验收。任何透明置顶/鼠标穿透桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。
 
-因此 #32 的 Real-environment acceptance gate 为 `Not required`。真实 Windows + CS2 + OBS
-Browser Source 的 reload、长时 soak、Program/Assist capture isolation 与生产路径关闭仍由
-#35 单独验收；CI 通过不能替代该 Layer D 证据。
+因此 #32 不要求额外的真实环境验收门槛。真实 Windows + CS2 + OBS Browser Source 的重新加载、长时稳定运行、Program/Assist 捕获隔离与生产路径关闭仍由 #35 单独验收；CI 通过不能替代 Layer D 的真实证据。
 
 ### Layer C — Real CS2 / CSTV validation
 

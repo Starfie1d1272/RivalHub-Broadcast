@@ -67,4 +67,4 @@ Boltobserv / Obserview 用来验证观察者体验、自动缩放、头像标记
 | `lexogrine/obserview` | `36251ed3b42926a2697782bc5aa0dbaedc9891fb` / 根 `LICENSE` MIT、`package.json` GPL-3.0 | 独立 Radar/头像/画笔产品参考 | 许可证元数据冲突；澄清前不做代码级复用，也不继承旧 React/LHM/csgogsi-socket 状态 |
 | `nsnsay/Zhenhai-HUD-Manager` | `8244dcaa0b52a4cb24bf0dbfc26b1b0455de23f7` / 应用仓库顶层许可证边界不清 | 信息密度、上下层 Radar、监听器生命周期产品参考 | 不复制应用代码/资产，不建立第二套 Team/Player/Match 数据库 |
 
-本 Issue 采用 **M3MONs 的固定画布 + Eon 的确定性测试场景/测试纪律 + Playwright 官方截图回归 + Broadcast 自有 `ProgramSnapshot` contract**。Lexogrine HUD 仅作为 #33 的潜在组件参考；Obserview 的许可证元数据冲突继续显式记录。
+本 Issue 采用 **M3MONs 的固定画布 + Eon 的确定性测试场景/测试纪律 + Playwright 官方截图回归 + Broadcast 自有 `ProgramSnapshot` 契约**。Lexogrine HUD 仅作为 #33 的潜在组件参考；Obserview 的许可证元数据冲突继续显式记录。
