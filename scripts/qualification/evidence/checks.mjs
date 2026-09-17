@@ -187,9 +187,7 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     explicitNextExecution: {
       label: '下一场从新的地图执行开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
-      reason: resetPassed
-        ? '地图执行序号已推进、运行实例保持一致，并清理了上一场正式节目数据。'
-        : '缺少成功开始下一场地图执行的证据。',
+      reason: resetPassed ? '地图执行序号已推进、运行实例保持一致，并清理了上一场正式节目数据。' : '缺少成功开始下一场地图执行的证据。',
     },
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
