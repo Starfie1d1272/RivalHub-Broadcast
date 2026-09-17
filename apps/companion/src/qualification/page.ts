@@ -271,7 +271,7 @@ export function qualificationPageHtml(controlToken: string): string {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Qualification 验收 · RivalHub Broadcast</title>
+    <title>现场验收 · RivalHub Broadcast</title>
     <style>${PAGE_STYLE}</style>
   </head>
   <body>
