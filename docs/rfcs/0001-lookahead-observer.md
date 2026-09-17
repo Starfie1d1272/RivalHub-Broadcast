@@ -6,7 +6,7 @@
 | 主题 | 较早比赛时间轴、对齐、未来击杀提示、私有制播工作区 |
 | 需要真实验证 | Windows + CS2 + CSTV + OBS |
 
-## Summary
+## 摘要
 
 Lookahead 利用两个存在时间差的比赛时间轴：较早时间轴上的事件已经真实发生，但延迟 Program 尚未到达。Broadcast 将这种时间优势转换成低干扰的私有提示，帮助同一名解说兼 OB 提前准备切 POV。
 
@@ -25,7 +25,7 @@ playerA → playerB
 
 ## 产品边界
 
-### Goals
+### 目标
 
 - 提前显示下一次可靠 future kill cue；
 - cue 至少包含 countdown、killer、victim；
@@ -36,7 +36,7 @@ playerA → playerB
 - source reconnect 后默认关闭旧 cue，直到重新建立 alignment；
 - 提前量可配置。
 
-### Non-goals
+### 非目标
 
 第一层产品不要求：
 
@@ -50,7 +50,7 @@ playerA → playerB
 - server plugin 前置依赖；
 - 自动 replay / highlight。
 
-## Prior art：HOT
+## 现有先例：HOT
 
 HOT 证明两件事：
 
@@ -66,7 +66,7 @@ headless / no-delay source
 + explicit alignment
 + strict Program / Assist isolation
 + single Program renderer workflow
-+ local-first standalone mode
++ 本地优先的独立模式
 + optional RivalHub canonical context
 ```
 
@@ -92,7 +92,7 @@ low-bandwidth future event cue
 
 如果真实使用证明 spatial future cue 有价值，再研究同一 Radar 上极轻量、可关闭的 future marker。
 
-## Conceptual model
+## 概念模型
 
 ```text
 SourceTimeline
@@ -119,7 +119,7 @@ FutureKillCue
 
 Future cue 不建立第二份长期 `FutureTimelineState` truth；它是 bounded Lookahead evidence 与当前 Program timing 的派生结果。
 
-## Option A：Dual CSTV
+## 方案 A：双 CSTV
 
 ```text
 No-delay CSTV
@@ -141,7 +141,7 @@ Delayed CSTV
 
 任何 endpoint naming 规律都只能作为 discovery heuristic。启用 Assist 前必须验证 same match、same map 和可信 tick relation。
 
-## Option B：Single CSTV + local buffered relay
+## 方案 B：单 CSTV + 本地延迟中继
 
 当 provider 只有一条流时，可以研究本地 relay：
 
@@ -153,7 +153,7 @@ source
 
 该方案增加 buffer correctness、断线恢复和生产运维责任，因此不是默认方案。无论 acquisition 如何变化，上层 alignment / cue semantics 应保持一致。
 
-## Alignment
+## 时间轴对齐
 
 不能只依赖 wall-clock sleep。
 
@@ -169,7 +169,7 @@ source generation unchanged
 
 错误比赛、地图不一致、source reconnect、gap 不可信时默认关闭 cue。
 
-## Lead time
+## 提前量
 
 `desiredLead` 是产品参数，不是 Core constant。
 
