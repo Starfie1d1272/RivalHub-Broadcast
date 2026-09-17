@@ -1,6 +1,6 @@
 # Telemetry 数据语义
 
-本文定义 CS2 GSI 与 CSTV 输入在 Broadcast 中的 ownership、source semantics、标准化和证据要求。它不描述某个实施阶段，只记录当前有效规则。
+本文定义 CS2 GSI 与 CSTV 输入在 Broadcast 中的 ownership、source semantics、normalization 和 evidence 要求。它不描述某个实施阶段，只记录当前有效规则与仍有长期价值的真实 source facts。
 
 ## 1. 数据流
 
@@ -10,7 +10,7 @@
 CS2 Raw GSI
     ↓
 Companion HTTP ingress
-    ├─→ 有界采集记录
+    ├─→ bounded Capture Recorder
     └─→ packages/telemetry-gsi
             ↓
       TelemetryObservation
@@ -52,11 +52,11 @@ deepMerge(previous, current)
 
 当成“当前真实 GSI state”。
 
-真实 CS2 payload 会让某些只在特定阶段存在的字段自然消失。如果一律保留旧值，会制造上一回合 ``winner``、``bomb`` 等幽灵状态。
+真实 CS2 payload 会让某些只在特定阶段存在的字段自然消失。如果一律保留旧值，会制造上一回合 `winner`、`bomb` 等 ghost state。
 
 ## 3. Block-specific semantics
 
-当前适配器按 block 独立表达 coverage：
+当前 adapter 按 block 独立表达 coverage：
 
 ```text
 present
@@ -79,28 +79,42 @@ grenades
 Absence 可能表示：
 
 - 当前语义不存在；
-- 当前 observer context 不提供该能力；
+- 当前 observer context 不提供该 capability；
 - source 暂时没有提供该 block；
 - source/context 正在转换。
 
-因此 ``absent`` 不等于 ``unchanged``。
+因此 `absent` 不等于 `unchanged`。
 
-对特定 block 如果需要跨帧连续性，必须有明确真实证据、局部实现和可测试诊断，不能扩张成通用 merge policy。
+对特定 block 如果需要跨帧 continuity，必须有明确真实 evidence、局部实现和可测试 diagnostic，不能扩张成通用 merge policy。
 
-## 4. ``previously`` / ``added``
+### 3.1 已验证的 source facts
 
-Raw GSI 中的 ``previously`` 与 ``added`` 只作为 change hint 和诊断证据：
+仓库现有真实 capture 已经足以证明以下规则，后续实现不应重新退回 universal retain-on-omit：
+
+- 一份完整 Demo observer capture 中，`allplayers` 出现的 150 个 frame 每帧均包含 10 名玩家；
+- 一份 BOT spectator capture 中，`allplayers` 出现的 1936 个 frame 每帧均包含 10 名玩家；
+- 这些已观测 frame 中，每个 player object 持续提供 `name / team / observer_slot / state / weapons / match_stats / position / forward`；
+- `round` 在 warmup 场景可以整体不存在；
+- root `bomb` 在已观测 BOT warmup 中不存在，正式回合开始后才持续出现；
+- normal-player capture 中，`round.bomb` 与 `round.win_team` 会在对应语义结束后从 current payload 消失；
+- `previously` / `added` 通常提供有价值的 change hint，但真实 capture 也存在 current state 已变化而 hint 不完整的 frame。
+
+这些事实只证明**已录制场景**中的 source behavior，不声明所有 CS2 版本和 observer context 永远保持完全相同。Adapter 仍需 tolerant，并在实际 shape 偏离已知 evidence 时输出 diagnostic，而不是崩溃或伪造缺失字段。
+
+## 4. `previously` / `added`
+
+Raw GSI 中的 `previously` 与 `added` 只作为 change hint 和 diagnostic evidence：
 
 - parser compatibility 调查；
 - current-vs-previous diff 交叉验证；
 - corpus 分析；
-- 回归测试。
+- regression test。
 
-它们不是 Broadcast domain truth，也不能直接生成 ``RuntimeTransition``。
+它们不是 Broadcast domain truth，也不能直接生成 `RuntimeTransition`。
 
 ## 5. TelemetryObservation
 
-``TelemetryObservation`` 是 Core-owned 输入契约，表达某一 source frame 经解释后的当前观测。
+`TelemetryObservation` 是 Core-owned input contract，表达某一 source frame 经解释后的 current observation。
 
 概念结构：
 
@@ -131,7 +145,7 @@ TelemetryObservation
 - accumulator output；
 - Lookahead future cue。
 
-GSI-specific diagnostics 与 ``TelemetryObservation`` 并列返回，不塞进 Core domain。
+GSI-specific diagnostics 与 `TelemetryObservation` 并列返回，不塞进 Core domain。
 
 ## 6. GSI ingress
 
@@ -141,55 +155,55 @@ Companion 的 GSI ingress 只负责：
 2. 验证 GSI token；
 3. 应用 body / request limit；
 4. 记录 UTC 与 monotonic 接收时间；
-5. 将 accepted payload 交给采集记录器和 telemetry adapter；
+5. 将 accepted payload 交给 Capture Recorder 和 telemetry adapter；
 6. 快速 ACK。
 
-请求热路径不执行磁盘等待、RivalHub 网络调用、场景选择或重型业务逻辑。
+request hot path 不执行磁盘等待、RivalHub 网络调用、场景选择或重型业务逻辑。
 
-默认监听本机回环地址。LAN 暴露不是 telemetry 默认行为。
+默认监听 loopback。LAN exposure 不是 telemetry 默认行为。
 
-## 7. 采集记录
+## 7. Capture
 
-生产采集记录器属于 Companion telemetry runtime，不属于 ``packages/testkit``。
+Production Capture Recorder 属于 Companion telemetry runtime，不属于 `packages/testkit`。
 
 基本要求：
 
-- 写盘与 GSI 请求 ACK 解耦；
-- 队列有明确 item 和 byte 上限；
-- 队列溢出时记录降级，不无限积压；
-- writer failure 不阻塞 runtime；
-- shutdown 尝试有界收尾并明确 incomplete 状态；
+- 写盘与 GSI request ACK 解耦；
+- queue 有明确 item 和 byte 上限；
+- queue overflow 时记录 degraded state，不无限积压；
+- writer failure 不阻塞 Runtime；
+- shutdown 尝试 bounded finalization 并明确 incomplete 状态；
 - token 和不必要个人数据不进入可共享 fixture。
 
-采集格式必须保留足够的接收时间、sequence 和完整性信息，使离线 verifier 能证明某个 runtime observation 对应真实 accepted frame。
+Capture format 必须保留足够的 receive time、sequence 和 integrity information，使 offline verifier 能证明某个 runtime observation 对应真实 accepted frame。
 
 ## 8. Replay
 
-Replay 必须重新经过正式 adapter：
+Replay 必须重新经过 production adapter：
 
 ```text
 recorded raw input
 → production parser / normalizer
 → Core
-→ projection
+→ Projection
 ```
 
-禁止测试直接伪造最终 RuntimeState 或 ProgramProjection 来替代 telemetry 语义验证。
+禁止测试直接伪造最终 RuntimeState 或 ProgramProjection 来替代 telemetry semantics validation。
 
-``packages/testkit`` 可以对输入注入：
+`packages/testkit` 可以对输入注入：
 
 - packet drop；
 - duplicate；
 - reorder；
 - jitter；
 - disconnect / reconnect；
-- 时间加速；
+- time acceleration；
 - slow consumer；
 - source generation change。
 
 ## 9. CSTV GameEvent 边界
 
-``packages/telemetry-cstv`` 是第三方 CSTV parser 的隔离层。
+`packages/telemetry-cstv` 是第三方 CSTV parser 的 isolation layer。
 
 它负责：
 
@@ -206,11 +220,11 @@ recorded raw input
 - 渲染 HUD / Radar；
 - 决定 canonical 比赛事实。
 
-Program 与 Lookahead 具有独立 source-local continuity。Lookahead 重连必须让旧 timeline alignment 失效，但不能仅因为连接重建就改变 Program map epoch。
+Program 与 Lookahead 具有独立 source-local continuity。Lookahead reconnect 必须让旧 timeline alignment 失效，但不能仅因为连接重建就改变 Program `mapEpoch`。
 
 ## 10. 时间与序列
 
-本地 duration、timeout、staleness 和插值使用 monotonic clock。
+本地 duration、timeout、staleness 和 interpolation 使用 monotonic clock。
 
 跨进程、跨机器、报告和审计使用 UTC wall clock。
 
@@ -219,13 +233,13 @@ monotonic → 过了多久
 wall clock → 什么时候发生
 ```
 
-序列值必须明确 scope，不能把 ingress sequence、runtime sequence、channel sequence 混成同一个编号。
+sequence value 必须明确 scope，不能把 ingress sequence、runtime sequence、channel sequence 混成同一个编号。
 
-## 11. 真实证据与 fixture
+## 11. 真实 Evidence 与 Fixture
 
 真实 Windows + CS2 / CSTV 输入用于证明 source behavior；synthetic fixture 用于可重复覆盖边界条件。
 
-当真实 capture 与旧假设冲突时：
+当真实 capture 与旧 hypothesis 冲突时：
 
 1. 保留原始 evidence；
 2. 修正 source semantics；
@@ -240,17 +254,17 @@ Reference corpus 应覆盖：
 - map end / map change；
 - disconnect / reconnect；
 - source restart / generation change；
-- Program 与 Lookahead 对齐；
-- 长时间运行与慢消费者。
+- Program 与 Lookahead alignment；
+- long-running / slow-consumer behavior。
 
 新增 capture 只为回答明确问题，不为了样本数量重复录制已经充分证明的场景。
 
 ## 12. 隐私与安全
 
-采集、日志和 fixture 必须：
+Capture、日志和 fixture 必须：
 
 - 移除 GSI token；
 - 避免保存不必要账户身份；
 - 对 player identity 使用可重复的脱敏方式；
-- 保留验证连续性需要的结构，不通过删字段破坏语义；
-- 在进入仓库前执行 sanitizer 和完整性检查。
+- 保留验证 continuity 需要的结构，不通过删字段破坏语义；
+- 在进入仓库前执行 sanitizer 和 integrity check。
