@@ -1,0 +1,70 @@
+name: PR40 rebase helper
+
+on:
+  pull_request:
+    types: [reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  sync-generated-files:
+    if: ${{ github.event.pull_request.number == 40 && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
+        with:
+          version: 12.3.4
+          runtime: node@24
+          install: false
+
+      - name: Merge long-lived documentation wording
+        shell: python
+        run: |
+          from pathlib import Path
+
+          architecture = Path('docs/architecture.md')
+          text = architecture.read_text()
+          anchor = 'Renderer 消费 consumer-specific normalized projection，不消费 Raw GSI，不直接调用 RivalHub API。\n'
+          paragraph = 'Program V1 渲染器使用 1920×1080 逻辑画布；Web 测试场景直接消费带版本的 `ProgramSnapshot`；响应式布局与宿主缩放只负责显示适配，不属于渲染器的领域事实。\n'
+          if paragraph not in text:
+              if anchor not in text:
+                  raise SystemExit('architecture anchor missing')
+              text = text.replace(anchor, anchor + '\n' + paragraph, 1)
+              architecture.write_text(text)
+
+          validation = Path('docs/development-validation.md')
+          text = validation.read_text()
+          bullet_anchor = '- OBS Browser Source 基础兼容测试；\n'
+          visual_bullet = '- Program 截图回归：以 `ubuntu-24.04` + 固定版本 Playwright Chromium 作为唯一基准环境；\n'
+          if visual_bullet not in text:
+              if bullet_anchor not in text:
+                  raise SystemExit('validation bullet anchor missing')
+              text = text.replace(bullet_anchor, bullet_anchor + visual_bullet, 1)
+          old = '非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。任何透明 topmost/click-through 桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。'
+          new = '非 Windows 环境可以用于早期 Browser Source 与普通浏览器 host 验证，但不能替代 Windows 生产验收。Program 视觉回归只维护一套正式基准：`ubuntu-24.04` 上由固定版本 Playwright 提供的 Chromium。本地 macOS/Windows 运行视觉测试只用于冒烟检查，不得更新正式基准。需要有意更新基准时使用 `pnpm visual:update`，并在提交前人工审阅 PNG 差异。视觉回归通过不能替代 Windows + CS2 + OBS 生产验收。任何透明置顶/鼠标穿透桌面 Overlay（Program 或 Assist）的真实窗口行为都属于 Windows 生产路径，不能用普通浏览器页面假装已验收。'
+          if new not in text:
+              if old not in text:
+                  raise SystemExit('validation paragraph anchor missing')
+              text = text.replace(old, new, 1)
+          validation.write_text(text)
+
+      - name: Regenerate merged lockfile
+        run: pnpm install --lockfile-only
+
+      - name: Commit generated merge result
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add pnpm-lock.yaml docs/architecture.md docs/development-validation.md
+          if git diff --cached --quiet; then
+            exit 0
+          fi
+          git commit -m "chore: 同步 #31 rebase 生成文件"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}

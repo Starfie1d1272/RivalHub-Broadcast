@@ -9,6 +9,11 @@ import {
   type DebugFreshness,
   type DebugRuntimeResponse,
 } from './debug/runtime';
+import { ProgramPage } from './program/ProgramPage';
+import {
+  ProgramVisualFixtureNotFound,
+  ProgramVisualFixturePage,
+} from './program/testing/ProgramVisualFixturePage';
 import { createLocalChannelClient, type LocalChannelConnectionState } from './realtime';
 import type { LocalChannel } from '@rivalhub-broadcast/protocol/version';
 
@@ -17,7 +22,7 @@ export const surfaceDefinitions = [
     id: 'program',
     path: '/program',
     title: '节目输出',
-    description: '节目输出占位页面。正式节目画面与比赛信息叠加层属于后续阶段。',
+    description: '透明 1920×1080 节目画布；比赛 HUD 与雷达界面将在后续阶段接入。',
     realtimeChannel: 'program',
   },
   {
@@ -78,12 +83,17 @@ function recorderStateLabel(state: string | undefined): string {
   }
 }
 
-function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }) {
+function useLocalChannelConnection(channel: LocalChannel) {
   const client = useMemo(() => createLocalChannelClient(channel), [channel]);
   useEffect(() => {
     client.start();
     return () => client.dispose();
   }, [client]);
+  return client;
+}
+
+function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }) {
+  const client = useLocalChannelConnection(channel);
   const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
 
   return (
@@ -95,6 +105,11 @@ function SurfaceConnectionMarker({ channel }: { readonly channel: LocalChannel }
       本地实时连接 · {connectionStateLabel(snapshot.state)}
     </p>
   );
+}
+
+function ProgramRoute() {
+  useLocalChannelConnection('program');
+  return <ProgramPage />;
 }
 
 export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }) {
@@ -378,6 +393,25 @@ export function DebugPage() {
 }
 
 export function App() {
-  const surface = surfaceForPath(window.location.pathname);
-  return surface.id === 'debug' ? <DebugPage /> : <SurfacePage surface={surface} />;
+  const pathname = window.location.pathname;
+  const visualRoute = /^\/__visual\/program\/([^/]+)\/?$/.exec(pathname);
+  const isVisualPath =
+    pathname === '/__visual/program' || pathname.startsWith('/__visual/program/');
+
+  if (isVisualPath) {
+    if (!import.meta.env.DEV || import.meta.env.VITE_VISUAL_FIXTURES !== '1') {
+      return <ProgramVisualFixtureNotFound fixtureId={visualRoute?.[1] ?? null} />;
+    }
+    const fixtureId = visualRoute?.[1];
+    return fixtureId === undefined ? (
+      <ProgramVisualFixtureNotFound fixtureId={null} />
+    ) : (
+      <ProgramVisualFixturePage fixtureId={fixtureId} />
+    );
+  }
+
+  const surface = surfaceForPath(pathname);
+  if (surface.id === 'debug') return <DebugPage />;
+  if (surface.id === 'program') return <ProgramRoute />;
+  return <SurfacePage surface={surface} />;
 }

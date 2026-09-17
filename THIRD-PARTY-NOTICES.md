@@ -9,6 +9,7 @@
 | 项目 | 精确版本 | 当前用途 | 已知许可证 |
 | --- | --- | --- | --- |
 | `@eslint/js` | 10.0.1 | ESLint flat config 基础规则 | MIT |
+| `@fontsource/inter` | 5.3.0 | Program/Web 本地自托管字体，导入 400/500/600/700 | OFL-1.1 |
 | `@types/node` | 24.13.4 | Node 类型声明 | MIT |
 | `@types/react` / `@types/react-dom` | 19.3.0 | React Web 类型声明 | MIT |
 | `@typescript/native` → `typescript` | 7.0.2 | TypeScript 7 `tsc` 编译/类型检查 | Apache-2.0 |
@@ -18,6 +19,7 @@
 | `eslint-plugin-react-hooks` | 7.1.1 | React hooks lint rules | MIT |
 | `fastify` | 5.12.4 | Companion local HTTP composition layer | MIT |
 | `prettier` | 3.9.6 | Source/config formatting | MIT |
+| `@playwright/test` | 1.63.0 | 确定性浏览器视觉回归 | Apache-2.0 |
 | `react` / `react-dom` | 19.3.0 | Web shell presentation | MIT |
 | `tsx` | 4.23.13 | Companion development runner | MIT |
 | `typescript-eslint` | 8.70.0 | TypeScript-aware ESLint parser/rules | MIT |
@@ -26,7 +28,7 @@
 | `zod` | 4.6.2 | Protocol package runtime-schema baseline | MIT |
 | `cs2parser` | 2.5.0 | `packages/telemetry-cstv` Live CSTV `/sync`/fragment reader and game-event source | GPL-3.0；仅通过内部 binding 使用，未复制代码；upstream `osztenkurden/cs2parser@74b2238b22d8a0e221be7c2d609083c93d312c7e` |
 
-许可证链接：[MIT](https://opensource.org/license/mit)、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)、[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html)。
+许可证链接：[MIT](https://opensource.org/license/mit)、[Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0)、[OFL-1.1](https://openfontlicense.org/)、[GPL-3.0](https://www.gnu.org/licenses/gpl-3.0.html)。
 
 | 项目 | 当前用途 | 已知许可证/边界 |
 | --- | --- | --- |
@@ -44,3 +46,5 @@
 | ValveResourceFormat | future Source 2 asset / baked data tooling 候选 | MIT |
 
 参考项目的存在不代表本仓库已包含其代码或资产。
+
+Issue #31 没有复制任何第三方 HUD 代码或图片资产；`@fontsource/inter` 仅作为本地字体依赖使用，Playwright 仅作为固定版本 Chromium 的视觉回归工具使用。
