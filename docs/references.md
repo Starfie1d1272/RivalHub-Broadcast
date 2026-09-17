@@ -4,14 +4,14 @@
 
 | 项目 | 主要学习点 | 不直接继承 |
 | --- | --- | --- |
-| `papesgit/hot` / HLAE Observer Tools | Observer Desk、Delayed Observer Cues、Radar / Viewport cue、游戏画面嵌入工作区 | HLAE injection 不是 Broadcast 基础前提；不复制具体布局或把第二个完整 renderer 变成要求 |
+| `papesgit/hot` / HLAE Observer Tools（核验基线：v0.4.0） | Observer Desk、Delayed Observer Cues、Radar / Viewport cue、游戏画面嵌入工作区 | HLAE injection 不是 Broadcast 基础前提；不复制具体布局或把第二个完整 renderer 变成要求 |
 | `drweissbrot/cs-hud` | 最小 GSI → 本地服务 → HUD / Radar → OBS，本地优先 | 老旧技术结构和有限产品模型 |
 | `mortenlein/eon` | Waiting / Intermission / Result、Operator、Simulator、Radar、确定性测试纪律 | 不继承单体状态结构，不从 Raw GSI 构造展示测试真相 |
 | `nsnsay/Zhenhai-HUD-Manager` | TypeScript workspace、手雷/烟火、上下层 Radar、监听器生命周期 | 顶层许可证边界不清；不复制应用代码或建立第二套 Team / Match 数据库 |
 | Boltobserv | 专业观察者 Radar、上下层、道具、自动缩放、观察者体验 | GPL-3.0；不作为旁路 runtime，也不复制代码或资产 |
 | Lexogrine Obserview | 独立 Radar、头像、画笔、跨设备绘制 | 许可证元数据存在冲突；澄清前不做代码级复用 |
 | Lexogrine HUD Manager | 成熟 HUD 管理、面板、BP、摄像机与回放工作流 | Manager 为专有软件，只做产品对照 |
-| `lexogrine/cs2-react-hud` | 选手卡、比分条、观察目标高亮等组件拆分 | 不把 LHM contract 变成 RuntimeState 或本地协议 |
+| `lexogrine/cs2-react-hud` | 选手卡、比分条、观察目标高亮等组件拆分 | 不把 LHM contract 变成 RuntimeState 或 Local Protocol |
 | JTs-Hud | BYOH、GSI 安装、观察者工具、LHM 兼容 | GPL Manager 不作为底座；不继承本地赛事数据库 |
 | `M3MONs/CS2-HUD` | 固定 1920×1080 逻辑画布、离线预览、Radar 高频路径 | 不继承布局编辑器或另一套后端/状态 authority |
 | SHUD | OBS、场景、摄像机生产外壳 | 公开源码不足以作为完整实现底座 |
@@ -22,7 +22,7 @@
 
 ## HOT 与 Lookahead
 
-HOT 的 Delayed Observer Cues 已经证明“较早时间轴 → 延迟 observer cue”有公开 prior art。RivalHub Broadcast 不宣称这一概念首创。
+HOT **v0.4.0** 的 Delayed Observer Cues 已经证明“较早时间轴 → 延迟 observer cue”有公开 prior art。RivalHub Broadcast 不宣称这一概念首创。后续如果 HOT 行为发生变化，应重新核对版本，不把这里的 v0.4.0 结论自动外推到未来版本。
 
 Broadcast 的差异在于把以下边界组合为同一产品：
 
@@ -31,7 +31,7 @@ headless / no-delay source
 + explicit timeline alignment
 + Program / Assist projection isolation
 + single Program renderer workflow
-+ standalone local-first mode
++ independent local-first mode
 + optional RivalHub canonical context
 ```
 
@@ -49,8 +49,9 @@ MapGeometryProvider
 Radar domain
   world→radar / floor / marker / utility
         ↓
-Web renderer
+Web Radar Renderer
   React / SVG / Canvas / rAF
+  temporal interpolation / smoothing / autozoom presentation
 ```
 
 第三方项目可以帮助验证产品体验或算法，但不能把其状态模型、地图 package shape 或应用 runtime 变成 Broadcast 的公共 contract。
@@ -63,6 +64,6 @@ Web renderer
 4. 专有软件只做产品对照。
 5. 第三方内部类型不得成为 Broadcast 公共协议或 Core domain 的 authority。
 6. 已存在明确 owner 的共享基础设施优先通过 adapter/provider 接入，不再维护第二份真相。
-7. 研究结论如果依赖具体版本行为，应在相关 Issue / PR 中保留版本证据；长期文档只保留仍有效的设计结论。
+7. 研究结论如果依赖具体版本行为，应在相关 Issue / PR 中保留版本证据；长期文档只保留仍有效的设计结论和必要 provenance。
 
 实际安装的直接第三方依赖和许可证只记录在根目录 [`THIRD-PARTY-NOTICES.md`](../THIRD-PARTY-NOTICES.md)。
