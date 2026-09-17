@@ -118,12 +118,12 @@ const requestOptions = ${qualificationRequestOptions.toString()};
 const stateLabels = {
   waiting: '等待 CS2',
   receiving: '正在接收比赛数据',
-  stale: '比赛数据已停止',
+  stale: '比赛数据已过期',
   ready: '可以导出结果',
 };
 const checkLabels = {
   productionChain: '第一场数据已进入正式处理链路',
-  realSilenceToStale: '停止输入后已识别为数据中断',
+  realSilenceToStale: '数据过期与退出 CS2 已分别确认',
   explicitNextExecution: '下一场从新的地图执行开始',
   demoBRecovery: '第二场已恢复且无上一场残留',
   captureIntegrity: '采集记录完整且可验证',
@@ -279,7 +279,7 @@ export function qualificationPageHtml(controlToken: string): string {
       <header class="qualification-header">
         <p class="qualification-kicker">RivalHub Broadcast / 现场验收</p>
         <h1>让真实比赛<br />自己作证。</h1>
-        <p>这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并观察数据停止，再开始下一场，验证第二场从干净状态恢复。</p>
+        <p>这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。</p>
       </header>
 
       <section class="qualification-signal" aria-live="polite">
@@ -290,7 +290,7 @@ export function qualificationPageHtml(controlToken: string): string {
 
       <section class="qualification-flow" aria-label="现场验收流程">
         <article class="qualification-step" data-step="a"><span class="qualification-step__index">01 / 第一场</span><h2>播放 Demo A</h2><p>等页面显示正在接收比赛数据后，确认第一场正常。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
-        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>退出 CS2</h2><p>在 CS2 中执行 quit；页面会自动确认数据停止，然后确认已退出 CS2。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
+        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>退出 CS2</h2><p>在 CS2 中执行 quit；页面会自动识别一段时间未收到新数据，随后由你确认已经退出 CS2。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="next"><span class="qualification-step__index">03 / 下一场</span><h2>准备下一场</h2><p>点击一次，准备接收下一场比赛。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="b"><span class="qualification-step__index">04 / 第二场</span><h2>播放 Demo B</h2><p>重新打开 CS2，确认第二场没有上一场残留。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
       </section>
