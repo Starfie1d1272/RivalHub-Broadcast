@@ -1,0 +1,57 @@
+name: PR40 文档措辞收口
+
+on:
+  pull_request:
+    types: [reopened]
+
+permissions:
+  contents: write
+
+jobs:
+  cleanup:
+    if: ${{ github.event.pull_request.number == 40 && github.event.pull_request.head.repo.full_name == github.repository }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+
+      - name: 收口中文优先表述
+        shell: python
+        run: |
+          from pathlib import Path
+
+          validation = Path('docs/development-validation.md')
+          text = validation.read_text()
+          old = '''Issue #32 的 production Local Web Host 属于本层：同一 Fastify instance 提供 Vite static
+          assets 与 Local Protocol V1 WebSocket，普通浏览器、Vite dev proxy 和未来 OBS Browser
+          Source 都复用当前 page Origin 推导出的 `ws:`/`wss:` URL。自动化验证应覆盖 static route、
+          subprotocol/Origin policy、baseline/reconnect、publisher latest-wins、buffer guard、
+          heartbeat 与 shutdown cleanup；这些测试不需要真实 CS2 或 OBS。`pnpm build` 后还必须运行
+          `pnpm local-web:production-smoke`，直接消费真实 `apps/web/dist`，验证 `/program` 返回实际
+          Vite HTML、hashed asset 可访问，以及 Program WebSocket 能 upgrade 并发送 baseline；不能用
+          Vitest 内部另行构建来替代这一 post-build 组合 smoke。
+          '''
+          new = '''Issue #32 的生产本地网页服务属于本层：同一 Fastify 实例提供 Vite 静态资源与 Local Protocol V1 WebSocket。普通浏览器、Vite 开发代理和未来 OBS Browser Source 都从当前页面 Origin 推导 `ws:`/`wss:` 地址。自动化验证应覆盖静态路由、子协议与 Origin 策略、初始状态与重连、发布端只保留最新状态（latest-wins）、缓冲区保护、心跳与关闭清理；这些测试不需要真实 CS2 或 OBS。`pnpm build` 后还必须运行 `pnpm local-web:production-smoke`，直接消费真实 `apps/web/dist`，验证 `/program` 返回实际 Vite HTML、带哈希的资源可访问，以及 Program WebSocket 能完成升级连接并发送初始状态；不能用 Vitest 内部另行构建来替代这一构建后组合冒烟检查。
+          '''
+          old = old.replace('          ', '')
+          new = new.replace('          ', '')
+          if old not in text:
+              raise SystemExit('Issue #32 validation wording anchor missing')
+          text = text.replace(old, new, 1)
+          text = text.replace('因此 #32 的 Real-environment acceptance gate 为 `Not required`。真实 Windows + CS2 + OBS\nBrowser Source 的 reload、长时 soak、Program/Assist capture isolation 与生产路径关闭仍由\n#35 单独验收；CI 通过不能替代该 Layer D 证据。', '因此 #32 不要求额外的真实环境验收门槛。真实 Windows + CS2 + OBS Browser Source 的重新加载、长时稳定运行、Program/Assist 捕获隔离与生产路径关闭仍由 #35 单独验收；CI 通过不能替代 Layer D 的真实证据。', 1)
+          validation.write_text(text)
+
+          references = Path('docs/references.md')
+          text = references.read_text()
+          text = text.replace('Broadcast 自有 `ProgramSnapshot` contract', 'Broadcast 自有 `ProgramSnapshot` 契约')
+          references.write_text(text)
+
+      - name: 提交文字修复
+        run: |
+          git diff --check
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/development-validation.md docs/references.md
+          git commit -m "docs: 收口 #31/#32 中文优先表述"
+          git push origin HEAD:${{ github.event.pull_request.head.ref }}
