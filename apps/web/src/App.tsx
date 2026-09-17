@@ -22,7 +22,7 @@ export const surfaceDefinitions = [
     id: 'program',
     path: '/program',
     title: '节目输出',
-    description: '透明 1920×1080 节目画布，用于承载 Program-safe 的正式节目图形。',
+    description: '透明 1920×1080 节目画布，用于承载正式节目图形。',
     realtimeChannel: 'program',
   },
   {
