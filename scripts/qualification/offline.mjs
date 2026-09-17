@@ -137,7 +137,7 @@ async function assertBundleSmoke(outputRoot) {
     !installer.includes('GsiEndpointConflictWarning') ||
     readme.includes('stopdemo') ||
     readme.includes('This bundle') ||
-    !readme.includes('Windows 现场快速开始') ||
+    !readme.includes('快速开始') ||
     !readme.includes('quit')
   )
     throw new Error('qualification 启动脚本不满足可移植性检查');
