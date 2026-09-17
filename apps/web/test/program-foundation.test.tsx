@@ -33,6 +33,7 @@ describe('Program presentation foundation', () => {
     const stale = getProgramFixture('context-stale');
     const mismatch = getProgramFixture('identity-mismatch');
     const degraded = getProgramFixture('identity-degraded');
+    const stress = getProgramFixture('stress-long-labels');
 
     expect(awaiting?.payload.status).toEqual({
       telemetry: 'awaiting',
@@ -59,6 +60,18 @@ describe('Program presentation foundation', () => {
     expect(
       degraded?.payload.players.filter((player) => player.canonicalPlayerId !== null),
     ).toHaveLength(2);
+    expect(stress?.payload.players.map((player) => player.lifeState)).toEqual([
+      'alive',
+      'alive',
+      'dead',
+      'unknown',
+      'alive',
+      'alive',
+      'alive',
+      'dead',
+      'unknown',
+      'alive',
+    ]);
   });
 
   it('keeps bomb coverage aligned with the projected bomb value', () => {

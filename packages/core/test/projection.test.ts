@@ -218,6 +218,18 @@ describe('Program-safe projections', () => {
       'weapon-a',
       'weapon-z',
     ]);
+    expect(first.players.map((item) => item.lifeState)).toEqual([
+      'alive',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+      'dead',
+    ]);
     expect(first.players[0]).not.toHaveProperty('position');
     expect(first.bomb).not.toHaveProperty('position');
     expect(first).not.toHaveProperty('lookahead');

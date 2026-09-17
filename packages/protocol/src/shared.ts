@@ -31,12 +31,14 @@ export const localSnapshotEnvelopeSchema = z.object({
   payload: z.unknown(),
 });
 
-export interface LocalSnapshotV1<TPayload> {
+export interface LocalSnapshot<TPayload, TSchemaVersion extends number> {
   readonly type: 'snapshot';
   readonly protocolVersion: typeof LOCAL_PROTOCOL_VERSION;
   readonly channel: LocalChannel;
-  readonly schemaVersion: 1;
+  readonly schemaVersion: TSchemaVersion;
   readonly channelSeq: number;
   readonly cursor: ProjectionCursor;
   readonly payload: TPayload;
 }
+
+export type LocalSnapshotV1<TPayload> = LocalSnapshot<TPayload, 1>;

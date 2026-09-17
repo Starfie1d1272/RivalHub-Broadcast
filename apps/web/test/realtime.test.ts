@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { programSnapshotSchema } from '@rivalhub-broadcast/protocol/program';
+import { PROGRAM_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
 import {
   createLocalChannelClient,
   localWebSocketUrl,
@@ -27,7 +28,7 @@ function snapshot(
     type: 'snapshot',
     protocolVersion: 1,
     channel: 'program',
-    schemaVersion: 1,
+    schemaVersion: PROGRAM_SCHEMA_VERSION,
     channelSeq,
     cursor: { ...cursor, ...cursorOverrides },
     payload: {
@@ -183,7 +184,10 @@ describe('local realtime browser client', () => {
     sockets.sockets[0]!.open();
     expect(client.getSnapshot().state).toBe('awaiting-baseline');
     sockets.sockets[0]!.message(JSON.stringify(snapshot(1)));
-    expect(client.getSnapshot()).toMatchObject({ state: 'live', current: { channelSeq: 1 } });
+    expect(client.getSnapshot()).toMatchObject({
+      state: 'live',
+      current: { channelSeq: 1, schemaVersion: PROGRAM_SCHEMA_VERSION },
+    });
     const firstSnapshot = client.getSnapshot();
     sockets.sockets[0]!.message(JSON.stringify(snapshot(1)));
     expect(client.getSnapshot()).toBe(firstSnapshot);

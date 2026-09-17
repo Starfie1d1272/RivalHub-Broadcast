@@ -1,5 +1,6 @@
 import type { IdentityResolution } from '@rivalhub-broadcast/core/identity';
 import {
+  derivePlayerLifeState,
   getProjectionIdentityState,
   getProgramSafeRuntimeFreshness,
   isProjectionIdentityCurrent,
@@ -34,14 +35,13 @@ function canonicalPlayerFor(input: RadarProjectionInput, sourcePlayerId: string)
 
 function projectRadarPlayer(input: RadarProjectionInput, player: ObservedPlayer): RadarPlayer {
   const canonical = canonicalPlayerFor(input, player.sourcePlayerId);
-  const health = player.state?.health;
   return {
     sourcePlayerId: player.sourcePlayerId,
     canonicalPlayerId: canonical?.canonicalPlayerId ?? null,
     displayName: canonical?.displayName ?? player.displayName ?? null,
     side: player.side ?? 'unknown',
     observerSlot: player.observerSlot ?? null,
-    lifeState: health === undefined ? 'unknown' : health > 0 ? 'alive' : 'dead',
+    lifeState: derivePlayerLifeState(player.state?.health),
     position: player.position ?? null,
     forward: player.forward ?? null,
   };

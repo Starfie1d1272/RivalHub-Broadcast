@@ -5,12 +5,14 @@ export {
 } from './program-safe-runtime.js';
 export { projectObserverAssist } from './observer-assist.js';
 export { projectProgram } from './program.js';
+export { derivePlayerLifeState } from './player-life-state.js';
 export {
   getProjectionIdentityCapabilities,
   getProjectionIdentityState,
   isProjectionIdentityCurrent,
 } from './identity.js';
 export type { ProjectionCursor } from './cursor.js';
+export type { PlayerLifeState } from './player-life-state.js';
 export type {
   ProgramSafeRuntimeFreshness,
   ProgramSafeRuntimeView,
