@@ -22,14 +22,14 @@ export const surfaceDefinitions = [
     id: 'program',
     path: '/program',
     title: '节目输出',
-    description: '透明 1920×1080 节目画布；比赛 HUD 与雷达界面将在后续阶段接入。',
+    description: '透明 1920×1080 节目画布，用于承载 Program-safe 的正式节目图形。',
     realtimeChannel: 'program',
   },
   {
     id: 'operator',
     path: '/operator',
     title: '导播控制',
-    description: '导播控制占位页面。正式运行控制属于后续阶段。',
+    description: '本地导播控制入口；当前提供实时通道与运行状态基础。',
     realtimeChannel: 'operator',
   },
   {
@@ -136,7 +136,7 @@ export function SurfacePage({ surface }: { readonly surface: SurfaceDefinition }
       {surface.realtimeChannel === null ? null : (
         <SurfaceConnectionMarker channel={surface.realtimeChannel} />
       )}
-      <p className="shell__note">实时数据通道已接入；正式比赛画面将在后续阶段实现。</p>
+      <p className="shell__note">当前页面只展示已实现的本地实时连接与基础运行能力。</p>
     </main>
   );
 }
