@@ -1,765 +1,325 @@
-# 初始架构边界
+# 系统架构
 
-> 状态：**Baseline**。本文记录已经足够明确、值得固定的架构边界。Runtime / Workspace 技术基线见 [ADR-0002](decisions/0002-runtime-workspace-technology-baseline.md)；RuntimeState、identity、delivery/backpressure 与跨仓 contract 边界见 [ADR-0003](decisions/0003-runtime-state-delivery-invariants.md)；Program / Observer Assist 隔离见 [ADR-0004](decisions/0004-program-output-and-observer-assist-isolation.md)；产品能力线、RivalHub 第一方集成与可移植性边界见 [ADR-0005](decisions/0005-product-capability-boundaries-and-portability.md)。
+本文只描述当前有效的架构边界。设计过程、实施顺序和一次性调查不进入本文。
 
-## 1. 架构目标
+## 1. 总体模型
 
-RivalHub Broadcast 是一套 local-first、**snapshot + explicit-transition driven**、capability-aware 的 CS2 Broadcast Runtime。产品上以 RivalHub 为第一方赛事集成，但架构上把 RivalHub-specific 语义限制在 adapter / contract boundary，不把主站内部类型或在线服务变成 Shared Runtime Foundation、Radar 或 Lookahead 的隐式运行前提。
-
-这里刻意不把系统概括成“所有东西都是 Event”。高频可覆盖状态以 current snapshot 为主；只有 round/map/session 等真正的边沿变化才形成明确 `RuntimeTransition`。这与后文“不要建设万能 EventJournal/event-sourcing”保持一致。
-
-架构优先级按顺序为：
-
-1. 长时间直播不积压、不越来越延迟；
-2. 官方赛事事实与本地观测严格分权；
-3. Program 与 Observer Assist future information 不发生误播/泄漏；
-4. Wrong Match / roster mismatch / stale / reconnect / restart 能安全降级；
-5. 可复现、可回放、可测试；
-6. HUD / Radar / scene / Assist 能持续扩展；
-7. 第三方能力通过 adapter/capability 接入，不污染 Core；
-8. RivalHub-first 的产品深度与 Core / Radar / Lookahead 的可移植性同时成立，不通过过早通用化换取“可移植”。
-
-### 1.1 产品能力与架构分层
-
-顶层产品结构不是三个彼此独立的系统，而是一套 Shared Runtime Foundation 上的三条 consumer capability line：
+RivalHub Broadcast 是一套本地优先、snapshot-driven 并带显式边沿转换的 CS2 制播 Runtime。
 
 ```text
-Integration / Source adapters
-  RivalHub / Program GSI / Lookahead CSTV / future enhanced telemetry
-                           │
-                           ▼
-Shared Runtime Foundation
-  normalization / continuity / identity / RuntimeState / replay / delivery
-                           │
-          ┌────────────────┼────────────────┐
-          ▼                ▼                ▼
-赛事与实时数据          正式节目制播       Observer Assist / Lookahead
-Tournament &           Program            private future cue
-Live Data              Production
+赛事上下文                    实时数据
+RivalHub / 本地配置           GSI / CSTV
+       │                         │
+       └───────┐         ┌───────┘
+               ▼         ▼
+              Adapters
+                 │
+                 ▼
+        Shared Runtime Foundation
+        ├─ continuity
+        ├─ identity
+        ├─ RuntimeState
+        ├─ RuntimeTransition
+        ├─ health / capability
+        └─ bounded delivery
+                 │
+      ┌──────────┼───────────┐
+      ▼          ▼           ▼
+正式节目      制作控制      观察辅助
+Program       Operator      Observer Assist
+HUD / Radar   Debug         Lookahead cues
 ```
 
-三条能力线分别拥有不同的输出和 authority：
+架构目标按优先级为：
 
-- **赛事与实时数据**：把 canonical tournament context 与 realtime observation 连接起来，向 RivalHub 产生 ReliableObservation / BroadcastLiveSnapshot 等版本化输出；
-- **正式节目制播**：从 Program-safe runtime slice 构造 HUD / Radar / scenes / OBS Program；
-- **Observer Assist / Lookahead**：从 Assist-private evidence + Program-safe timing/context 构造本机 future cue。
+1. 长时间运行不积压旧状态；
+2. 官方赛事事实与本地 observation 严格分权；
+3. Program 与 Assist 的数据边界默认安全；
+4. 错场、断流、重连和重启可以明确降级；
+5. 输入可 capture、可 replay、可测试；
+6. Presentation 可以持续演进而不反向污染 Core。
 
-Shared Runtime Foundation 拥有 continuity / identity / RuntimeState / transitions / health / capability / capture/replay / bounded delivery 等公共语义。产品能力线不能各自复制一套 session、map epoch 或 identity truth。
+## 2. Authority 与数据 ownership
 
-RivalHub 是当前默认且最完整的赛事 context provider，但依赖方向固定为 `adapter → Broadcast-owned domain → consumer projection`。如果未来出现第二个 provider、独立 Assist 发行或其它赛事 context source，应优先新增 adapter，而不是改写 Core ownership。
+### 2.1 赛事上下文提供方
 
-当前不因此拆仓库、不建设通用电竞协议或 plugin framework；物理拆分必须由第二个真实 consumer/provider 或独立发行需求证明。
+RivalHub 连接模式下，RivalHub 拥有官方比赛、队伍、名单、BP、赛程和赛果等赛事事实。独立模式可以提供同形的本地比赛上下文，但不会改变 Runtime ownership。两种模式的长期产品边界见 ADR-0006。
 
-## 2. 四个 Plane
+Broadcast 不直接读取或写入 RivalHub 数据库，也不导入 RivalHub 页面或内部 domain 类型。
 
-```text
-Official Plane
-  RivalHub Match / Roster / BP / Schedule / Result
-                    │
-                    ▼
-Telemetry Plane
-  Delayed Program GSI required
-  no-delay Lookahead / server events / HLAE optional
-                    │
-                    ▼
-Broadcast Core
-  session / identity / runtime state / transitions / accumulators / scene policy
-                    │
-          ┌─────────┴──────────┐
-          ▼                    ▼
-Presentation Plane         Uplink Plane
-Program / Operator         ReliableObservation → #610
-Observer Assist / Debug    BroadcastLiveSnapshot → #615
-Radar / HUD / scenes
-```
+### 2.2 Broadcast
 
-这四个 Plane 描述 authority / data-flow，不与上一节三条产品能力线一一对应：赛事与实时数据主要跨 Official / Core / Uplink，正式节目制播主要跨 Telemetry / Core / Presentation，Observer Assist 则在独立 Lookahead input 与 Assist-private presentation 之间工作。
+Broadcast 拥有：
 
-Delayed Program feed 与 no-delay Lookahead feed **不是两个对等 Program source**。Lookahead 只拥有 advisory 资格，不拥有 Program fallback 资格。
+- 实时数据 ingress 与 normalization；
+- source continuity；
+- 本地比赛绑定与 identity state；
+- `RuntimeState` 与 `RuntimeTransition`；
+- HUD、Radar、场景和制作控制所需 Projection；
+- Lookahead alignment 与 Observer Assist；
+- 本地 diagnostics、capture 与 replay；
+- Local Protocol 与 delivery semantics。
 
-## 3. 权威边界
+### 2.3 赛后证据
 
-### RivalHub
+DAK、OCR 或其它赛后来源属于 evidence / reconciliation 链，不进入低延迟 Program 主循环。
 
-拥有长期官方事实：
+核心原则：
 
-- Match identity / lifecycle；
-- CompetitionEntry；
-- EventRoster / MatchRoster；
-- canonical BP；
-- schedule / `scheduledAt` / canonical `startedAt`；
-- coverage / commentator assignment；
-- official map/series result；
-- Stage / Bracket progression；
-- 对外 BroadcastManifest / ingest API 的服务端语义与校验。
+> Broadcast 可以产生 observation；official fact 由对应赛事 authority 决定。
 
-RivalHub #610 的 canonical lifecycle 不依赖 Broadcast/GSI。完整 BP、可信 Broadcast observation、人工赛务等路径最终由 #610 汇入同一 canonical command/service。
-
-### Broadcast
-
-拥有本地运行态：
-
-- telemetry ingress；
-- normalized observation；
-- live session / producer instance / map execution continuity；
-- RuntimeState；
-- Program / Observer Assist / Operator / Debug projection；
-- HUD / Radar；
-- scene / presentation control；
-- provisional stats；
-- lookahead alignment / Assist cue；
-- local diagnostics / cache / replay；
-- 发送给 RivalHub 的 observation / live snapshot producer payload。
-
-### DAK / OCR
-
-负责赛后 evidence 和更高质量统计，不作为低延迟 HUD 主循环依赖。
-
-最重要的边界仍是：
-
-> **Broadcast 产生 observation；RivalHub 决定 official truth。**
-
-同时：
-
-> **no-delay Lookahead information 可以帮助人提前切镜，但不能反向成为 Program 或公共 live state。**
-
-## 4. Package ownership
+## 3. Package ownership
 
 ```text
 apps/companion
-  本地 composition root。
-  组装 HTTP、telemetry、RivalHub adapter、Core、production capture、local persistence、web output、OBS integration。
+  本地服务与 composition root。
+  组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、capture 与 qualification tooling。
 
 apps/web
-  /operator /program /debug 的 UI。
-  Observer Assist 可作为独立 route 或 desktop/topmost overlay surface 接入，但业务上不是独立用户角色。
-  第一套 Major renderer 先作为 app 内 presentation module，不急于定义独立 renderer SDK。
-
-packages/protocol
-  Broadcast-owned local wire schema / DTO / fixture contract。
-  主要服务 Companion ↔ Program / Observer Assist / Operator / Debug；不得包含产品运行时状态机。
+  Program、Operator 与 Debug 的 Web Renderer / Host。
+  不拥有 RuntimeState，也不直接解释 Raw GSI。
 
 packages/core
-  纯 TypeScript runtime/domain core：
-  RuntimeState、session/identity、transitions、accumulators、scene policy、projectors、Assist policy 所需纯逻辑。
-  禁止依赖 React、HTTP server、WebSocket 实现、OBS、RivalHub API/client/内部类型或具体 GSI/CSTV parser。
+  纯 TypeScript Runtime domain。
+  拥有 continuity、identity、RuntimeState、RuntimeTransition、accumulator、Projection。
+
+packages/protocol
+  Broadcast 自有的 Local Protocol、schema 和 acceptance rules。
+  不拥有 RuntimeState 或业务状态机。
 
 packages/telemetry-gsi
-  Raw CS2 GSI → normalized telemetry。
-  Raw GSI 类型不得泄漏出该 package。
-  source-specific block semantics 以 docs/telemetry.md 为准。
+  Raw GSI parsing、source semantics、diagnostics 和 normalization。
+  Raw GSI 类型不得越过本 package。
 
 packages/telemetry-cstv
-  Live CSTV `/sync` → `/start` → `/full` → `/delta` adapter。
-  这是唯一允许直接接触 `cs2parser` 的 package；只向 Core 输出 parser-neutral `GameEventObservation`。
-  Program 与 Lookahead 使用独立 source role、generation、sequence 与健康语义，不把 Lookahead 作为 Program fallback。
-  `cs2parser` 的第三方类型与 raw event object 不得越过本 package 的 binding/normalizer。
+  CSTV GameEvent 读取与 parser-neutral observation。
+  第三方 parser 类型不得越过本 package。
 
 packages/rivalhub
-  RivalHub 第一方 adapter：BroadcastManifest consumer、pairing/auth、#610 ReliableObservation、#615 BroadcastLiveSnapshot uplink。
-  只能通过主仓公开 versioned contract 工作，不直连 RivalHub/Supabase 表；不得反向拥有 Core / Radar / Lookahead domain contract。
+  RivalHub 公开赛事上下文 contract 的 adapter。
+  不拥有 Core / Radar / Lookahead domain。
 
 packages/radar
-  Framework-neutral Radar domain：RadarFrame、world→radar、MapGeometryProvider、floor/marker/utility semantics、interpolation/autozoom math。
-  React/SVG/Canvas/DOM renderer 与 rAF scheduling 属于 apps/web presentation。
-  可以消费 Broadcast-owned identity/display enrichment，但不能把 RivalHub package shape 变成 Radar contract。
+  framework-neutral Radar domain：RadarFrame、world→radar、MapGeometryProvider、floor、marker / utility semantics。
+  不拥有 React/SVG/Canvas/DOM，也不拥有 temporal interpolation、smoothing、autozoom/crop animation state。
 
 packages/testkit
-  capture reader、replay、simulator、fault injection、fixtures、deterministic assertions。
+  capture 读取、replay、simulation、fault injection 和 deterministic assertions。
+  不得成为 production runtime dependency。
 ```
 
-production recorder 属于 Companion/telemetry runtime，不属于 `packages/testkit`，也不得让 production runtime 反向依赖 testkit。
+依赖方向必须保持：
 
-第一套 Major renderer 留在 `apps/web` presentation 内；在出现第二个真实 renderer consumer 或独立发布需求前，不建立独立 renderer package/API boundary。
+```text
+adapter → Broadcast-owned domain → consumer Projection → Renderer / transport
+```
 
-同理，当前 Lookahead 继续作为同一 monorepo 内的能力线和 adapter/runtime seam 演进；在出现第二个真实 provider/独立发行需求前，不建立独立仓库或通用 plugin SDK。
+禁止通过 deep import、TypeScript `paths` 或共享数据库绕过 ownership。
 
-## 5. RuntimeState、Projection 与 ReliableObservation
+## 4. RuntimeState 与 Projection
 
-Core 只有一份内部 runtime aggregate，但“一份 RuntimeState”不等于一个无边界、所有 consumer 都能直接读取的万能对象。
+Core 只有一份内部 `RuntimeState`，但它不是所有消费面的万能 payload。
 
-概念上至少区分：
+概念上区分：
 
 ```text
 RuntimeState
-├─ official / match context
-├─ program-safe runtime slice
-│  ├─ normalized Program telemetry
-│  ├─ accumulators / identity / session
-│  └─ Program presentation control
-├─ assist-private runtime slice
-│  ├─ bounded Lookahead evidence
-│  ├─ timeline alignment health
-│  └─ current/scheduled Assist cue
+├─ match context
+├─ program-safe runtime data
+├─ assist-private runtime data
 └─ operational health / incidents
 ```
 
-Core 仍只有一份 domain truth；这些是同一 runtime aggregate 内的结构化 ownership，而不是 `ProgramState` / `CasterState` 等互相竞争的第二套 truth。
-
-当前状态类 consumer 通过 projector 获得自己的模型：
+不同消费面只通过自己的 Projection 获取数据：
 
 ```text
 RuntimeState
 ├─ ProgramProjection
 ├─ RadarFrame
-├─ ObserverAssistProjection
 ├─ OperatorProjection
-├─ DebugProjection
-└─ BroadcastLiveSnapshot
+├─ ObserverAssistProjection
+└─ DebugProjection
 ```
 
-### Program / Assist 是硬边界
+规则：
 
-```text
-ProgramProjection
-  允许进入正式节目 / OBS / 观众视野的信息
-  只从 program-safe input 构造
+- Projection 不能反向成为第二份 domain truth；
+- Renderer 不读取整个 RuntimeState；
+- ProgramProjection 不包含 Lookahead future 字段；
+- DebugProjection 可以更宽，但不因此成为其它消费面的数据源；
+- domain interpretation 在 Projection 结束，例如 `lifeState` 由 Core 统一推导，Renderer 不重复根据 HP 猜测。
 
-ObserverAssistProjection
-  只包含本机解说兼 OB 需要的辅助 cue
-  可以消费 program-safe timing/context + assist-private input
-  不作为 ProgramProjection 的超集
+## 5. 状态、转换、命令与事件
 
-OperatorProjection
-  match/config/health/scene/incident/recovery/uplink/OBS/alignment
+系统不使用一个万能 Event 类型承载所有语义。
 
-DebugProjection
-  raw/normalized diagnostics / timing / evidence
-```
+### 高频 Snapshot
 
-Future fields 不得先进入 ProgramProjection 再靠 CSS、route、窗口层级或 OBS visibility 隐藏。Program projector / #615 producer 应尽量通过 narrowed typed input / selector / schema boundary 实现 **safety by construction**，而不是依赖“拿到万能 state 后记得别读某字段”。
-
-`ReliableObservation` 属于边沿消息，不等价于 current-state projection：
-
-```text
-RuntimeTransition
-+ transition-time RuntimeState / context
-        ↓
-ReliableObservation candidate
-        ↓
-validation / idempotency / outbox
-```
-
-因此：
-
-- 禁止把一份巨型 RuntimeState 高频广播给所有 consumer；
-- projection 不成为第二份 domain truth；
-- ReliableObservation 必须携带/保留触发 transition 时必要的 evidence/context，不能在事后只从新的 current RuntimeState 猜已经发生的边沿事实。
-
-## 6. Program feed 与 Lookahead feed
-
-当前业务语义：
-
-```text
-Delayed Program feed
-  → CS2 observer / GSI
-  → Program HUD / Radar / scenes
-  → OBS
-  → #615 BroadcastLiveSnapshot
-
-No-delay Lookahead feed
-  → machine-only headless parser
-  → event/tick evidence
-  → timeline alignment
-  → ObserverAssistProjection
-```
-
-约束：
-
-- Lookahead feed 没有 Program eligibility；
-- Program down 不触发 Lookahead→Program fallback；
-- Lookahead down 时 Program 正常继续，只关闭/降级 Assist；
-- Perfect `...5 / ...6` 和约 120 秒只是 provider discovery/configuration fact，不进入 Core invariant；
-- wrong-match / map mismatch / alignment unhealthy 时 Assist fail closed；
-- map change / reconnect 后必须重新建立可信 alignment 才恢复 future cue。
-
-两条 ingress 具有独立连接连续性。Program GSI reconnect 和 Lookahead parser reconnect 不应被一个全局 sequence/epoch 模糊掉。每个 source 至少要在 adapter/alignment 层表达：
-
-```text
-sourceRole
-sourceInstance / sourceGeneration
-source-local seq / tick / observedAt
-sourceHealth
-```
-
-source generation 变化时，依赖该 source 的旧 alignment 立即失效；重新证明 same match / map / tick relation 后才能恢复 cue。
-
-Lookahead 核心 contract 应保持 Broadcast-owned：source acquisition 可以 provider-specific，但 timeline identity/alignment、future-event evidence 与 cue scheduling 不能以 RivalHub Web/domain implementation 作为算法前提。RivalHub 可提供 canonical roster、display、branding、lifecycle 等 enrichment 和 identity evidence。
-
-### 第一阶段 Assist
-
-基础完成条件只需要：
-
-```text
-player_death observed on Lookahead
-+ attacker / victim / event tick
-+ current Program tick
-→ target lead-time scheduling
-→ countdown + killer→victim + optional reliable location
-```
-
-不要求 engagement/story 分类、AI ranking、prediction 或自动切镜。
-
-RFC-0001 可以继续研究更丰富的 cue/transport/relay 方案，但不改变上述基础 invariant。
-
-## 7. Realtime delivery semantics
-
-### Snapshot lane
+位置、HP、金钱、时钟等使用：
 
 ```text
 latest-wins
 bounded
-droppable
+droppable / supersedable
 ```
 
-适合 HP、money、position、clock、bomb position 等高频可覆盖状态。
+旧 snapshot 没有补发价值。
 
-每个 consumer 最多保留：
+### RuntimeTransition
 
-```text
-正在发送的 snapshot
-+ 最新一个 pending snapshot
-```
+表达 Runtime 观察到的明确边沿，例如回合、地图执行或关键比赛状态变化。Transition 用于 accumulator、场景建议、diagnostics 和 ReliableObservation 派生。
 
-例如：
+### OperatorCommand
 
-```text
-sending 101
-102 arrives → pending = 102
-103 arrives → pending = 103
-101 sent    → send 103
-```
+表示制作人员的显式操作，需要 request identity 与结果。它不是 telemetry event。
 
-不得形成 `101 → 102 → 103 → ...` 的旧状态 FIFO。
+### ReliableObservation
 
-### Reliable semantics
+由 `RuntimeTransition` 与 transition-time context 派生。它不是把当前 RuntimeState 序列化后换个名字。
 
-“Event”不作为万能桶，至少区分：
+### Incident
 
-```text
-RuntimeTransition
-  round/map/bomb/session boundary
+表示错场、数据过期、序列异常、slow consumer 等运行问题，只用于 health、Operator、diagnostics 和日志。
 
-OperatorCommand
-  人对 presentation/runtime 的显式操作
+## 6. 连续性模型
 
-ReliableObservation
-  发往 RivalHub #610 的低频、高价值 observation
-
-Incident
-  wrong-match/roster-mismatch/stale/uplink/slow-consumer/alignment 等诊断状态
-```
-
-只有具备明确 consumer、可靠性和 retention 目的的消息才进入对应持久/重试机制；不建设通用 EventJournal/event-sourcing。
-
-## 8. #610 lifecycle、ObservationHealth 与 identity
-
-Broadcast/GSI 是可选 observation source；没有 telemetry 的比赛仍由 RivalHub #610 正常通过 BP + 人工逐图完成。
-
-Broadcast 的职责是产生可信 observation candidate，而不是拥有 Match lifecycle。
-
-### Start evidence
-
-```text
-canonical BP 完整保存
-→ #610 正常 start evidence
-
-trusted Broadcast 观察到 gameplay
-→ match_started ReliableObservation
-→ #610 可以承认现实 in_progress
-```
-
-如果 GSI 已开始但 BP 漏填，Broadcast 在 Operator/Admin 侧产生内部 warning；Program 不泄漏后台赛务错误。
-
-### Steam64 自动核验
-
-```text
-canonical MatchRoster / active lineup Steam64
-↕
-observed players
-```
-
-Identity 至少表达：
-
-```text
-unbound
-resolving
-matched
-degraded
-mismatch
-```
-
-Capability 由 identity、telemetry health 与 canonical context 派生。
-
-`mismatch` 的 fail-closed 精确含义：
-
-- 停止错误 Match 的 public snapshot / branding uplink；
-- 停止自动 result canonicalization eligibility；
-- 保留已经发生的 observation/evidence 供 #610 reconciliation；
-- 如果现实比赛已经可信开始，不因为 preparation/roster incident 否认 in_progress。
-
-`MatchPreparation` 与 `ObservationHealth` 是不同 projection，不压成一个 `canStart` boolean。
-
-当前 no-delay Lookahead feed 的业务 owner 是 Observer Assist。是否未来让它参与 #610 更早 observation 必须通过独立 contract 决定，不自动扩张。
-
-## 9. Session / identity / time invariant
-
-至少区分：
+至少区分四个维度：
 
 ```text
 liveSessionId
-  RivalHub Match ↔ producer session 绑定
+  一场比赛与 Broadcast producer session 的绑定
 
 producerInstanceId
-  一次 Companion process/runtime 实例
+  一次 Companion 运行实例
 
 mapEpoch
-  一次地图 execution；正式 restart/restore 需要隔离旧 observation 时改变
+  一张地图的一次实际执行
 
-runtime/uplink seq
-  在明确 producer / protocol scope 内单调递增
+sourceGeneration / source sequence
+  单个数据源自己的连接与读取连续性
 ```
 
-不要用一个模糊 `epoch` 同时代表所有 restart/reconnect 情况，也不要让 runtime/uplink `seq` 兼任某个 telemetry ingress 的 source-local sequence。
+不能用一个全局 `epoch` 或 `seq` 同时代表进程、比赛、地图和数据源。
 
-Program / Lookahead 各自的 connection generation、source-local seq/tick 属于对应 adapter/alignment continuity。单纯 Lookahead parser reconnect 不应推进 Program `mapEpoch`；真正的 map execution restart 才改变 map-level continuity。
+Program GSI 与 Lookahead CSTV 是独立 source。任一 source generation 改变时，只使依赖该 source 的连续性证明失效；Lookahead 重连不会自动推进 Program 的 `mapEpoch`。
 
-本地 timeout/staleness/interpolation 使用 monotonic clock；`observedAt` / `producedAt` / audit/log 使用 UTC wall clock。
-
-## 10. Browser reconnect
-
-Program / Operator / Debug 重连时：
+## 7. Program 与 Observer Assist 隔离
 
 ```text
-WebSocket subprotocol negotiation
-→ current liveSessionId / mapEpoch
-→ current baseline projection
-→ continue live updates
+Delayed Program source
+  → Program-safe Runtime
+  → ProgramProjection
+  → Program Renderer
+  → Program Host / OBS
 ```
-
-不重放断线期间所有历史 snapshot。
-
-Observer Assist 如果是 browser/desktop consumer，同样获取当前 alignment health + 当前 cue baseline 后继续，不重放已经过期的 future cue。
-
-当前 production local web host 已由 `apps/companion` 内的 Fastify composition root 提供：
 
 ```text
-apps/web/dist
-  ├─ /          → index.html
-  ├─ /program   → index.html
-  ├─ /operator  → index.html
-  └─ /debug     → index.html + /debug/runtime HTTP polling
-
-Local Protocol V1
-  ├─ /local/v1/program
-  ├─ /local/v1/radar
-  ├─ /local/v1/operator
-  └─ /local/v1/assist
+Lookahead source
+  → Assist-private evidence
+  → timeline alignment
+  → ObserverAssistProjection
+  → private Assist Renderer / Host
 ```
 
-静态 host 与 WebSocket adapter 仍属于 `apps/companion` 的 host/adapter 层；它们直接消费
-已有 projection publisher，不建立第二套 broker、RuntimeState 或 protocol。Browser client
-位于 `apps/web/src/realtime/`，只保存当前 channel snapshot、connection state 和 reset
-signals。默认 host 为 loopback；LAN 访问需要显式 Origin allowlist，且 transport failure
-不会改变 Runtime/domain truth。Vite dev host 通过 `/local/v1` WebSocket proxy 复用相同的
-browser URL contract。
+硬约束：
 
-## 11. Local-first 与 observation outbox
+- Lookahead 没有 Program fallback 资格；
+- Lookahead 故障只降级 Assist；
+- Program 故障不会自动切换到 Lookahead；
+- future information 不能先进入 Program 再靠 CSS、window z-order 或 OBS crop 隐藏；
+- Program 与 Assist 可以有不同 Host，但数据安全由 Projection / schema 保证。
 
-RivalHub 暂时不可达不能让已运行的 Program 立即失效。本地需要 last-known-good match context、必要节目资产和 compact recovery state。
+观察辅助可以由 transparent/topmost window 承载，也可以是 Broadcast Workspace 的私有区域；Host 技术不改变这一边界。
 
-必须区分：
-
-```text
-canonical / high-impact command
-  离线时不自动排队恢复后执行
-
-ReliableObservation
-  允许进入 bounded durable outbox
-  reconnect 后重新验证 session/epoch/revision/identity 再安全 retry
-```
-
-Outbox 必须有 idempotency、bounded retention、retry/backoff、stale invalidation 与 Operator/Debug 可见性。
-
-## 12. Scene 与 Overlay
-
-基础节目状态使用 `BaseScene`：
-
-```text
-Waiting
-Matchup
-VetoPlayback
-Gameplay
-Halftime
-MapResult
-InterMap
-MatchResult
-Break
-Emergency
-```
-
-临时节目反馈使用 `OverlayCue`，例如：
-
-```text
-Clutch
-Ace
-MultiKill
-DamageFeedback
-BombUrgency
-Timeout
-TechnicalWarning
-```
-
-`TechnicalPause` 可以按节目需要成为 Gameplay overlay 或独立完整画面，不在 Core enum 中提前锁死唯一视觉实现。
-
-Scene policy 维护：
-
-```text
-suggestedScene
-activeScene
-mode = auto | manual
-```
-
-自动逻辑不能覆盖 operator 的 manual scene；`suggestedScene` 应基于稳定后的 transition/state policy，而不是一次 GSI frame 直接跳场景。
-
-Observer Assist cue 不等价于 Program OverlayCue；future kill cue 不进入 Program scene graph。
-
-## 13. Radar 边界
+## 8. Radar 边界
 
 `packages/radar` 拥有：
 
-```text
-RadarFrame / projection
-world → radar transform
-MapGeometryProvider
-floor selection
-marker / utility semantics
-interpolation / autozoom math
-```
+- `RadarFrame`；
+- world → radar 坐标变换；
+- `MapGeometryProvider`；
+- floor selection；
+- marker / utility semantics；
+- 与时间无关、可确定性验证的几何和 domain 计算。
 
-`apps/web` presentation 拥有：
+`apps/web` 的 Radar Renderer 拥有：
 
-```text
-React / SVG / Canvas / DOM renderer
-CSS/theme
-requestAnimationFrame scheduling
-OBS/browser-specific rendering
-```
+- React / SVG / Canvas / DOM；
+- CSS 和 theme；
+- `requestAnimationFrame` scheduling；
+- temporal interpolation / smoothing；
+- teleport / discontinuity reset；
+- autozoom / crop 的 presentation state 与动画；
+- OBS / browser Host 的 rendering adaptation。
 
-当前默认 `MapGeometryProvider` 使用 `packages/radar` 自己持有的、显式版本化的 CS2 overview calibration snapshot；DAK `@cs2dak/maps` 仅作为独立交叉参考，不是 Broadcast 的 build/runtime owner。Radar 不把 DAK package shape 当成自己的 domain contract。
+地图几何作为 provider 输入 Radar domain。第三方地图包可以作为 reference 或 adapter source，但不能成为 Broadcast Radar contract 的 shape owner。
 
-Radar source snapshot 频率与浏览器渲染频率分离，使用 interpolation/presentation scheduling 平滑，而不是无界提高 transport 频率。
+## 9. Local Protocol 与 delivery
 
-## 14. Capability 原则
-
-高级能力必须声明真实可用性，例如：
+本地 WebSocket 使用独立 channel：
 
 ```text
-telemetry.gsi
-telemetry.lookahead
-telemetry.damage-source
-observer.assist
-radar.utility-timer
-bomb.damage-prediction
-observer.camera-control
-obs.control
+program
+radar
+operator
+assist
 ```
 
-Renderer/Projector 只能在 capability 成立时展示需要该数据精度的效果。
+每个 channel 有自己的 schema version、publisher 和 acceptance state。protocol version 与 channel schema version 分离，因此单个 payload 演进不要求整个 Local Protocol 同步升级。
 
-Capability 也用于可移植性降级：缺少 RivalHub avatar/branding 等 enrichment 时，可以降低 display capability；但不能把 display enrichment 缺失误判为 Program timeline、Lookahead alignment 或 Runtime continuity 失效。反之，identity 无法可靠绑定到目标 Match 时仍必须按安全边界 fail closed。
+连接建立后立即发送当前 baseline；断线重连重新取得 current baseline，不补发历史 snapshot。
 
-## 15. RivalHub contract ownership 与术语
-
-Broadcast-owned local contract：
+每个 consumer 的发送状态保持常数级：
 
 ```text
-Companion ↔ Program
-Companion ↔ Observer Assist
-Companion ↔ Operator
-Companion ↔ Debug
+in-flight
++ latest pending
 ```
 
-RivalHub-owned API boundary：
+新 snapshot 覆盖旧 pending snapshot。slow consumer 不能让内存 queue 随运行时间增长。
 
-```text
-BroadcastManifest
-#610 Reliable Observation ingest
-#615 Live Snapshot ingest
-```
+## 10. 本地安全
 
-Broadcast 通过 `packages/rivalhub` 消费/生产这些公开 contract，可使用 machine-readable schema、generated/local validator 和 compatibility fixture，但不 import RivalHub 源码类型。
-
-`BroadcastManifest` 的 consumer 需求至少包括：
-
-```text
-schemaVersion / revision / updatedAt
-season / stage / match identity
-format / scheduledAt / startedAt / canonical status
-CompetitionEntry display / logo
-MatchRoster / Steam64 / player display / avatar
-map pool / canonical BP
-canonical map / result state
-coverage / commentator / stream context
-branding / sponsor metadata
-```
-
-只下发制播 whitelist facts，不携带 email、教育材料、内部审核记录等无关 PII。
-
-读路径与写路径分阶段，但不等到 uplink 阶段才第一次验证真实赛事上下文：
-
-```text
-M2
-  冻结 BroadcastManifest consumer schema / validator / same-shape fixture
-
-M3
-  用真实 read-only Manifest + last-known-good cache 跑完整 Program workflow
-
-M4
-  pairing/auth hardening
-  ReliableObservation / BroadcastLiveSnapshot write path
-  outbox / security / re-auth
-```
-
-这样可以在 scene/HUD/Radar 仍可调整时尽早暴露真实 Match/Roster/BP/Branding contract 问题，同时把高风险写路径留到本地 runtime 稳定以后。
-
-术语固定：
-
-```text
-BroadcastLiveSnapshot
-  Broadcast → #615 producer payload
-  只来自 Delayed Program timeline
-
-EphemeralLiveProjection
-  #615 在 RivalHub 服务端维护的实时投影
-
-PublicLiveMatchProjection
-  公共 Match 页面消费的 read model
-```
-
-no-delay Lookahead future state 不进入 `BroadcastLiveSnapshot`。
-
-公开 Match 页面、SSE/WebSocket/Realtime/REST 或未来其它数据分发属于 RivalHub / 对应云端服务 owner；Broadcast Companion 只拥有安全、标准化的 producer contract，不直接承担公网 data-provider 职责。
-
-## 16. Local security baseline
-
-默认：
+默认网络边界：
 
 ```text
 bind = 127.0.0.1
-LAN = explicit opt-in
 ```
 
-并保持：
+非 loopback 监听必须显式开启，并配置精确 Origin allowlist。
+
+凭据分离：
 
 ```text
 GSI token
-!= local operator credential
+!= local control credential
 != RivalHub producer credential
 ```
 
-进入 pairing/LAN/uplink 前必须补齐 Origin/session/protocol validation、scoped credential、log/fixture redaction 等安全措施。不得为了局域网访问直接无保护暴露 `0.0.0.0`。
+Local WebSocket 校验 Origin 与 subprotocol；只读 snapshot channel 不接受浏览器业务消息。日志、fixture 和导出文件不得包含不必要的 token 或个人数据。
 
-Lookahead CSTV/playcast URL、token 等可能属于赛事凭据，不能进入公开 fixture/log。
+## 11. Capture、Replay 与测试
 
-## 17. Renderer、浏览器与 OBS 边界
-
-Renderer 消费 consumer-specific normalized projection，不消费 Raw GSI，不直接调用 RivalHub API。
-
-Program V1 渲染器使用 1920×1080 逻辑画布；Web 测试场景直接消费带版本的 `ProgramSnapshot`；响应式布局与宿主缩放只负责显示适配，不属于渲染器的领域事实。
-
-React 负责 scene composition、结构布局与低频 UI；Radar marker、utility movement 等高频动画使用适合的 rAF/imperative hot path，避免把每个 GSI tick 等价为整棵 React rerender。
-
-OBS Browser Source 的 CEF 版本不能假定与 Chrome Stable 同步。较新 Web API 必须 feature-detect/fallback；真实 OBS 是 `/program` 的生产验收环境。
-
-官方 OBS Program preset 是 production integration：
+真实输入通过 production ingress 同时进入 capture 与 Runtime processing：
 
 ```text
-RivalHub Program Scene
-├─ CS2 Program Capture（Delayed GOTV）
-├─ /program Browser Source
-└─ Program-safe assets
+Raw input
+├─→ bounded Capture Recorder
+└─→ production adapter → Runtime
 ```
 
-不得包含 Observer Assist surface/window。
+capture 写盘失败不能阻塞 GSI request hot path。`packages/testkit` 消费保存的输入进行 replay、加速、drop、duplicate、reorder、disconnect 和 slow-consumer 测试。
 
-`obs-websocket` 或等价 control channel 可以负责 preset 创建/校验/修复和未来可选 scene control，但控制通道断开后现有 `/program` Browser Source 必须继续工作。深度 auto-director / 复杂 orchestration 继续后置。
+真实 production evidence 优先于 synthetic fixture；fixture 用于可重复边界条件，不用于证明真实 CS2 source behavior。
 
-如果 Observer Assist 采用透明 topmost/click-through window，必须通过真实 Windows + OBS rehearsal 验证官方 capture path 不会把它录入 Program。
+## 12. 扩展规则
 
-## 18. Runtime / Workspace 技术基线
+新增能力优先使用现有 owner：
 
-详见 [ADR-0002](decisions/0002-runtime-workspace-technology-baseline.md)。当前选择：
+- 新赛事上下文来源 → adapter；
+- 新 CSTV / telemetry provider → source adapter；
+- 新显示形态 → 现有 Projection 的新 Host / Renderer；
+- 新节目数据 → 先判断是否属于 Core、Radar、Program 或 Assist；
+- 新可靠上行 → 独立 reliable message，不把 snapshot 改成 FIFO。
 
-```text
-Runtime           Node.js 24.x LTS
-Language          TypeScript 7 / ESM-only
-Workspace         pnpm 12 native workspace + catalog
-Web               React 19 stable line + Vite 8
-Local HTTP        Fastify 5
-Local WebSocket   ws 8
-Wire validation   Zod 4
-Tests             Vitest 5 + Playwright 1.63 + testkit replay
-```
-
-版本原则：
-
-- 初始化与常规升级优先 stable release；
-- `package.json` / lockfile 固定实际精确版本；
-- 同一已选技术路线内的兼容 patch/minor 升级通过正常 dependency PR + replay/build/visual checks，不需要新 ADR；
-- runtime major、framework major 或带来架构语义变化的升级才需要重新决策；
-- Node production line 优先 LTS，并以真实 Windows/OBS soak 作为升级 gate。
-
-补充 invariant：
-
-- Shared package 默认构建为普通 ESM JS + `.d.ts`，不直接导出 `src/*.ts`；
-- Shared library 默认不 bundle；Web production output 由 Vite/Rolldown bundle；
-- Node package 使用 `nodenext` module resolution，Web 使用 bundler resolution；
-- production 不依赖 Node type stripping 直接执行完整 TypeScript 应用；
-- 初版不引入 Turborepo/Nx；只有真实 CI profiling 证明需要时再增加；
-- Fastify、`ws`、React、具体 GSI/CSTV parser、OBS client 都属于 adapter/presentation，不得进入 `packages/core`。
-
-## 19. 可执行依赖护栏
-
-仓库提供 `pnpm architecture:check`，把本文件和 ADR 中已经稳定的 negative invariant 转成可执行契约。它负责检查 shared package 的 `dist`/ESM/declaration exports、workspace `workspace:` protocol、显式 workspace dependency、runtime dependency cycle、TypeScript `paths`，以及 Core、Protocol、Radar、Web、RivalHub 的高置信度 forbidden ownership boundary。
-
-`scripts/architecture/policy.mjs` 是 checker 与 ESLint direct-import fast feedback 共享的机器规则来源；checker 还会解析 static import、re-export、dynamic import、`require` 与 type-only edge。该 guard 不冻结完整 positive dependency matrix，也不替代后续真实 runtime/protocol ADR。发现冲突时应先修正真实 owner 或更新决策，不通过 baseline、known-violation 或 wildcard ignore 压制结果。
-
-Program/Assist isolation 的语义优先通过 contract/fixture/projector tests 与真实 OBS acceptance；只有出现高置信静态依赖规则时再加入 architecture checker，避免用依赖图伪装运行时数据隔离测试。
-
-ADR-0005 增加的“RivalHub-first 但不反向锁定 Core/Radar/Lookahead”原则同样优先落实为清晰 package ownership、contract tests 和真实 standalone/local fixture；只有高置信 forbidden dependency 出现时才把对应规则加入 architecture checker，不提前冻结完整插件式依赖矩阵。
-
-## 20. 当前尚未冻结的事项
-
-以下内容仍需要实现 spike 或后续 ADR：
-
-- `BroadcastManifest` / ReliableObservation / BroadcastLiveSnapshot 精确字段；
-- desktop/portable host 与最终 packaging；
-- RivalHub pairing / credential storage；
-- cloud live uplink rate；
-- Radar asset 来源与生成流程；
-- #30 之外的 geometry 扩展与 custom/workshop map support；
-- GSI parser dependency 的最终选择；
-- Lookahead CSTV headless parser / alignment implementation 的最终选择；
-- Observer Assist 是 browser route、透明 desktop window 还是其它 shell integration；
-- Electron / Tauri / ordinary launcher / portable bundle 的 packaging 决策；
-- Enhanced telemetry 与 server plugin 的范围；
-- BombDamageProvider；
-- OBS 深度 scene orchestration / auto-director；
-- 第三方 HUD compatibility；
-- 是否以及何时出现独立 Lookahead/数据产品 packaging；
-- 第二个 tournament context provider / CSTV provider 的具体 adapter。
-
-以下内容已经不再属于“是否要做”的开放问题：
-
-- 当前真实现场角色是单人解说兼 OB；
-- RivalHub 是第一方 canonical tournament integration，但 Shared Runtime / Radar / Lookahead 不 import RivalHub 内部实现；
-- 产品按“赛事与实时数据 / 正式节目制播 / Observer Assist”三条能力线组织，共享一套 Runtime Foundation；
-- Delayed Program feed 是唯一 Program timeline；
-- no-delay Lookahead feed 是 machine-only Assist input，不具备 Program fallback eligibility；
-- Observer Assist future information 与 Program/#615/OBS 必须硬隔离；
-- 第一阶段 Assist 以确定性 future kill cue 为目标，不要求 engagement/AI/auto TAKE；
-- 官方 OBS Program preset 不包含 Observer Assist，并需要一键配置/校验能力；
-- 当前不因未来可移植/商业化可能性拆仓库、建设通用电竞协议或 plugin framework。
-
-这些事项在有足够证据前不得因为“参考项目这样做”而自动成为仓库约定。
+只有出现第二个真实 consumer、真实 provider 或独立发行需求，并且现有边界造成明确摩擦时，才增加新的 public abstraction 或物理拆分。

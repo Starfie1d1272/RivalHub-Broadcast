@@ -118,8 +118,15 @@ const requestOptions = ${qualificationRequestOptions.toString()};
 const stateLabels = {
   waiting: '等待 CS2',
   receiving: '正在接收比赛数据',
-  stale: '比赛数据已停止',
+  stale: '比赛数据已过期',
   ready: '可以导出结果',
+};
+const checkLabels = {
+  productionChain: '第一场数据已进入正式处理链路',
+  realSilenceToStale: '数据过期与退出 CS2 已分别确认',
+  explicitNextExecution: '下一场从新的地图执行开始',
+  demoBRecovery: '第二场已恢复且无上一场残留',
+  captureIntegrity: '采集记录完整且可验证',
 };
 const flow = [
   { id: 'a', markers: ['demo-a-live'] },
@@ -142,7 +149,7 @@ function escapeHtml(value) {
 async function call(path, method = 'GET', body) {
   const response = await fetch(path, requestOptions(method, body));
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || 'Companion 请求失败');
+  if (!response.ok) throw new Error(data.message || '本地制播服务请求失败');
   return data;
 }
 
@@ -150,14 +157,18 @@ function checkStatus(status) {
   return status === 'PASS' ? '已通过' : status === 'FAIL' ? '失败' : '待确认';
 }
 
+function resultLabel(value) {
+  return value === 'PASS' ? '通过' : value === 'FAIL' ? '失败' : '证据不足';
+}
+
 function render(data) {
   if (finalizationComplete) return;
   stateText.textContent = stateLabels[data.state] || '正在读取状态';
   signal.dataset.tone = data.state === 'receiving' || data.state === 'ready' ? 'good' : 'neutral';
-  result.textContent = data.result === 'PASS' ? 'PASS' : data.result === 'FAIL' ? 'FAIL' : 'INCONCLUSIVE';
+  result.textContent = resultLabel(data.result);
   result.dataset.tone = data.result.toLowerCase();
   checks.innerHTML = Object.entries(data.checks).map(([key, check]) =>
-    '<div class="qualification-check" data-status="' + escapeHtml(check.status) + '"><dt>' + escapeHtml(check.label) + '</dt><dd>' + escapeHtml(checkStatus(check.status)) + '</dd></div>'
+    '<div class="qualification-check" data-status="' + escapeHtml(check.status) + '"><dt>' + escapeHtml(checkLabels[key] || check.label) + '</dt><dd>' + escapeHtml(checkStatus(check.status)) + '</dd></div>'
   ).join('');
   for (const step of flow) {
     const card = document.querySelector('[data-step="' + step.id + '"]');
@@ -180,7 +191,7 @@ async function refresh() {
   try {
     render(await call('/qualification/status'));
   } catch (error) {
-    stateText.textContent = '无法连接 Companion';
+    stateText.textContent = '无法连接本地制播服务';
     message.textContent = error.message;
     signal.dataset.tone = 'neutral';
   }
@@ -193,7 +204,7 @@ function renderFinalization(data) {
     data.result === 'PASS' && data.verification === 'passed' && data.cleanup !== 'failed'
       ? 'good'
       : 'neutral';
-  result.textContent = data.result === 'PASS' ? 'PASS' : data.result === 'FAIL' ? 'FAIL' : 'INCONCLUSIVE';
+  result.textContent = resultLabel(data.result);
   result.dataset.tone = String(data.result || 'INCONCLUSIVE').toLowerCase();
   buttons.forEach((button) => { button.disabled = true; });
   const reportPath = data.reportPath || 'evidence/<runId>/REPORT.md';
@@ -206,12 +217,12 @@ function renderFinalization(data) {
   const diagnostics = data.verification === 'passed' || !data.diagnosticsPath
     ? ''
     : '诊断日志：' + data.diagnosticsPath;
-  message.textContent = '核心验收：' + data.result + ' · ' + verification + ' · ' + cleanup + ' · 报告：' + reportPath + (diagnostics ? ' · ' + diagnostics : '');
+  message.textContent = '核心验收：' + resultLabel(data.result) + ' · ' + verification + ' · ' + cleanup + ' · 报告：' + reportPath + (diagnostics ? ' · ' + diagnostics : '');
 }
 
 async function waitForFinalization() {
   const deadline = Date.now() + 60000;
-  message.textContent = 'Companion 正在完成 recorder；页面会自动显示最终结果。';
+  message.textContent = '正在整理采集记录并生成最终验收结果。';
   while (Date.now() < deadline) {
     try {
       const data = await call('/qualification/finalization');
@@ -220,11 +231,11 @@ async function waitForFinalization() {
         void call('/qualification/finalization/ack', 'POST').catch(() => {});
         return;
       }
-      message.textContent = '正在生成 evidence，请稍候。';
+      message.textContent = '正在生成验收证据，请稍候。';
     } catch {}
     await new Promise((resolve) => window.setTimeout(resolve, 500));
   }
-  message.textContent = '等待最终 evidence 超时；请在 bundle 的 evidence 目录检查日志。';
+  message.textContent = '等待最终验收证据超时；请在验收包的 evidence 目录检查日志。';
 }
 
 async function act(path, method = 'POST', body) {
@@ -260,26 +271,26 @@ export function qualificationPageHtml(controlToken: string): string {
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
-    <title>Qualification 验收 · RivalHub Broadcast</title>
+    <title>现场验收 · RivalHub Broadcast</title>
     <style>${PAGE_STYLE}</style>
   </head>
   <body>
     <main class="qualification-shell">
       <header class="qualification-header">
-        <p class="qualification-kicker">RivalHub Broadcast / M1 验收</p>
+        <p class="qualification-kicker">RivalHub Broadcast / 现场验收</p>
         <h1>让真实比赛<br />自己作证。</h1>
-        <p>这个页面只服务一次连续的 Demo 验收：启动 Broadcast，观察数据停止，开始下一场，再确认新的比赛从干净状态恢复。</p>
+        <p>这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。</p>
       </header>
 
       <section class="qualification-signal" aria-live="polite">
         <span class="qualification-signal__dot" aria-hidden="true"></span>
-        <span class="qualification-signal__label">Companion 当前状态</span>
+        <span class="qualification-signal__label">本地制播服务状态</span>
         <strong class="qualification-signal__state" id="qualification-state">正在读取状态</strong>
       </section>
 
-      <section class="qualification-flow" aria-label="Qualification 验收流程">
+      <section class="qualification-flow" aria-label="现场验收流程">
         <article class="qualification-step" data-step="a"><span class="qualification-step__index">01 / 第一场</span><h2>播放 Demo A</h2><p>等页面显示正在接收比赛数据后，确认第一场正常。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
-        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>退出 CS2</h2><p>在 CS2 中执行 quit；页面会自动确认数据停止，然后确认已退出 CS2。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
+        <article class="qualification-step" data-step="stop"><span class="qualification-step__index">02 / 停止</span><h2>退出 CS2</h2><p>在 CS2 中执行 quit；页面会自动识别一段时间未收到新数据，随后由你确认已经退出 CS2。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="next"><span class="qualification-step__index">03 / 下一场</span><h2>准备下一场</h2><p>点击一次，准备接收下一场比赛。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
         <article class="qualification-step" data-step="b"><span class="qualification-step__index">04 / 第二场</span><h2>播放 Demo B</h2><p>重新打开 CS2，确认第二场没有上一场残留。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
       </section>
@@ -298,12 +309,12 @@ export function qualificationPageHtml(controlToken: string): string {
           <p class="qualification-message" id="qualification-message" aria-live="polite">页面会自动记录验收所需信息并生成报告。</p>
         </article>
         <article class="qualification-panel">
-          <h2>本次结果 <span id="qualification-result">INCONCLUSIVE</span></h2>
+          <h2>本次结果 <span id="qualification-result">证据不足</span></h2>
           <dl class="qualification-checks" id="qualification-checks"></dl>
         </article>
       </section>
 
-      <footer class="qualification-footer">本地 qualification surface · 不进入正式 Program / OBS 输出 · 结果以 evidence/REPORT.md 与 qualification.json 为准</footer>
+      <footer class="qualification-footer">本地现场验收页面 · 不进入正式节目或 OBS 输出 · 机器结果保存在 evidence/REPORT.md 与 qualification.json</footer>
     </main>
     <script>${PAGE_SCRIPT(controlToken)}</script>
   </body>

@@ -126,5 +126,5 @@ Write-JsonFile -Path $script:InstallStatePath -Value $state
 
 Write-Output "GSI 配置已安装：$cfgPath"
 Write-Output "配置指纹（SHA-256）：$fingerprint"
-Write-Output 'Token 已生成，仅保存在本地 qualification 状态中。'
+Write-Output 'GSI 令牌已生成，仅保存在本地验收状态中。'
 Write-Output '下一步：执行 start.ps1。'

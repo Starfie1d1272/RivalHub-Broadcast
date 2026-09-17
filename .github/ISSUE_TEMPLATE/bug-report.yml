@@ -1,78 +1,78 @@
-name: Bug report
-description: Reproducible defect in current implemented behavior.
+name: 缺陷报告
+description: 报告当前已实现行为中可复现的缺陷。
 title: "[Bug] "
 body:
   - type: textarea
     id: observed
     attributes:
-      label: Observed behavior
-      description: What actually happened?
+      label: 实际行为
+      description: 实际发生了什么？
     validations:
       required: true
 
   - type: textarea
     id: expected
     attributes:
-      label: Expected behavior
-      description: What should have happened instead?
+      label: 预期行为
+      description: 正确情况下应发生什么？
     validations:
       required: true
 
   - type: textarea
     id: reproduce
     attributes:
-      label: Reproduction
-      description: Minimal reproducible steps, fixture/replay, logs, screenshots, or runtime context.
+      label: 复现方式
+      description: 给出最小复现步骤、测试样例、重放、日志、截图或运行上下文。
     validations:
       required: true
 
   - type: dropdown
     id: environment
     attributes:
-      label: Environment
-      description: Where was the defect observed?
+      label: 发生环境
+      description: 缺陷在哪个环境中观察到？
       options:
-        - macOS development
+        - macOS 开发环境
         - GitHub Actions macOS
         - GitHub Actions Windows
-        - Real Windows
+        - 真实 Windows
         - Windows + CS2
         - Windows + OBS
         - Windows + CS2 + OBS
-        - Other / unknown
+        - 其它 / 未知
     validations:
       required: true
 
   - type: textarea
     id: environment_details
     attributes:
-      label: Environment details
-      description: OS version, CS2 build, OBS version, Browser Source context, commit SHA, runtime versions, or other relevant details.
+      label: 环境详情
+      description: OS、CS2、OBS、Browser Source、commit SHA、运行时版本等相关信息。
 
   - type: textarea
     id: impact
     attributes:
-      label: Impact
-      description: User-facing, production, correctness, latency or reliability impact.
+      label: 影响
+      description: 说明对用户、生产正确性、延迟或可靠性的影响。
     validations:
       required: true
 
   - type: textarea
     id: evidence
     attributes:
-      label: Evidence
-      description: Relevant logs, session/epoch information, fixture names, commit SHA, screenshots, capture notes, etc.
+      label: 证据
+      description: 相关日志、会话/地图执行信息、测试样例、commit SHA、截图或采集说明。
 
   - type: textarea
     id: invariants
     attributes:
-      label: Relevant invariants / suspected boundary
-      description: If known, cite the affected ADR/package/lane. Do not guess if evidence is insufficient.
+      label: 相关不变量 / 疑似边界
+      description: 如已知，请引用相关 ADR、package 或数据通道；证据不足时不要猜测。
 
   - type: textarea
     id: validation
     attributes:
-      label: Fix acceptance
-      description: What regression test/replay and, if needed, real-environment evidence proves the bug is fixed?
+      label: 修复验收
+      description: 什么回归测试、重放或真实环境证据可以证明问题已修复？
     validations:
       required: true

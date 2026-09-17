@@ -171,46 +171,46 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     finalFresh(finalRuntime);
   const checks = {
     productionChain: {
-      label: '第一场数据进入生产链路',
+      label: '第一场数据进入制播数据链路（production chain）',
       status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: productionChainPassed
-        ? 'Demo A marker 已绑定 reset 前同一 execution 的 accepted Capture V1 frame。'
-        : '缺少与 Demo A marker 同一 execution、同一 sequence/timestamp 的 Capture V1 frame。',
+        ? 'Demo A 场景标记已绑定显式重置（reset）前同一地图执行（map execution）的已接受 Capture V1 数据帧（accepted frame）。'
+        : '缺少与 Demo A 场景标记对应、同一地图执行（map execution）和同一序列/时间戳（sequence/timestamp）的 Capture V1 数据帧。',
     },
     realSilenceToStale: {
-      label: '停止输入后进入 stale',
+      label: '停止输入后进入数据已过期状态（stale）',
       status: stopPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: stopPassed
-        ? 'Companion 在未重启的情况下观察到 stale，并在下一场 reset 前记录了退出 CS2。'
-        : '等待 Demo A 后自动进入 stale，并在下一场 reset 前确认已退出 CS2。',
+        ? '本地制播服务未重启即观察到数据已过期状态（runtime-stale），并在下一场显式重置（reset）前记录了“已确认 CS2 退出”（cs2-closed）。'
+        : '等待 Demo A 后运行状态进入数据已过期状态（stale），并在下一场显式重置（reset）前确认“已确认 CS2 退出”（cs2-closed）。',
     },
     explicitNextExecution: {
-      label: '下一场从显式新执行开始',
+      label: '下一场从显式新地图执行（map execution）开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? 'map epoch 增加、身份保持一致，且上一场 Program telemetry 已清理。'
-        : '缺少成功的 explicit reset 证据。',
+        ? 'mapEpoch 已推进、producerInstanceId 保持一致，且上一场 Program telemetry 已清理。'
+        : '缺少成功的显式下一场重置（explicit next-execution reset）证据。',
     },
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
       status: demoBRecoveryPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: demoBRecoveryPassed
-        ? 'Demo B marker 已绑定 reset 后新 execution 的 accepted frame，并恢复 fresh。'
-        : '等待 CS2 重开、reset 后新 execution 的 Demo B frame 与 fresh final runtime。',
+        ? 'Demo B 场景标记已绑定显式重置（reset）后新地图执行（map execution）的已接受数据帧（accepted frame），并恢复为数据正常（fresh）。'
+        : '等待 CS2 重开、显式重置（reset）后新地图执行（map execution）的 Demo B 数据帧，以及最终运行状态恢复正常（fresh）。',
     },
     captureIntegrity: {
-      label: 'Capture recorder 可安全导出',
+      label: 'Capture V1 完整性',
       status: captureFailed ? 'FAIL' : captureResults.length > 0 ? 'PASS' : 'INCONCLUSIVE',
       reason: captureFailed
-        ? 'Capture V1 不完整、发生丢帧或校验失败。'
+        ? 'Capture V1 不完整、存在丢失数据帧（dropped frame）或完整性校验失败。'
         : captureResults.length > 0
-          ? 'Capture V1 frame count/hash/schema 校验通过。'
-          : '没有找到已发布 Capture V1。',
+          ? 'Capture V1 数据帧数量、hash 与 schema 校验通过。'
+          : '没有找到已发布的 Capture V1。',
     },
   };
   if (artifact === undefined) {
     checks.captureIntegrity.status = 'FAIL';
-    checks.captureIntegrity.reason = '缺少 artifact identity。';
+    checks.captureIntegrity.reason = '缺少验收包身份信息（artifact identity）。';
   }
   if (
     Object.keys(checks).length !== QUALIFICATION_CHECK_KEYS.length ||

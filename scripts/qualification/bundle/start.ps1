@@ -5,14 +5,14 @@ Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$ins
 $artifact = Read-JsonFile -Path (Join-Path $script:BundleRoot 'metadata\artifact.json')
 $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
 $appPath = Join-Path $script:BundleRoot 'app'
-if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw 'bundle 内缺少 runtime\node.exe' }
-if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw 'bundle 内缺少 Companion dist\server.js' }
+if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw '验收包内缺少 runtime\node.exe' }
+if (-not (Test-Path -LiteralPath (Join-Path $appPath 'dist\server.js') -PathType Leaf)) { throw '验收包内缺少本地制播服务 dist\server.js' }
 $nodeModulesPath = Join-Path $appPath 'node_modules'
-if (-not (Test-Path -LiteralPath $nodeModulesPath -PathType Container)) { throw 'bundle 内缺少 node_modules' }
+if (-not (Test-Path -LiteralPath $nodeModulesPath -PathType Container)) { throw '验收包内缺少 node_modules' }
 $dependencyPath = Join-Path $nodeModulesPath '.pnpm\node_modules'
 
 $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue)
-if ($listeners.Count -gt 0) { throw '3000 端口已被占用；请先停止其他进程再开始 qualification' }
+if ($listeners.Count -gt 0) { throw '3000 端口已被占用；请先停止其他进程再开始现场验收' }
 
 $runId = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
 $runDir = Join-Path $script:BundleRoot "evidence\$runId"
@@ -74,7 +74,7 @@ if (Test-Path -LiteralPath $dependencyPath -PathType Container) {
 }
 
 $supervisorPath = Join-Path $script:BundleRoot 'scripts\qualification-supervisor.mjs'
-if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw 'bundle 内缺少 qualification supervisor 脚本' }
+if (-not (Test-Path -LiteralPath $supervisorPath -PathType Leaf)) { throw '验收包内缺少验收管理脚本' }
 $supervisorLogPath = Join-Path $script:QualificationStateRoot 'supervisor.log'
 $supervisorErrorPath = Join-Path $script:QualificationStateRoot 'supervisor.stderr.log'
 $quotedSupervisorPath = '"' + $supervisorPath.Replace('"', '\"') + '"'
@@ -83,7 +83,7 @@ $supervisor = Start-Process -FilePath $nodePath -ArgumentList @($quotedSuperviso
 $ready = $false
 $deadline = (Get-Date).AddSeconds(30)
 while ((Get-Date) -lt $deadline) {
-    if (-not (Test-ProcessRunning -ProcessId $supervisor.Id)) { throw "qualification supervisor 在服务就绪前退出；请查看 $supervisorErrorPath" }
+    if (-not (Test-ProcessRunning -ProcessId $supervisor.Id)) { throw "验收管理进程在服务就绪前退出；请查看 $supervisorErrorPath" }
     try {
         $health = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 2 -ErrorAction Stop
         if ($health.status -eq 'ok') { $ready = $true; break }
@@ -91,12 +91,12 @@ while ((Get-Date) -lt $deadline) {
     Start-Sleep -Milliseconds 250
 }
 $runState = Read-RunState
-if ($null -eq $runState.processId) { throw "未记录 Companion PID；请查看 $supervisorErrorPath" }
-if (-not $ready) { throw "等待 Companion 就绪超过 30 秒；请查看 $supervisorErrorPath" }
+if ($null -eq $runState.processId) { throw "未记录本地制播服务 PID；请查看 $supervisorErrorPath" }
+if (-not $ready) { throw "等待本地制播服务就绪超过 30 秒；请查看 $supervisorErrorPath" }
 $runState | Add-Member -NotePropertyName supervisorProcessId -NotePropertyValue ([int]$supervisor.Id) -Force
 Write-JsonFile -Path $script:RunStatePath -Value $runState
 
-Write-Output "Companion 正在运行（PID $([int]$runState.processId)）；supervisor PID $($supervisor.Id)"
-Write-Output '请打开 http://127.0.0.1:3000/qualification 进入现场操作页面。'
-Write-Output '页面是首选流程；Companion 退出后会完成 evidence。'
-Write-Output 'check.ps1、mark.ps1 和 stop.ps1 仍可作为自动化备用入口。'
+Write-Output "本地制播服务正在运行（PID $([int]$runState.processId)）；验收管理进程 PID $($supervisor.Id)"
+Write-Output '请打开 http://127.0.0.1:3000/qualification 进入现场验收页面。'
+Write-Output '页面是首选流程；服务退出后会自动整理并验证验收证据。'
+Write-Output 'check.ps1、mark.ps1 和 stop.ps1 可作为自动化备用入口。'

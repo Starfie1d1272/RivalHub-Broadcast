@@ -13,24 +13,30 @@ do {
     Start-Sleep -Milliseconds 500
 } while ((Get-Date) -lt $deadline)
 
-if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内 runtime 未进入 stale" }
-$companion = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
+if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内运行状态未进入已过期（stale）（数据仍未被判定为过期）" }
+$service = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
 $gsi = switch ([string]$status.gsi) {
-    'receiving' { '接收中' }
-    'silent' { '已静默' }
-    default { '尚未收到' }
+    'receiving' { '正在接收（receiving）' }
+    'silent' { '当前无新数据（silent）' }
+    default { '尚未收到数据' }
 }
 $freshness = switch ([string]$status.freshness) {
-    'fresh' { 'fresh' }
-    'stale' { 'stale' }
-    default { '等待中' }
+    'fresh' { '正常（fresh）' }
+    'stale' { '已过期（stale）' }
+    'awaiting' { '等待数据（awaiting）' }
+    default { '未知' }
 }
-$recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '失败' } else { '正常' }
-Write-Output "Companion：$companion"
+$recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '异常' } else { '正常' }
+$result = switch ([string]$status.result) {
+    'PASS' { '通过（PASS）' }
+    'FAIL' { '失败（FAIL）' }
+    default { '证据不足（INCONCLUSIVE）' }
+}
+Write-Output "本地制播服务：$service"
 Write-Output "GSI：$gsi"
-Write-Output "Runtime 新鲜度：$freshness"
-Write-Output "Map epoch：$([string]$status.mapEpoch)"
-Write-Output "Recorder 状态：$recorder"
-Write-Output "最近 accepted frame 年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
-Write-Output "当前场景：$([string]$status.lastMarker)"
-Write-Output "Qualification 结果：$([string]$status.result)"
+Write-Output "运行状态：$freshness"
+Write-Output "mapEpoch：$([string]$status.mapEpoch)"
+Write-Output "采集记录：$recorder"
+Write-Output "最近有效数据年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
+Write-Output "最近场景标记（marker）：$([string]$status.lastMarker)"
+Write-Output "现场验收结果：$result"

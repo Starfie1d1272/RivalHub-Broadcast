@@ -136,8 +136,14 @@ function escapeHtml(value) {
   });
 }
 
-function completionPage(completion) {
-  const result = escapeHtml(completion.result ?? 'INCONCLUSIVE');
+function resultLabel(result) {
+  if (result === 'PASS') return '通过（PASS）';
+  if (result === 'FAIL') return '失败（FAIL）';
+  return '证据不足（INCONCLUSIVE）';
+}
+
+export function completionPage(completion) {
+  const result = escapeHtml(resultLabel(completion.result));
   const reportPath = escapeHtml(completion.reportPath ?? 'evidence/<runId>/REPORT.md');
   const verification =
     completion.verification === 'passed' ? '核心验收证据已验证' : '核心验收证据验证失败';
@@ -148,8 +154,8 @@ function completionPage(completion) {
         ? '环境已恢复'
         : '环境恢复状态待确认';
   return `<!doctype html>
-<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>Qualification 结果</title></head>
-<body><main><h1>核心验收：${result}</h1><p>${escapeHtml(verification)}</p><p>${escapeHtml(cleanup)}</p><p>报告：<code>${reportPath}</code></p></main></body></html>`;
+<html lang="zh-CN"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>现场验收结果</title></head>
+<body><main><h1>现场验收结果：${result}</h1><p>${escapeHtml(verification)}</p><p>${escapeHtml(cleanup)}</p><p>报告：<code>${reportPath}</code></p></main></body></html>`;
 }
 
 async function listenCompletionServer({ port, controlToken, getCompletion }) {
@@ -237,7 +243,7 @@ export function markCleanupFailure(completion) {
   return {
     ...completion,
     cleanup: 'failed',
-    error: 'qualification GSI 配置恢复失败',
+    error: '现场验收 GSI 配置恢复失败',
   };
 }
 
@@ -343,9 +349,9 @@ async function main() {
       status: 'complete',
       result: 'INCONCLUSIVE',
       verification: 'failed',
-      error: 'qualification evidence 完成失败',
+      error: '验收证据完成失败',
     };
-    await appendFile(supervisorLogPath, `evidence 完成失败：${String(error)}\n`, 'utf8').catch(
+    await appendFile(supervisorLogPath, `验收证据完成失败：${String(error)}\n`, 'utf8').catch(
       () => undefined,
     );
   }
@@ -374,7 +380,7 @@ async function main() {
     } catch (error) {
       await appendFile(
         supervisorLogPath,
-        `qualification 状态清理未能安排：${String(error)}\n`,
+        `现场验收状态清理未能安排：${String(error)}\n`,
         'utf8',
       ).catch(() => undefined);
       exitCode = 1;

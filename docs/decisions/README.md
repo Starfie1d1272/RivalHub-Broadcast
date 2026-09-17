@@ -26,3 +26,16 @@ ADR 用于记录会长期约束仓库的技术/产品架构决策，避免重要
 - [`0003-runtime-state-delivery-invariants.md`](0003-runtime-state-delivery-invariants.md)：RuntimeState/projection、transition-derived ReliableObservation、session/identity、delivery/backpressure、observation outbox、Radar/scene 与跨仓 contract invariant；其中 EventJournal/泛化 Event 语义 supersede ADR-0002 决策 5 的对应旧表述，跨仓 contract ownership supersede ADR-0002 决策 6 的过宽表述。
 - [`0004-program-output-and-observer-assist-isolation.md`](0004-program-output-and-observer-assist-isolation.md)：Delayed Program timeline、machine-only Lookahead、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界。
 - [`0005-product-capability-boundaries-and-portability.md`](0005-product-capability-boundaries-and-portability.md)：三条产品能力线、Shared Runtime Foundation、RivalHub 第一方集成语义，以及 Core / Radar / Lookahead 不被第一方实现反向锁定的可移植性边界。
+- [`0006-local-independent-and-rivalhub-connected-modes.md`](0006-local-independent-and-rivalhub-connected-modes.md)：独立模式与 RivalHub 连接模式的产品边界；将校园赛、社区赛等明确为适用场景而非第三种运行模式，并冻结“RivalHub 是第一方集成但不是运行前置条件”的产品方向。
+
+## Clarification
+
+### 2026-09-17：ADR-0003 Radar ownership 用词
+
+ADR-0003 第 9 节中的 `interpolation math / autozoom math` 是早期 broad wording。按 #30 之后已经冻结的 Radar Domain / Renderer 边界，应解释为：
+
+- `packages/radar` 可以拥有 framework-neutral、deterministic、stateless 的 geometry / transform / floor / marker / utility 以及必要纯数学；
+- temporal interpolation / smoothing、teleport/discontinuity reset、autozoom/crop 的 presentation state 与 animation scheduling 属于 Web Radar Renderer；
+- React / SVG / Canvas / DOM / `requestAnimationFrame` 继续不进入 `packages/radar`。
+
+这是一条 ownership clarification，不改变 ADR-0003 的核心决定：Radar domain 与 Renderer 分离，Renderer 不成为第二份 domain truth。

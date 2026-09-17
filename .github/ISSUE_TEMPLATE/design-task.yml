@@ -1,67 +1,67 @@
-name: Design / architecture task
-description: Research and freeze a decision before implementation becomes agent-ready.
+name: 设计 / 架构任务
+description: 在进入实现前调研并冻结重要产品或技术决策。
 title: "[Design] "
 body:
   - type: textarea
     id: problem
     attributes:
-      label: Problem
-      description: What product or engineering uncertainty needs a decision?
+      label: 问题
+      description: 需要解决什么产品或工程不确定性？
     validations:
       required: true
 
   - type: textarea
     id: context
     attributes:
-      label: Context and constraints
-      description: Current product, architecture, operational and repository constraints.
+      label: 背景与约束
+      description: 当前产品、架构、运行和仓库约束是什么？
     validations:
       required: true
 
   - type: textarea
     id: evidence
     attributes:
-      label: Required evidence / research
-      description: Code, docs, reference projects, real runtime evidence or external documentation that must be reviewed.
+      label: 必要证据 / 调研
+      description: 必须检查哪些代码、文档、参考项目、真实运行证据或外部规范？
     validations:
       required: true
 
   - type: textarea
     id: questions
     attributes:
-      label: Decisions to make
-      description: Enumerate the concrete questions this issue must resolve.
+      label: 需要冻结的决策
+      description: 枚举本任务必须回答的具体问题。
     validations:
       required: true
 
   - type: textarea
     id: invariants
     attributes:
-      label: Existing invariants that must not be broken
-      description: Cite relevant ADRs/docs and authority boundaries.
+      label: 不可破坏的不变量
+      description: 引用相关 ADR、文档和权威边界。
     validations:
       required: true
 
   - type: textarea
     id: platform
     attributes:
-      label: Platform / validation implications
-      description: Does this decision affect macOS development, Windows CI, real Windows, CS2, OBS, packaging, or production acceptance? State the expected validation lane.
+      label: 平台与验收影响
+      description: 是否影响 macOS 开发、Windows CI、真实 Windows、CS2、OBS、打包或生产验收？说明验证方式。
     validations:
       required: true
 
   - type: textarea
     id: deliverable
     attributes:
-      label: Deliverable
-      description: What should be updated when the design is complete (ADR, docs, implementation-ready issue, etc.)?
+      label: 交付物
+      description: 设计完成后应更新什么，例如 ADR、长期文档或可直接执行的实现任务。
     validations:
       required: true
 
   - type: textarea
     id: exit
     attributes:
-      label: Exit criteria
-      description: What must be true before follow-up implementation can be marked agent-ready, including any platform/validation decisions?
+      label: 退出条件
+      description: 在后续实现可标记为 agent-ready 前，哪些问题必须已经得到确定答案？
     validations:
       required: true
