@@ -216,7 +216,8 @@ export class LocalWebSocketTransport {
         connectionId: id,
         reason: error.message,
       });
-      void this.cleanup(connection, 'send_failed');
+      socket.terminate();
+      void this.cleanup(connection, 'socket_error');
     });
     socket.on('close', (code, reason) => {
       void this.cleanup(connection, `close:${code}:${reason.toString()}`);
@@ -306,6 +307,7 @@ export class LocalWebSocketTransport {
         bufferedBytes: connection.socket.bufferedAmount,
       });
       connection.socket.terminate();
+      void this.cleanup(connection, 'slow_consumer_terminated');
       throw new Error('local WebSocket bufferedAmount exceeded limit');
     }
 
@@ -323,6 +325,7 @@ export class LocalWebSocketTransport {
         SNAPSHOT_TOO_LARGE_CLOSE_CODE,
         'local snapshot exceeds 256 KiB',
       );
+      void this.cleanup(connection, 'snapshot_oversize');
       throw new Error('local snapshot exceeds 256 KiB');
     }
 
@@ -347,6 +350,7 @@ export class LocalWebSocketTransport {
           bufferedBytes: connection.socket.bufferedAmount,
         });
         connection.socket.terminate();
+        void this.cleanup(connection, 'slow_consumer_terminated');
         settle(new Error('local WebSocket bufferedAmount exceeded limit'));
       }
     });
