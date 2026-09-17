@@ -182,10 +182,13 @@ export class ProgramCueClient {
     const previous = this.currentProgramSnapshot;
     this.currentProgramSnapshot = snapshot;
     if (
+      !this.disposed &&
       previous !== null &&
       (snapshot === null || !sameProgramContinuity(previous.cursor, snapshot.cursor))
     ) {
+      this.acceptance?.reset();
       this.resetEphemeral('program-snapshot-reset');
+      this.update({ state: 'awaiting-baseline', baseline: null, error: null });
     }
   }
 

@@ -65,7 +65,13 @@ function cue(
   };
 }
 
-function programSnapshot(overrides: Partial<{ producerInstanceId: string; mapEpoch: number }>) {
+function programSnapshot(
+  overrides: Partial<{
+    producerInstanceId: string;
+    mapEpoch: number;
+    programSourceGeneration: number;
+  }>,
+) {
   const snapshot = getProgramFixture('live-neutral');
   if (snapshot === null) throw new Error('fixture missing');
   return {
@@ -76,6 +82,9 @@ function programSnapshot(overrides: Partial<{ producerInstanceId: string; mapEpo
         ? {}
         : { producerInstanceId: overrides.producerInstanceId }),
       ...(overrides.mapEpoch === undefined ? {} : { mapEpoch: overrides.mapEpoch }),
+      ...(overrides.programSourceGeneration === undefined
+        ? {}
+        : { programSourceGeneration: overrides.programSourceGeneration }),
     },
   };
 }
@@ -207,6 +216,39 @@ describe('ProgramCueClient and renderer seam', () => {
     sockets.sockets[0]!.message(cue(2));
 
     expect(received).toEqual(['pc:fixture-producer:9:2']);
+    client.dispose();
+  });
+
+  it('drops an in-flight old cue across a Program GSI generation reset until a new baseline', () => {
+    const sockets = socketFactory();
+    let currentProgram = programSnapshot({});
+    const received: string[] = [];
+    const resets: string[] = [];
+    const client = createProgramCueClient({
+      location: { protocol: 'http:', host: '127.0.0.1:4173' },
+      webSocketFactory: sockets.factory,
+      getProgramSnapshot: () => currentProgram,
+      onCue: (value) => received.push(value.id),
+      onReset: (reason) => resets.push(reason),
+    });
+    client.observeProgramSnapshot(currentProgram);
+    client.start();
+    sockets.sockets[0]!.open();
+    sockets.sockets[0]!.message(baseline());
+
+    const oldInFlightCue = cue(2);
+    currentProgram = programSnapshot({ programSourceGeneration: 2 });
+    client.observeProgramSnapshot(currentProgram);
+
+    expect(client.getSnapshot()).toMatchObject({ state: 'awaiting-baseline', baseline: null });
+    expect(resets).toContain('program-snapshot-reset');
+    sockets.sockets[0]!.message(oldInFlightCue);
+    expect(received).toEqual([]);
+
+    sockets.sockets[0]!.message(baseline());
+    sockets.sockets[0]!.message(cue(3, 3));
+    expect(client.getSnapshot().state).toBe('live');
+    expect(received).toEqual(['pc:fixture-producer:9:3']);
     client.dispose();
   });
 
