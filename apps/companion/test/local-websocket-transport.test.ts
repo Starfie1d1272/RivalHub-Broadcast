@@ -80,7 +80,9 @@ class FakeSocket extends EventEmitter {
   pings = 0;
   sendError: Error | undefined;
   deferSend = false;
+  deferCloseEvent = false;
   private readonly deferredCallbacks: Array<(error?: Error) => void> = [];
+  private deferredClose: { readonly code: number; readonly reason: string } | undefined;
 
   send(data: string, callback: (error?: Error) => void): void {
     this.sent.push(data);
@@ -96,9 +98,23 @@ class FakeSocket extends EventEmitter {
   }
 
   close(code?: number, reason?: string): void {
-    this.closeCalls.push({ code: code ?? 1000, reason: reason ?? '' });
+    const close = { code: code ?? 1000, reason: reason ?? '' };
+    this.closeCalls.push(close);
+    if (this.deferCloseEvent) {
+      this.readyState = 2;
+      this.deferredClose = close;
+      return;
+    }
     this.readyState = 3;
-    this.emit('close', code ?? 1000, Buffer.from(reason ?? ''));
+    this.emit('close', close.code, Buffer.from(close.reason));
+  }
+
+  emitDeferredClose(): void {
+    const close = this.deferredClose;
+    if (close === undefined) throw new Error('no deferred close event');
+    this.deferredClose = undefined;
+    this.readyState = 3;
+    this.emit('close', close.code, Buffer.from(close.reason));
   }
 
   terminate(): void {
@@ -221,10 +237,11 @@ describe('local WebSocket transport lifecycle', () => {
     });
   });
 
-  it('closes an oversized snapshot with the fixed bounded failure', async () => {
+  it('preserves the 1009 close handshake for an oversized snapshot', async () => {
     const publisher = new FakePublisher();
     publisher.publish({ channel: 'program', value: 'x'.repeat(MAX_LOCAL_SNAPSHOT_BYTES) });
     const socket = new FakeSocket();
+    socket.deferCloseEvent = true;
     const transport = createTransport(publisher);
 
     attach(transport, socket);
@@ -234,8 +251,30 @@ describe('local WebSocket transport lifecycle', () => {
       code: 1009,
       reason: 'local snapshot exceeds 256 KiB',
     });
+    expect(socket.readyState).toBe(2);
     expect(socket.terminated).toBe(0);
     expect(publisher.subscriberCount).toBe(0);
+
+    socket.emitDeferredClose();
+    await flushMicrotasks();
+    expect(socket.terminated).toBe(0);
+  });
+
+  it('terminates and cleans the subscription when the socket emits an error', async () => {
+    const publisher = new FakePublisher();
+    const scheduler = new FakeHeartbeatScheduler();
+    const socket = new FakeSocket();
+    const transport = createTransport(publisher, scheduler);
+
+    attach(transport, socket);
+    expect(publisher.subscriberCount).toBe(1);
+
+    socket.emit('error', new Error('transport failure'));
+    await flushMicrotasks();
+
+    expect(socket.terminated).toBe(1);
+    expect(publisher.subscriberCount).toBe(0);
+    expect(scheduler.cleared).toBe(true);
   });
 
   it('cleans the publisher subscription and heartbeat after a remote normal close', async () => {
