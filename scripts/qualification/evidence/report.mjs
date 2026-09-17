@@ -58,8 +58,8 @@ export function renderReport({
     '## 最终运行状态',
     '',
     finalRuntime === undefined
-      ? '- `final-runtime.json` 不可用'
-      : `- Runtime freshness：**${freshnessLabel(finalRuntime.freshness)}**`,
+      ? '- 最终运行状态文件（`final-runtime.json`）不可用'
+      : `- 运行状态：**${freshnessLabel(finalRuntime.freshness)}**`,
     '',
     '本报告不包含原始 GSI Token 或账户身份信息。',
   );

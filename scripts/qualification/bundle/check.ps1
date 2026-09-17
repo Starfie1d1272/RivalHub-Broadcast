@@ -13,7 +13,7 @@ do {
     Start-Sleep -Milliseconds 500
 } while ((Get-Date) -lt $deadline)
 
-if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内 runtime 未进入 stale（数据仍未被判定为过期）" }
+if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内运行状态未进入已过期（stale）（数据仍未被判定为过期）" }
 $service = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
 $gsi = switch ([string]$status.gsi) {
     'receiving' { '正在接收（receiving）' }
@@ -23,7 +23,8 @@ $gsi = switch ([string]$status.gsi) {
 $freshness = switch ([string]$status.freshness) {
     'fresh' { '正常（fresh）' }
     'stale' { '已过期（stale）' }
-    default { '等待中' }
+    'awaiting' { '等待数据（awaiting）' }
+    default { '未知' }
 }
 $recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '异常' } else { '正常' }
 $result = switch ([string]$status.result) {
@@ -31,11 +32,11 @@ $result = switch ([string]$status.result) {
     'FAIL' { '失败（FAIL）' }
     default { '证据不足（INCONCLUSIVE）' }
 }
-Write-Output "Companion（本地制播服务）：$service"
+Write-Output "本地制播服务：$service"
 Write-Output "GSI：$gsi"
-Write-Output "Runtime freshness：$freshness"
+Write-Output "运行状态：$freshness"
 Write-Output "mapEpoch：$([string]$status.mapEpoch)"
-Write-Output "Recorder：$recorder"
-Write-Output "最近 accepted frame 年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
-Write-Output "最近 marker：$([string]$status.lastMarker)"
-Write-Output "Qualification 结果：$result"
+Write-Output "采集记录：$recorder"
+Write-Output "最近有效数据年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
+Write-Output "最近场景标记（marker）：$([string]$status.lastMarker)"
+Write-Output "现场验收结果：$result"

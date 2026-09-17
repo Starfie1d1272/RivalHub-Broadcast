@@ -259,24 +259,24 @@ function evaluateChecks(
   const silenceToStalePassed = realSilenceToStalePassed(markers, resetBefore);
   const checks: Record<string, QualificationCheck> = {
     productionChain: {
-      label: '第一场数据进入生产链路',
+      label: '第一场数据进入制播数据链路（production chain）',
       status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: productionChainPassed
-        ? 'Demo A marker 已绑定第一场 execution 内的 fresh accepted observation。'
-        : '等待第一场 execution 内与 Capture 可对应的 fresh accepted observation。',
+        ? 'Demo A 场景标记已绑定第一场地图执行（map execution）内的已接受正常观测（fresh accepted observation）。'
+        : '等待第一场地图执行（map execution）内与采集记录对应的已接受正常观测（fresh accepted observation）。',
     },
     realSilenceToStale: {
-      label: '停止输入后进入 stale',
+      label: '停止输入后进入数据已过期状态（stale）',
       status: silenceToStalePassed ? 'PASS' : 'INCONCLUSIVE',
       reason: silenceToStalePassed
-        ? 'Companion 在未重启的情况下观察到 stale，并在下一场 reset 前记录了退出 CS2。'
-        : '等待 Demo A 后自动进入 stale，并在下一场 reset 前确认已退出 CS2。',
+        ? '本地制播服务未重启即观察到数据已过期状态（stale），并在下一场显式重置（reset）前记录了 CS2 退出。'
+        : '等待 Demo A 后运行状态进入数据已过期状态（stale），并在下一场显式重置（reset）前确认 CS2 退出。',
     },
     explicitNextExecution: {
-      label: '下一场从显式新执行开始',
+      label: '下一场从显式新地图执行（map execution）开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? '显式 reset 已增加 map epoch，并清理上一场 Program telemetry。'
+        ? '显式重置（reset）已推进 mapEpoch，并清理上一场正式节目数据（Program telemetry）。'
         : '等待一次成功的“开始下一场”控制。',
     },
     demoBRecovery: {
@@ -287,11 +287,11 @@ function evaluateChecks(
           : 'INCONCLUSIVE',
       reason:
         hasMarker(markers, 'cs2-reopened') && resetPassed && demoBRecoveryPassed
-          ? 'Demo B marker 已绑定 reset 后新 execution 的 fresh observation。'
-          : '等待 CS2 重开、reset 后的 fresh Demo B observation 与 recovery。',
+          ? 'Demo B 场景标记已绑定显式重置（reset）后新地图执行（map execution）的已接受正常观测（fresh accepted observation）。'
+          : '等待 CS2 重开、显式重置（reset）后的正常 Demo B 观测（fresh observation）与状态恢复。',
     },
     captureIntegrity: {
-      label: 'Capture recorder 可安全导出',
+      label: '采集记录可安全导出',
       status:
         snapshot.scenarioWriteFailed ||
         recorderHealth.state === 'failed' ||
@@ -303,10 +303,10 @@ function evaluateChecks(
       reason: snapshot.scenarioWriteFailed
         ? 'scenario marker 写入失败。'
         : recorderHealth.state === 'failed' || recorderHealth.incomplete
-          ? 'recorder 已报告失败或不完整。'
+          ? '采集记录已报告失败或不完整。'
           : recorderHealth.state === 'closed' && recorderHealth.frameCount > 0
-            ? 'recorder 已 finalize 且存在 accepted frame。'
-            : '等待 graceful shutdown 完成 recorder finalize。',
+            ? '采集记录已完成整理（finalize），且存在已接受的数据帧（accepted frame）。'
+            : '等待服务正常结束并完成采集记录整理。',
     },
   };
   const checkKeys = Object.keys(checks);
@@ -458,7 +458,8 @@ export function registerQualificationRoutes(
     if (kind === 'runtime-stale' || kind === 'next-execution') {
       return reply.code(409).send({
         error: 'qualification_marker_automatic',
-        message: 'runtime-stale 由系统自动记录；next-execution 请使用“开始下一场”控制。',
+        message:
+          '数据过期状态（runtime-stale）由系统自动记录；下一场执行（next-execution）请使用“开始下一场”控制。',
       });
     }
     try {
@@ -489,7 +490,11 @@ export function registerQualificationRoutes(
       const debug = getDebug();
       const runtime = options.programRuntime.getSnapshot();
       await options.evidence.recordMarker('cs2-closed', runtime, freshnessFromDebug(debug));
-      return { ok: true, kind: 'cs2-closed', message: '已记录退出 CS2，等待页面确认数据停止' };
+      return {
+        ok: true,
+        kind: 'cs2-closed',
+        message: '已确认 CS2 退出，等待页面确认数据进入过期状态',
+      };
     } catch (error: unknown) {
       return reply
         .code(503)
@@ -562,7 +567,7 @@ export function registerQualificationRoutes(
       result: status.result,
       runId: options.runId,
       finalizationPath: '/qualification/finalization',
-      message: '正在完成 qualification evidence',
+      message: '正在整理现场验收证据',
     });
   });
 }
@@ -572,9 +577,9 @@ function markerMessage(kind: QualificationMarkerKind): string {
     case 'demo-a-live':
       return '第一场数据已记录';
     case 'cs2-closed':
-      return 'CS2 关闭已记录';
+      return 'CS2 退出已记录';
     case 'runtime-stale':
-      return '数据停止已记录';
+      return '数据过期状态已记录';
     case 'next-execution':
       return '下一场执行已记录';
     case 'cs2-reopened':

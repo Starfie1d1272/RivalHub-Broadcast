@@ -6,6 +6,7 @@ import { describe, expect, it } from 'vitest';
 
 import { readQualificationEvidence } from './evidence.mjs';
 import {
+  completionPage,
   finalizeQualificationRun,
   markCleanupFailure,
   shouldCleanupQualificationState,
@@ -27,6 +28,23 @@ function artifact() {
 }
 
 describe('qualification supervisor finalization', () => {
+  it.each([
+    ['PASS', '通过（PASS）'],
+    ['FAIL', '失败（FAIL）'],
+    ['INCONCLUSIVE', '证据不足（INCONCLUSIVE）'],
+  ])('renders %s as %s on the completion page', (machineResult, visibleResult) => {
+    const page = completionPage({
+      result: machineResult,
+      reportPath: 'evidence/run/REPORT.md',
+      verification: 'passed',
+      cleanup: 'passed',
+    });
+
+    expect(page).toContain('<title>现场验收结果</title>');
+    expect(page).toContain(`<h1>现场验收结果：${visibleResult}</h1>`);
+    expect(page).not.toContain(`<h1>现场验收结果：${machineResult}</h1>`);
+  });
+
   it('finishes and verifies evidence without stop.ps1', async () => {
     const runDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-supervisor-'));
     const logDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-supervisor-log-'));
@@ -67,6 +85,9 @@ describe('qualification supervisor finalization', () => {
       });
       await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain(
         '# RivalHub Broadcast 现场验收报告',
+      );
+      await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain(
+        '- 运行状态：**正常（fresh）**',
       );
       await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain('INCONCLUSIVE');
       await expect(readFile(join(runDir, 'hashes.txt'), 'utf8')).resolves.toContain('REPORT.md');
