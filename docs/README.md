@@ -1,65 +1,63 @@
 # 文档索引
 
-本仓库的一手文档默认使用中文；文件路径、代码标识符、协议字段和第三方专有名词可保留英文。
+本目录记录 RivalHub Broadcast 的长期产品、架构、协议、数据语义和验证规则。长期文档只描述**当前有效的事实与约束**；单次实现过程、短期排期、某个 PR 的完成情况和一次性调试记录留在 Issue / PR / Project。
 
-当前文档：
+仓库一手文档默认使用中文。术语边界见 [`terminology.md`](terminology.md)。
 
-- [`product.md`](product.md)：产品需求基线。产品讨论优先更新这里；顶层产品结构按“赛事与实时数据 / 正式节目制播 / Observer Assist”三条能力线组织。
-- [`architecture.md`](architecture.md)：已冻结的架构边界与待决事项；runtime 模型以 current snapshot + explicit transition 为核心，并区分 Program-safe / Assist-private state、source-local continuity，以及第一方 RivalHub adapter 与 Shared Runtime Foundation 的依赖边界。
-- [`telemetry.md`](telemetry.md)：Telemetry / GSI 设计与 evidence baseline，定义 Raw GSI、block-specific source semantics、`TelemetryObservation`、production capture、replay 与真实 CS2 evidence/验证边界。
-- [`protocol.md`](protocol.md)：M2 RivalHub read-side Manifest/ScheduleWindow contract、authority、identity proof、fixture 与独立 LKG 边界；#29 local protocol 仍另行实现。
-- [`roadmap.md`](roadmap.md)：M0–M5 阶段目标、三条产品能力线的阶段映射、RivalHub read/write 集成顺序与阶段依赖。
-- [`development-validation.md`](development-validation.md)：跨平台开发/CI、真实 Windows + CS2/CSTV + OBS 验收与 reference corpus 的职责边界。
-- [`references.md`](references.md)：参考项目的优缺点、维护状态与复用边界。
-- [`rfcs/`](rfcs/)：重大但尚未完全冻结的专项产品/技术设计；RFC-0001 负责 Lookahead acquisition、alignment、cue scheduling、portability 与可选增强研究。
-- [`decisions/`](decisions/)：Architecture Decision Records。
-- [`../CONTRIBUTING.md`](../CONTRIBUTING.md)：Issue-driven / agent-assisted 实施、PR 交付与文档同步规范。
+## 一手文档
 
-当前关键 ADR：
+| 文档 | 负责回答 |
+| --- | --- |
+| [`product.md`](product.md) | 产品是什么、服务谁、哪些能力属于产品边界 |
+| [`architecture.md`](architecture.md) | 当前系统如何分层、谁拥有什么、哪些依赖方向不可破坏 |
+| [`protocol.md`](protocol.md) | RivalHub 只读赛事上下文与本地 WebSocket 协议 |
+| [`telemetry.md`](telemetry.md) | GSI / CSTV 输入如何解释、标准化和验证 |
+| [`development-validation.md`](development-validation.md) | 开发、CI、视觉回归和真实环境验收如何分责 |
+| [`roadmap.md`](roadmap.md) | 能力之间的依赖顺序和阶段边界 |
+| [`references.md`](references.md) | 参考项目能借鉴什么、哪些实现和许可证不能直接继承 |
+| [`terminology.md`](terminology.md) | 中文术语与用户可见文案规范 |
 
-- ADR-0001：项目定位与权威边界；
-- ADR-0002：Runtime / Workspace 技术基线；
-- ADR-0003：RuntimeState / projection、session/identity、delivery/backpressure、outbox 与跨仓 contract invariant；
-- ADR-0004：Delayed Program 输出、machine-only Lookahead feed、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界；
-- ADR-0005：赛事与实时数据 / 正式节目制播 / Observer Assist 三条产品能力线、Shared Runtime Foundation，以及 RivalHub 第一方集成与 Core/Lookahead 可移植性边界。
+## 决策与研究
 
-文档 authority 关系：
+- [`decisions/`](decisions/)：已经接受、需要长期约束实现的架构决策。
+- [`rfcs/`](rfcs/)：仍存在重要开放问题的专项设计研究。
+
+ADR 负责记录“为什么采用当前边界”，`architecture.md` 负责给出**当前架构的干净视图**。当二者表达不一致时，应先判断决策是否已经改变：如果改变，更新或新增 ADR；如果只是长期文档漂移，直接修正文档。
+
+## 文档权威关系
 
 ```text
 product.md
-  产品要做到什么；三条能力线分别解决什么问题
-
-architecture.md + ADR
-  长期架构 invariant / ownership / 第一方 adapter / Program vs Assist boundary
-
-telemetry.md
-  单个 GSI source 的 Raw GSI / source semantics / capture / replay evidence
-
-rfcs/
-  尚未完全冻结的专项设计；不能覆盖 Accepted ADR
+  产品目标、用户、能力边界
+        ↓
+architecture.md + Accepted ADR
+  ownership、依赖方向、运行时不变量
+        ↓
+protocol.md / telemetry.md
+  具体契约与数据源语义
+        ↓
+development-validation.md
+  验证与验收规则
 
 roadmap.md
-  阶段级交付、三条能力线的推进顺序、RivalHub read/write 接入顺序与依赖
-
-development-validation.md
-  开发/CI/真实 Windows+CS2/CSTV+OBS 的验证职责
+  只描述能力依赖和演进顺序，不承担当前实施状态
 
 Issue / PR / Project
-  当前执行规格、短期状态、一次性调查与验证证据
+  当前工作规格、短期状态、一次性调查与交付证据
 ```
 
-RivalHub 主仓 #610 / #613 / #615 拥有主站 canonical Match Runtime、Broadcast 跨仓产品边界与 public live projection 的服务端语义；本仓 docs/ADR 拥有 Broadcast 本地 runtime 的具体实现架构。RFC 必须建立在这些 canonical boundary 上，发生冲突时应先重新对齐 authority，而不是在代码中增加兼容性分叉。
-
-后续文档按实现需要 just-in-time 创建，不提前为尚未进入当前 milestone 的细节建立空规范。预期主题包括：
-
-- `scene-engine.md`：BaseScene / OverlayCue、scene policy 与 operator override；
-- `radar.md`：MapGeometryProvider、RadarFrame、utility、interpolation/autozoom、renderer/asset 边界；
-- `testing.md`：record/replay、fault injection、slow consumer、source generation、Program/Assist non-leak、visual regression、soak；
-- `operations.md`：Windows / CS2 / CSTV / OBS 正式赛事运行手册、Program preset 与 Assist Overlay 运行方式；
-- `security.md`：pairing、localhost/LAN access、credential scope、Origin/protocol validation 与日志/fixture 敏感信息边界。
+`references.md` 和 RFC 提供设计证据，但不能覆盖 Accepted ADR 或当前一手文档。
 
 ## 维护规则
 
-长期文档记录稳定产品语义、架构 invariant、evidence-backed source facts、跨包/跨仓 contract、运行与验收规则。单个 PR 的中间过程、短期排期、当前机器状态、一次性 commit/branch 状态和已经被实现取代的计划留在 Issue/PR/Project。
+长期文档应满足：
 
-文档不是代码完成后的补记：如果一个 PR 改变了文档当前描述的事实，该 PR 必须同步修改相关文档；如果只是实现既有规格且没有改变长期事实，不要求为了“有文档改动”而制造无意义更新。涉及 authority、runtime invariant、协议语义、Program/Assist isolation、recovery/security 或高风险运行决策时，应先形成可审阅文档/ADR，再实现；普通实现细节按 just-in-time design freeze 推进。
+- 使用现在时描述当前有效行为；
+- 不写“即将”“随后由某 Issue 完成”“某 PR 已经实现”等执行状态；
+- 不把 Issue 编号当成架构或协议名称；
+- 不复制已经由代码常量、`package.json` 或 lockfile 精确维护的易变版本信息；
+- 协议示例必须与当前 schema 一致；
+- 用户或制作人员可见的运行方式发生变化时同步更新；
+- 已被实现取代的设计过程从长期文档移除，不保留兼容性叙述。
+
+如果代码改变了本文档描述的长期事实，修改代码的同一 PR 必须同步更新相应文档。

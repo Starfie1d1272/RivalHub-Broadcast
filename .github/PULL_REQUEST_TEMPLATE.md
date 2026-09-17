@@ -1,28 +1,28 @@
-## Summary
+## 摘要
 
-<!-- What real capability or fix does this PR deliver? -->
+<!-- 这个 PR 实际交付了什么能力或修复？ -->
 
-## Issue
+## 关联工作
 
 Closes #
 
-## Scope completed
+## 已完成范围
 
-- [ ] Required scope implemented
-- [ ] Non-goals were not expanded without approval
+- [ ] 任务要求的范围已经实现
+- [ ] 未未经批准扩张非目标
 
-## Canonical decisions / architecture
+## 架构与决策
 
-<!-- Confirm the relevant ADR/docs were followed. List any deviations explicitly. -->
+<!-- 列出相关 ADR / 文档；如有偏离必须明确说明。 -->
 
-- Relevant ADR/docs:
-- Deviations: None / describe below
+- 相关 ADR / 文档：
+- 偏离：无 / 说明如下
 
-## Key changes
+## 关键变更
 
-<!-- Packages/apps/ownership boundaries changed. -->
+<!-- 涉及哪些 package / app / ownership / contract？ -->
 
-## Validation evidence
+## 验证证据
 
 ```text
 pnpm typecheck
@@ -31,38 +31,39 @@ pnpm test
 pnpm build
 ```
 
-<!-- Replace/add the exact commands actually run. -->
+<!-- 替换或补充实际执行过的命令。 -->
 
-## Platform validation
+## 平台验证
 
-- Implementation environment: Cross-platform / macOS-primary / Windows-specific / other
-- Automated validation completed:
-  - [ ] Local deterministic tests
+- 实现环境：跨平台 / macOS 为主 / Windows 专用 / 其它
+- 已完成自动化验证：
+  - [ ] 本地确定性测试
   - [ ] macOS CI
   - [ ] Windows CI
   - [ ] Linux CI
-- Real-environment acceptance required by Issue: Not required / Real Windows / Windows + CS2 / Windows + OBS / Windows + CS2 + OBS
-- Real-environment acceptance status: Not required / Pending / Passed / Failed
-- Evidence / validator:
+- 任务要求的真实环境验收：不需要 / 真实 Windows / Windows + CS2 / Windows + OBS / Windows + CS2 + OBS
+- 真实环境验收状态：不需要 / 待完成 / 通过 / 失败
+- 验收证据 / 验证人：
 
-<!-- Never mark real Windows/CS2/OBS evidence as passed if it was not actually run. If pending evidence is a closing gate, say explicitly that the Issue is not fully accepted yet. -->
+<!-- 未实际运行真实 Windows / CS2 / OBS 时不得标记为通过。 -->
 
-## Runtime / reliability checks
+## 运行时与可靠性
 
-<!-- Check only what is relevant. -->
+<!-- 只勾选与本 PR 相关的项目。 -->
 
-- [ ] slow consumer / backpressure considered
-- [ ] reconnect considered
-- [ ] duplicate / out-of-order considered
-- [ ] session / epoch boundaries considered
-- [ ] wrong-match / stale behavior considered
-- [ ] queue/memory growth considered
+- [ ] 慢消费者 / 背压
+- [ ] 重连
+- [ ] 重复 / 乱序
+- [ ] session / map epoch
+- [ ] wrong-match / stale
+- [ ] queue / memory 增长
 
-## Documentation
+## 文档
 
-- [ ] Docs updated where required
-- [ ] No known conflict between implementation and docs/ADR
+- [ ] 受影响的一手文档已经同步
+- [ ] 实现与文档 / ADR 没有已知冲突
+- [ ] 用户可见文案符合中文优先与术语规范
 
-## Remaining risks / follow-up
+## 剩余风险
 
-<!-- Explicitly list unfinished work, pending platform acceptance, and link/create follow-up Issues instead of hiding it in TODOs. -->
+<!-- 明确写出未完成工作、待补真实环境证据和需要另开的后续任务。 -->

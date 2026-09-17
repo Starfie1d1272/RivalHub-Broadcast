@@ -171,46 +171,46 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     finalFresh(finalRuntime);
   const checks = {
     productionChain: {
-      label: '第一场数据进入生产链路',
+      label: '第一场数据进入正式处理链路',
       status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: productionChainPassed
-        ? 'Demo A marker 已绑定 reset 前同一 execution 的 accepted Capture V1 frame。'
-        : '缺少与 Demo A marker 同一 execution、同一 sequence/timestamp 的 Capture V1 frame。',
+        ? '第一场标记已与重置前同一地图执行中的已接收采集帧建立对应关系。'
+        : '缺少与第一场标记处于同一地图执行、且序号与时间可对应的采集帧。',
     },
     realSilenceToStale: {
-      label: '停止输入后进入 stale',
+      label: '停止输入后识别为数据中断',
       status: stopPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: stopPassed
-        ? 'Companion 在未重启的情况下观察到 stale，并在下一场 reset 前记录了退出 CS2。'
-        : '等待 Demo A 后自动进入 stale，并在下一场 reset 前确认已退出 CS2。',
+        ? '本地制播服务未重启，并在下一场开始前确认比赛数据停止且 CS2 已退出。'
+        : '等待第一场结束后自动识别数据停止，并在下一场开始前确认已退出 CS2。',
     },
     explicitNextExecution: {
-      label: '下一场从显式新执行开始',
+      label: '下一场从新的地图执行开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? 'map epoch 增加、身份保持一致，且上一场 Program telemetry 已清理。'
-        : '缺少成功的 explicit reset 证据。',
+        ? '地图执行序号已推进、运行实例保持一致，并清理了上一场正式节目数据。'
+        : '缺少成功开始下一场地图执行的证据。',
     },
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
       status: demoBRecoveryPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: demoBRecoveryPassed
-        ? 'Demo B marker 已绑定 reset 后新 execution 的 accepted frame，并恢复 fresh。'
-        : '等待 CS2 重开、reset 后新 execution 的 Demo B frame 与 fresh final runtime。',
+        ? '第二场标记已与新地图执行中的已接收帧对应，最终数据状态正常。'
+        : '等待 CS2 重开、第二场新地图执行的采集帧以及最终正常数据状态。',
     },
     captureIntegrity: {
-      label: 'Capture recorder 可安全导出',
+      label: '采集记录完整且可验证',
       status: captureFailed ? 'FAIL' : captureResults.length > 0 ? 'PASS' : 'INCONCLUSIVE',
       reason: captureFailed
-        ? 'Capture V1 不完整、发生丢帧或校验失败。'
+        ? '采集记录不完整、发生丢帧或完整性校验失败。'
         : captureResults.length > 0
-          ? 'Capture V1 frame count/hash/schema 校验通过。'
-          : '没有找到已发布 Capture V1。',
+          ? '采集帧数量、哈希与结构校验通过。'
+          : '没有找到已完成的采集记录。',
     },
   };
   if (artifact === undefined) {
     checks.captureIntegrity.status = 'FAIL';
-    checks.captureIntegrity.reason = '缺少 artifact identity。';
+    checks.captureIntegrity.reason = '缺少构建产物身份信息。';
   }
   if (
     Object.keys(checks).length !== QUALIFICATION_CHECK_KEYS.length ||
@@ -218,7 +218,7 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
   ) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'qualification check 实现与 evidence contract 不一致',
+      '现场验收检查实现与证据契约不一致',
     );
   }
   return checks;

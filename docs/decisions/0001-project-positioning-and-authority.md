@@ -1,81 +1,44 @@
 # ADR-0001：项目定位与权威边界
 
 - 状态：**Accepted**
-- 日期：2026-09-12
 
 ## 背景
 
-RivalHub 已拥有 Match、CompetitionEntry、Roster、BP、Schedule、Stage、官方赛果等赛事事实。现有 CS2 HUD/Manager 项目通常又维护一套本地 Team / Player / Match 数据，导致真实赛事中需要重复配置，并产生身份、比分和 BP 漂移风险。
-
-同时，本项目需要承担 GSI、HUD、Radar、scene、临时统计、OBS 输出和本地诊断等低延迟工作；这些运行态不适合直接塞进 RivalHub 主站 domain。
+赛事事实、低延迟本地运行态和赛后证据具有不同的更新频率、可靠性和责任边界。把它们放进同一数据库或同一状态模型会导致重复配置、身份漂移和错误 authority。
 
 ## 决策
 
-### 1. 独立仓库
+### 独立本地制播运行时
 
-RivalHub Broadcast 作为独立仓库和本地制播 runtime 演进，不作为 RivalHub Web 主仓中的一个页面模块。
+RivalHub Broadcast 作为独立仓库和本地制播运行时演进，不作为 RivalHub Web 主仓中的页面模块。
 
-### 2. 产品定位
-
-项目定义为 **RivalHub-native CS2 Broadcast Runtime**，而不是通用 HUD Manager。
-
-Gameplay HUD 只是完整节目流程中的一个 scene。
-
-### 3. Authority
+### 赛事事实与实时观测分权
 
 ```text
-RivalHub
-  = official tournament context / canonical truth
+赛事上下文提供方
+  official / canonical tournament facts
 
 Broadcast
-  = local realtime observation / presentation runtime
+  local realtime observation / presentation runtime
 
-DAK
-  = post-match Demo evidence / analysis
-
-OCR
-  = platform-specific post-match evidence / fallback
+DAK / OCR / other evidence
+  post-match evidence / reconciliation input
 ```
 
-Broadcast 不建立第二套 Team / Player / Match / BP 官方数据库。
+RivalHub 连接模式下，RivalHub 是官方赛事事实 authority。Standalone 模式使用本地比赛上下文，但不会让 Broadcast 的实时观测自动变成官方赛事事实。
 
-### 4. Integration
+### 不建立第二套赛事数据库
 
-Broadcast 只通过版本化 contract 与 RivalHub 集成，不直连 Supabase/生产表，也不 import RivalHub 内部页面或数据库实现。
+Broadcast 不维护独立的官方 Team / Player / Match / BP 数据库。连接 RivalHub 时只消费公开、版本化契约；不直连 Supabase / production tables，也不导入 RivalHub 内部页面或 domain 类型。
 
-RivalHub 主仓未来即使重构 Match Runtime，只要公开 integration contract 保持兼容，Broadcast Core 不应随之重写。
+### Observation 与 official fact 分离
 
-### 5. Observation 与 Official Fact 分离
-
-GSI / enhanced telemetry / local accumulator 产生的是 observation 和 provisional facts。
-
-Broadcast 可以发送 live projection、boundary event 和 result candidate；是否自动形成 canonical result，由 RivalHub 自己的 Match Runtime / reconciliation policy 决定。
+GSI、CSTV、accumulator 和本地 Runtime 产生 observation、projection 和 candidate evidence。是否形成 canonical lifecycle 或赛果，由对应赛事 authority 的 reconciliation policy 决定。
 
 ## 后果
 
-正面：
-
-- 同一赛事事实只维护一次；
-- Broadcast 可以离线/本地优先；
-- RivalHub 与 Broadcast 可独立升级技术栈；
-- GSI parser、renderer、OBS、桌面壳都能作为边缘适配器替换；
-- Wrong Match 可以在 integration boundary fail closed。
-
-代价：
-
-- 必须认真设计并版本化 integration contract；
-- 本地 runtime 要承担 cache、identity resolution、reconnect 和 diagnostics；
-- 不能通过“直接读写主站数据库”快速绕过协议设计。
-
-## 本 ADR 没有决定
-
-- Node/Bun；
-- Fastify/其他 HTTP server；
-- 一个还是两个物理 WebSocket；
-- Electron/Tauri/普通 launcher；
-- BroadcastManifest 具体字段；
-- 网站使用 SSE/WebSocket/Realtime；
-- server game event adapter；
-- LHM compatibility。
-
-这些内容后续单独决策。
+- 同一赛事事实不需要在网站、HUD 和 OBS 工作流中重复维护；
+- Broadcast 可以本地优先并独立演进；
+- RivalHub 与 Broadcast 可以分别升级内部实现；
+- telemetry、renderer、OBS 和赛事上下文来源都可以作为边缘适配器替换；
+- 错场时可以在 integration boundary 默认拒绝，而不是污染官方数据。

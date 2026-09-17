@@ -1,101 +1,84 @@
 # RivalHub Broadcast 贡献指南
 
-RivalHub Broadcast 主要采用 Issue-driven、agent-assisted 的开发方式。任何实现都应先理解仓库里的产品与架构约束，再修改代码。
+本仓库采用 Issue-driven、agent-assisted 的开发方式。任何实现都必须先理解产品、架构和 ownership，再修改代码。
 
-## 必读
-
-按顺序阅读：
+## 必读顺序
 
 1. `README.md`
 2. `docs/product.md`
 3. `docs/architecture.md`
-4. `docs/roadmap.md`
+4. `docs/protocol.md` / `docs/telemetry.md`（按任务）
 5. `docs/development-validation.md`
 6. `docs/decisions/`
 7. `AGENTS.md`
-8. 当前 Issue 直接引用的专题文档
+8. 当前工作单直接引用的专题文档
 
 ## 文档与界面语言
 
-仓库一手文档和产品界面默认使用中文。目标不是机械翻译代码，而是让读者在不理解内部实现术语的情况下也能正确操作和判断状态。
+仓库一手文档、GitHub 协作表面和产品界面默认使用中文。详细规则见 [`docs/terminology.md`](docs/terminology.md)。
 
-- 面向用户、导播或赛事工作人员的标题、按钮、状态、提示、错误说明和辅助文本必须使用清晰中文；不得直接展示内部状态枚举、组件名或架构术语。
-- 开发文档正文优先使用中文。代码符号、环境变量、协议字段、标准专名、第三方项目名和必须精确搜索的协议字符串可保留原文，并应使用反引号或在首次出现时给出中文说明。
-- `WebSocket`、HTTP、OBS、GSI、Vite 等标准专名可以保留；`host`、`production`、`baseline`、`allowlist`、`loopback`、`renderer` 等存在稳定中文表达的普通工程词，不应在自然语言正文中无必要混用。
-- Debug 页面可以展示原始 JSON 字段和值，但包围这些数据的页面标题、状态解释和操作提示仍应使用中文。
-- 协议冻结的 exact string（例如 WebSocket subprotocol、close reason）、代码测试名和第三方 API 名不因界面本地化而改写。
-- 修改用户可见页面或长期文档时，评审必须同时检查语义正确性和语言边界；不能以“只是开发者页面”为理由长期积累中英混排。
+必须遵守：
 
-## 工作单元
+- 标题、按钮、状态、提示、错误说明和辅助文本使用清晰中文；
+- 不直接展示内部状态枚举、组件名或架构术语；
+- 代码符号、环境变量、协议字段、精确协议字符串和第三方专名保持原文；
+- HTTP、WebSocket、OBS、GSI、CSTV 等标准专名可以保留；
+- `host`、`renderer`、`baseline`、`allowlist`、`loopback`、`qualification` 等普通工程词在自然语言中优先使用中文；
+- Debug 页可以展示原始 JSON，但其标题、解释和操作提示必须中文化。
 
-一个可以直接交给 Luna / coding agent 的 Issue 必须具备：
+## 工作单
 
-- Objective；
-- Context；
-- Canonical decisions；
-- Scope；
-- Non-goals；
-- Architecture / ownership；
-- Implementation plan；
-- Required tests；
-- Acceptance criteria；
-- Validation；
-- Implementation environment；
-- Automated validation；
-- Real-environment acceptance gate；
-- Dependencies；
-- Documentation impact；
-- Handoff requirements。
+可直接交给 coding agent 的实现任务至少应明确：
 
-如果实现过程中发现需要改变已冻结的 authority、runtime invariant、package ownership、security、recovery 或 protocol 语义，应停止扩张实现范围，并把偏差反馈到 Issue/ADR，而不是自行重设计。
+- 目标；
+- 背景与约束；
+- 已冻结决策；
+- 范围；
+- 非目标；
+- ownership 与依赖方向；
+- 实施步骤；
+- 必要测试；
+- 验收标准；
+- 自动化验证；
+- 真实环境验收要求；
+- 依赖关系；
+- 文档影响；
+- 交接要求。
 
-## 开发环境与验收环境
-
-本项目不把“在哪里写代码”和“在哪里最终验收”混成一个概念。
-
-默认模型：
-
-```text
-Development
-  cross-platform / contributor environment
-        ↓
-Automated validation
-  deterministic tests + GitHub Actions
-        ↓
-Real-environment acceptance（按需）
-  Windows / Windows+CS2 / Windows+OBS / Windows+CS2+OBS
-```
-
-具体规则见 `docs/development-validation.md`。
-
-GitHub-hosted runner 是自动化验证环境，不替代真实 Windows + CS2/OBS 验收。如果 Issue 可以继续实现和自动验证，只是等待真实 Windows/CS2/OBS 证据，不应把整个任务标成 `blocked`；使用 `needs-windows-validation` 或 Project 的 Platform validation 字段表达 pending gate。
+如果实现需要改变 authority、Runtime invariant、package ownership、安全、恢复或协议语义，应先回到设计层，不在代码中自行扩张。
 
 ## Agent-ready
 
-`agent-ready` 只用于“不再需要主要产品/架构判断”的 Issue。
-
-Agent 可以：
-
-- 在 Scope 内选择局部实现细节；
-- 根据测试/类型错误做最小必要修复；
-- 补充与本 Issue 直接相关的测试和文档。
-
-Agent 不可以未经明确批准：
+`agent-ready` 表示主要产品与架构判断已经完成。Agent 可以在既定边界内选择局部实现细节，但不能未经批准：
 
 - 更换 Runtime / framework / transport 基线；
-- 引入新的 canonical state owner；
-- 直连 RivalHub/Supabase 内部表；
+- 新增 canonical state owner；
+- 直连 RivalHub / Supabase 内部表；
 - 让 Raw GSI 越过 telemetry adapter；
 - 把 snapshot 改成可靠 FIFO；
-- 新增 speculative framework/plugin system；
-- 顺手重构 Issue 范围外的大块代码。
+- 建设没有真实 consumer 的插件框架；
+- 顺手重构任务范围外的大块代码。
 
-如果某项真实环境验收当前不可执行，Agent 应：
+## 开发、自动化与真实验收
 
-1. 完成所有可在当前环境完成的实现和自动验证；
-2. 不伪造真实 Windows/CS2/OBS 结果；
-3. 在 PR 中明确列出 pending acceptance；
-4. 如果该 acceptance 是 Issue closing gate，则不得声称 Issue 已完全完成。
+必须区分：
+
+```text
+开发环境
+自动化验证
+真实环境验收
+```
+
+GitHub-hosted Windows runner 只能证明自动化在该 runner 上通过，不能替代真实 Windows + CS2 / OBS 验收。
+
+真实环境暂时不可用时：
+
+1. 完成所有可执行的实现和自动化验证；
+2. 不伪造真实环境结果；
+3. 在 PR 明确标记 pending evidence；
+4. 如果真实 evidence 是 closing gate，不声称任务完全验收。
+
+详细规则见 [`docs/development-validation.md`](docs/development-validation.md)。
 
 ## PR 交付标准
 
@@ -103,60 +86,73 @@ PR 必须说明：
 
 1. 完成了什么；
 2. 没有完成什么；
-3. 是否偏离 Issue 的 Canonical decisions；
-4. 关键文件和 ownership 变化；
+3. 是否偏离已冻结决策；
+4. 关键 ownership / contract 变化；
 5. 实际执行过的验证命令；
-6. macOS / Windows CI / real Windows / CS2 / OBS 等平台验证状态；
-7. replay / visual / soak 等非普通单测证据（如适用）；
-8. 剩余风险和后续 Issue；
-9. **Documentation impact：实现是否改变了 README、产品/架构、协议、telemetry、运行或验证文档描述的事实；如改变，必须在同一 PR 更新。**
+6. 自动化和真实环境验证状态；
+7. replay / visual / soak 等专项证据；
+8. 剩余风险；
+9. 文档影响。
 
-PR 不应以“CI 绿了”替代业务 acceptance，也不应以 mock/simulator 代替要求中的真实环境验收。
+文档不是实现流水账。长期文档只记录当前有效事实和规则，不写“某 Issue 已实现”“下一步由某 PR 完成”等短期状态。
 
-文档不是每个 PR 的流水账。以下内容通常留在 Issue/PR/Project，而不进入长期文档：
+如果代码改变：
 
-- 单次调试过程与中间失败；
-- 当前开发机/协作者是否可用；
-- 一次性 commit SHA、PR 状态或短期执行顺序；
-- 已经被实现取代的 implementation plan；
-- 不构成长期开发表面的内部实现细节。
+- authority / ownership；
+- public 或 cross-package contract；
+- Runtime invariant；
+- security / recovery；
+- source semantics；
+- 用户可见运行方式；
+- 验收模型；
 
-以下变化则必须同步文档：
-
-- authority / ownership / package boundary；
-- public or cross-package contract；
-- runtime invariant / continuity / delivery semantics；
-- security / recovery / publication guarantee；
-- evidence-backed source semantics；
-- 用户或 operator 可见的运行方式；
-- milestone scope / acceptance model。
-
-如果代码与长期文档发生冲突，不能以“以后再补文档”作为 PR 完成状态。
+同一 PR 必须同步更新对应长期文档。
 
 ## Architecture contract
 
-提交前必须运行 `pnpm architecture:check`。它检查 shared package 的 `dist` exports、workspace protocol、显式 workspace dependency、runtime cycle、TypeScript `paths` 以及各 package 的 ownership boundary。
+提交前运行：
 
-架构 violation 应通过复用现有 owner、调整真实依赖边界或更新对应 ADR 解决；不得新增 baseline、known-violation 或全局 ignore。ESLint 的 direct-import 提示来自同一份 `scripts/architecture/policy.mjs`，但完整 graph 检查以 `architecture:check` 为准。
+```text
+pnpm architecture:check
+```
 
-## 设计与实现的关系
+它检查：
 
-采用 just-in-time design freeze：
+- workspace dependency；
+- package exports；
+- runtime cycle；
+- TypeScript `paths`；
+- forbidden dependency；
+- ownership boundary。
 
-- 能由当前 ADR/文档直接约束的工作，可以进入实现；
-- 下一 Milestone 才需要的协议、安全、Radar、Scene、Packaging 细节，不提前过度设计；
-- 一旦某项成为当前 Milestone 的 blocking decision，应先固化到 docs/ADR，再标记 Issue 为 `agent-ready`。
+架构检查失败应通过修正真实依赖或更新决策解决，不能新增 known-violation、全局 ignore 或绕过 package boundary。
+
+## 测试原则
+
+实时链路改动至少考虑：
+
+- normal replay；
+- slow consumer / backpressure；
+- reconnect；
+- duplicate / out-of-order；
+- source generation；
+- session / map epoch；
+- wrong match / roster mismatch；
+- stale context；
+- Program / Assist non-leak；
+- queue / memory growth。
+
+浏览器 reconnect 默认获取 current baseline，不补发全部离线 snapshot。
 
 ## 完成定义
 
-Issue 只有在以下条件都满足时才算完成：
+任务只有在以下条件满足时才算完成：
 
-- Scope 已实现；
-- Acceptance criteria 可复现通过；
+- 范围已实现；
+- 验收标准可复现；
 - 必要测试已加入；
-- architecture guard / typecheck / lint / build 等相关检查通过；
-- Issue 声明的 automated validation 已完成；
-- Issue 声明为 closing gate 的 real-environment acceptance 已完成；
-- **受实现影响的长期文档已在同一 PR 同步，且没有与实现产生已知冲突；**
-- PR 中记录了实际验证证据；
-- 未完成内容已经明确留给后续 Issue，而不是隐藏在 TODO 里。
+- architecture / typecheck / lint / build 等相关检查通过；
+- planner 要求的自动化验证通过；
+- closing gate 所需真实环境 evidence 已完成；
+- 受影响长期文档同步；
+- PR 记录实际验证和剩余风险。

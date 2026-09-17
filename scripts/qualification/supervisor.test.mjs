@@ -66,7 +66,7 @@ describe('qualification supervisor finalization', () => {
         qualification: { result: 'INCONCLUSIVE' },
       });
       await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain(
-        '# RivalHub Broadcast Qualification 验收报告',
+        '# RivalHub Broadcast 现场验收报告',
       );
       await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain('INCONCLUSIVE');
       await expect(readFile(join(runDir, 'hashes.txt'), 'utf8')).resolves.toContain('REPORT.md');

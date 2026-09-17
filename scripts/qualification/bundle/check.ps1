@@ -13,24 +13,29 @@ do {
     Start-Sleep -Milliseconds 500
 } while ((Get-Date) -lt $deadline)
 
-if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内 runtime 未进入 stale" }
-$companion = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
+if ($WaitForStale -and $status.freshness -ne 'stale') { throw "$TimeoutSeconds 秒内仍未确认比赛数据停止" }
+$service = if (Test-ProcessRunning -ProcessId ([int](Read-RunState).processId)) { '运行中' } else { '已停止' }
 $gsi = switch ([string]$status.gsi) {
-    'receiving' { '接收中' }
-    'silent' { '已静默' }
-    default { '尚未收到' }
+    'receiving' { '正在接收' }
+    'silent' { '数据已停止' }
+    default { '尚未收到数据' }
 }
-$freshness = switch ([string]$status.freshness) {
-    'fresh' { 'fresh' }
-    'stale' { 'stale' }
+$dataState = switch ([string]$status.freshness) {
+    'fresh' { '正常' }
+    'stale' { '已停止' }
     default { '等待中' }
 }
-$recorder = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '失败' } else { '正常' }
-Write-Output "Companion：$companion"
-Write-Output "GSI：$gsi"
-Write-Output "Runtime 新鲜度：$freshness"
-Write-Output "Map epoch：$([string]$status.mapEpoch)"
-Write-Output "Recorder 状态：$recorder"
-Write-Output "最近 accepted frame 年龄：$([string]$status.lastAcceptedFrameAgeMs) ms"
-Write-Output "当前场景：$([string]$status.lastMarker)"
-Write-Output "Qualification 结果：$([string]$status.result)"
+$recording = if ([bool]$status.recorder.incomplete -or [string]$status.recorder.state -eq 'failed') { '异常' } else { '正常' }
+$result = switch ([string]$status.result) {
+    'PASS' { '通过' }
+    'FAIL' { '失败' }
+    default { '证据不足' }
+}
+Write-Output "本地制播服务：$service"
+Write-Output "GSI 数据：$gsi"
+Write-Output "比赛数据状态：$dataState"
+Write-Output "地图执行序号：$([string]$status.mapEpoch)"
+Write-Output "采集记录：$recording"
+Write-Output "距最近一帧：$([string]$status.lastAcceptedFrameAgeMs) ms"
+Write-Output "最近场景标记：$([string]$status.lastMarker)"
+Write-Output "验收结果：$result"

@@ -1,28 +1,26 @@
-# Architecture Decision Records
+# 架构决策记录
 
-ADR 用于记录会长期约束仓库的技术/产品架构决策，避免重要选择只存在于 Issue、聊天或某次实现里。
+ADR 用于记录需要长期约束实现的技术或产品决策。它解释“为什么采用当前边界”，而 [`../architecture.md`](../architecture.md) 给出当前系统的干净架构视图。
 
 ## 状态
 
-- `Proposed`：已提出，尚未冻结；
-- `Accepted`：当前正式决策；
-- `Superseded`：已被后续 ADR 替代；
+- `Proposed`：已提出，尚未冻结。
+- `Accepted`：当前正式决策。
+- `Superseded`：已被后续 ADR 替代。
 - `Rejected`：明确评估后不采用。
 
-## 规则
+## 维护规则
 
-1. 一个 ADR 聚焦一组具有共同决策原因、可以独立演进/被 supersede 的决定；不要求“一项依赖一个 ADR”。
-2. 记录“为什么”，不只记录最后选择。
-3. 如果新事实改变旧决定，不静默改写历史语义；新建 ADR，并明确 supersede 的具体旧决定/范围。
-4. 对已接受 ADR 的非语义性勘误或“让正文与已接受决策保持一致”的澄清，应显式标注 clarification；如果实际决策发生改变，仍必须新建 ADR supersede。
-5. 第三方项目只是证据，不自动成为设计规范。
-6. 重要实现如果没有对应的产品需求或 ADR，不应由 Agent 自行扩张范围。
-7. 精确 dependency version 由 `package.json` / lockfile 记录；同一既定技术路线内的兼容 patch/minor 升级通常不需要新 ADR，除非改变架构语义或生产兼容边界。
+1. ADR 只记录长期决策，不记录某个 Issue / PR 的实施过程。
+2. 精确 dependency patch 版本由 `package.json`、workspace catalog 和 lockfile 维护，ADR 只冻结技术路线和兼容边界。
+3. 决策语义改变时新增 ADR 或明确 supersede；纯文字澄清可以直接修正。
+4. 第三方项目只是证据，不自动成为设计规范。
+5. 当前实现与 ADR 冲突时，不能通过兼容层长期掩盖冲突；应先重新确认决策。
 
 ## 当前 ADR
 
-- [`0001-project-positioning-and-authority.md`](0001-project-positioning-and-authority.md)：项目定位与权威边界。
-- [`0002-runtime-workspace-technology-baseline.md`](0002-runtime-workspace-technology-baseline.md)：Runtime、TypeScript/ESM、pnpm workspace、Web/server 构建与测试技术基线。
-- [`0003-runtime-state-delivery-invariants.md`](0003-runtime-state-delivery-invariants.md)：RuntimeState/projection、transition-derived ReliableObservation、session/identity、delivery/backpressure、observation outbox、Radar/scene 与跨仓 contract invariant；其中 EventJournal/泛化 Event 语义 supersede ADR-0002 决策 5 的对应旧表述，跨仓 contract ownership supersede ADR-0002 决策 6 的过宽表述。
-- [`0004-program-output-and-observer-assist-isolation.md`](0004-program-output-and-observer-assist-isolation.md)：Delayed Program timeline、machine-only Lookahead、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界。
-- [`0005-product-capability-boundaries-and-portability.md`](0005-product-capability-boundaries-and-portability.md)：三条产品能力线、Shared Runtime Foundation、RivalHub 第一方集成语义，以及 Core / Radar / Lookahead 不被第一方实现反向锁定的可移植性边界。
+- [`0001-project-positioning-and-authority.md`](0001-project-positioning-and-authority.md)：产品定位与 authority。
+- [`0002-runtime-workspace-technology-baseline.md`](0002-runtime-workspace-technology-baseline.md)：运行时、workspace、Web 与测试技术基线。
+- [`0003-runtime-state-delivery-invariants.md`](0003-runtime-state-delivery-invariants.md)：RuntimeState、连续性、投递、身份和可靠消息不变量。
+- [`0004-program-output-and-observer-assist-isolation.md`](0004-program-output-and-observer-assist-isolation.md)：正式节目与观察辅助隔离。
+- [`0005-product-capability-boundaries-and-portability.md`](0005-product-capability-boundaries-and-portability.md)：Standalone / RivalHub 连接模式、产品能力线与可移植性。

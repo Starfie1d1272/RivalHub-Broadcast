@@ -1,92 +1,90 @@
-name: Agent execution task
-description: Implementation-ready work item for Luna or another coding agent.
+name: Agent 执行任务
+description: 已完成主要设计、可直接交给 Luna 或其它编码 Agent 的实现任务。
 title: "[M?] "
 body:
   - type: markdown
     attributes:
       value: |
-        Use this form only when the task is sufficiently designed to become an executable work item. If major product/architecture decisions are still open, use the Design / architecture task form first.
+        仅在主要产品与架构决策已经冻结时使用此模板。如果仍存在关键方案选择，请先使用“设计 / 架构任务”。
 
   - type: textarea
     id: objective
     attributes:
-      label: Objective
-      description: What real capability exists after this issue is complete?
-      placeholder: Describe the observable outcome, not just files to edit.
+      label: 目标
+      description: 完成后真实存在什么能力或修复？请描述可观察结果，而不是只列要改的文件。
     validations:
       required: true
 
   - type: textarea
     id: context
     attributes:
-      label: Context
-      description: Why this task exists; relevant milestone, docs, ADRs, or external issues.
+      label: 背景与约束
+      description: 说明任务原因，以及相关产品、架构、ADR、协议或外部约束。
     validations:
       required: true
 
   - type: textarea
     id: decisions
     attributes:
-      label: Canonical decisions
-      description: Decisions already frozen. The implementing agent must not redesign these unless the issue is sent back for design.
+      label: 已冻结决策
+      description: 列出实现 Agent 不应重新设计的决定；如需改变，应退回设计阶段。
       placeholder: |
-        - ADR-0002 ...
         - ADR-0003 ...
-        - Core must not import ...
+        - Core 不得依赖 ...
     validations:
       required: true
 
   - type: textarea
     id: scope
     attributes:
-      label: Scope
-      description: Exact work that belongs in this issue.
+      label: 范围
+      description: 本任务必须完成的准确工作。
     validations:
       required: true
 
   - type: textarea
     id: non_goals
     attributes:
-      label: Non-goals
-      description: Explicitly exclude tempting adjacent work.
+      label: 非目标
+      description: 明确排除容易顺手扩张的相邻工作。
     validations:
       required: true
 
   - type: textarea
     id: architecture
     attributes:
-      label: Architecture / ownership
-      description: Packages/apps touched, dependency direction, owners and boundaries.
+      label: 架构与所有权
+      description: 涉及哪些 package / app、依赖方向、数据所有者和边界。
     validations:
       required: true
 
   - type: textarea
     id: implementation
     attributes:
-      label: Implementation plan
-      description: A concrete plan based on the real repository structure. The agent may refine local details but should not change the architecture.
+      label: 实施方案
+      description: 基于真实仓库结构给出可直接执行的步骤；允许调整局部细节，但不得自行改变架构。
     validations:
       required: true
 
   - type: dropdown
     id: implementation_environment
     attributes:
-      label: Implementation environment
-      description: Where can this task be implemented? This is separate from its final acceptance environment.
+      label: 实现环境
+      description: 此任务可以在哪里实现？这与最终真实环境验收分开。
       options:
-        - Cross-platform / macOS-primary
-        - Windows-specific
-        - Other explicit environment
+        - 跨平台 / macOS 为主
+        - Windows 专用
+        - 其它明确环境
     validations:
       required: true
 
   - type: checkboxes
     id: automated_validation
     attributes:
-      label: Automated validation
-      description: Which automated environments/checks are required by this issue? Select all that apply.
+      label: 自动化验证
+      description: 本任务需要哪些自动化环境或检查？
       options:
-        - label: Local deterministic tests
+        - label: 本地确定性测试
         - label: macOS CI
         - label: Windows CI
         - label: Linux CI
@@ -94,11 +92,11 @@ body:
   - type: dropdown
     id: real_environment_gate
     attributes:
-      label: Real-environment acceptance gate
-      description: Production-like evidence required before this issue can be considered fully accepted.
+      label: 真实环境验收门槛
+      description: 在任务可视为完全验收前，需要什么生产近似环境证据？
       options:
-        - Not required
-        - Real Windows
+        - 不需要
+        - 真实 Windows
         - Windows + CS2
         - Windows + OBS
         - Windows + CS2 + OBS
@@ -108,32 +106,30 @@ body:
   - type: textarea
     id: platform_notes
     attributes:
-      label: Platform / validator notes
-      description: Name the expected platform validator, fixture/evidence, or explain why no real-environment gate is needed.
-      placeholder: "Example: implementation on Mac; Windows+CS2 collaborator records real GSI fixture before closure."
+      label: 平台与验收说明
+      description: 说明预期验证环境、测试样例或验收证据；如不需要真实环境，也说明原因。
 
   - type: textarea
     id: tests
     attributes:
-      label: Required tests
-      description: Unit/integration/replay/visual/soak/real-environment cases required by this task.
+      label: 必要测试
+      description: 列出单元、集成、重放、视觉、长时间运行或真实环境测试。
     validations:
       required: true
 
   - type: textarea
     id: acceptance
     attributes:
-      label: Acceptance criteria
-      description: Reproducible conditions for closing the issue, including any required platform gate.
-      placeholder: Use checkboxes where useful.
+      label: 验收标准
+      description: 给出可复现的关闭条件，包括必要的平台门槛。
     validations:
       required: true
 
   - type: textarea
     id: validation
     attributes:
-      label: Validation
-      description: Commands and evidence expected in the PR handoff.
+      label: 验证命令与证据
+      description: PR 交接时应提供的命令和证据。
       placeholder: |
         pnpm typecheck
         pnpm lint
@@ -145,23 +141,22 @@ body:
   - type: textarea
     id: dependencies
     attributes:
-      label: Dependencies
-      description: Blocked-by / blocks relationships, including cross-repository issues.
-      placeholder: "Blocked by: ...\nBlocks: ..."
+      label: 依赖关系
+      description: 说明被什么阻塞、会阻塞什么，以及跨仓依赖。
 
   - type: textarea
     id: docs
     attributes:
-      label: Documentation impact
-      description: Docs/ADR/README changes required, or state explicitly that none are expected.
+      label: 文档影响
+      description: 需要同步哪些长期文档、ADR 或 README；若没有也请明确说明。
     validations:
       required: true
 
   - type: textarea
     id: handoff
     attributes:
-      label: Handoff requirements
-      description: Any task-specific information the final PR report must include in addition to CONTRIBUTING.md.
-      placeholder: "Report deviations, validation evidence, pending real-environment acceptance, remaining risks, and follow-up work."
+      label: 交接要求
+      description: 除 CONTRIBUTING.md 外，最终 PR 还必须报告哪些任务特有信息。
+      placeholder: "例如：偏离项、实际验证证据、待补真实环境验收、剩余风险和后续工作。"
     validations:
       required: true
