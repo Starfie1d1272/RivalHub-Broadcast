@@ -9,8 +9,8 @@ import {
   type DebugFreshness,
   type DebugRuntimeResponse,
 } from './debug/runtime';
-import { createLocalChannelClient } from './realtime';
-import type { LocalChannel, LocalChannelConnectionState } from '@rivalhub-broadcast/protocol/version';
+import { createLocalChannelClient, type LocalChannelConnectionState } from './realtime';
+import type { LocalChannel } from '@rivalhub-broadcast/protocol/version';
 
 export const surfaceDefinitions = [
   {
@@ -256,13 +256,30 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
       </section>
 
       <section className="debug-evidence-grid" aria-label="当前证据">
-        <DebugEvidencePanel eyebrow="01 / 接收入口" title="已接收原始数据" tone="signal" value={data.raw.current} />
-        <DebugEvidencePanel eyebrow="02 / 适配层" title="标准化观测" value={data.normalized.current} />
-        <DebugEvidencePanel eyebrow="03 / 运行核心" title="当前运行状态" value={data.runtime.current} />
+        <DebugEvidencePanel
+          eyebrow="01 / 接收入口"
+          title="已接收原始数据"
+          tone="signal"
+          value={data.raw.current}
+        />
+        <DebugEvidencePanel
+          eyebrow="02 / 适配层"
+          title="标准化观测"
+          value={data.normalized.current}
+        />
+        <DebugEvidencePanel
+          eyebrow="03 / 运行核心"
+          title="当前运行状态"
+          value={data.runtime.current}
+        />
       </section>
 
       <section className="debug-lower-grid" aria-label="运行诊断">
-        <DebugEvidencePanel eyebrow="04 / 连续性" title="近期状态切换" value={data.recentTransitions} />
+        <DebugEvidencePanel
+          eyebrow="04 / 连续性"
+          title="近期状态切换"
+          value={data.recentTransitions}
+        />
         <DebugEvidencePanel
           eyebrow="05 / 健康状态"
           title="记录与投递"
