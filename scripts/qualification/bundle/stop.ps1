@@ -1,6 +1,15 @@
 ﻿param([switch]$KeepGsiConfig)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
+function Get-ResultLabel {
+    param([string]$Result)
+    switch ($Result) {
+        'PASS' { return '通过' }
+        'FAIL' { return '失败' }
+        default { return '证据不足' }
+    }
+}
+
 $state = Read-RunState
 $runDir = [string]$state.runDir
 $finalizationPath = Join-Path $script:QualificationStateRoot 'finalization.json'
@@ -12,24 +21,24 @@ try {
     try {
         $finalRuntime = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/debug/runtime' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-runtime.json') -Value $finalRuntime
-    } catch { Write-Output '无法获取最终 runtime snapshot；报告会将受影响的 check 标为 INCONCLUSIVE。' }
+    } catch { Write-Output '无法获取最终运行状态快照；报告会将受影响的检查项标为“证据不足”。' }
     try {
         $finalHealth = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-health.json') -Value $finalHealth
-    } catch { Write-Output '无法获取最终 health snapshot。' }
+    } catch { Write-Output '无法获取最终健康状态快照。' }
 
     try {
         $finish = Invoke-QualificationApi -Method POST -Path '/qualification/finish'
         Write-Output ([string]$finish.message)
     } catch {
-        Write-Output 'qualification 完成接口不可用；正在优雅终止 Companion 进程。'
+        Write-Output '现场验收完成接口不可用；正在正常终止本地制播服务进程。'
         if (Test-ProcessRunning -ProcessId ([int]$state.processId)) { Stop-Process -Id ([int]$state.processId) }
     }
 
     $deadline = (Get-Date).AddSeconds(45)
     while ((Get-Date) -lt $deadline -and (Test-ProcessRunning -ProcessId ([int]$state.processId))) { Start-Sleep -Milliseconds 250 }
     if (Test-ProcessRunning -ProcessId ([int]$state.processId)) {
-        Write-Error 'Companion 在 45 秒内未停止；正在强制终止。'
+        Write-Error '本地制播服务在 45 秒内未停止；正在强制终止。'
         Stop-Process -Id ([int]$state.processId) -Force
         $exitCode = 1
     }
@@ -46,11 +55,11 @@ try {
         Start-Sleep -Milliseconds 250
     }
     if ($null -ne $completion) {
-        Write-Output "Qualification 结果：$([string]$completion.result)"
+        Write-Output "验收结果：$(Get-ResultLabel -Result ([string]$completion.result))"
         Write-Output "报告：$(Join-Path $script:BundleRoot ([string]$completion.reportPath))"
-        if ([string]$completion.verification -ne 'passed') { $exitCode = 1; throw 'evidence verification 失败' }
+        if ([string]$completion.verification -ne 'passed') { $exitCode = 1; throw '验收证据校验失败' }
         if ([string]$completion.cleanup -eq 'failed') {
-            Write-Error 'GSI 配置恢复失败；qualification 本地状态已保留，供诊断使用。'
+            Write-Error 'GSI 配置恢复失败；本地验收状态已保留，供诊断使用。'
             $exitCode = 1
         } elseif ([string]$completion.result -ne 'PASS') {
             $exitCode = 2
@@ -61,20 +70,20 @@ try {
             $supervisorProcessId = $state.supervisorProcessId
         }
         if ($null -ne $supervisorProcessId -and [int]$supervisorProcessId -gt 0 -and (Test-ProcessRunning -ProcessId ([int]$supervisorProcessId))) {
-            throw "qualification supervisor 仍在运行，不能安全执行 finalization 备用流程。请查看 $finalizationPath 和 supervisor.log"
+            throw "验收管理进程仍在运行，不能安全执行验收收尾备用流程。请查看 $finalizationPath 和 supervisor.log"
         }
         $fallbackOwner = $true
-        Write-Output 'qualification supervisor 未提供完成状态；正在执行 evidence 完成备用流程。'
+        Write-Output '验收管理进程未提供完成状态；正在执行验收证据收尾备用流程。'
         $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
         $evidenceScript = Join-Path $script:BundleRoot 'scripts\verify-evidence.mjs'
         & $nodePath $evidenceScript '--finish' $runDir
-        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence 报告生成失败' }
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw '验收报告生成失败' }
         & $nodePath $evidenceScript '--verify' $runDir
-        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw 'evidence verification 失败' }
+        if ($LASTEXITCODE -ne 0) { $exitCode = 1; throw '验收证据校验失败' }
 
         $qualification = Read-JsonFile -Path (Join-Path $runDir 'qualification.json')
         $fallbackVerificationPassed = $true
-        Write-Output "Qualification 结果：$([string]$qualification.result)"
+        Write-Output "验收结果：$(Get-ResultLabel -Result ([string]$qualification.result))"
         Write-Output "报告：$(Join-Path $runDir 'REPORT.md')"
         if ([string]$qualification.result -ne 'PASS') { $exitCode = 2 }
     }
@@ -119,7 +128,7 @@ try {
         }
     }
     if ($fallbackOwner -and (-not $fallbackVerificationPassed -or -not $fallbackCleanupPassed)) {
-        Write-Output 'Qualification 本地状态已保留，供诊断使用。'
+        Write-Output '本地验收状态已保留，供诊断使用。'
     }
 }
 exit $exitCode
