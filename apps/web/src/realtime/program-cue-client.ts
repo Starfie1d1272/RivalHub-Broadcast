@@ -186,10 +186,44 @@ export class ProgramCueClient {
       previous !== null &&
       (snapshot === null || !sameProgramContinuity(previous.cursor, snapshot.cursor))
     ) {
-      this.acceptance?.reset();
-      this.resetEphemeral('program-snapshot-reset');
-      this.update({ state: 'awaiting-baseline', baseline: null, error: null });
+      this.resubscribeAfterProgramSnapshotReset();
     }
+  }
+
+  private resubscribeAfterProgramSnapshotReset(): void {
+    const shouldReconnect =
+      this.snapshot.state === 'connecting' ||
+      this.snapshot.state === 'awaiting-baseline' ||
+      this.snapshot.state === 'live' ||
+      this.snapshot.state === 'reconnecting';
+
+    if (this.reconnectTimer !== undefined) {
+      this.scheduler.clearTimeout(this.reconnectTimer);
+      this.reconnectTimer = undefined;
+    }
+
+    const socket = this.socket;
+    this.socket = undefined;
+    this.acceptance = undefined;
+    this.connectionGeneration += 1;
+    this.reconnectIndex = 0;
+
+    this.resetEphemeral('program-snapshot-reset');
+    this.update({
+      state: shouldReconnect ? 'connecting' : this.snapshot.state,
+      baseline: null,
+      error: null,
+    });
+
+    if (socket !== undefined) {
+      try {
+        socket.close(1000, 'program snapshot reset');
+      } catch {
+        // The old socket is already invalidated by connectionGeneration.
+      }
+    }
+
+    if (shouldReconnect) this.connect();
   }
 
   private connect(): void {
