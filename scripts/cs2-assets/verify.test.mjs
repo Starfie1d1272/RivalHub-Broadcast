@@ -32,7 +32,7 @@ async function writeFixture({ mutateManifest } = {}) {
     items: [
       {
         canonicalKey: 'weapon.ak47',
-        sourceWeaponIds: ['weapon_ak47'],
+        gsiWeaponNames: ['weapon_ak47'],
         sourcePath: 'panorama/images/icons/equipment/ak47.vsvg_c',
         kind: 'firearm',
         family: 'rifle',
