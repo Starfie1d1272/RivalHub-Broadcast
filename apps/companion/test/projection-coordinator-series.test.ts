@@ -21,6 +21,7 @@ import { createProjectionCoordinator } from '../src/projections/projection-coord
 import { createProgramRuntime } from '../src/runtime/program-runtime.js';
 import { createCstvSourceManagers } from '../src/telemetry/cstv-source-manager.js';
 import { MatchContextController, MatchManifestLkgStore } from '../src/match-context/index.js';
+import { MAX_LOCAL_SNAPSHOT_BYTES } from '../src/local-web/transport-constants.js';
 
 async function readManifest(cleanScores = true): Promise<BroadcastManifestV1> {
   const manifest = JSON.parse(
@@ -223,7 +224,7 @@ describe('Section IV.E: Program / Protocol integration and boundaries', () => {
     }
   });
 
-  it('E.4 maximum legal Program snapshot with capped 256 roundHistory entries stays within the 64 KiB hard guard', async () => {
+  it('E.4 Program snapshot with the maximum retained 256-round history remains below the 64 KiB Program budget and the 256 KiB outbound transport hard guard', async () => {
     const dir = await mkdtemp(join(tmpdir(), 'lkg-test-'));
     try {
       const manifest = await readManifest(true);
@@ -281,10 +282,11 @@ describe('Section IV.E: Program / Protocol integration and boundaries', () => {
       const jsonString = JSON.stringify(parsed);
       const byteLength = Buffer.byteLength(jsonString, 'utf8');
 
-      // Hard guard check: must stay within 64 KiB (65536 bytes)
+      // Verification against both transport hard guard (256 KiB) and Program conservative budget (64 KiB):
+      expect(byteLength).toBeLessThanOrEqual(MAX_LOCAL_SNAPSHOT_BYTES);
       expect(byteLength).toBeLessThanOrEqual(64 * 1024);
       console.log(
-        `Max Program snapshot size with 256 roundHistory items: ${byteLength} bytes / 65536 bytes limit (${(byteLength / 1024).toFixed(1)} KiB)`,
+        `Representative 256-round Program snapshot size: ${byteLength} bytes (${(byteLength / 1024).toFixed(1)} KiB) — well within 64 KiB Program budget and 256 KiB outbound transport hard guard (${MAX_LOCAL_SNAPSHOT_BYTES} bytes)`,
       );
 
       await coordinator.close();
