@@ -5,7 +5,7 @@ import {
   CS2_ITEM_CATALOG,
   getCs2Asset,
   getCs2Item,
-  resolveCs2Item,
+  resolveCs2ItemByGsiName,
 } from '../src/index.js';
 
 describe('@rivalhub-broadcast/cs2-assets resolver', () => {
@@ -18,39 +18,57 @@ describe('@rivalhub-broadcast/cs2-assets resolver', () => {
   });
 
   it('returns an explicit unknown result without guessing a filename', () => {
-    expect(resolveCs2Item('weapon_future_unknown')).toEqual({
+    expect(resolveCs2ItemByGsiName('weapon_future_unknown')).toEqual({
       kind: 'unknown',
-      sourceWeaponId: 'weapon_future_unknown',
+      gsiWeaponName: 'weapon_future_unknown',
     });
   });
 
   it('resolves weapon, utility, objective and melee presentation metadata', () => {
-    expect(resolveCs2Item('weapon_ak47')).toMatchObject({
+    expect(resolveCs2ItemByGsiName('weapon_ak47')).toMatchObject({
       kind: 'known',
       item: { canonicalKey: 'weapon.ak47', ammoPresentation: 'magazine' },
     });
-    expect(resolveCs2Item('weapon_flashbang')).toMatchObject({
+    expect(resolveCs2ItemByGsiName('weapon_flashbang')).toMatchObject({
       kind: 'known',
       item: { canonicalKey: 'utility.flashbang', ammoPresentation: 'utility' },
     });
-    expect(resolveCs2Item('weapon_c4')).toMatchObject({
+    expect(resolveCs2ItemByGsiName('weapon_c4')).toMatchObject({
       kind: 'known',
       item: { canonicalKey: 'objective.c4', ammoPresentation: 'objective' },
     });
-    expect(resolveCs2Item('weapon_knife')).toMatchObject({
+    expect(resolveCs2ItemByGsiName('weapon_knife')).toMatchObject({
       kind: 'known',
       item: { canonicalKey: 'weapon.knife', ammoPresentation: 'none' },
     });
   });
 
   it('uses only explicit aliases for legacy/current source ids', () => {
-    expect(resolveCs2Item('weapon_p2000')).toMatchObject({
+    expect(resolveCs2ItemByGsiName('weapon_p2000')).toMatchObject({
       kind: 'known',
       item: { canonicalKey: 'weapon.hkp2000' },
     });
-    expect(resolveCs2Item('weapon_usp_silencer_off')).toEqual({
+    expect(resolveCs2ItemByGsiName('weapon_usp_silencer_off')).toEqual({
       kind: 'unknown',
-      sourceWeaponId: 'weapon_usp_silencer_off',
+      gsiWeaponName: 'weapon_usp_silencer_off',
     });
   });
+  it('resolves Program weapon presentation from name and never from the weapons-object slot key', () => {
+    const resolveProgramWeapon = (weapon: { readonly name: string | null }) =>
+      weapon.name === null ? null : resolveCs2ItemByGsiName(weapon.name);
+
+    const observed = { sourceWeaponId: 'weapon_2', name: 'weapon_ak47' } as const;
+    expect(resolveProgramWeapon(observed)).toMatchObject({
+      kind: 'known',
+      item: { canonicalKey: 'weapon.ak47' },
+    });
+    expect(resolveCs2ItemByGsiName(observed.sourceWeaponId)).toEqual({
+      kind: 'unknown',
+      gsiWeaponName: 'weapon_2',
+    });
+
+    const unavailable = { sourceWeaponId: 'weapon_3', name: null } as const;
+    expect(resolveProgramWeapon(unavailable)).toBeNull();
+  });
+
 });

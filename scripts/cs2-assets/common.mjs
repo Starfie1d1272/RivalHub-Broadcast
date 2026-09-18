@@ -57,7 +57,7 @@ export function validateCatalog(catalog) {
 
   const canonicalKeys = new Set();
   const assetIds = new Set();
-  const sourceIds = new Map();
+  const gsiNames = new Map();
   const validKinds = new Set(['firearm', 'melee', 'utility', 'equipment', 'objective']);
   const validAmmo = new Set([
     'magazine',
@@ -84,11 +84,11 @@ export function validateCatalog(catalog) {
     );
     assert(!canonicalKeys.has(item.canonicalKey), `canonicalKey 重复：${item.canonicalKey}`);
     canonicalKeys.add(item.canonicalKey);
-    assert(Array.isArray(item.sourceWeaponIds), `${label}.sourceWeaponIds 必须是数组`);
+    assert(Array.isArray(item.gsiWeaponNames), `${label}.gsiWeaponNames 必须是数组`);
     assert(Array.isArray(item.aliases), `${label}.aliases 必须是数组`);
     assert(
-      item.kind === 'equipment' || item.sourceWeaponIds.length > 0,
-      `${label} 缺少 sourceWeaponIds`,
+      item.kind === 'equipment' || item.gsiWeaponNames.length > 0,
+      `${label} 缺少 gsiWeaponNames`,
     );
     assert(validKinds.has(item.kind), `${label}.kind 无效：${String(item.kind)}`);
     validateSourcePath(item.sourcePath);
@@ -107,7 +107,7 @@ export function validateCatalog(catalog) {
       assert(item.evidence.length > 0, `${label} 的非 none ammoPresentation 必须有 evidence`);
     }
 
-    for (const key of ['sourceWeaponIds', 'aliases']) {
+    for (const key of ['gsiWeaponNames', 'aliases']) {
       const values = item[key];
       assert(
         values.every((value) => typeof value === 'string' && value.length > 0),
@@ -115,12 +115,12 @@ export function validateCatalog(catalog) {
       );
       assertSorted(values, `${label}.${key}`);
       for (const value of values) {
-        const owner = sourceIds.get(value);
+        const owner = gsiNames.get(value);
         assert(
           owner === undefined || owner === item.canonicalKey,
-          `source ID/alias 冲突：${value}`,
+          `GSI weapon name/alias 冲突：${value}`,
         );
-        sourceIds.set(value, item.canonicalKey);
+        gsiNames.set(value, item.canonicalKey);
       }
     }
 
@@ -134,7 +134,7 @@ export function validateCatalog(catalog) {
     }
   }
 
-  return { canonicalKeys, assetIds, sourceIds };
+  return { canonicalKeys, assetIds, gsiNames };
 }
 
 export function validateSourcePath(sourcePath) {

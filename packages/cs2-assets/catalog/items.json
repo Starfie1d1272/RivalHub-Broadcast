@@ -3,7 +3,7 @@
   "items": [
     {
       "canonicalKey": "equipment.armor",
-      "sourceWeaponIds": [],
+      "gsiWeaponNames": [],
       "sourcePath": "panorama/images/hud/teamcounter/armor.vsvg_c",
       "kind": "equipment",
       "family": "armor",
@@ -21,7 +21,7 @@
     },
     {
       "canonicalKey": "equipment.armor-helmet",
-      "sourceWeaponIds": [],
+      "gsiWeaponNames": [],
       "sourcePath": "panorama/images/hud/teamcounter/armor_helmet.vsvg_c",
       "kind": "equipment",
       "family": "armor",
@@ -39,7 +39,7 @@
     },
     {
       "canonicalKey": "equipment.defuse-kit",
-      "sourceWeaponIds": [],
+      "gsiWeaponNames": [],
       "sourcePath": "panorama/images/icons/equipment/defuser.vsvg_c",
       "kind": "equipment",
       "family": "defuse",
@@ -57,7 +57,7 @@
     },
     {
       "canonicalKey": "equipment.helmet",
-      "sourceWeaponIds": [],
+      "gsiWeaponNames": [],
       "sourcePath": "panorama/images/icons/equipment/helmet.vsvg_c",
       "kind": "equipment",
       "family": "armor",
@@ -75,7 +75,7 @@
     },
     {
       "canonicalKey": "objective.c4",
-      "sourceWeaponIds": ["weapon_c4"],
+      "gsiWeaponNames": ["weapon_c4"],
       "sourcePath": "panorama/images/icons/equipment/c4.vsvg_c",
       "kind": "objective",
       "family": "bomb",
@@ -93,7 +93,7 @@
     },
     {
       "canonicalKey": "utility.decoy",
-      "sourceWeaponIds": ["weapon_decoy"],
+      "gsiWeaponNames": ["weapon_decoy"],
       "sourcePath": "panorama/images/icons/equipment/decoy.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -111,7 +111,7 @@
     },
     {
       "canonicalKey": "utility.flashbang",
-      "sourceWeaponIds": ["weapon_flashbang"],
+      "gsiWeaponNames": ["weapon_flashbang"],
       "sourcePath": "panorama/images/icons/equipment/flashbang.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -129,7 +129,7 @@
     },
     {
       "canonicalKey": "utility.healthshot",
-      "sourceWeaponIds": ["weapon_healthshot"],
+      "gsiWeaponNames": ["weapon_healthshot"],
       "sourcePath": "panorama/images/icons/equipment/healthshot.vsvg_c",
       "kind": "utility",
       "family": "medical",
@@ -147,7 +147,7 @@
     },
     {
       "canonicalKey": "utility.hegrenade",
-      "sourceWeaponIds": ["weapon_hegrenade"],
+      "gsiWeaponNames": ["weapon_hegrenade"],
       "sourcePath": "panorama/images/icons/equipment/hegrenade.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -165,7 +165,7 @@
     },
     {
       "canonicalKey": "utility.incgrenade",
-      "sourceWeaponIds": ["weapon_incgrenade"],
+      "gsiWeaponNames": ["weapon_incgrenade"],
       "sourcePath": "panorama/images/icons/equipment/incgrenade.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -183,7 +183,7 @@
     },
     {
       "canonicalKey": "utility.molotov",
-      "sourceWeaponIds": ["weapon_molotov"],
+      "gsiWeaponNames": ["weapon_molotov"],
       "sourcePath": "panorama/images/icons/equipment/molotov.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -201,7 +201,7 @@
     },
     {
       "canonicalKey": "utility.smokegrenade",
-      "sourceWeaponIds": ["weapon_smokegrenade"],
+      "gsiWeaponNames": ["weapon_smokegrenade"],
       "sourcePath": "panorama/images/icons/equipment/smokegrenade.vsvg_c",
       "kind": "utility",
       "family": "grenade",
@@ -219,7 +219,7 @@
     },
     {
       "canonicalKey": "utility.taser",
-      "sourceWeaponIds": ["weapon_taser"],
+      "gsiWeaponNames": ["weapon_taser"],
       "sourcePath": "panorama/images/icons/equipment/taser.vsvg_c",
       "kind": "utility",
       "family": "taser",
@@ -237,7 +237,7 @@
     },
     {
       "canonicalKey": "weapon.ak47",
-      "sourceWeaponIds": ["weapon_ak47"],
+      "gsiWeaponNames": ["weapon_ak47"],
       "sourcePath": "panorama/images/icons/equipment/ak47.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -255,7 +255,7 @@
     },
     {
       "canonicalKey": "weapon.aug",
-      "sourceWeaponIds": ["weapon_aug"],
+      "gsiWeaponNames": ["weapon_aug"],
       "sourcePath": "panorama/images/icons/equipment/aug.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -273,7 +273,7 @@
     },
     {
       "canonicalKey": "weapon.awp",
-      "sourceWeaponIds": ["weapon_awp"],
+      "gsiWeaponNames": ["weapon_awp"],
       "sourcePath": "panorama/images/icons/equipment/awp.vsvg_c",
       "kind": "firearm",
       "family": "sniper-rifle",
@@ -291,7 +291,7 @@
     },
     {
       "canonicalKey": "weapon.bayonet",
-      "sourceWeaponIds": ["weapon_bayonet"],
+      "gsiWeaponNames": ["weapon_bayonet"],
       "sourcePath": "panorama/images/icons/equipment/bayonet.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -309,7 +309,7 @@
     },
     {
       "canonicalKey": "weapon.bizon",
-      "sourceWeaponIds": ["weapon_bizon"],
+      "gsiWeaponNames": ["weapon_bizon"],
       "sourcePath": "panorama/images/icons/equipment/bizon.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -327,7 +327,7 @@
     },
     {
       "canonicalKey": "weapon.cz75a",
-      "sourceWeaponIds": ["weapon_cz75a"],
+      "gsiWeaponNames": ["weapon_cz75a"],
       "sourcePath": "panorama/images/icons/equipment/cz75a.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -345,7 +345,7 @@
     },
     {
       "canonicalKey": "weapon.deagle",
-      "sourceWeaponIds": ["weapon_deagle"],
+      "gsiWeaponNames": ["weapon_deagle"],
       "sourcePath": "panorama/images/icons/equipment/deagle.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -363,7 +363,7 @@
     },
     {
       "canonicalKey": "weapon.elite",
-      "sourceWeaponIds": ["weapon_elite"],
+      "gsiWeaponNames": ["weapon_elite"],
       "sourcePath": "panorama/images/icons/equipment/elite.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -381,7 +381,7 @@
     },
     {
       "canonicalKey": "weapon.famas",
-      "sourceWeaponIds": ["weapon_famas"],
+      "gsiWeaponNames": ["weapon_famas"],
       "sourcePath": "panorama/images/icons/equipment/famas.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -399,7 +399,7 @@
     },
     {
       "canonicalKey": "weapon.fiveseven",
-      "sourceWeaponIds": ["weapon_fiveseven"],
+      "gsiWeaponNames": ["weapon_fiveseven"],
       "sourcePath": "panorama/images/icons/equipment/fiveseven.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -417,7 +417,7 @@
     },
     {
       "canonicalKey": "weapon.g3sg1",
-      "sourceWeaponIds": ["weapon_g3sg1"],
+      "gsiWeaponNames": ["weapon_g3sg1"],
       "sourcePath": "panorama/images/icons/equipment/g3sg1.vsvg_c",
       "kind": "firearm",
       "family": "sniper-rifle",
@@ -435,7 +435,7 @@
     },
     {
       "canonicalKey": "weapon.galilar",
-      "sourceWeaponIds": ["weapon_galilar"],
+      "gsiWeaponNames": ["weapon_galilar"],
       "sourcePath": "panorama/images/icons/equipment/galilar.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -453,7 +453,7 @@
     },
     {
       "canonicalKey": "weapon.glock",
-      "sourceWeaponIds": ["weapon_glock"],
+      "gsiWeaponNames": ["weapon_glock"],
       "sourcePath": "panorama/images/icons/equipment/glock.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -471,7 +471,7 @@
     },
     {
       "canonicalKey": "weapon.hkp2000",
-      "sourceWeaponIds": ["weapon_hkp2000"],
+      "gsiWeaponNames": ["weapon_hkp2000"],
       "sourcePath": "panorama/images/icons/equipment/hkp2000.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -493,7 +493,7 @@
     },
     {
       "canonicalKey": "weapon.knife",
-      "sourceWeaponIds": ["weapon_knife"],
+      "gsiWeaponNames": ["weapon_knife"],
       "sourcePath": "panorama/images/icons/equipment/knife.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -511,7 +511,7 @@
     },
     {
       "canonicalKey": "weapon.knife-butterfly",
-      "sourceWeaponIds": ["weapon_knife_butterfly"],
+      "gsiWeaponNames": ["weapon_knife_butterfly"],
       "sourcePath": "panorama/images/icons/equipment/knife_butterfly.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -529,7 +529,7 @@
     },
     {
       "canonicalKey": "weapon.knife-canis",
-      "sourceWeaponIds": ["weapon_knife_canis"],
+      "gsiWeaponNames": ["weapon_knife_canis"],
       "sourcePath": "panorama/images/icons/equipment/knife_canis.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -547,7 +547,7 @@
     },
     {
       "canonicalKey": "weapon.knife-cord",
-      "sourceWeaponIds": ["weapon_knife_cord"],
+      "gsiWeaponNames": ["weapon_knife_cord"],
       "sourcePath": "panorama/images/icons/equipment/knife_cord.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -565,7 +565,7 @@
     },
     {
       "canonicalKey": "weapon.knife-css",
-      "sourceWeaponIds": ["weapon_knife_css"],
+      "gsiWeaponNames": ["weapon_knife_css"],
       "sourcePath": "panorama/images/icons/equipment/knife_css.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -583,7 +583,7 @@
     },
     {
       "canonicalKey": "weapon.knife-falchion",
-      "sourceWeaponIds": ["weapon_knife_falchion"],
+      "gsiWeaponNames": ["weapon_knife_falchion"],
       "sourcePath": "panorama/images/icons/equipment/knife_falchion.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -601,7 +601,7 @@
     },
     {
       "canonicalKey": "weapon.knife-flip",
-      "sourceWeaponIds": ["weapon_knife_flip"],
+      "gsiWeaponNames": ["weapon_knife_flip"],
       "sourcePath": "panorama/images/icons/equipment/knife_flip.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -619,7 +619,7 @@
     },
     {
       "canonicalKey": "weapon.knife-gut",
-      "sourceWeaponIds": ["weapon_knife_gut"],
+      "gsiWeaponNames": ["weapon_knife_gut"],
       "sourcePath": "panorama/images/icons/equipment/knife_gut.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -637,7 +637,7 @@
     },
     {
       "canonicalKey": "weapon.knife-gypsy-jackknife",
-      "sourceWeaponIds": ["weapon_knife_gypsy_jackknife"],
+      "gsiWeaponNames": ["weapon_knife_gypsy_jackknife"],
       "sourcePath": "panorama/images/icons/equipment/knife_gypsy_jackknife.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -655,7 +655,7 @@
     },
     {
       "canonicalKey": "weapon.knife-karambit",
-      "sourceWeaponIds": ["weapon_knife_karambit"],
+      "gsiWeaponNames": ["weapon_knife_karambit"],
       "sourcePath": "panorama/images/icons/equipment/knife_karambit.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -673,7 +673,7 @@
     },
     {
       "canonicalKey": "weapon.knife-kukri",
-      "sourceWeaponIds": ["weapon_knife_kukri"],
+      "gsiWeaponNames": ["weapon_knife_kukri"],
       "sourcePath": "panorama/images/icons/equipment/knife_kukri.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -691,7 +691,7 @@
     },
     {
       "canonicalKey": "weapon.knife-m9-bayonet",
-      "sourceWeaponIds": ["weapon_knife_m9_bayonet"],
+      "gsiWeaponNames": ["weapon_knife_m9_bayonet"],
       "sourcePath": "panorama/images/icons/equipment/knife_m9_bayonet.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -709,7 +709,7 @@
     },
     {
       "canonicalKey": "weapon.knife-outdoor",
-      "sourceWeaponIds": ["weapon_knife_outdoor"],
+      "gsiWeaponNames": ["weapon_knife_outdoor"],
       "sourcePath": "panorama/images/icons/equipment/knife_outdoor.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -727,7 +727,7 @@
     },
     {
       "canonicalKey": "weapon.knife-push",
-      "sourceWeaponIds": ["weapon_knife_push"],
+      "gsiWeaponNames": ["weapon_knife_push"],
       "sourcePath": "panorama/images/icons/equipment/knife_push.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -745,7 +745,7 @@
     },
     {
       "canonicalKey": "weapon.knife-skeleton",
-      "sourceWeaponIds": ["weapon_knife_skeleton"],
+      "gsiWeaponNames": ["weapon_knife_skeleton"],
       "sourcePath": "panorama/images/icons/equipment/knife_skeleton.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -763,7 +763,7 @@
     },
     {
       "canonicalKey": "weapon.knife-stiletto",
-      "sourceWeaponIds": ["weapon_knife_stiletto"],
+      "gsiWeaponNames": ["weapon_knife_stiletto"],
       "sourcePath": "panorama/images/icons/equipment/knife_stiletto.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -781,7 +781,7 @@
     },
     {
       "canonicalKey": "weapon.knife-survival-bowie",
-      "sourceWeaponIds": ["weapon_knife_survival_bowie"],
+      "gsiWeaponNames": ["weapon_knife_survival_bowie"],
       "sourcePath": "panorama/images/icons/equipment/knife_survival_bowie.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -799,7 +799,7 @@
     },
     {
       "canonicalKey": "weapon.knife-t",
-      "sourceWeaponIds": ["weapon_knife_t"],
+      "gsiWeaponNames": ["weapon_knife_t"],
       "sourcePath": "panorama/images/icons/equipment/knife_t.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -817,7 +817,7 @@
     },
     {
       "canonicalKey": "weapon.knife-tactical",
-      "sourceWeaponIds": ["weapon_knife_tactical"],
+      "gsiWeaponNames": ["weapon_knife_tactical"],
       "sourcePath": "panorama/images/icons/equipment/knife_tactical.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -835,7 +835,7 @@
     },
     {
       "canonicalKey": "weapon.knife-twinblade",
-      "sourceWeaponIds": ["weapon_knife_twinblade"],
+      "gsiWeaponNames": ["weapon_knife_twinblade"],
       "sourcePath": "panorama/images/icons/equipment/knife_twinblade.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -853,7 +853,7 @@
     },
     {
       "canonicalKey": "weapon.knife-ursus",
-      "sourceWeaponIds": ["weapon_knife_ursus"],
+      "gsiWeaponNames": ["weapon_knife_ursus"],
       "sourcePath": "panorama/images/icons/equipment/knife_ursus.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -871,7 +871,7 @@
     },
     {
       "canonicalKey": "weapon.knife-widowmaker",
-      "sourceWeaponIds": ["weapon_knife_widowmaker"],
+      "gsiWeaponNames": ["weapon_knife_widowmaker"],
       "sourcePath": "panorama/images/icons/equipment/knife_widowmaker.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -889,7 +889,7 @@
     },
     {
       "canonicalKey": "weapon.knifegg",
-      "sourceWeaponIds": ["weapon_knifegg"],
+      "gsiWeaponNames": ["weapon_knifegg"],
       "sourcePath": "panorama/images/icons/equipment/knifegg.vsvg_c",
       "kind": "melee",
       "family": "melee",
@@ -907,7 +907,7 @@
     },
     {
       "canonicalKey": "weapon.m249",
-      "sourceWeaponIds": ["weapon_m249"],
+      "gsiWeaponNames": ["weapon_m249"],
       "sourcePath": "panorama/images/icons/equipment/m249.vsvg_c",
       "kind": "firearm",
       "family": "machinegun",
@@ -925,7 +925,7 @@
     },
     {
       "canonicalKey": "weapon.m4a1",
-      "sourceWeaponIds": ["weapon_m4a1"],
+      "gsiWeaponNames": ["weapon_m4a1"],
       "sourcePath": "panorama/images/icons/equipment/m4a1.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -943,7 +943,7 @@
     },
     {
       "canonicalKey": "weapon.m4a1-silencer",
-      "sourceWeaponIds": ["weapon_m4a1_silencer"],
+      "gsiWeaponNames": ["weapon_m4a1_silencer"],
       "sourcePath": "panorama/images/icons/equipment/m4a1_silencer.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -961,7 +961,7 @@
     },
     {
       "canonicalKey": "weapon.mac10",
-      "sourceWeaponIds": ["weapon_mac10"],
+      "gsiWeaponNames": ["weapon_mac10"],
       "sourcePath": "panorama/images/icons/equipment/mac10.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -979,7 +979,7 @@
     },
     {
       "canonicalKey": "weapon.mag7",
-      "sourceWeaponIds": ["weapon_mag7"],
+      "gsiWeaponNames": ["weapon_mag7"],
       "sourcePath": "panorama/images/icons/equipment/mag7.vsvg_c",
       "kind": "firearm",
       "family": "shotgun",
@@ -997,7 +997,7 @@
     },
     {
       "canonicalKey": "weapon.mp5sd",
-      "sourceWeaponIds": ["weapon_mp5sd"],
+      "gsiWeaponNames": ["weapon_mp5sd"],
       "sourcePath": "panorama/images/icons/equipment/mp5sd.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -1015,7 +1015,7 @@
     },
     {
       "canonicalKey": "weapon.mp7",
-      "sourceWeaponIds": ["weapon_mp7"],
+      "gsiWeaponNames": ["weapon_mp7"],
       "sourcePath": "panorama/images/icons/equipment/mp7.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -1033,7 +1033,7 @@
     },
     {
       "canonicalKey": "weapon.mp9",
-      "sourceWeaponIds": ["weapon_mp9"],
+      "gsiWeaponNames": ["weapon_mp9"],
       "sourcePath": "panorama/images/icons/equipment/mp9.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -1051,7 +1051,7 @@
     },
     {
       "canonicalKey": "weapon.negev",
-      "sourceWeaponIds": ["weapon_negev"],
+      "gsiWeaponNames": ["weapon_negev"],
       "sourcePath": "panorama/images/icons/equipment/negev.vsvg_c",
       "kind": "firearm",
       "family": "machinegun",
@@ -1069,7 +1069,7 @@
     },
     {
       "canonicalKey": "weapon.nova",
-      "sourceWeaponIds": ["weapon_nova"],
+      "gsiWeaponNames": ["weapon_nova"],
       "sourcePath": "panorama/images/icons/equipment/nova.vsvg_c",
       "kind": "firearm",
       "family": "shotgun",
@@ -1087,7 +1087,7 @@
     },
     {
       "canonicalKey": "weapon.p250",
-      "sourceWeaponIds": ["weapon_p250"],
+      "gsiWeaponNames": ["weapon_p250"],
       "sourcePath": "panorama/images/icons/equipment/p250.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -1105,7 +1105,7 @@
     },
     {
       "canonicalKey": "weapon.p90",
-      "sourceWeaponIds": ["weapon_p90"],
+      "gsiWeaponNames": ["weapon_p90"],
       "sourcePath": "panorama/images/icons/equipment/p90.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -1123,7 +1123,7 @@
     },
     {
       "canonicalKey": "weapon.revolver",
-      "sourceWeaponIds": ["weapon_revolver"],
+      "gsiWeaponNames": ["weapon_revolver"],
       "sourcePath": "panorama/images/icons/equipment/revolver.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -1141,7 +1141,7 @@
     },
     {
       "canonicalKey": "weapon.sawedoff",
-      "sourceWeaponIds": ["weapon_sawedoff"],
+      "gsiWeaponNames": ["weapon_sawedoff"],
       "sourcePath": "panorama/images/icons/equipment/sawedoff.vsvg_c",
       "kind": "firearm",
       "family": "shotgun",
@@ -1159,7 +1159,7 @@
     },
     {
       "canonicalKey": "weapon.scar20",
-      "sourceWeaponIds": ["weapon_scar20"],
+      "gsiWeaponNames": ["weapon_scar20"],
       "sourcePath": "panorama/images/icons/equipment/scar20.vsvg_c",
       "kind": "firearm",
       "family": "sniper-rifle",
@@ -1177,7 +1177,7 @@
     },
     {
       "canonicalKey": "weapon.sg556",
-      "sourceWeaponIds": ["weapon_sg556"],
+      "gsiWeaponNames": ["weapon_sg556"],
       "sourcePath": "panorama/images/icons/equipment/sg556.vsvg_c",
       "kind": "firearm",
       "family": "rifle",
@@ -1195,7 +1195,7 @@
     },
     {
       "canonicalKey": "weapon.ssg08",
-      "sourceWeaponIds": ["weapon_ssg08"],
+      "gsiWeaponNames": ["weapon_ssg08"],
       "sourcePath": "panorama/images/icons/equipment/ssg08.vsvg_c",
       "kind": "firearm",
       "family": "sniper-rifle",
@@ -1213,7 +1213,7 @@
     },
     {
       "canonicalKey": "weapon.tec9",
-      "sourceWeaponIds": ["weapon_tec9"],
+      "gsiWeaponNames": ["weapon_tec9"],
       "sourcePath": "panorama/images/icons/equipment/tec9.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -1231,7 +1231,7 @@
     },
     {
       "canonicalKey": "weapon.ump45",
-      "sourceWeaponIds": ["weapon_ump45"],
+      "gsiWeaponNames": ["weapon_ump45"],
       "sourcePath": "panorama/images/icons/equipment/ump45.vsvg_c",
       "kind": "firearm",
       "family": "smg",
@@ -1249,7 +1249,7 @@
     },
     {
       "canonicalKey": "weapon.usp-silencer",
-      "sourceWeaponIds": ["weapon_usp_silencer"],
+      "gsiWeaponNames": ["weapon_usp_silencer"],
       "sourcePath": "panorama/images/icons/equipment/usp_silencer.vsvg_c",
       "kind": "firearm",
       "family": "pistol",
@@ -1267,7 +1267,7 @@
     },
     {
       "canonicalKey": "weapon.xm1014",
-      "sourceWeaponIds": ["weapon_xm1014"],
+      "gsiWeaponNames": ["weapon_xm1014"],
       "sourcePath": "panorama/images/icons/equipment/xm1014.vsvg_c",
       "kind": "firearm",
       "family": "shotgun",

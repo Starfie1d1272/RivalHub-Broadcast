@@ -15,7 +15,7 @@ export interface Cs2EvidenceReference {
 
 export interface Cs2ItemMetadata {
   readonly canonicalKey: string;
-  readonly sourceWeaponIds: readonly string[];
+  readonly gsiWeaponNames: readonly string[];
   readonly sourcePath: string;
   readonly kind: Cs2ItemKind;
   readonly family: string;
@@ -65,5 +65,5 @@ export type Cs2AssetResolution =
     }
   | {
       readonly kind: 'unknown';
-      readonly sourceWeaponId: string;
+      readonly gsiWeaponName: string;
     };
