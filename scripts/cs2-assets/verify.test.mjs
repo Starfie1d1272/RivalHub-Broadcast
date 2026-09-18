@@ -14,7 +14,7 @@ afterEach(async () => {
   );
 });
 
-async function writeFixture({ mutateManifest } = {}) {
+async function writeFixture({ mutateCatalog, mutateManifest } = {}) {
   const root = await mkdtemp(join(process.cwd(), '.agent-tmp-cs2-assets-test-'));
   temporaryRoots.push(root);
   const packageRoot = join(root, 'packages', 'cs2-assets');
@@ -45,6 +45,7 @@ async function writeFixture({ mutateManifest } = {}) {
       },
     ],
   };
+  mutateCatalog?.(catalog);
   const manifest = {
     schemaVersion: 1,
     source: { appId: 730, steamBuildId: '123456', container: 'game/csgo/pak01_dir.vpk' },
@@ -99,6 +100,35 @@ describe('cs2-assets verify', () => {
     });
     await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
       'outputPath 必须包含 outputSha256',
+    );
+  });
+
+
+  it('rejects a catalog-known item when its manifest asset is missing', async () => {
+    const root = await writeFixture({
+      mutateManifest: (manifest) => {
+        delete manifest.assets['weapon.ak47'];
+      },
+    });
+    await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
+      'catalog assetId 集合必须与 manifest assets 集合完全一致',
+    );
+  });
+
+  it('rejects duplicate GSI weapon names or aliases across catalog items', async () => {
+    const root = await writeFixture({
+      mutateCatalog: (catalog) => {
+        catalog.items.push({
+          ...catalog.items[0],
+          canonicalKey: 'weapon.ak47-duplicate',
+          assetId: 'weapon.ak47-duplicate',
+          gsiWeaponNames: [],
+          aliases: ['weapon_ak47'],
+        });
+      },
+    });
+    await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
+      'GSI weapon name/alias 冲突：weapon_ak47',
     );
   });
 });
