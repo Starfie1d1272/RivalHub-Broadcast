@@ -720,4 +720,201 @@ describe('SeriesProgress', () => {
       roundHistory: { completeness: 'unavailable', rounds: [] },
     });
   });
+  it('C.1 recovers regulation mid-map history from round_wins, preserves unknown win condition, and deduplicates round_ended with round_wins', () => {
+    const context = contextFixture('bo1');
+    const midMapWins = [
+      { roundNumber: 1, winnerSide: 'CT' as const, winCondition: 'elimination' as const },
+      { roundNumber: 2, winnerSide: 'T' as const, winCondition: 'bomb' as const },
+      { roundNumber: 3, winnerSide: 'CT' as const, winCondition: 'unknown' as const },
+      { roundNumber: 4, winnerSide: 'CT' as const, winCondition: 'defuse' as const },
+    ];
+
+    // Mid-map attach with score 3:1 and 4 round_wins:
+    let progress = reduce(
+      createSeriesProgress(context),
+      [],
+      observation('de_mirage', 1, { ct: 3, t: 1 }, midMapWins),
+      proof(1, 'CT'),
+    );
+    expect(progress.maps[0]?.roundHistory.rounds).toHaveLength(4);
+    expect(progress.maps[0]?.roundHistory.completeness).toBe('complete');
+    // Round 3 preserves unknown winCondition
+    expect(progress.maps[0]?.roundHistory.rounds[2]?.winCondition).toBe('unknown');
+
+    // Live round_ended arrives for round 4 with known winCondition:
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          roundNumber: 4,
+          winnerSide: 'CT',
+          winCondition: 'defuse',
+        },
+      ],
+      observation('de_mirage', 1, { ct: 3, t: 1 }, midMapWins),
+      proof(1, 'CT'),
+    );
+    // Deduplicated: round 4 is NOT duplicated into 5 entries, and unproven historical entrant is not backfilled:
+    expect(progress.maps[0]?.roundHistory.rounds).toHaveLength(4);
+    expect(progress.maps[0]?.roundHistory.rounds[3]).toMatchObject({
+      roundNumber: 4,
+      winnerSide: 'CT',
+      winnerEntryId: null,
+      winCondition: 'defuse',
+    });
+  });
+
+  it('C.2 flags partial when restore + round_wins + score have conflict combinations and unprovable OT indices without guessing round offsets', () => {
+    const context = contextFixture('bo1');
+
+    // Score is 7:5 (12 rounds total), but roundWins only has 8 rounds:
+    const incompleteWins = Array.from({ length: 8 }, (_, i) => ({
+      roundNumber: i + 1,
+      winnerSide: 'CT' as const,
+      winCondition: 'elimination' as const,
+    }));
+    const partialProgress = reduce(
+      createSeriesProgress(context),
+      [],
+      observation('de_mirage', 1, { ct: 7, t: 5 }, incompleteWins),
+      proof(1, 'CT'),
+    );
+    expect(partialProgress.maps[0]?.roundHistory.completeness).toBe('partial');
+    expect(partialProgress.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'round_history_partial' })]),
+    );
+
+    // OT scenario: score is 16:15, but roundWins has fewer rounds than total score:
+    const otWins = [
+      { roundNumber: 1, winnerSide: 'CT' as const, winCondition: 'elimination' as const },
+      { roundNumber: 2, winnerSide: 'T' as const, winCondition: 'bomb' as const },
+    ];
+    const otProgress = reduce(
+      createSeriesProgress(context),
+      [],
+      observation('de_mirage', 1, { ct: 16, t: 15 }, otWins),
+      proof(1, 'CT'),
+    );
+    // Must fail closed to partial, no guessing OT offset:
+    expect(otProgress.maps[0]?.roundHistory.completeness).toBe('partial');
+    expect(otProgress.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'round_history_partial' })]),
+    );
+  });
+
+  it('D.1 verifies pick, decider, independent teamAStartSide across BO1, BO3, and BO5 formats', () => {
+    const bo1 = createSeriesProgress(contextFixture('bo1'));
+    expect(bo1.format).toBe('bo1');
+    expect(bo1.requiredWins).toBe(1);
+    expect(bo1.maps).toHaveLength(1);
+
+    const bo3 = createSeriesProgress(contextFixture('bo3'));
+    expect(bo3.format).toBe('bo3');
+    expect(bo3.requiredWins).toBe(2);
+    expect(bo3.maps).toHaveLength(3);
+    expect(bo3.maps[0]?.selection).toEqual({ kind: 'pick', entryId: 'a' });
+    expect(bo3.maps[0]?.teamAStartSide).toBe('CT');
+    expect(bo3.maps[1]?.selection).toEqual({ kind: 'pick', entryId: 'b' });
+    expect(bo3.maps[1]?.teamAStartSide).toBe('T');
+    // Map 3 is decider, with start side independent from pick
+    expect(bo3.maps[2]?.selection).toEqual({ kind: 'decider' });
+
+    const bo5 = createSeriesProgress(contextFixture('bo5'));
+    expect(bo5.format).toBe('bo5');
+    expect(bo5.requiredWins).toBe(3);
+    expect(bo5.maps).toHaveLength(5);
+  });
+
+  it('D.2 normalizes map aliases (Dust 2 / Dust II / dust2, Mirage / mirage) and fails closed on duplicate canonical map slot ambiguity', () => {
+    // 1. Dust 2 / Dust II / dust2 aliases:
+    const contextWithDust2: MatchContext = {
+      ...contextFixture('bo3'),
+      maps: [
+        {
+          mapId: 'map-1',
+          mapOrder: 1,
+          mapName: 'Dust II',
+          pickedByEntryId: 'a',
+          teamAStartSide: 'CT',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+        {
+          mapId: 'map-2',
+          mapOrder: 2,
+          mapName: 'Mirage',
+          pickedByEntryId: 'b',
+          teamAStartSide: 'T',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+        {
+          mapId: 'map-3',
+          mapOrder: 3,
+          mapName: 'de_inferno',
+          pickedByEntryId: null,
+          teamAStartSide: 'CT',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+      ],
+    };
+    const progress = reduce(createSeriesProgress(contextWithDust2), [], observation('dust2', 1));
+    expect(progress.bindingState).toBe('bound');
+    expect(progress.currentMapOrder).toBe(1);
+    expect(progress.maps[0]?.mapName).toBe('de_dust2');
+
+    // 2. Duplicate canonical map slots ambiguity fails closed:
+    const ambiguousContext: MatchContext = {
+      ...contextFixture('bo3'),
+      maps: [
+        {
+          mapId: 'map-1',
+          mapOrder: 1,
+          mapName: 'de_mirage',
+          pickedByEntryId: 'a',
+          teamAStartSide: 'CT',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+        {
+          mapId: 'map-2',
+          mapOrder: 2,
+          mapName: 'Mirage', // Both map 1 and map 2 canonicalize to de_mirage!
+          pickedByEntryId: 'b',
+          teamAStartSide: 'T',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+        {
+          mapId: 'map-3',
+          mapOrder: 3,
+          mapName: 'de_inferno',
+          pickedByEntryId: null,
+          teamAStartSide: 'CT',
+          scoreA: null,
+          scoreB: null,
+          completedAt: null,
+        },
+      ],
+    };
+    const ambiguousProgress = reduce(
+      createSeriesProgress(ambiguousContext),
+      [],
+      observation('mirage', 1),
+    );
+    expect(ambiguousProgress.bindingState).toBe('needs_operator');
+    expect(ambiguousProgress.currentMapOrder).toBeNull();
+    expect(ambiguousProgress.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'map_ambiguous' })]),
+    );
+  });
 });
