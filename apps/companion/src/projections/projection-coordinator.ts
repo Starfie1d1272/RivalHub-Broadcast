@@ -15,6 +15,7 @@ import {
   type ObserverAssistProjection,
   type ProgramProjection,
 } from '@rivalhub-broadcast/core/projection';
+import type { OperatorCommand, SeriesSideProof } from '@rivalhub-broadcast/core/series-progress';
 import type { RuntimeReduceResult } from '@rivalhub-broadcast/core/runtime';
 import { assistSnapshotSchema, type AssistSnapshot } from '@rivalhub-broadcast/protocol/assist';
 import {
@@ -35,7 +36,7 @@ import { projectRadarFrame, type RadarFrame } from '@rivalhub-broadcast/radar';
 import type { MatchContextBinding } from '../match-context/index.js';
 import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
 import type { CstvSourceManagers } from '../telemetry/cstv-source-manager.js';
-import type { ProgramRuntime } from '../runtime/program-runtime.js';
+import type { ProgramRuntime, SeriesOperatorCommandResult } from '../runtime/program-runtime.js';
 import {
   createLocalChannelPublisher,
   type LocalChannelPublisher,
@@ -253,8 +254,12 @@ export class ProjectionCoordinator {
       const runtimeView = selectProgramSafeRuntimeView(runtimeState);
       const identity = this.resolveIdentity(runtimeSnapshot);
       const activeLineup = this.resolveActiveLineup(runtimeSnapshot, identity);
-      const nowMonotonicMs = this.nowMonotonicMs();
       const context = this.contextBinding?.context;
+      const seriesProgress = this.programRuntime.synchronizeSeriesProgress(
+        context,
+        seriesSideProofFor(runtimeSnapshot, identity),
+      );
+      const nowMonotonicMs = this.nowMonotonicMs();
       const program = projectProgram({
         runtime: runtimeView,
         ...(context === undefined ? {} : { context }),
@@ -263,6 +268,7 @@ export class ProjectionCoordinator {
           : { contextFreshness: this.contextBinding.freshness }),
         identity,
         activeLineup,
+        seriesProgress,
         nowMonotonicMs,
         continuityPolicy: runtimeSnapshot.continuityPolicy,
       });
@@ -292,6 +298,12 @@ export class ProjectionCoordinator {
 
   getCurrent(): ProjectionBundle {
     return this.current;
+  }
+
+  executeOperatorCommand(command: OperatorCommand): SeriesOperatorCommandResult {
+    const result = this.programRuntime.executeOperatorCommand(command);
+    if (!this.closed) this.refresh();
+    return result;
   }
 
   getPublisher(channel: 'program'): LocalChannelPublisher<ProgramSnapshot>;
@@ -587,6 +599,29 @@ export class ProjectionCoordinator {
     this.staleTimerKey = undefined;
     this.staleDeadline = undefined;
   }
+}
+
+function seriesSideProofFor(
+  runtimeSnapshot: ReturnType<ProgramRuntime['getSnapshot']>,
+  identity: IdentityResolution,
+): SeriesSideProof | null {
+  const runtime = runtimeSnapshot.current;
+  if (
+    !identity.capabilities.identityDependentResult ||
+    identity.sourceGeneration !== runtime.programSource.generation ||
+    identity.mapEpoch !== runtime.map.epoch ||
+    identity.sideMapping.a === 'unknown' ||
+    identity.sideMapping.b === 'unknown' ||
+    identity.sideMapping.a === identity.sideMapping.b
+  ) {
+    return null;
+  }
+  return {
+    sourceGeneration: runtime.programSource.generation,
+    mapEpoch: runtime.map.epoch,
+    a: identity.sideMapping.a,
+    b: identity.sideMapping.b,
+  };
 }
 
 function sameStaleKey(

@@ -183,6 +183,7 @@ function makeLivePayload({
   identity = 'unbound',
   match = null,
   teams = { ct: neutralTeam('CT'), t: neutralTeam('T') },
+  series = null,
   players = observedPlayers(),
   mapName = 'de_ancient',
   mapMode = 'competitive',
@@ -199,6 +200,7 @@ function makeLivePayload({
   readonly identity?: LiveStatus['identity'];
   readonly match?: ProgramPayload['match'];
   readonly teams?: ProgramPayload['teams'];
+  readonly series?: ProgramPayload['series'];
   readonly players?: ProgramPlayer[];
   readonly mapName?: string | null;
   readonly mapMode?: string | null;
@@ -215,6 +217,7 @@ function makeLivePayload({
     status: { telemetry: 'fresh', context, identity },
     match,
     teams,
+    series,
     map: {
       name: mapName,
       mode: mapMode,
@@ -249,6 +252,7 @@ function awaitingPayload(): ProgramPayload {
     status: { telemetry: 'awaiting', context: 'unbound', identity: 'unbound' },
     match: null,
     teams: { ct: neutralTeam('CT'), t: neutralTeam('T') },
+    series: null,
     map: {
       name: null,
       mode: null,

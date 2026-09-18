@@ -14,4 +14,8 @@ export class SerialCommitQueue {
       release();
     }
   }
+
+  async flush(): Promise<void> {
+    await this.tail;
+  }
 }

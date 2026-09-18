@@ -1,0 +1,38 @@
+export {
+  addSeriesProgressIssue,
+  createSeriesProgress,
+  isSeriesProgressCheckpointCompatible,
+  makeSeriesProgressCheckpoint,
+  syncSeriesProgress,
+} from './reducer.js';
+export type {
+  BindCurrentMapExecutionToSeriesMapCommand,
+  OperatorCommand,
+  SeriesBindingState,
+  SeriesCompleteness,
+  SeriesEntrant,
+  SeriesMapObservation,
+  SeriesMapProgress,
+  SeriesMapSelection,
+  SeriesMapStatus,
+  SeriesProgress,
+  SeriesProgressCheckpoint,
+  SeriesProgressCheckpointStore,
+  SeriesProgressEvent,
+  SeriesProgressIssue,
+  SeriesProgressIssueCode,
+  SeriesProgressReduceResult,
+  SeriesProgressSyncInput,
+  SeriesRoundHistory,
+  SeriesRoundResult,
+  SeriesSideProof,
+} from './types.js';
+export {
+  SERIES_PROGRESS_CHECKPOINT_VERSION,
+  SERIES_ROUND_HISTORY_MAX,
+  isSeriesProgressCheckpoint,
+  requiredSeriesWins,
+  seriesCheckpointIdentity,
+  seriesMapPlanFingerprint,
+  seriesProgressMapPlanFingerprint,
+} from './types.js';

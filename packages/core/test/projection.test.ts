@@ -19,6 +19,7 @@ import {
   projectProgram,
   selectProgramSafeRuntimeView,
 } from '../src/projection/index.js';
+import { createSeriesProgress } from '../src/series-progress/index.js';
 import type { MatchContext } from '../src/match-context/index.js';
 import type { ObservedPlayer, TelemetryObservation } from '../src/telemetry/index.js';
 
@@ -72,8 +73,8 @@ function contextFixture(): MatchContext {
       mapName: mapOrder === 1 ? 'de_mirage' : `de_map_${mapOrder}`,
       pickedByEntryId: null,
       teamAStartSide: 'CT' as const,
-      scoreA: null,
-      scoreB: null,
+      scoreA: mapOrder === 1 ? 13 : null,
+      scoreB: mapOrder === 1 ? 9 : null,
       completedAt: null,
     })),
     veto: [],
@@ -197,6 +198,7 @@ describe('Program-safe projections', () => {
     const before = structuredClone(state);
     const identity = matchedIdentity(context, input);
     const activeLineup = resolvedLineup(state, input, identity, context);
+    const seriesProgress = createSeriesProgress(context);
     const runtime = selectProgramSafeRuntimeView(state);
 
     const first = projectProgram({
@@ -204,6 +206,7 @@ describe('Program-safe projections', () => {
       context,
       identity,
       activeLineup,
+      seriesProgress,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -212,6 +215,7 @@ describe('Program-safe projections', () => {
       context,
       identity,
       activeLineup,
+      seriesProgress,
       nowMonotonicMs: 7,
       continuityPolicy: POLICY,
     });
@@ -256,26 +260,28 @@ describe('Program-safe projections', () => {
     expect(first).not.toHaveProperty('identityIssues');
   });
 
-  it('keeps normalized values while marking telemetry stale and hides stale series score', () => {
+  it('keeps normalized values and local series facts while marking telemetry stale', () => {
     const context = contextFixture();
     const input = observation();
     const state = acceptedState(input);
     const identity = matchedIdentity(context, input);
     const activeLineup = resolvedLineup(state, input, identity, context);
+    const seriesProgress = createSeriesProgress(context);
     const projection = projectProgram({
       runtime: selectProgramSafeRuntimeView(state),
       context,
       contextFreshness: 'stale',
       identity,
       activeLineup,
+      seriesProgress,
       nowMonotonicMs: 108,
       continuityPolicy: POLICY,
     });
 
     expect(projection.status.telemetry).toBe('stale');
     expect(projection.status.context).toBe('stale');
-    expect(projection.teams.ct.seriesScore).toBeNull();
-    expect(projection.teams.t.seriesScore).toBeNull();
+    expect(projection.teams.ct.seriesScore).toBe(1);
+    expect(projection.teams.t.seriesScore).toBe(0);
     expect(projection.map.name).toBe('de_mirage');
     expect(projection.clock?.endsInSeconds).toBe(42);
   });

@@ -30,6 +30,14 @@
       "types": "./dist/identity/index.d.ts",
       "import": "./dist/identity/index.js"
     },
+    "./map-name": {
+      "types": "./dist/map-name.d.ts",
+      "import": "./dist/map-name.js"
+    },
+    "./series-progress": {
+      "types": "./dist/series-progress/index.d.ts",
+      "import": "./dist/series-progress/index.js"
+    },
     "./projection": {
       "types": "./dist/projection/index.d.ts",
       "import": "./dist/projection/index.js"

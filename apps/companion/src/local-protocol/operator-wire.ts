@@ -132,6 +132,24 @@ function mapSourceHealth(
 
 export function mapOperatorProjection(projection: OperatorProjection): OperatorPayload {
   return {
+    seriesProgress:
+      projection.seriesProgress === null
+        ? null
+        : {
+            bindingState: projection.seriesProgress.bindingState,
+            requiredWins: projection.seriesProgress.requiredWins,
+            score: { ...projection.seriesProgress.score },
+            currentMapOrder: projection.seriesProgress.currentMapOrder,
+            maps: projection.seriesProgress.maps.map((map) => ({
+              mapOrder: map.mapOrder,
+              mapName: map.mapName,
+              status: map.status,
+              executionMapEpoch: map.executionMapEpoch,
+              finalScore: map.finalScore === null ? null : { ...map.finalScore },
+              roundHistoryCompleteness: map.roundHistoryCompleteness,
+            })),
+            issues: projection.seriesProgress.issues.map((item) => ({ ...item })),
+          },
     runtime: {
       telemetryFreshness: projection.runtime.telemetryFreshness,
       mapName: projection.runtime.mapName,

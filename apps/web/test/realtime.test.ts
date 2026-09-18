@@ -38,6 +38,7 @@ function snapshot(
         ct: { mode: 'neutral', entryId: null, name: 'CT', logoUrl: null, seriesScore: null },
         t: { mode: 'neutral', entryId: null, name: 'T', logoUrl: null, seriesScore: null },
       },
+      series: null,
       map: {
         name: 'de_mirage',
         mode: null,

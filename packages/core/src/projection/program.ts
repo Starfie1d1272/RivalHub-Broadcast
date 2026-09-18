@@ -4,7 +4,12 @@ import {
   type IdentityResolution,
   type IdentityState,
 } from '../identity/index.js';
-import type { MatchContext, MatchFormat } from '../match-context/index.js';
+import type { MatchContext, MatchFormat, MatchVetoActionType } from '../match-context/index.js';
+import type {
+  SeriesMapProgress,
+  SeriesMapSelection,
+  SeriesProgress,
+} from '../series-progress/index.js';
 import type {
   BombState,
   CountdownPhase,
@@ -46,6 +51,58 @@ export interface ProgramTeamPresentationNeutral {
 
 export type ProgramTeamPresentation =
   ProgramTeamPresentationCanonical | ProgramTeamPresentationNeutral;
+
+export interface ProgramSeriesEntrant {
+  readonly entryId: string;
+  readonly name: string;
+  readonly logoUrl: string | null;
+}
+
+export interface ProgramSeriesMap {
+  readonly mapId: string | null;
+  readonly mapOrder: number;
+  readonly mapName: string;
+  readonly selection: SeriesMapSelection;
+  readonly teamAStartSide: 'CT' | 'T' | null;
+  readonly status: SeriesMapProgress['status'];
+  readonly finalScore: SeriesMapProgress['finalScore'];
+  readonly winnerEntryId: string | null;
+}
+
+export interface ProgramVetoStep {
+  readonly stepOrder: number;
+  readonly actionType: MatchVetoActionType;
+  readonly mapName: string;
+  readonly entryId: string | null;
+  readonly side: 'CT' | 'T' | null;
+}
+
+export interface ProgramRoundHistoryItem {
+  readonly roundNumber: number;
+  readonly winnerSide: SourceSide;
+  readonly winnerEntryId: string | null;
+  readonly winCondition: 'elimination' | 'bomb' | 'defuse' | 'time' | 'unknown';
+}
+
+export interface ProgramSeriesProjection {
+  readonly format: MatchFormat;
+  readonly requiredWins: 1 | 2 | 3;
+  readonly entrants: {
+    readonly a: ProgramSeriesEntrant;
+    readonly b: ProgramSeriesEntrant;
+  };
+  readonly score: { readonly a: number; readonly b: number };
+  readonly status: 'planned' | 'live' | 'completed';
+  readonly bindingState: SeriesProgress['bindingState'];
+  readonly currentMapOrder: number | null;
+  readonly maps: readonly ProgramSeriesMap[];
+  readonly veto: readonly ProgramVetoStep[];
+  readonly roundHistory: null | {
+    readonly mapOrder: number;
+    readonly completeness: SeriesMapProgress['roundHistory']['completeness'];
+    readonly rounds: readonly ProgramRoundHistoryItem[];
+  };
+}
 
 export interface ProgramPlayerStateProjection {
   readonly health: number | null;
@@ -128,6 +185,7 @@ export interface ProgramProjection {
     readonly ct: ProgramTeamPresentation;
     readonly t: ProgramTeamPresentation;
   };
+  readonly series: ProgramSeriesProjection | null;
   readonly map: {
     readonly name: string | null;
     readonly mode: string | null;
@@ -168,6 +226,7 @@ export interface ProgramProjectionInput {
   readonly activeLineup: ActiveLineupResolution;
   readonly nowMonotonicMs: number;
   readonly continuityPolicy: RuntimeContinuityPolicy;
+  readonly seriesProgress?: SeriesProgress | null;
 }
 
 function nullable<T>(value: T | undefined): T | null {
@@ -187,9 +246,9 @@ function neutralTeam(name: 'CT' | 'T'): ProgramTeamPresentationNeutral {
 
 function canonicalTeams(
   context: MatchContext | undefined,
+  seriesProgress: SeriesProgress | null | undefined,
   identity: IdentityResolution,
   identityIsCurrent: boolean,
-  contextFreshness: 'unbound' | 'fresh' | 'stale',
 ): { readonly ct: ProgramTeamPresentation; readonly t: ProgramTeamPresentation } {
   const canUseBranding =
     context !== undefined &&
@@ -207,31 +266,92 @@ function canonicalTeams(
     CT: identity.sideMapping.a === 'CT' ? context.entrants.a : context.entrants.b,
     T: identity.sideMapping.a === 'T' ? context.entrants.a : context.entrants.b,
   } as const;
+  const seriesScoreFor = (entryId: string): number | null => {
+    if (seriesProgress === null || seriesProgress === undefined) return null;
+    if (seriesProgress.matchId !== context.matchId) return null;
+    if (seriesProgress.entrants.a.entryId === entryId) return seriesProgress.score.a;
+    if (seriesProgress.entrants.b.entryId === entryId) return seriesProgress.score.b;
+    return null;
+  };
   return {
     ct: {
       mode: 'canonical',
       entryId: bySide.CT.entryId,
       name: bySide.CT.name,
       logoUrl: bySide.CT.logoUrl,
-      seriesScore:
-        contextFreshness === 'fresh'
-          ? identity.sideMapping.a === 'CT'
-            ? context.scoreA
-            : context.scoreB
-          : null,
+      seriesScore: seriesScoreFor(bySide.CT.entryId),
     },
     t: {
       mode: 'canonical',
       entryId: bySide.T.entryId,
       name: bySide.T.name,
       logoUrl: bySide.T.logoUrl,
-      seriesScore:
-        contextFreshness === 'fresh'
-          ? identity.sideMapping.a === 'T'
-            ? context.scoreA
-            : context.scoreB
-          : null,
+      seriesScore: seriesScoreFor(bySide.T.entryId),
     },
+  };
+}
+
+function projectSeries(
+  context: MatchContext | undefined,
+  progress: SeriesProgress | null | undefined,
+): ProgramSeriesProjection | null {
+  if (context === undefined || progress === null || progress === undefined) return null;
+  if (progress.matchId !== context.matchId) return null;
+
+  const complete =
+    progress.score.a >= progress.requiredWins || progress.score.b >= progress.requiredWins;
+  const hasLiveEvidence =
+    progress.bindingState === 'bound' ||
+    progress.bindingState === 'needs_operator' ||
+    progress.score.a > 0 ||
+    progress.score.b > 0 ||
+    progress.maps.some((map) => map.status === 'current' || map.status === 'completed');
+  const currentMap =
+    progress.currentMapOrder === null
+      ? undefined
+      : progress.maps.find((map) => map.mapOrder === progress.currentMapOrder);
+  const historyMap =
+    currentMap ??
+    [...progress.maps]
+      .reverse()
+      .find((map) => map.status === 'completed' || map.roundHistory.rounds.length > 0);
+
+  return {
+    format: progress.format,
+    requiredWins: progress.requiredWins,
+    entrants: {
+      a: { ...progress.entrants.a },
+      b: { ...progress.entrants.b },
+    },
+    score: { ...progress.score },
+    status: complete ? 'completed' : hasLiveEvidence ? 'live' : 'planned',
+    bindingState: progress.bindingState,
+    currentMapOrder: progress.currentMapOrder,
+    maps: progress.maps.map((map) => ({
+      mapId: map.mapId,
+      mapOrder: map.mapOrder,
+      mapName: map.mapName,
+      selection: { ...map.selection },
+      teamAStartSide: map.teamAStartSide,
+      status: map.status,
+      finalScore: map.finalScore === null ? null : { ...map.finalScore },
+      winnerEntryId: map.winnerEntryId,
+    })),
+    veto: context.veto.map((step) => ({
+      stepOrder: step.stepOrder,
+      actionType: step.actionType,
+      mapName: step.mapName,
+      entryId: step.entryId,
+      side: step.side,
+    })),
+    roundHistory:
+      historyMap === undefined
+        ? null
+        : {
+            mapOrder: historyMap.mapOrder,
+            completeness: historyMap.roundHistory.completeness,
+            rounds: historyMap.roundHistory.rounds.map((round) => ({ ...round })),
+          },
   };
 }
 
@@ -369,7 +489,8 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
             format: input.context.format,
             stage: input.context.stage,
           },
-    teams: canonicalTeams(input.context, input.identity, identityIsCurrent, contextFreshness),
+    teams: canonicalTeams(input.context, input.seriesProgress, input.identity, identityIsCurrent),
+    series: projectSeries(input.context, input.seriesProgress),
     map: {
       name: nullable(map?.name),
       mode: nullable(map?.mode),

@@ -82,6 +82,7 @@ BP / Veto 的节目播放只消费已经确认的赛事事实，并转换成 pre
 HUD 至少能够表达：
 
 - 地图、BO 格式、系列赛比分；
+- 当前地图序号、已结束/当前/未开始/不再进行的地图、Pick/decider/start side；
 - CT/T 当前比分、回合、阶段和时钟；
 - 稳定的 5+5 active lineup；raw `allplayers` 中的 observer、coach、extra 或暂时缺失 entry 不直接决定 Player Rails；
 - 选手的赛事身份与 `canonical | observed | unresolved` 证据状态；
@@ -95,6 +96,8 @@ HUD 至少能够表达：
 - 当前观察选手。
 
 ProgramProjection 负责完成领域解释；React 组件只负责展示。例如选手存活状态由 Core 统一推导为 `alive | dead | unknown`，Renderer 不再次根据 HP 猜测。
+
+系列赛比分、地图结果和当前地图绑定由 Broadcast 本地 `SeriesProgress` 统一维护。地图结束后本地立即推进，不等待 RivalHub 回写；进程重启使用有界 checkpoint 恢复已冻结事实。实际服务器地图与赛前计划不一致时，比赛 telemetry 仍可继续显示，但 Series 暂停绑定并等待 Operator 明确确认。Round History 恢复不完整时显示 `partial`，不由 Renderer 补猜缺失回合。
 
 ### 5.2 雷达
 

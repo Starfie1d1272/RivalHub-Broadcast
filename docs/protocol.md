@@ -184,9 +184,9 @@ Companion → Program 的短生命周期 transient cue。两类消息共享 WebS
 
 ```text
 localProtocolVersion = 1
-programSchemaVersion  = 4
+programSchemaVersion  = 5
 radarSchemaVersion    = 1
-operatorSchemaVersion = 2
+operatorSchemaVersion = 3
 assistSchemaVersion   = 1
 programCueSchemaVersion = 1
 subprotocol = rivalhub-broadcast.local.v1
@@ -269,7 +269,7 @@ CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、sou
 delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
 `programReceiveSequence`。
 
-### 4.4 Program schema v4
+### 4.4 Program schema v5
 
 Program payload 只包含正式节目允许显示的信息：
 
@@ -303,13 +303,23 @@ Program 不包含：
 
 Stable membership（Steam64 集合）与当前 CT/T side assignment 分离：halftime / overtime 换边只更新 side，不重置 membership。`coverage.allPlayers = absent` 表示没有新的 lineup evidence，不触发 lineup transition；如果成员暂时缺失，`retained` 只保留节目槽位和 identity metadata，缺失成员的当前 health、equipment、weapons、observer slot 等 volatile telemetry 以 unavailable/null 表达，不从上一帧伪造。
 
+### 4.4.1 Series projection
+
+Program 的 `series` 是 Core `SeriesProgress` 的 entrant-oriented 只读 projection，包含 `format`、`requiredWins`、双方 entrant、Broadcast 本地冻结的 `score`、`planned | live | completed` 状态、`bindingState`、`currentMapOrder`、地图 compact strip、原始 veto steps，以及当前/刚结束地图的有限 `roundHistory`。
+
+`series.score` 与兼容保留的 `teams.ct/t.seriesScore` 必须来自同一份 `SeriesProgress`；不能继续以 `MatchContext.scoreA/scoreB` 作为第二份实时真相。地图异常时 `bindingState = needs_operator`、`currentMapOrder = null`，但当前 GSI map/CT/T score 仍可正常进入 Program。Renderer 不读取 `MatchContext.maps[]`、`veto[]` 或 Raw GSI 自行推导 Series。
+
+`roundHistory` 的 item 只表达已证明的 `roundNumber`、source `winnerSide`、可冻结的 `winnerEntryId` 和 normalized `winCondition`。历史恢复不完整时暴露 `partial`，不填补无法证明的回合。
+
 ### 4.5 Radar schema v1
 
 Radar 快照包含当前雷达领域所需的比赛游标、新鲜度、身份状态、地图、选手、C4 和手雷等信息。雷达 schema 表达 domain frame，不承诺 React / SVG / Canvas 等具体渲染实现。
 
-### 4.6 Operator schema v2
+### 4.6 Operator schema v3
 
-Operator 快照包含制作控制需要的比赛上下文、运行转换、身份、ActiveLineup diagnostics 和 source health。它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源；`activeLineup.extras` 与 resolver issues 只用于 Operator/debug，不进入正式 Player Rails。
+Operator 快照包含制作控制需要的比赛上下文、运行转换、身份、ActiveLineup diagnostics、SeriesProgress binding/issues 和 source health。`seriesProgress` 只提供 Operator 恢复所需的有界地图状态、比分与诊断；它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源；`activeLineup.extras` 与 resolver issues 只用于 Operator/debug，不进入正式 Player Rails。
+
+当 `seriesProgress.bindingState = needs_operator` 时，已配置 `OPERATOR_CONTROL_TOKEN` 的 Companion 提供 `POST /operator/series/bind`。请求必须通过本地 Web Origin policy，并携带 `x-operator-token` 或同值 Bearer credential，提交 `bind-current-map-execution-to-series-map`、`mapOrder` 与非空 `reason`；服务只返回 command acknowledgement，不允许通过该入口直接改写比分。
 
 ### 4.7 Assist schema v1
 

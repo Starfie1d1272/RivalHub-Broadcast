@@ -6,6 +6,7 @@ import Fastify, { type FastifyInstance } from 'fastify';
 import { DebugEvidenceStore, type DebugRuntimeClock } from './runtime/debug-state.js';
 import type { LatestWinsConsumerHealth } from './runtime/latest-wins.js';
 import { createProgramRuntime, type ProgramRuntime } from './runtime/program-runtime.js';
+import type { SeriesProgressCheckpointStore } from '@rivalhub-broadcast/core/series-progress';
 import {
   createProjectionCoordinator,
   type ProjectionCoordinator,
@@ -40,6 +41,7 @@ import {
   type ObservationSink,
 } from './telemetry/gsi-ingress.js';
 import { registerStaticHost } from './local-web/static-host.js';
+import { registerOperatorCommandRoutes } from './operator/controller.js';
 import {
   createLocalWebSocketTransport,
   registerLocalWebSocketTransport,
@@ -53,6 +55,8 @@ export interface CompanionAppOptions {
   readonly producerInstanceId?: string;
   readonly gsiSequenceSource?: GsiSequenceSource;
   readonly programRuntime?: ProgramRuntime;
+  readonly seriesProgressCheckpointStore?: SeriesProgressCheckpointStore;
+  readonly onSeriesProgressDiagnostic?: (diagnostic: { readonly code: string }) => void;
   readonly projectionCoordinator?: ProjectionCoordinator;
   readonly programCueCoordinator?: ProgramCueCoordinator;
   readonly matchContextBinding?: MatchContextBinding;
@@ -67,6 +71,7 @@ export interface CompanionAppOptions {
   readonly clock?: GsiClock;
   readonly qualificationMode?: boolean;
   readonly qualificationControlToken?: string;
+  readonly operatorControlToken?: string;
   readonly qualificationRunId?: string;
   readonly qualificationScenarioPath?: string;
   readonly qualificationClock?: QualificationClock;
@@ -90,7 +95,15 @@ function projectionDiagnosticDegradesRuntime(code: string): boolean {
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
   const programRuntime =
-    options.programRuntime ?? createProgramRuntime(options.producerInstanceId ?? randomUUID());
+    options.programRuntime ??
+    createProgramRuntime(options.producerInstanceId ?? randomUUID(), {
+      ...(options.seriesProgressCheckpointStore === undefined
+        ? {}
+        : { seriesProgressCheckpointStore: options.seriesProgressCheckpointStore }),
+      ...(options.onSeriesProgressDiagnostic === undefined
+        ? {}
+        : { onSeriesProgressDiagnostic: options.onSeriesProgressDiagnostic }),
+    });
   const debugEvidenceStore =
     options.debugEvidenceStore ?? new DebugEvidenceStore(programRuntime.getSnapshot());
   debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
@@ -284,14 +297,26 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     registerQualificationRoutes(app, qualificationOptions);
   }
 
+  if (options.operatorControlToken !== undefined) {
+    if (options.operatorControlToken.trim().length === 0) {
+      throw new Error('设置 operatorControlToken 时必须为非空值');
+    }
+    registerOperatorCommandRoutes(app, {
+      controlToken: options.operatorControlToken,
+      originPolicy: localWebTransport.getOriginPolicy(),
+      execute: (command) => projectionCoordinator.executeOperatorCommand(command),
+    });
+  }
+
   app.addHook('onClose', async () => {
     await Promise.all([
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
       ...deliveryConsumers.map((consumer) => consumer.close()),
     ]);
-    await localWebTransport.close();
     await Promise.all([projectionCoordinator.close(), programCueCoordinator.close()]);
+    await programRuntime.close();
+    await localWebTransport.close();
     await recorder.finalize();
   });
 

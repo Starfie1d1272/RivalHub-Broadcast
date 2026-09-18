@@ -12,6 +12,57 @@ const nullableString = z.string().nullable();
 const nullableBoolean = z.boolean().nullable();
 const sourceSideSchema = z.enum(['CT', 'T', 'unknown']);
 const coverageSchema = z.enum(['present', 'absent', 'degraded']);
+const seriesSelectionSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('pick'), entryId: z.string().min(1) }),
+  z.object({ kind: z.literal('decider') }),
+  z.object({ kind: z.literal('unknown') }),
+]);
+const seriesRoundSchema = z.object({
+  roundNumber: z.number().int().positive(),
+  winnerSide: sourceSideSchema,
+  winnerEntryId: nullableString,
+  winCondition: z.enum(['elimination', 'bomb', 'defuse', 'time', 'unknown']),
+});
+const seriesMapSchema = z.object({
+  mapId: nullableString,
+  mapOrder: z.number().int().positive(),
+  mapName: z.string(),
+  selection: seriesSelectionSchema,
+  teamAStartSide: z.enum(['CT', 'T']).nullable(),
+  status: z.enum(['pending', 'current', 'completed', 'not_played']),
+  finalScore: z
+    .object({ a: z.number().int().nonnegative(), b: z.number().int().nonnegative() })
+    .nullable(),
+  winnerEntryId: nullableString,
+});
+const seriesVetoStepSchema = z.object({
+  stepOrder: z.number().int().positive(),
+  actionType: z.enum(['ban', 'pick', 'side_pick', 'decider']),
+  mapName: z.string(),
+  entryId: nullableString,
+  side: z.enum(['CT', 'T']).nullable(),
+});
+const seriesProjectionSchema = z.object({
+  format: z.enum(['bo1', 'bo3', 'bo5']),
+  requiredWins: z.union([z.literal(1), z.literal(2), z.literal(3)]),
+  entrants: z.object({
+    a: z.object({ entryId: z.string().min(1), name: z.string(), logoUrl: nullableString }),
+    b: z.object({ entryId: z.string().min(1), name: z.string(), logoUrl: nullableString }),
+  }),
+  score: z.object({ a: z.number().int().nonnegative(), b: z.number().int().nonnegative() }),
+  status: z.enum(['planned', 'live', 'completed']),
+  bindingState: z.enum(['bound', 'unbound', 'needs_operator']),
+  currentMapOrder: z.number().int().positive().nullable(),
+  maps: z.array(seriesMapSchema),
+  veto: z.array(seriesVetoStepSchema),
+  roundHistory: z
+    .object({
+      mapOrder: z.number().int().positive(),
+      completeness: z.enum(['complete', 'partial', 'unavailable']),
+      rounds: z.array(seriesRoundSchema),
+    })
+    .nullable(),
+});
 
 const teamSchema = z.discriminatedUnion('mode', [
   z.object({
@@ -120,6 +171,7 @@ export const programPayloadSchema = z.object({
     })
     .nullable(),
   teams: z.object({ ct: teamSchema, t: teamSchema }),
+  series: seriesProjectionSchema.nullable(),
   map: z.object({
     name: nullableString,
     mode: nullableString,

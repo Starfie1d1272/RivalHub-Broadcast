@@ -31,6 +31,37 @@ function playerFixture(sourcePlayerId: string) {
 }
 
 describe('adaptGsiPayload', () => {
+  it('normalizes map_round_wins into bounded Core round evidence', () => {
+    const result = adaptGsiPayload(
+      {
+        map: {
+          name: 'de_mirage',
+          phase: 'live',
+          round: 3,
+          round_wins: {
+            '1': 'ct_win_elimination',
+            '2': 't_win_defuse',
+            '3': 'ct_win_bomb',
+            '4': 't_win_time',
+            '5': 'future_reason',
+          },
+        },
+      },
+      receiveContext,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.observation.telemetry.map?.roundWins).toEqual([
+      { roundNumber: 1, winnerSide: 'CT', winCondition: 'elimination' },
+      { roundNumber: 2, winnerSide: 'T', winCondition: 'defuse' },
+      { roundNumber: 3, winnerSide: 'CT', winCondition: 'bomb' },
+      { roundNumber: 4, winnerSide: 'T', winCondition: 'time' },
+      { roundNumber: 5, winnerSide: 'unknown', winCondition: 'unknown' },
+    ]);
+    expect(diagnosticCodes(result)).toEqual(['UNKNOWN_GSI_ENUM']);
+  });
+
   it('normalizes a synthetic contract composition without leaking raw GSI shape', () => {
     const result = adaptGsiPayload(SYNTHETIC_EVIDENCE_INFORMED_OBSERVER_FRAME, receiveContext);
 

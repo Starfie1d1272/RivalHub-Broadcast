@@ -131,7 +131,38 @@ const sourceHealthSchema = z.object({
   lastTerminalStatus: z.enum(['complete', 'timeout', 'cancelled', 'failed']).nullable(),
 });
 
+const seriesProgressSchema = z
+  .object({
+    bindingState: z.enum(['bound', 'unbound', 'needs_operator']),
+    requiredWins: z.number().int().positive().max(3),
+    score: z.object({ a: z.number().int().nonnegative(), b: z.number().int().nonnegative() }),
+    currentMapOrder: z.number().int().positive().nullable(),
+    maps: z.array(
+      z.object({
+        mapOrder: z.number().int().positive(),
+        mapName: z.string(),
+        status: z.enum(['pending', 'current', 'completed', 'not_played']),
+        executionMapEpoch: z.number().int().nonnegative().nullable(),
+        finalScore: z
+          .object({ a: z.number().int().nonnegative(), b: z.number().int().nonnegative() })
+          .nullable(),
+        roundHistoryCompleteness: z.enum(['complete', 'partial', 'unavailable']),
+      }),
+    ),
+    issues: z.array(
+      z.object({
+        code: z.string(),
+        severity: z.enum(['info', 'warning', 'error']),
+        message: z.string(),
+        mapOrder: z.number().int().positive().nullable(),
+        mapEpoch: z.number().int().nonnegative().nullable(),
+      }),
+    ),
+  })
+  .nullable();
+
 export const operatorPayloadSchema = z.object({
+  seriesProgress: seriesProgressSchema,
   runtime: z.object({
     telemetryFreshness: z.enum(['awaiting', 'fresh', 'stale']),
     mapName: nullableString,
