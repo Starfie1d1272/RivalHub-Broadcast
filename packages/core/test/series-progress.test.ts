@@ -396,6 +396,7 @@ describe('SeriesProgress', () => {
       ),
     ).toBe(false);
   });
+
   it('completes a BO1 locally after a proven map result', () => {
     let progress = reduce(createSeriesProgress(contextFixture('bo1')));
     progress = reduce(
@@ -557,7 +558,9 @@ describe('SeriesProgress', () => {
     );
   });
 
-  it('freezes entrant identity per round across side changes and never backfills missing proof', () => {
+  it(
+    'freezes entrant identity per round across side changes and never backfills missing proof',
+    () => {
     let progress = reduce(createSeriesProgress(contextFixture('bo1')));
 
     progress = reduce(
@@ -618,8 +621,9 @@ describe('SeriesProgress', () => {
       observation('de_mirage', 1, { ct: 2, t: 1 }),
       proof(1, 'CT'),
     );
-    expect(laterProof.maps[0]?.roundHistory.rounds[2]?.winnerEntryId).toBeNull();
-  });
+      expect(laterProof.maps[0]?.roundHistory.rounds[2]?.winnerEntryId).toBeNull();
+    },
+  );
 
   it('retains same-map progress across source generation changes', () => {
     let progress = reduce(createSeriesProgress(contextFixture('bo1')));
@@ -641,7 +645,10 @@ describe('SeriesProgress', () => {
 
     const reconnected = syncSeriesProgress(progress, {
       events: [],
-      observation: { ...observation('de_mirage', 1, { ct: 1, t: 0 }), sourceGeneration: 1 },
+      observation: {
+        ...observation('de_mirage', 1, { ct: 1, t: 0 }),
+        sourceGeneration: 1,
+      },
       sideProof: { ...proof(1), sourceGeneration: 1 },
     }).progress;
 
@@ -712,12 +719,14 @@ describe('SeriesProgress', () => {
     );
 
     expect(progress.score).toEqual({ a: 1, b: 0 });
-    expect(progress.maps[0]).toMatchObject({ status: 'completed', finalScore: { a: 13, b: 9 } });
+    expect(progress.maps[0]).toMatchObject({
+      status: 'completed',
+      finalScore: { a: 13, b: 9 },
+    });
     expect(progress.maps[1]).toMatchObject({
       status: 'current',
       executionMapEpoch: 3,
       roundHistory: { completeness: 'unavailable', rounds: [] },
     });
   });
-
 });
