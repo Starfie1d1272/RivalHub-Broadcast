@@ -115,6 +115,8 @@ planner + ci-gate
 
 非 PR 事件使用完整验证，并包含 offline qualification。
 
+CS2 asset import 是维护者本地资源工作流：CI 不安装 CS2、不下载 VPK、不运行 extraction，只验证 checked-in `@rivalhub-broadcast/cs2-assets` catalog、manifest、SVG hash、public output 与 resolver contract。首次生成或更新 asset 时，必须使用 `pnpm cs2-assets:import` 的 pinned Source2Viewer-CLI，并把 Steam build ID、source/output hash 和工具版本提交在 manifest 中。
+
 ``ci-gate`` 是稳定 required context；条件 job 本身不需要全部设成 branch required check。
 
 ## 4. 自动化主入口

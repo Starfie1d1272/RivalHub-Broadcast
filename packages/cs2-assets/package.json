@@ -1,0 +1,21 @@
+{
+  "name": "@rivalhub-broadcast/cs2-assets",
+  "private": true,
+  "type": "module",
+  "files": [
+    "dist"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json --pretty false",
+    "typecheck": "tsc -p tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
+  },
+  "devDependencies": {
+    "@typescript/native": "catalog:"
+  }
+}

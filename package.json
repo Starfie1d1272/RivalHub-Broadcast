@@ -10,6 +10,8 @@
   "scripts": {
     "architecture:check": "node scripts/architecture/check.mjs",
     "build": "pnpm --recursive --sort --workspace-concurrency=1 run build",
+    "cs2-assets:import": "node scripts/cs2-assets/import.mjs",
+    "cs2-assets:verify": "node scripts/cs2-assets/verify.mjs",
     "dev": "pnpm --parallel --filter @rivalhub-broadcast/companion --filter @rivalhub-broadcast/web run dev",
     "format": "prettier --write \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig*.json\" \"eslint.config.js\" \"vitest.config.ts\" \"playwright.config.ts\" \".prettierrc.json\" \"apps/**/*.{ts,tsx,js,jsx,json,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,html}\" \"tests/**/*.{ts,tsx,js,jsx,json,css,html}\" \"scripts/**/*.mjs\"",
     "format:check": "prettier --check \"package.json\" \"pnpm-workspace.yaml\" \"tsconfig*.json\" \"eslint.config.js\" \"vitest.config.ts\" \"playwright.config.ts\" \".prettierrc.json\" \"apps/**/*.{ts,tsx,js,jsx,json,css,html}\" \"packages/**/*.{ts,tsx,js,jsx,json,css,html}\" \"tests/**/*.{ts,tsx,js,jsx,json,css,html}\" \"scripts/**/*.mjs\"",

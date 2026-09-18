@@ -1,0 +1,9 @@
+{
+  "extends": "../../tsconfig.library.json",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": ".",
+    "resolveJsonModule": true
+  },
+  "include": ["src", "catalog/items.json", "generated/manifest.json"]
+}

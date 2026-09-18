@@ -90,6 +90,33 @@ export const PACKAGE_BOUNDARIES = Object.freeze({
       '@rivalhub-broadcast/rivalhub',
     ],
   }),
+  '@rivalhub-broadcast/cs2-assets': packageBoundary({
+    message:
+      'CS2 assets owns presentation asset metadata, generated SVGs, provenance, and framework-neutral resolution; keep Runtime, telemetry, RivalHub, Radar, and renderer ownership outside the package.',
+    forbidden: [
+      'react',
+      'react-dom',
+      'fastify',
+      'ws',
+      'vite',
+      '@vitejs/',
+      '@supabase/',
+      'zod',
+      'cs2parser',
+    ],
+    forbidNodeBuiltins: true,
+    forbiddenWorkspacePackages: [
+      '@rivalhub-broadcast/core',
+      '@rivalhub-broadcast/protocol',
+      '@rivalhub-broadcast/telemetry-gsi',
+      '@rivalhub-broadcast/telemetry-cstv',
+      '@rivalhub-broadcast/rivalhub',
+      '@rivalhub-broadcast/radar',
+      '@rivalhub-broadcast/testkit',
+      '@rivalhub-broadcast/web',
+      '@rivalhub-broadcast/companion',
+    ],
+  }),
   '@rivalhub-broadcast/telemetry-gsi': packageBoundary({
     message:
       'Telemetry GSI must remain a pure, replayable, transport-independent source adapter; keep UI, server, storage, RivalHub, Radar, testkit, and Node-only ownership outside the package.',

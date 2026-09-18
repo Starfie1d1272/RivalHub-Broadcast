@@ -20,7 +20,11 @@ export default tseslint.config(
     languageOptions: {
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['packages/protocol/test/*.ts', 'packages/radar/test/*.ts'],
+          allowDefaultProject: [
+            'packages/cs2-assets/test/*.ts',
+            'packages/protocol/test/*.ts',
+            'packages/radar/test/*.ts',
+          ],
           defaultProject: 'tsconfig.node.json',
         },
         tsconfigRootDir: import.meta.dirname,

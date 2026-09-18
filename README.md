@@ -92,6 +92,7 @@ apps/
   web/                  正式节目、制作控制、运行诊断
 
 packages/
+  cs2-assets/           CS2 official presentation assets、semantic catalog 与 provenance
   core/                 RuntimeState、连续性、身份、transition、Projection
   protocol/             Broadcast 自有的 Local Protocol
   radar/                与前端框架无关的 Radar domain

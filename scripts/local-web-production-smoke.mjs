@@ -1,5 +1,6 @@
 import net from 'node:net';
 import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -159,6 +160,31 @@ async function assertProgramBaseline(port, subprotocol, route) {
   }
 }
 
+async function assertCs2Assets(baseUrl, requestOptions) {
+  const manifestResponse = await globalThis.fetch(
+    `${baseUrl}/assets/cs2/manifest.json`,
+    requestOptions,
+  );
+  assert(manifestResponse.status === 200, 'CS2 asset manifest 未返回 HTTP 200');
+  assert(
+    manifestResponse.headers.get('content-type')?.includes('application/json') === true,
+    'CS2 asset manifest MIME 不正确',
+  );
+  const manifest = await manifestResponse.json();
+  assert(manifest.schemaVersion === 1, 'CS2 asset manifest schemaVersion 不正确');
+  for (const [assetId, asset] of Object.entries(manifest.assets ?? {})) {
+    const assetResponse = await globalThis.fetch(`${baseUrl}${asset.outputPath}`, requestOptions);
+    assert(assetResponse.status === 200, `${assetId} 未返回 HTTP 200`);
+    assert(
+      assetResponse.headers.get('content-type')?.includes('image/svg+xml') === true,
+      `${assetId} SVG MIME 不正确`,
+    );
+    const body = Buffer.from(await assetResponse.arrayBuffer());
+    const digest = createHash('sha256').update(body).digest('hex');
+    assert(digest === asset.outputSha256, `${assetId} SVG hash 不一致`);
+  }
+}
+
 async function main() {
   const builtHtml = await readFile(join(webRoot, 'index.html'), 'utf8');
   const assetPath = /(?:src|href)="(\/assets\/[^"\s]+)"/.exec(builtHtml)?.[1];
@@ -186,6 +212,7 @@ async function main() {
     );
     const assetResponse = await globalThis.fetch(`${baseUrl}${assetPath}`, requestOptions);
     assert(assetResponse.status === 200, `${assetPath} returned HTTP ${assetResponse.status}`);
+    await assertCs2Assets(baseUrl, requestOptions);
     await assertProgramBaseline(address.port, LOCAL_WEB_SUBPROTOCOL, LOCAL_WEB_ROUTES.program);
   } finally {
     await app.close();

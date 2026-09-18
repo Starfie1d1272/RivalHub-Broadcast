@@ -1,0 +1,1287 @@
+{
+  "schemaVersion": 1,
+  "items": [
+    {
+      "canonicalKey": "equipment.armor",
+      "sourceWeaponIds": [],
+      "sourcePath": "panorama/images/hud/teamcounter/armor.vsvg_c",
+      "kind": "equipment",
+      "family": "armor",
+      "displayCategory": "equipment",
+      "assetId": "equipment.armor",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "equipment.armor-helmet",
+      "sourceWeaponIds": [],
+      "sourcePath": "panorama/images/hud/teamcounter/armor_helmet.vsvg_c",
+      "kind": "equipment",
+      "family": "armor",
+      "displayCategory": "equipment",
+      "assetId": "equipment.armor-helmet",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "equipment.defuse-kit",
+      "sourceWeaponIds": [],
+      "sourcePath": "panorama/images/icons/equipment/defuser.vsvg_c",
+      "kind": "equipment",
+      "family": "defuse",
+      "displayCategory": "equipment",
+      "assetId": "equipment.defuse-kit",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "equipment.helmet",
+      "sourceWeaponIds": [],
+      "sourcePath": "panorama/images/icons/equipment/helmet.vsvg_c",
+      "kind": "equipment",
+      "family": "armor",
+      "displayCategory": "equipment",
+      "assetId": "equipment.helmet",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "objective.c4",
+      "sourceWeaponIds": ["weapon_c4"],
+      "sourcePath": "panorama/images/icons/equipment/c4.vsvg_c",
+      "kind": "objective",
+      "family": "bomb",
+      "displayCategory": "objective",
+      "assetId": "objective.c4",
+      "ammoPresentation": "objective",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.decoy",
+      "sourceWeaponIds": ["weapon_decoy"],
+      "sourcePath": "panorama/images/icons/equipment/decoy.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.decoy",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.flashbang",
+      "sourceWeaponIds": ["weapon_flashbang"],
+      "sourcePath": "panorama/images/icons/equipment/flashbang.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.flashbang",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.healthshot",
+      "sourceWeaponIds": ["weapon_healthshot"],
+      "sourcePath": "panorama/images/icons/equipment/healthshot.vsvg_c",
+      "kind": "utility",
+      "family": "medical",
+      "displayCategory": "utility",
+      "assetId": "utility.healthshot",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.hegrenade",
+      "sourceWeaponIds": ["weapon_hegrenade"],
+      "sourcePath": "panorama/images/icons/equipment/hegrenade.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.hegrenade",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.incgrenade",
+      "sourceWeaponIds": ["weapon_incgrenade"],
+      "sourcePath": "panorama/images/icons/equipment/incgrenade.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.incgrenade",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.molotov",
+      "sourceWeaponIds": ["weapon_molotov"],
+      "sourcePath": "panorama/images/icons/equipment/molotov.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.molotov",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.smokegrenade",
+      "sourceWeaponIds": ["weapon_smokegrenade"],
+      "sourcePath": "panorama/images/icons/equipment/smokegrenade.vsvg_c",
+      "kind": "utility",
+      "family": "grenade",
+      "displayCategory": "utility",
+      "assetId": "utility.smokegrenade",
+      "ammoPresentation": "utility",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "utility.taser",
+      "sourceWeaponIds": ["weapon_taser"],
+      "sourcePath": "panorama/images/icons/equipment/taser.vsvg_c",
+      "kind": "utility",
+      "family": "taser",
+      "displayCategory": "utility",
+      "assetId": "utility.taser",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.ak47",
+      "sourceWeaponIds": ["weapon_ak47"],
+      "sourcePath": "panorama/images/icons/equipment/ak47.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.ak47",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.aug",
+      "sourceWeaponIds": ["weapon_aug"],
+      "sourcePath": "panorama/images/icons/equipment/aug.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.aug",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.awp",
+      "sourceWeaponIds": ["weapon_awp"],
+      "sourcePath": "panorama/images/icons/equipment/awp.vsvg_c",
+      "kind": "firearm",
+      "family": "sniper-rifle",
+      "displayCategory": "sniper",
+      "assetId": "weapon.awp",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.bayonet",
+      "sourceWeaponIds": ["weapon_bayonet"],
+      "sourcePath": "panorama/images/icons/equipment/bayonet.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.bayonet",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.bizon",
+      "sourceWeaponIds": ["weapon_bizon"],
+      "sourcePath": "panorama/images/icons/equipment/bizon.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.bizon",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.cz75a",
+      "sourceWeaponIds": ["weapon_cz75a"],
+      "sourcePath": "panorama/images/icons/equipment/cz75a.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.cz75a",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.deagle",
+      "sourceWeaponIds": ["weapon_deagle"],
+      "sourcePath": "panorama/images/icons/equipment/deagle.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.deagle",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.elite",
+      "sourceWeaponIds": ["weapon_elite"],
+      "sourcePath": "panorama/images/icons/equipment/elite.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.elite",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.famas",
+      "sourceWeaponIds": ["weapon_famas"],
+      "sourcePath": "panorama/images/icons/equipment/famas.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.famas",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.fiveseven",
+      "sourceWeaponIds": ["weapon_fiveseven"],
+      "sourcePath": "panorama/images/icons/equipment/fiveseven.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.fiveseven",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.g3sg1",
+      "sourceWeaponIds": ["weapon_g3sg1"],
+      "sourcePath": "panorama/images/icons/equipment/g3sg1.vsvg_c",
+      "kind": "firearm",
+      "family": "sniper-rifle",
+      "displayCategory": "sniper",
+      "assetId": "weapon.g3sg1",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.galilar",
+      "sourceWeaponIds": ["weapon_galilar"],
+      "sourcePath": "panorama/images/icons/equipment/galilar.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.galilar",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.glock",
+      "sourceWeaponIds": ["weapon_glock"],
+      "sourcePath": "panorama/images/icons/equipment/glock.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.glock",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.hkp2000",
+      "sourceWeaponIds": ["weapon_hkp2000"],
+      "sourcePath": "panorama/images/icons/equipment/hkp2000.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.hkp2000",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": ["weapon_p2000"],
+      "evidence": [
+        {
+          "kind": "live-gsi",
+          "reference": "packages/telemetry-gsi/test/fixtures/real-derived.ts:REAL_DERIVED_FRAME.player.weapons.weapon_1"
+        },
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife",
+      "sourceWeaponIds": ["weapon_knife"],
+      "sourcePath": "panorama/images/icons/equipment/knife.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-butterfly",
+      "sourceWeaponIds": ["weapon_knife_butterfly"],
+      "sourcePath": "panorama/images/icons/equipment/knife_butterfly.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-butterfly",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-canis",
+      "sourceWeaponIds": ["weapon_knife_canis"],
+      "sourcePath": "panorama/images/icons/equipment/knife_canis.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-canis",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-cord",
+      "sourceWeaponIds": ["weapon_knife_cord"],
+      "sourcePath": "panorama/images/icons/equipment/knife_cord.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-cord",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-css",
+      "sourceWeaponIds": ["weapon_knife_css"],
+      "sourcePath": "panorama/images/icons/equipment/knife_css.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-css",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-falchion",
+      "sourceWeaponIds": ["weapon_knife_falchion"],
+      "sourcePath": "panorama/images/icons/equipment/knife_falchion.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-falchion",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-flip",
+      "sourceWeaponIds": ["weapon_knife_flip"],
+      "sourcePath": "panorama/images/icons/equipment/knife_flip.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-flip",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-gut",
+      "sourceWeaponIds": ["weapon_knife_gut"],
+      "sourcePath": "panorama/images/icons/equipment/knife_gut.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-gut",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-gypsy-jackknife",
+      "sourceWeaponIds": ["weapon_knife_gypsy_jackknife"],
+      "sourcePath": "panorama/images/icons/equipment/knife_gypsy_jackknife.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-gypsy-jackknife",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-karambit",
+      "sourceWeaponIds": ["weapon_knife_karambit"],
+      "sourcePath": "panorama/images/icons/equipment/knife_karambit.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-karambit",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-kukri",
+      "sourceWeaponIds": ["weapon_knife_kukri"],
+      "sourcePath": "panorama/images/icons/equipment/knife_kukri.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-kukri",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-m9-bayonet",
+      "sourceWeaponIds": ["weapon_knife_m9_bayonet"],
+      "sourcePath": "panorama/images/icons/equipment/knife_m9_bayonet.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-m9-bayonet",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-outdoor",
+      "sourceWeaponIds": ["weapon_knife_outdoor"],
+      "sourcePath": "panorama/images/icons/equipment/knife_outdoor.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-outdoor",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-push",
+      "sourceWeaponIds": ["weapon_knife_push"],
+      "sourcePath": "panorama/images/icons/equipment/knife_push.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-push",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-skeleton",
+      "sourceWeaponIds": ["weapon_knife_skeleton"],
+      "sourcePath": "panorama/images/icons/equipment/knife_skeleton.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-skeleton",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-stiletto",
+      "sourceWeaponIds": ["weapon_knife_stiletto"],
+      "sourcePath": "panorama/images/icons/equipment/knife_stiletto.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-stiletto",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-survival-bowie",
+      "sourceWeaponIds": ["weapon_knife_survival_bowie"],
+      "sourcePath": "panorama/images/icons/equipment/knife_survival_bowie.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-survival-bowie",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-t",
+      "sourceWeaponIds": ["weapon_knife_t"],
+      "sourcePath": "panorama/images/icons/equipment/knife_t.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-t",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-tactical",
+      "sourceWeaponIds": ["weapon_knife_tactical"],
+      "sourcePath": "panorama/images/icons/equipment/knife_tactical.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-tactical",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-twinblade",
+      "sourceWeaponIds": ["weapon_knife_twinblade"],
+      "sourcePath": "panorama/images/icons/equipment/knife_twinblade.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-twinblade",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-ursus",
+      "sourceWeaponIds": ["weapon_knife_ursus"],
+      "sourcePath": "panorama/images/icons/equipment/knife_ursus.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-ursus",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knife-widowmaker",
+      "sourceWeaponIds": ["weapon_knife_widowmaker"],
+      "sourcePath": "panorama/images/icons/equipment/knife_widowmaker.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knife-widowmaker",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.knifegg",
+      "sourceWeaponIds": ["weapon_knifegg"],
+      "sourcePath": "panorama/images/icons/equipment/knifegg.vsvg_c",
+      "kind": "melee",
+      "family": "melee",
+      "displayCategory": "melee",
+      "assetId": "weapon.knifegg",
+      "ammoPresentation": "none",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.m249",
+      "sourceWeaponIds": ["weapon_m249"],
+      "sourcePath": "panorama/images/icons/equipment/m249.vsvg_c",
+      "kind": "firearm",
+      "family": "machinegun",
+      "displayCategory": "machinegun",
+      "assetId": "weapon.m249",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.m4a1",
+      "sourceWeaponIds": ["weapon_m4a1"],
+      "sourcePath": "panorama/images/icons/equipment/m4a1.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.m4a1",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.m4a1-silencer",
+      "sourceWeaponIds": ["weapon_m4a1_silencer"],
+      "sourcePath": "panorama/images/icons/equipment/m4a1_silencer.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.m4a1-silencer",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": ["weapon_m4a1_silencer_off"],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.mac10",
+      "sourceWeaponIds": ["weapon_mac10"],
+      "sourcePath": "panorama/images/icons/equipment/mac10.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.mac10",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.mag7",
+      "sourceWeaponIds": ["weapon_mag7"],
+      "sourcePath": "panorama/images/icons/equipment/mag7.vsvg_c",
+      "kind": "firearm",
+      "family": "shotgun",
+      "displayCategory": "shotgun",
+      "assetId": "weapon.mag7",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.mp5sd",
+      "sourceWeaponIds": ["weapon_mp5sd"],
+      "sourcePath": "panorama/images/icons/equipment/mp5sd.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.mp5sd",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.mp7",
+      "sourceWeaponIds": ["weapon_mp7"],
+      "sourcePath": "panorama/images/icons/equipment/mp7.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.mp7",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.mp9",
+      "sourceWeaponIds": ["weapon_mp9"],
+      "sourcePath": "panorama/images/icons/equipment/mp9.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.mp9",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.negev",
+      "sourceWeaponIds": ["weapon_negev"],
+      "sourcePath": "panorama/images/icons/equipment/negev.vsvg_c",
+      "kind": "firearm",
+      "family": "machinegun",
+      "displayCategory": "machinegun",
+      "assetId": "weapon.negev",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.nova",
+      "sourceWeaponIds": ["weapon_nova"],
+      "sourcePath": "panorama/images/icons/equipment/nova.vsvg_c",
+      "kind": "firearm",
+      "family": "shotgun",
+      "displayCategory": "shotgun",
+      "assetId": "weapon.nova",
+      "ammoPresentation": "shells",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.p250",
+      "sourceWeaponIds": ["weapon_p250"],
+      "sourcePath": "panorama/images/icons/equipment/p250.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.p250",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.p90",
+      "sourceWeaponIds": ["weapon_p90"],
+      "sourcePath": "panorama/images/icons/equipment/p90.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.p90",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.revolver",
+      "sourceWeaponIds": ["weapon_revolver"],
+      "sourcePath": "panorama/images/icons/equipment/revolver.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.revolver",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.sawedoff",
+      "sourceWeaponIds": ["weapon_sawedoff"],
+      "sourcePath": "panorama/images/icons/equipment/sawedoff.vsvg_c",
+      "kind": "firearm",
+      "family": "shotgun",
+      "displayCategory": "shotgun",
+      "assetId": "weapon.sawedoff",
+      "ammoPresentation": "shells",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.scar20",
+      "sourceWeaponIds": ["weapon_scar20"],
+      "sourcePath": "panorama/images/icons/equipment/scar20.vsvg_c",
+      "kind": "firearm",
+      "family": "sniper-rifle",
+      "displayCategory": "sniper",
+      "assetId": "weapon.scar20",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.sg556",
+      "sourceWeaponIds": ["weapon_sg556"],
+      "sourcePath": "panorama/images/icons/equipment/sg556.vsvg_c",
+      "kind": "firearm",
+      "family": "rifle",
+      "displayCategory": "rifle",
+      "assetId": "weapon.sg556",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.ssg08",
+      "sourceWeaponIds": ["weapon_ssg08"],
+      "sourcePath": "panorama/images/icons/equipment/ssg08.vsvg_c",
+      "kind": "firearm",
+      "family": "sniper-rifle",
+      "displayCategory": "sniper",
+      "assetId": "weapon.ssg08",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.tec9",
+      "sourceWeaponIds": ["weapon_tec9"],
+      "sourcePath": "panorama/images/icons/equipment/tec9.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.tec9",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.ump45",
+      "sourceWeaponIds": ["weapon_ump45"],
+      "sourcePath": "panorama/images/icons/equipment/ump45.vsvg_c",
+      "kind": "firearm",
+      "family": "smg",
+      "displayCategory": "smg",
+      "assetId": "weapon.ump45",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.usp-silencer",
+      "sourceWeaponIds": ["weapon_usp_silencer"],
+      "sourcePath": "panorama/images/icons/equipment/usp_silencer.vsvg_c",
+      "kind": "firearm",
+      "family": "pistol",
+      "displayCategory": "pistol",
+      "assetId": "weapon.usp-silencer",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    },
+    {
+      "canonicalKey": "weapon.xm1014",
+      "sourceWeaponIds": ["weapon_xm1014"],
+      "sourcePath": "panorama/images/icons/equipment/xm1014.vsvg_c",
+      "kind": "firearm",
+      "family": "shotgun",
+      "displayCategory": "shotgun",
+      "assetId": "weapon.xm1014",
+      "ammoPresentation": "shells",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825: scripts/items/items_game.txt and scripts/weapons.vdata_c (Source2Viewer-CLI 20.0; decompiled evidence hashes recorded in provenance/ammo-evidence.md)"
+        }
+      ]
+    }
+  ]
+}
