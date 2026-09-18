@@ -495,11 +495,7 @@ describe('SeriesProgress', () => {
 
   it('fails closed on a map-order exception and rejects binding over a completed slot', () => {
     const context = contextFixture();
-    const outOfOrder = reduce(
-      createSeriesProgress(context),
-      [],
-      observation('de_inferno', 1),
-    );
+    const outOfOrder = reduce(createSeriesProgress(context), [], observation('de_inferno', 1));
     expect(outOfOrder).toMatchObject({ bindingState: 'needs_operator', currentMapOrder: null });
     expect(outOfOrder.issues).toEqual(
       expect.arrayContaining([expect.objectContaining({ code: 'map_order_exception' })]),
@@ -558,9 +554,7 @@ describe('SeriesProgress', () => {
     );
   });
 
-  it(
-    'freezes entrant identity per round across side changes and never backfills missing proof',
-    () => {
+  it('freezes entrant identity per round across side changes and never backfills missing proof', () => {
     let progress = reduce(createSeriesProgress(contextFixture('bo1')));
 
     progress = reduce(
@@ -621,9 +615,8 @@ describe('SeriesProgress', () => {
       observation('de_mirage', 1, { ct: 2, t: 1 }),
       proof(1, 'CT'),
     );
-      expect(laterProof.maps[0]?.roundHistory.rounds[2]?.winnerEntryId).toBeNull();
-    },
-  );
+    expect(laterProof.maps[0]?.roundHistory.rounds[2]?.winnerEntryId).toBeNull();
+  });
 
   it('retains same-map progress across source generation changes', () => {
     let progress = reduce(createSeriesProgress(contextFixture('bo1')));
@@ -654,9 +647,7 @@ describe('SeriesProgress', () => {
 
     expect(reconnected.currentMapOrder).toBe(1);
     expect(reconnected.maps[0]?.executionMapEpoch).toBe(1);
-    expect(reconnected.maps[0]?.roundHistory.rounds).toEqual(
-      progress.maps[0]?.roundHistory.rounds,
-    );
+    expect(reconnected.maps[0]?.roundHistory.rounds).toEqual(progress.maps[0]?.roundHistory.rounds);
   });
 
   it('same-map restart clears only the unfinished current map history', () => {
