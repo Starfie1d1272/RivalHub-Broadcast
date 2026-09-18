@@ -53,6 +53,7 @@ describe('@rivalhub-broadcast/cs2-assets resolver', () => {
       gsiWeaponName: 'weapon_usp_silencer_off',
     });
   });
+
   it('resolves Program weapon presentation from name and never from the weapons-object slot key', () => {
     const resolveProgramWeapon = (weapon: { readonly name: string | null }) =>
       weapon.name === null ? null : resolveCs2ItemByGsiName(weapon.name);
@@ -70,5 +71,4 @@ describe('@rivalhub-broadcast/cs2-assets resolver', () => {
     const unavailable = { sourceWeaponId: 'weapon_3', name: null } as const;
     expect(resolveProgramWeapon(unavailable)).toBeNull();
   });
-
 });
