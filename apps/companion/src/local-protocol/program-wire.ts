@@ -1,11 +1,36 @@
 import type { ProgramPayload } from '@rivalhub-broadcast/protocol/program';
 import type { ProgramProjection } from '@rivalhub-broadcast/core/projection';
 
+function mapSeries(projection: ProgramProjection['series']): ProgramPayload['series'] {
+  if (projection === null) return null;
+  return {
+    ...projection,
+    entrants: {
+      a: { ...projection.entrants.a },
+      b: { ...projection.entrants.b },
+    },
+    maps: projection.maps.map((map) => ({
+      ...map,
+      selection: { ...map.selection },
+      finalScore: map.finalScore === null ? null : { ...map.finalScore },
+    })),
+    veto: projection.veto.map((step) => ({ ...step })),
+    roundHistory:
+      projection.roundHistory === null
+        ? null
+        : {
+            ...projection.roundHistory,
+            rounds: projection.roundHistory.rounds.map((round) => ({ ...round })),
+          },
+  };
+}
+
 export function mapProgramProjection(projection: ProgramProjection): ProgramPayload {
   return {
     status: projection.status,
     match: projection.match,
     teams: projection.teams,
+    series: mapSeries(projection.series),
     map: projection.map,
     round: projection.round,
     clock: projection.clock,

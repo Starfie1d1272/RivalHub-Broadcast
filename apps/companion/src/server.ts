@@ -4,6 +4,7 @@ import { dirname, join } from 'node:path';
 
 import { buildApp } from './app.js';
 import { createProgramRuntime } from './runtime/program-runtime.js';
+import { JsonSeriesProgressCheckpointStore } from './series-progress/checkpoint-store.js';
 import {
   createCaptureRecorder,
   createDisabledRecorder,
@@ -25,9 +26,12 @@ const localWebLanMode = /^(?:1|true)$/i.test(process.env.LOCAL_WEB_LAN_MODE ?? '
 const localWebAllowedOrigins = parseAllowedOrigins(process.env.LOCAL_WEB_ALLOWED_ORIGINS);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
+const seriesProgressCheckpointPath =
+  process.env.SERIES_PROGRESS_CHECKPOINT_PATH ?? join(captureDir, '..', 'series-progress.json');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
+const operatorControlToken = process.env.OPERATOR_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
 const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
 const qualificationScenarioPath =
@@ -79,6 +83,9 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 } else if (qualificationMode && host !== '127.0.0.1') {
   console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
   process.exitCode = 1;
+} else if (operatorControlToken !== undefined && operatorControlToken.trim().length === 0) {
+  console.error('Companion 启动失败：OPERATOR_CONTROL_TOKEN 必须设置为非空值');
+  process.exitCode = 1;
 } else if (cstvSourceConfigError !== undefined) {
   console.error(`Companion 启动失败：${cstvSourceConfigError}`);
   process.exitCode = 1;
@@ -97,7 +104,15 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     console.error(`Companion capture recorder 不可用：${String(error)}`);
   }
 
-  const programRuntime = createProgramRuntime(producerInstanceId);
+  const seriesProgressCheckpointStore = new JsonSeriesProgressCheckpointStore({
+    filePath: seriesProgressCheckpointPath,
+    onDiagnostic: (code) => console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+  });
+  const programRuntime = createProgramRuntime(producerInstanceId, {
+    seriesProgressCheckpointStore,
+    onSeriesProgressDiagnostic: ({ code }) =>
+      console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+  });
   const app = buildApp({
     logger: true,
     gsiToken,
@@ -110,6 +125,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     ...(cstvSourceConfig === undefined ? {} : { cstvSources: cstvSourceConfig }),
     qualificationMode,
     ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),
+    ...(operatorControlToken === undefined ? {} : { operatorControlToken }),
     ...(qualificationMode
       ? {
           qualificationRunId,

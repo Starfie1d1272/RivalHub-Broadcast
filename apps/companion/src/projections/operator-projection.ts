@@ -15,6 +15,7 @@ import type {
 } from '@rivalhub-broadcast/core/identity';
 import type { RuntimeDisposition, RuntimeTransition } from '@rivalhub-broadcast/core/runtime';
 import type { MatchFormat } from '@rivalhub-broadcast/core/match-context';
+import type { SeriesProgress } from '@rivalhub-broadcast/core/series-progress';
 
 import type { MatchContextBinding } from '../match-context/index.js';
 import type { CstvSourceHealth, CstvSourceManagers } from '../telemetry/cstv-source-manager.js';
@@ -23,6 +24,21 @@ import { projectionContextFromBinding, type ProjectionContextInput } from './con
 
 export interface OperatorProjection {
   readonly cursor: ProjectionCursor;
+  readonly seriesProgress: null | {
+    readonly bindingState: SeriesProgress['bindingState'];
+    readonly requiredWins: SeriesProgress['requiredWins'];
+    readonly score: SeriesProgress['score'];
+    readonly currentMapOrder: number | null;
+    readonly maps: readonly {
+      readonly mapOrder: number;
+      readonly mapName: string;
+      readonly status: SeriesProgress['maps'][number]['status'];
+      readonly executionMapEpoch: number | null;
+      readonly finalScore: SeriesProgress['maps'][number]['finalScore'];
+      readonly roundHistoryCompleteness: SeriesProgress['maps'][number]['roundHistory']['completeness'];
+    }[];
+    readonly issues: SeriesProgress['issues'];
+  };
   readonly runtime: {
     readonly telemetryFreshness: 'awaiting' | 'fresh' | 'stale';
     readonly mapName: string | null;
@@ -92,9 +108,28 @@ export function projectOperator(input: OperatorProjectionInput): OperatorProject
   const context = projectionContextFromBinding(input.context);
   const lastAccepted = safeRuntime.programSourceLastAccepted;
   const lineupPlayers = [...input.activeLineup.ct, ...input.activeLineup.t];
+  const seriesProgress = input.runtime.seriesProgress;
 
   return {
     cursor: safeRuntime.cursor,
+    seriesProgress:
+      seriesProgress === null
+        ? null
+        : {
+            bindingState: seriesProgress.bindingState,
+            requiredWins: seriesProgress.requiredWins,
+            score: { ...seriesProgress.score },
+            currentMapOrder: seriesProgress.currentMapOrder,
+            maps: seriesProgress.maps.map((map) => ({
+              mapOrder: map.mapOrder,
+              mapName: map.mapName,
+              status: map.status,
+              executionMapEpoch: map.executionMapEpoch,
+              finalScore: map.finalScore === null ? null : { ...map.finalScore },
+              roundHistoryCompleteness: map.roundHistory.completeness,
+            })),
+            issues: seriesProgress.issues.map((item) => ({ ...item })),
+          },
     runtime: {
       telemetryFreshness: getProgramSafeRuntimeFreshness(
         safeRuntime,

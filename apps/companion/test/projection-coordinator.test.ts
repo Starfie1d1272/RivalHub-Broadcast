@@ -216,6 +216,7 @@ describe('ProjectionCoordinator', () => {
     expect(coordinator.getPublisher('operator').getCurrent()?.payload).not.toHaveProperty(
       'recentGameEvents',
     );
+    expect(coordinator.getPublisher('operator').getCurrent()?.payload.seriesProgress).toBeNull();
 
     await subscription.close();
     await coordinator.close();
@@ -371,9 +372,9 @@ describe('ProjectionCoordinator', () => {
       expect(coordinator.getCurrent().program.teams.ct).toMatchObject({
         mode: 'canonical',
         name: manifestWithScore.entrants.a.name,
-        seriesScore: null,
+        seriesScore: 1,
       });
-      expect(coordinator.getCurrent().program.teams.t.seriesScore).toBeNull();
+      expect(coordinator.getCurrent().program.teams.t.seriesScore).toBe(0);
       expect(runtime.getSnapshot().current.runtimeSeq).toBe(runtimeSeq);
       expect(coordinator.getPublisher('program').getCurrent()?.channelSeq).toBe(
         (channelSeq ?? 0) + 1,

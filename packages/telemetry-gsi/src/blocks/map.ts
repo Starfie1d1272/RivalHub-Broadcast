@@ -1,4 +1,11 @@
-import type { MapPhase, ObservedMap, ObservedMapSide } from '@rivalhub-broadcast/core/telemetry';
+import type {
+  MapPhase,
+  ObservedMap,
+  ObservedMapSide,
+  ObservedRoundWin,
+  RoundWinCondition,
+  SourceSide,
+} from '@rivalhub-broadcast/core/telemetry';
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { optionalEnum } from '../parse/enum.js';
 import { asSourceRecord } from '../parse/record.js';
@@ -47,6 +54,45 @@ function parseMapSide(
   };
 }
 
+function normalizeRoundWin(value: string): {
+  readonly winnerSide: SourceSide;
+  readonly winCondition: RoundWinCondition;
+} {
+  const match = /^(ct|t)_win_(elimination|bomb|defuse|time)$/i.exec(value.trim());
+  if (match === null) return { winnerSide: 'unknown', winCondition: 'unknown' };
+  return {
+    winnerSide: match[1]!.toUpperCase() as 'CT' | 'T',
+    winCondition: match[2]!.toLowerCase() as Exclude<RoundWinCondition, 'unknown'>,
+  };
+}
+
+function parseRoundWins(
+  value: unknown,
+  diagnostics: DiagnosticCollector,
+  path: string,
+): readonly ObservedRoundWin[] | undefined {
+  const record = asSourceRecord(value);
+  if (record === undefined) {
+    diagnostics.add('INVALID_FIELD', 'error', path);
+    return undefined;
+  }
+
+  const wins: ObservedRoundWin[] = [];
+  for (const [rawRoundNumber, rawReason] of Object.entries(record)) {
+    const roundNumber = /^\d+$/.test(rawRoundNumber) ? Number(rawRoundNumber) : Number.NaN;
+    if (!Number.isSafeInteger(roundNumber) || roundNumber <= 0 || typeof rawReason !== 'string') {
+      diagnostics.add('INVALID_FIELD', 'warning', `${path}.${rawRoundNumber}`);
+      continue;
+    }
+    const normalized = normalizeRoundWin(rawReason);
+    if (normalized.winnerSide === 'unknown' || normalized.winCondition === 'unknown') {
+      diagnostics.add('UNKNOWN_GSI_ENUM', 'warning', `${path}.${rawRoundNumber}`, rawReason);
+    }
+    wins.push({ roundNumber, ...normalized });
+  }
+  return wins.sort((left, right) => left.roundNumber - right.roundNumber);
+}
+
 export function parseMap(
   value: unknown,
   diagnostics: DiagnosticCollector,
@@ -70,6 +116,9 @@ export function parseMap(
     `${path}.phase`,
   );
   const roundNumber = optionalInteger(record, 'round', diagnostics, `${path}.round`);
+  const roundWins = Object.hasOwn(record, 'round_wins')
+    ? parseRoundWins(record.round_wins, diagnostics, `${path}.round_wins`)
+    : undefined;
 
   const sideValues: { ct?: ObservedMapSide; t?: ObservedMapSide } = {};
   if (Object.hasOwn(record, 'team_ct')) {
@@ -87,6 +136,7 @@ export function parseMap(
     ...(mode === undefined ? {} : { mode }),
     ...(phase === undefined ? {} : { phase }),
     ...(roundNumber === undefined ? {} : { roundNumber }),
+    ...(roundWins === undefined ? {} : { roundWins }),
     ...(hasSides ? { sides: sideValues } : {}),
   });
 }

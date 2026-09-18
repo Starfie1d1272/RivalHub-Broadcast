@@ -45,6 +45,7 @@ function payload() {
         seriesScore: null,
       },
     },
+    series: null,
     map: {
       name: 'de_mirage',
       mode: null,
@@ -92,13 +93,13 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
 
     expect(LOCAL_PROTOCOL_SUBPROTOCOL).toBe('rivalhub-broadcast.local.v1');
     expect(LOCAL_PROTOCOL_VERSION).toBe(1);
-    expect(PROGRAM_SCHEMA_VERSION).toBe(4);
+    expect(PROGRAM_SCHEMA_VERSION).toBe(5);
     expect(parsed.channel).toBe('program');
     expect(parsed).not.toHaveProperty('lookahead');
     expect(parsed.payload).not.toHaveProperty('futureCue');
   });
 
-  it('requires the Program v4 player evidence, ADR views, and life state fields', () => {
+  it('requires the Program v5 series, player evidence, ADR views, and life state fields', () => {
     const player = {
       sourcePlayerId: 'player-1',
       canonicalPlayerId: null,

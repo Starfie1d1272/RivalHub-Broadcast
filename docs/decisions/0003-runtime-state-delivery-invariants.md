@@ -9,6 +9,8 @@
 
 > 2026-09-17 clarification：Issue #46 将 `ActiveLineupResolution` 与 map-scoped player stats 落为 Core Foundation seam。Raw `allplayers` 仍属于 telemetry observation；Core 维护一份 map-scoped stable membership/side assignment 与 accumulator，ProgramProjection 只消费由 Coordinator 解析并绑定到当前 source generation 的 resolved cohort。只有 `allplayers = present` 且唯一 Steam64 的无歧义 5+5 才能建立或替换 baseline；`absent` / `degraded` 只允许保留既有 membership，不能把旧 generation 的 volatile telemetry 当作当前值。Accumulator 由 phase transition、continuity、map epoch 与 evidence completeness 驱动，`map.round` 只作 sanity hint；当前回合 evidence gap 使该回合 fail closed，而同一 accumulator 提供 `liveAdr` 与 `completedAdr` 两个 read view。该 clarification 不新增第二份 `RuntimeState`，也不改变 ADR-0003 关于 projection ownership、map epoch 和 latest-wins 的决定。
 
+> 2026-09-18 clarification：Issue #48 将 `SeriesProgress` 落为 Core-owned 的纯规则模型，由 Companion 当前唯一的 runtime composition owner 持有；它消费 `RuntimeTransition`、`MatchContext` 和同一 `sourceGeneration + mapEpoch` 下已证明的 side mapping，不复制 `RuntimeState`、`IdentityResolver`、`ActiveLineupResolution` 或 side-mapping ownership。地图计划不匹配时 Series fail closed 为 `needs_operator`，Program 仍可显示原始 telemetry。系列赛恢复只使用兼容的有界原子 JSON checkpoint，不建立 event-sourcing；Round History 由 `round_ended` 为 primary truth，`map_round_wins` 只作保守恢复、未知 `winCondition` 补充和冲突校验，不能覆盖已冻结的 `winnerSide`。兼容 checkpoint 加载后还必须校验当前 execution 的 `roundNumber`、score 与 `round_wins`；矛盾时保留 primary history 并标记 `partial/diagnostic`。Operator projection 暴露绑定与诊断，独立的 `OPERATOR_CONTROL_TOKEN` ingress 承载显式 map bind command，Companion shutdown await checkpoint flush。该 clarification 不改变现有 single-runtime、Program/Assist isolation 与 latest-wins 决定。
+
 ## 背景
 
 ADR-0002 已冻结 Runtime / Workspace 技术栈，但在正式实现 Core 前，还需要把实时系统最容易走偏的语义边界固定下来：

@@ -11,6 +11,7 @@ import {
 } from './debug/runtime';
 import { ProgramCueRendererBridge } from './program/ProgramCueRendererBridge';
 import { ProgramPage } from './program/ProgramPage';
+import { OperatorPage } from './operator/OperatorPage';
 import {
   ProgramVisualFixtureNotFound,
   ProgramVisualFixturePage,
@@ -445,5 +446,6 @@ export function App() {
   const surface = surfaceForPath(pathname);
   if (surface.id === 'debug') return <DebugPage />;
   if (surface.id === 'program') return <ProgramRoute />;
+  if (surface.id === 'operator') return <OperatorPage />;
   return <SurfacePage surface={surface} />;
 }

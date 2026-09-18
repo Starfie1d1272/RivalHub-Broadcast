@@ -161,6 +161,28 @@ RuntimeState
 - DebugProjection 可以更宽，但不因此成为其它消费面的数据源；
 - domain interpretation 在 Projection 结束，例如 `lifeState` 由 Core 统一推导，Renderer 不重复根据 HP 猜测。
 
+### 4.1 SeriesProgress 与本地恢复
+
+`SeriesProgress` 是 Core-owned 的系列赛事实模型，表达地图计划与实际 execution 的绑定、已冻结地图结果、有限的 Round History 以及当前系列赛比分。它由 Companion 当前唯一的 runtime composition owner 持有，但不是第二份 `RuntimeState`、event journal 或赛事数据库。
+
+接线边界固定为：
+
+```text
+RuntimeTransition + MatchContext + 当前已证明的 side mapping
+                         ↓
+                 Core SeriesProgress reducer
+                         ↓
+                    ProgramProjection
+```
+
+`IdentityResolver`、`ActiveLineupResolution` 和 side-mapping 仍由既有 owner 维护；Series reducer 只接收同一 `sourceGeneration + mapEpoch` 的显式 proof，不复制这些状态。实际地图与计划不一致时保留原始 Program telemetry，Series binding fail closed 为 `needs_operator`，不猜 map slot 或 canonical series score。
+
+连续运行时 `round_ended` 是 Round History 的 primary truth；后续 `map_round_wins` 只能恢复缺失历史、补充未知 `winCondition` 或做保守校验，不能覆盖已经冻结的 `winnerSide`。如果 snapshot 与 transition 冲突，保留 primary fact，并将 history 降级为 `partial`、留下 Operator diagnostic。兼容 checkpoint 加载后还必须把当前 GSI 的 `roundNumber`、CT/T score 和 `round_wins` 与已冻结 history 做一次 execution-state reconciliation；发现回退或矛盾时同样保留 checkpoint history 并降级，不把 schema compatibility 当作 execution compatibility。
+
+Series checkpoint 是小型、有界、单文件的本地恢复事实，复用 Companion 现有 durable JSON 原子替换与串行提交队列。它按 `matchId + entrants + format + ordered canonical map plan fingerprint` 校验兼容性；不兼容时丢弃旧 checkpoint 并产生诊断。checkpoint 只在回合、地图绑定、地图结束、reset/restore、operator bind 或 Series completion 等业务边界写入，不按每帧 GSI 写盘。Companion shutdown 会先 quiesce Projection / ProgramCue owner，再 await ProgramRuntime checkpoint drain，因此最后一个已提交业务边界可以作为重启恢复的 durability contract。
+
+Operator projection 暴露有界的 SeriesProgress binding、map status、score 与 issues；配置独立的 `OPERATOR_CONTROL_TOKEN` 后，`POST /operator/series/bind` 作为现有 OperatorCommand 的本地 ingress，成功或拒绝都返回明确 acknowledgement。
+
 ## 5. 状态、转换、命令与事件
 
 系统不使用一个万能 Event 类型承载所有语义。

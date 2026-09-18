@@ -25,8 +25,13 @@ export type {
   ProgramPlayerStateProjection,
   ProgramProjection,
   ProgramProjectionInput,
+  ProgramRoundHistoryItem,
+  ProgramSeriesEntrant,
+  ProgramSeriesMap,
+  ProgramSeriesProjection,
   ProgramTeamPresentation,
   ProgramTeamPresentationCanonical,
   ProgramTeamPresentationNeutral,
   ProgramWeaponProjection,
+  ProgramVetoStep,
 } from './program.js';

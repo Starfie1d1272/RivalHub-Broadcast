@@ -99,6 +99,14 @@ Absence 可能表示：
 - normal-player capture 中，`round.bomb` 与 `round.win_team` 会在对应语义结束后从 current payload 消失；
 - `previously` / `added` 通常提供有价值的 change hint，但真实 capture 也存在 current state 已变化而 hint 不完整的 frame。
 
+### 3.2 地图 canonicalization 与 `map_round_wins`
+
+Core 与 Radar 共用 Broadcast-owned 的显式 CS2 地图别名表，例如 `Mirage / mirage / de_mirage` 归一为 `de_mirage`，`Dust 2 / dust2 / Dust II / de_dust2` 归一为 `de_dust2`。只允许明确别名和空白/大小写规范化，不使用编辑距离或模糊猜测。
+
+`map.round_wins` 在 `packages/telemetry-gsi` 中解析为 normalized `ObservedRoundWin[]`。已知 `ct_win_* / t_win_*` 原因映射为 `elimination`、`bomb`、`defuse`、`time`；未知原因保留 `winnerSide = unknown` 与 `winCondition = unknown`，并产生 adapter diagnostic。
+
+它不是独立实时状态机：连续运行时由 `round_ended` transition 冻结 Round History，`map_round_wins` 只用于中途加入、重连/进程恢复和同一回合的安全校验/原因补充。只有能够证明 key 是当前地图的绝对连续回合号时才恢复缺失历史；加时可能重置局部 key 时标记 `partial`，不猜 OT offset。Core 对每张地图的历史保留显式上限，避免 source payload 或恢复路径造成无界增长。
+
 这些事实只证明**已录制场景**中的 source behavior，不声明所有 CS2 版本和 observer context 永远保持完全相同。Adapter 仍需 tolerant，并在实际 shape 偏离已知 evidence 时输出 diagnostic，而不是崩溃或伪造缺失字段。
 
 ## 4. `previously` / `added`
@@ -128,6 +136,7 @@ TelemetryObservation
 ├─ coverage
 └─ telemetry
    ├─ map
+   │  └─ roundWins（map_round_wins 的 normalized recovery evidence）
    ├─ round
    ├─ phaseCountdowns
    ├─ player

@@ -5,6 +5,7 @@ import {
   type RadarCalibrationSnapshot,
   type SupportedRadarMapKey,
 } from './cs2-overview-calibrations.js';
+import { canonicalizeCs2MapName } from '@rivalhub-broadcast/core/map-name';
 import type { MapGeometry, MapGeometryProvider } from './map-geometry.js';
 
 const EXPECTED_SPLIT_Z: Readonly<Partial<Record<SupportedRadarMapKey, number>>> = {
@@ -12,21 +13,6 @@ const EXPECTED_SPLIT_Z: Readonly<Partial<Record<SupportedRadarMapKey, number>>> 
   de_train: -50,
   de_vertigo: 11700,
 };
-
-const DISPLAY_ALIASES: Readonly<Record<string, SupportedRadarMapKey>> = Object.freeze({
-  dust2: 'de_dust2',
-  'dust 2': 'de_dust2',
-  'dust ii': 'de_dust2',
-  mirage: 'de_mirage',
-  inferno: 'de_inferno',
-  nuke: 'de_nuke',
-  ancient: 'de_ancient',
-  anubis: 'de_anubis',
-  cache: 'de_cache',
-  overpass: 'de_overpass',
-  train: 'de_train',
-  vertigo: 'de_vertigo',
-});
 
 function fail(mapKey: string, message: string): never {
   throw new Error(`Invalid radar calibration for ${mapKey}: ${message}`);
@@ -125,9 +111,10 @@ const MAP_GEOMETRIES = Object.freeze(
 );
 
 function canonicalMapKey(mapName: string): SupportedRadarMapKey | undefined {
-  const normalized = mapName.trim().toLowerCase();
-  const canonical = SUPPORTED_RADAR_MAP_KEYS.find((mapKey) => mapKey === normalized);
-  return canonical ?? DISPLAY_ALIASES[normalized];
+  const canonical = canonicalizeCs2MapName(mapName);
+  return canonical !== null && SUPPORTED_RADAR_MAP_KEYS.includes(canonical as SupportedRadarMapKey)
+    ? (canonical as SupportedRadarMapKey)
+    : undefined;
 }
 
 export const defaultMapGeometryProvider: MapGeometryProvider = Object.freeze({

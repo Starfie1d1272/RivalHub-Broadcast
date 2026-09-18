@@ -1,6 +1,13 @@
 export type { BombState, ObservedBomb } from './bomb.js';
 export type { ObservedGrenade, ObservedGrenadeFlame } from './grenade.js';
-export type { MapPhase, ObservedMap, ObservedMapSide, SourceSide } from './map.js';
+export type {
+  MapPhase,
+  ObservedMap,
+  ObservedMapSide,
+  ObservedRoundWin,
+  RoundWinCondition,
+  SourceSide,
+} from './map.js';
 export type {
   ObservedTelemetry,
   TelemetryCoverage,
