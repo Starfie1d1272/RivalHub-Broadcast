@@ -396,4 +396,328 @@ describe('SeriesProgress', () => {
       ),
     ).toBe(false);
   });
+  it('completes a BO1 locally after a proven map result', () => {
+    let progress = reduce(createSeriesProgress(contextFixture('bo1')));
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          finalScore: { ct: 13, t: 7 },
+        },
+      ],
+      observation('de_mirage', 1, { ct: 13, t: 7 }),
+      proof(1),
+    );
+
+    expect(progress.score).toEqual({ a: 1, b: 0 });
+    expect(progress.maps[0]).toMatchObject({
+      status: 'completed',
+      finalScore: { a: 13, b: 7 },
+      winnerEntryId: 'a',
+    });
+    expect(progress.currentMapOrder).toBeNull();
+  });
+
+  it('completes a BO5 at three map wins and marks the remainder not played', () => {
+    let progress = reduce(createSeriesProgress(contextFixture('bo5')));
+
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          finalScore: { ct: 13, t: 9 },
+        },
+      ],
+      observation('de_mirage', 1, { ct: 13, t: 9 }),
+      proof(1),
+    );
+    expect(progress.score).toEqual({ a: 1, b: 0 });
+
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-execution-changed',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          previousMapEpoch: 1,
+          previousMapName: 'de_mirage',
+          mapName: 'de_dust2',
+          resetReason: null,
+        },
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          finalScore: { ct: 9, t: 13 },
+        },
+      ],
+      observation('de_dust2', 2, { ct: 9, t: 13 }),
+      proof(2, 'T'),
+    );
+    expect(progress.score).toEqual({ a: 2, b: 0 });
+
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-execution-changed',
+          sourceGeneration: 0,
+          mapEpoch: 3,
+          previousMapEpoch: 2,
+          previousMapName: 'de_dust2',
+          mapName: 'de_inferno',
+          resetReason: null,
+        },
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 3,
+          finalScore: { ct: 13, t: 11 },
+        },
+      ],
+      observation('de_inferno', 3, { ct: 13, t: 11 }),
+      proof(3),
+    );
+
+    expect(progress.score).toEqual({ a: 3, b: 0 });
+    expect(progress.maps.slice(0, 3).every((map) => map.status === 'completed')).toBe(true);
+    expect(progress.maps.slice(3).every((map) => map.status === 'not_played')).toBe(true);
+    expect(progress.currentMapOrder).toBeNull();
+  });
+
+  it('fails closed on a map-order exception and rejects binding over a completed slot', () => {
+    const context = contextFixture();
+    const outOfOrder = reduce(
+      createSeriesProgress(context),
+      [],
+      observation('de_inferno', 1),
+    );
+    expect(outOfOrder).toMatchObject({ bindingState: 'needs_operator', currentMapOrder: null });
+    expect(outOfOrder.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'map_order_exception' })]),
+    );
+
+    let progress = reduce(createSeriesProgress(context));
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          finalScore: { ct: 13, t: 9 },
+        },
+      ],
+      observation('de_mirage', 1, { ct: 13, t: 9 }),
+      proof(1),
+    );
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-execution-changed',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          previousMapEpoch: 1,
+          previousMapName: 'de_mirage',
+          mapName: 'de_dust2',
+          resetReason: null,
+        },
+      ],
+      observation('de_dust2', 2),
+      proof(2),
+    );
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'operator-map-bind',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          mapOrder: 1,
+          mapName: 'de_dust2',
+          reason: '尝试覆盖已完成地图',
+        },
+      ],
+      observation('de_dust2', 2),
+      proof(2),
+    );
+
+    expect(progress.currentMapOrder).toBe(2);
+    expect(progress.maps[0]?.status).toBe('completed');
+    expect(progress.issues).toEqual(
+      expect.arrayContaining([expect.objectContaining({ code: 'operator_bind_rejected' })]),
+    );
+  });
+
+  it('freezes entrant identity per round across side changes and never backfills missing proof', () => {
+    let progress = reduce(createSeriesProgress(contextFixture('bo1')));
+
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          roundNumber: 1,
+          winnerSide: 'CT',
+          winCondition: 'elimination',
+        },
+      ],
+      observation('de_mirage', 1, { ct: 1, t: 0 }),
+      proof(1, 'CT'),
+    );
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          roundNumber: 2,
+          winnerSide: 'CT',
+          winCondition: 'time',
+        },
+      ],
+      observation('de_mirage', 1, { ct: 2, t: 0 }),
+      proof(1, 'T'),
+    );
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          roundNumber: 3,
+          winnerSide: 'T',
+          winCondition: 'bomb',
+        },
+      ],
+      observation('de_mirage', 1, { ct: 2, t: 1 }),
+      null,
+    );
+
+    expect(progress.maps[0]?.roundHistory.rounds).toMatchObject([
+      { roundNumber: 1, winnerEntryId: 'a' },
+      { roundNumber: 2, winnerEntryId: 'b' },
+      { roundNumber: 3, winnerEntryId: null },
+    ]);
+
+    const laterProof = reduce(
+      progress,
+      [],
+      observation('de_mirage', 1, { ct: 2, t: 1 }),
+      proof(1, 'CT'),
+    );
+    expect(laterProof.maps[0]?.roundHistory.rounds[2]?.winnerEntryId).toBeNull();
+  });
+
+  it('retains same-map progress across source generation changes', () => {
+    let progress = reduce(createSeriesProgress(contextFixture('bo1')));
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          roundNumber: 1,
+          winnerSide: 'CT',
+          winCondition: 'elimination',
+        },
+      ],
+      observation('de_mirage', 1, { ct: 1, t: 0 }),
+      proof(1),
+    );
+
+    const reconnected = syncSeriesProgress(progress, {
+      events: [],
+      observation: { ...observation('de_mirage', 1, { ct: 1, t: 0 }), sourceGeneration: 1 },
+      sideProof: { ...proof(1), sourceGeneration: 1 },
+    }).progress;
+
+    expect(reconnected.currentMapOrder).toBe(1);
+    expect(reconnected.maps[0]?.executionMapEpoch).toBe(1);
+    expect(reconnected.maps[0]?.roundHistory.rounds).toEqual(
+      progress.maps[0]?.roundHistory.rounds,
+    );
+  });
+
+  it('same-map restart clears only the unfinished current map history', () => {
+    const context = contextFixture();
+    let progress = reduce(createSeriesProgress(context));
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-ended',
+          sourceGeneration: 0,
+          mapEpoch: 1,
+          finalScore: { ct: 13, t: 9 },
+        },
+      ],
+      observation('de_mirage', 1, { ct: 13, t: 9 }),
+      proof(1),
+    );
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-execution-changed',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          previousMapEpoch: 1,
+          previousMapName: 'de_mirage',
+          mapName: 'de_dust2',
+          resetReason: null,
+        },
+        {
+          kind: 'round-ended',
+          sourceGeneration: 0,
+          mapEpoch: 2,
+          roundNumber: 1,
+          winnerSide: 'CT',
+          winCondition: 'elimination',
+        },
+      ],
+      observation('de_dust2', 2, { ct: 1, t: 0 }),
+      proof(2),
+    );
+    expect(progress.maps[1]?.roundHistory.rounds).toHaveLength(1);
+
+    progress = reduce(
+      progress,
+      [
+        {
+          kind: 'map-execution-changed',
+          sourceGeneration: 0,
+          mapEpoch: 3,
+          previousMapEpoch: 2,
+          previousMapName: 'de_dust2',
+          mapName: 'de_dust2',
+          resetReason: 'same-map-restart',
+        },
+      ],
+      observation('de_dust2', 3),
+      proof(3),
+    );
+
+    expect(progress.score).toEqual({ a: 1, b: 0 });
+    expect(progress.maps[0]).toMatchObject({ status: 'completed', finalScore: { a: 13, b: 9 } });
+    expect(progress.maps[1]).toMatchObject({
+      status: 'current',
+      executionMapEpoch: 3,
+      roundHistory: { completeness: 'unavailable', rounds: [] },
+    });
+  });
+
 });
