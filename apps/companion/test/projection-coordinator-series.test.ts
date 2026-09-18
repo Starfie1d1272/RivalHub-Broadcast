@@ -252,7 +252,7 @@ describe('Section IV.E: Program / Protocol integration and boundaries', () => {
       const snapshot = publisher.getCurrent();
       expect(snapshot).not.toBeNull();
 
-      // Synthesize a maximum-legal payload with 256 round history records (SERIES_ROUND_HISTORY_MAX)
+      // Synthesize a representative payload with the maximum retained 256-round history.
       const maxRounds = Array.from({ length: 256 }, (_, i) => ({
         roundNumber: i + 1,
         winnerSide: i % 2 === 0 ? ('CT' as const) : ('T' as const),
@@ -261,7 +261,7 @@ describe('Section IV.E: Program / Protocol integration and boundaries', () => {
           'elimination' | 'bomb' | 'defuse' | 'time',
       }));
 
-      const maxLegalPayload = {
+      const maxHistoryPayload = {
         ...snapshot!.payload,
         series: {
           ...snapshot!.payload.series!,
@@ -275,7 +275,7 @@ describe('Section IV.E: Program / Protocol integration and boundaries', () => {
 
       const parsed = programSnapshotSchema.parse({
         ...snapshot,
-        payload: maxLegalPayload,
+        payload: maxHistoryPayload,
       });
       expect(parsed.payload.series?.roundHistory?.rounds).toHaveLength(256);
 
