@@ -585,5 +585,4 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
       expect(asset.mediaType).toBe('image/svg+xml');
     }
   });
-
 });
