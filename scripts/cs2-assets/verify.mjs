@@ -82,11 +82,15 @@ function validateAssetRecord(assetId, record) {
   return relativeOutputPath;
 }
 
-export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT } = {}) {
+export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT, generatedRoot } = {}) {
   const packageRoot = join(rootDir, relative(REPOSITORY_ROOT, PACKAGE_ROOT));
   const catalogPath = join(packageRoot, relative(PACKAGE_ROOT, CATALOG_PATH));
-  const manifestPath = join(packageRoot, relative(PACKAGE_ROOT, MANIFEST_PATH));
-  const publicRoot = join(packageRoot, relative(PACKAGE_ROOT, PUBLIC_ROOT));
+  const manifestPath = generatedRoot
+    ? join(generatedRoot, 'manifest.json')
+    : join(packageRoot, relative(PACKAGE_ROOT, MANIFEST_PATH));
+  const publicRoot = generatedRoot
+    ? join(generatedRoot, 'public')
+    : join(packageRoot, relative(PACKAGE_ROOT, PUBLIC_ROOT));
   const toolchainPath = join(rootDir, relative(REPOSITORY_ROOT, TOOLCHAIN_PATH));
   const [catalog, manifest, toolchain] = await Promise.all([
     readCatalog(catalogPath),

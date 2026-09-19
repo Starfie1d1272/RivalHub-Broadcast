@@ -43,6 +43,16 @@ describe('@rivalhub-broadcast/cs2-assets resolver', () => {
     });
   });
 
+  it("audits that all 71 catalog items have tintMode: 'mask' for monochromatic presentation", () => {
+    expect(CS2_ITEM_CATALOG).toHaveLength(71);
+    for (const item of CS2_ITEM_CATALOG) {
+      expect(item.tintMode, `Item ${item.canonicalKey} must have tintMode 'mask'`).toBe('mask');
+      const asset = getCs2Asset(item.assetId);
+      expect(asset?.tintMode).toBe('mask');
+      expect(asset?.mediaType).toBe('image/svg+xml');
+    }
+  });
+
   it('uses only explicit aliases for legacy/current source ids', () => {
     expect(resolveCs2ItemByGsiName('weapon_p2000')).toMatchObject({
       kind: 'known',

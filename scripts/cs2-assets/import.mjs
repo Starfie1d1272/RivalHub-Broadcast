@@ -18,6 +18,7 @@ import {
   validateCatalog,
   validateSourcePath,
 } from './common.mjs';
+import { verifyCs2Assets } from './verify.mjs';
 
 const RAW_EXTENSION = '.vsvg_c';
 
@@ -85,12 +86,11 @@ export function parseArgs(argv) {
 }
 
 function runCommand(command, args, options = {}) {
-  const isWindowsBatch = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? REPOSITORY_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: isWindowsBatch,
+      shell: false,
     });
     let stdout = '';
     let stderr = '';
@@ -113,14 +113,27 @@ function runCommand(command, args, options = {}) {
   });
 }
 
-async function commandVersion(cli) {
-  const result = await runCommand(cli, ['--version']);
-  return `${result.stdout}\n${result.stderr}`.trim();
+export function parseCliVersion(rawOutput) {
+  const text = String(rawOutput ?? '').trim();
+  for (const line of text.split(/\r?\n/)) {
+    const trimmed = line.trim();
+    const match = /^(?:version:\s*|source\s*2\s*viewer(?:\s*-\s*v|\s+v|\s+)?)(.+)$/i.exec(trimmed);
+    if (match) {
+      return match[1].trim();
+    }
+  }
+  const firstLine = text.split(/\r?\n/)[0]?.trim();
+  return firstLine || text;
 }
 
-function versionMatches(actual, expected) {
-  const escaped = expected.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  return new RegExp(`(?:^|[^0-9])${escaped}(?:$|[^0-9])`).test(actual);
+export function versionMatches(actualOutput, expectedVersion) {
+  const parsed = parseCliVersion(actualOutput);
+  return parsed === expectedVersion;
+}
+
+async function commandVersion(launcher) {
+  const result = await runCommand(launcher.command, [...launcher.prefixArgs, '--version']);
+  return `${result.stdout}\n${result.stderr}`.trim();
 }
 
 function readSteamBuildIdFromAppManifest(appManifest) {
@@ -220,7 +233,8 @@ export async function importCs2Assets({
     cli !== undefined && cli.length > 0,
     '必须提供 --cli 或 SOURCE2VIEWER_CLI；import 不自动下载 VRF binary',
   );
-  const actualVersion = await commandVersion(cli);
+  const launcher = options._launcher ?? { command: cli, prefixArgs: [] };
+  const actualVersion = await commandVersion(launcher);
   const expectedVersion = toolchain.valveResourceFormat.version;
   assert(
     versionMatches(actualVersion, expectedVersion),
@@ -241,7 +255,8 @@ export async function importCs2Assets({
     for (const [index, { item, sourcePath }] of sourcePaths.entries()) {
       const rawExportRoot = join(rawRoot, `asset-${index}`);
       await mkdir(rawExportRoot, { recursive: true });
-      const rawResult = await runCommand(cli, [
+      const rawResult = await runCommand(launcher.command, [
+        ...launcher.prefixArgs,
         '-i',
         input.vpk,
         '-o',
@@ -255,7 +270,14 @@ export async function importCs2Assets({
       const rawPath = await findExportedRawFile(rawExportRoot, sourcePath);
       const sourceSha256 = await sha256File(rawPath);
       const svgPath = join(svgRoot, `${item.assetId}.svg`);
-      const decompileResult = await runCommand(cli, ['-i', rawPath, '-o', svgPath, '-d']);
+      const decompileResult = await runCommand(launcher.command, [
+        ...launcher.prefixArgs,
+        '-i',
+        rawPath,
+        '-o',
+        svgPath,
+        '-d',
+      ]);
       void decompileResult;
       const outputBytes = normalizeSvg(await readFile(svgPath));
       const outputSha256 = await sha256(outputBytes);
@@ -300,6 +322,11 @@ export async function importCs2Assets({
       `${JSON.stringify(manifest, null, 2)}\n`,
       'utf8',
     );
+    // Verify the complete generated staging tree before atomic replacement
+    await verifyCs2Assets({
+      rootDir: repositoryRoot,
+      generatedRoot: outputStagingRoot,
+    });
     await atomicReplaceDirectory(outputStagingRoot, targetOutputRoot);
     return { input, assets: Object.keys(assets).length, outputRoot: targetOutputRoot };
   } finally {
@@ -310,6 +337,7 @@ export async function importCs2Assets({
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const result = await importCs2Assets({ options });
+  await verifyCs2Assets();
   console.log(`CS2_ASSETS_IMPORT_PASS ${JSON.stringify(result)}`);
 }
 

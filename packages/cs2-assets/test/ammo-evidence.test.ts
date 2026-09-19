@@ -2,100 +2,193 @@ import { describe, expect, it } from 'vitest';
 
 import { CS2_ITEM_CATALOG, getCs2Item, resolveCs2ItemByGsiName } from '../src/index.js';
 
+interface AmmoEvidenceCase {
+  readonly canonicalKey: string;
+  readonly expectedAmmo: string;
+  readonly requiredEvidenceKind: 'live-gsi' | 'official-game-data';
+  readonly expectedReferenceFragment: string;
+}
+
+const AMMO_EVIDENCE_TABLE: readonly AmmoEvidenceCase[] = [
+  // Sniper with reserve clips (m_bReserveAmmoAsClips = true)
+  {
+    canonicalKey: 'weapon.ssg08',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Shotguns: MAG-7 has clip reload; Nova, XM1014, Sawed-off reload per shell
+  {
+    canonicalKey: 'weapon.mag7',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.nova',
+    expectedAmmo: 'shells',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.xm1014',
+    expectedAmmo: 'shells',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.sawedoff',
+    expectedAmmo: 'shells',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Machine guns: M249 and Negev both reserve clips (m_bReserveAmmoAsClips = true)
+  {
+    canonicalKey: 'weapon.m249',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.negev',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Melee
+  {
+    canonicalKey: 'weapon.knife',
+    expectedAmmo: 'none',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Utility grenades
+  {
+    canonicalKey: 'utility.flashbang',
+    expectedAmmo: 'utility',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'utility.hegrenade',
+    expectedAmmo: 'utility',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'utility.smokegrenade',
+    expectedAmmo: 'utility',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'utility.molotov',
+    expectedAmmo: 'utility',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'utility.incgrenade',
+    expectedAmmo: 'utility',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Objective
+  {
+    canonicalKey: 'objective.c4',
+    expectedAmmo: 'objective',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // Rifles and standard firearms
+  {
+    canonicalKey: 'weapon.ak47',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.m4a1',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.m4a1-silencer',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.mp9',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.awp',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.glock',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.usp-silencer',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  {
+    canonicalKey: 'weapon.galilar',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'official-game-data',
+    expectedReferenceFragment: 'Steam build 25218825',
+  },
+  // H&K P2000 has explicit sanitized real-derived live GSI evidence
+  {
+    canonicalKey: 'weapon.hkp2000',
+    expectedAmmo: 'magazine',
+    requiredEvidenceKind: 'live-gsi',
+    expectedReferenceFragment: 'packages/telemetry-gsi/test/fixtures/real-derived.ts',
+  },
+];
+
 describe('@rivalhub-broadcast/cs2-assets ammo evidence matrix', () => {
-  it('strictly maps HUD-relevant weapon and item presentation metadata to official evidence', () => {
-    // 1. SSG08 => magazine (official game-data m_bReserveAmmoAsClips = true)
-    const ssg08 = getCs2Item('weapon.ssg08');
-    expect(ssg08).toBeDefined();
-    expect(ssg08?.ammoPresentation).toBe('magazine');
+  it('strictly validates every HUD item against the official ammo evidence matrix (table-driven)', () => {
+    for (const testCase of AMMO_EVIDENCE_TABLE) {
+      const item = getCs2Item(testCase.canonicalKey);
+      expect(item, `Item ${testCase.canonicalKey} must exist in catalog`).toBeDefined();
+      expect(item?.ammoPresentation, `Item ${testCase.canonicalKey} ammoPresentation`).toBe(
+        testCase.expectedAmmo,
+      );
 
-    // 2. Shotguns: MAG-7 => magazine, Nova/XM1014/Sawed-Off => shells
-    const mag7 = getCs2Item('weapon.mag7');
-    expect(mag7).toBeDefined();
-    expect(mag7?.ammoPresentation).toBe('magazine');
-
-    const nova = getCs2Item('weapon.nova');
-    expect(nova).toBeDefined();
-    expect(nova?.ammoPresentation).toBe('shells');
-
-    const xm1014 = getCs2Item('weapon.xm1014');
-    expect(xm1014).toBeDefined();
-    expect(xm1014?.ammoPresentation).toBe('shells');
-
-    const sawedoff = getCs2Item('weapon.sawedoff');
-    expect(sawedoff).toBeDefined();
-    expect(sawedoff?.ammoPresentation).toBe('shells');
-
-    // 3. Machine guns: M249 => magazine, Negev => magazine
-    const m249 = getCs2Item('weapon.m249');
-    expect(m249).toBeDefined();
-    expect(m249?.ammoPresentation).toBe('magazine');
-
-    const negev = getCs2Item('weapon.negev');
-    expect(negev).toBeDefined();
-    expect(negev?.ammoPresentation).toBe('magazine');
-
-    // 4. Melee: knife => none
-    const knife = getCs2Item('weapon.knife');
-    expect(knife).toBeDefined();
-    expect(knife?.ammoPresentation).toBe('none');
-
-    // 5. Utility: flashbang, HE, smoke, molotov, incendiary => utility
-    const flashbang = getCs2Item('utility.flashbang');
-    expect(flashbang).toBeDefined();
-    expect(flashbang?.ammoPresentation).toBe('utility');
-
-    const he = getCs2Item('utility.hegrenade');
-    expect(he).toBeDefined();
-    expect(he?.ammoPresentation).toBe('utility');
-
-    const smoke = getCs2Item('utility.smokegrenade');
-    expect(smoke).toBeDefined();
-    expect(smoke?.ammoPresentation).toBe('utility');
-
-    const molotov = getCs2Item('utility.molotov');
-    expect(molotov).toBeDefined();
-    expect(molotov?.ammoPresentation).toBe('utility');
-
-    const incgrenade = getCs2Item('utility.incgrenade');
-    expect(incgrenade).toBeDefined();
-    expect(incgrenade?.ammoPresentation).toBe('utility');
-
-    // 6. Objective: C4 => objective
-    const c4 = getCs2Item('objective.c4');
-    expect(c4).toBeDefined();
-    expect(c4?.ammoPresentation).toBe('objective');
-  });
-
-  it('proves that ammo presentation is strictly per-item metadata and forbids family-wide heuristics', () => {
-    // Shotgun family: MAG-7 has clip reload and reserve clips; others reload per shell
-    const shotguns = CS2_ITEM_CATALOG.filter((item) => item.family === 'shotgun');
-    expect(shotguns.length).toBeGreaterThanOrEqual(4);
-    const shotgunAmmoTypes = new Set(shotguns.map((item) => item.ammoPresentation));
-    expect(shotgunAmmoTypes.has('magazine')).toBe(true);
-    expect(shotgunAmmoTypes.has('shells')).toBe(true);
-    expect(shotgunAmmoTypes.size).toBe(2);
-
-    // Machinegun family: M249 and Negev both report magazine, not reserve-rounds
-    const machineguns = CS2_ITEM_CATALOG.filter((item) => item.family === 'machinegun');
-    expect(machineguns.length).toBe(2);
-    for (const mg of machineguns) {
-      expect(mg.ammoPresentation).toBe('magazine');
-    }
-
-    // Sniper rifle family: each item has explicit official game-data evidence
-    const snipers = CS2_ITEM_CATALOG.filter((item) => item.family === 'sniper-rifle');
-    expect(snipers.length).toBeGreaterThanOrEqual(4);
-    for (const sniper of snipers) {
-      expect(sniper.ammoPresentation).toBe('magazine');
+      const matchingEvidence = item?.evidence.find((e) => e.kind === testCase.requiredEvidenceKind);
+      expect(
+        matchingEvidence,
+        `Item ${testCase.canonicalKey} must have evidence of kind ${testCase.requiredEvidenceKind}`,
+      ).toBeDefined();
+      expect(
+        matchingEvidence?.reference,
+        `Item ${testCase.canonicalKey} evidence reference must contain ${testCase.expectedReferenceFragment}`,
+      ).toContain(testCase.expectedReferenceFragment);
     }
   });
 
-  it('keeps Zeus/Taser without artificial numeric charge or local recharge timers', () => {
-    // Zeus has no stable GSI numeric charge contract; presentation must remain none
+  it('strictly verifies Zeus/Taser: ammoPresentation is none while still carrying official game-data evidence', () => {
     const taser = getCs2Item('utility.taser');
     expect(taser).toBeDefined();
+    // Must remain none without fabricated recharge timer
     expect(taser?.ammoPresentation).toBe('none');
+
+    // Despite ammoPresentation = none, Zeus must still explicitly carry official game-data evidence
+    const officialData = taser?.evidence.find((e) => e.kind === 'official-game-data');
+    expect(officialData).toBeDefined();
+    expect(officialData?.reference).toContain('Steam build 25218825');
 
     const resolution = resolveCs2ItemByGsiName('weapon_taser');
     expect(resolution).toMatchObject({
@@ -107,39 +200,42 @@ describe('@rivalhub-broadcast/cs2-assets ammo evidence matrix', () => {
     });
   });
 
-  it('distinguishes sanitized real-derived GSI evidence from official game-data evidence', () => {
-    // H&K P2000 has explicit sanitized real-derived GSI evidence in the repository
-    const hkp2000 = getCs2Item('weapon.hkp2000');
-    expect(hkp2000).toBeDefined();
-    expect(hkp2000?.ammoPresentation).toBe('magazine');
-    const liveGsiEvidence = hkp2000?.evidence.find((e) => e.kind === 'live-gsi');
-    expect(liveGsiEvidence).toBeDefined();
-    expect(liveGsiEvidence?.reference).toContain(
-      'packages/telemetry-gsi/test/fixtures/real-derived.ts',
-    );
+  it('proves that ammo presentation is strictly per-item metadata and forbids family-wide heuristics', () => {
+    // Shotgun family: MAG-7 has clip reload and reserve clips; others reload per shell
+    const shotguns = CS2_ITEM_CATALOG.filter((item) => item.family === 'shotgun');
+    expect(shotguns.length).toBeGreaterThanOrEqual(4);
+    const shotgunAmmoTypes = new Set(shotguns.map((item) => item.ammoPresentation));
+    expect(shotgunAmmoTypes.has('magazine')).toBe(true);
+    expect(shotgunAmmoTypes.has('shells')).toBe(true);
+    expect(shotgunAmmoTypes.size).toBe(2);
 
-    // Standard rifles and pistols without dedicated live GSI fixtures cite official game-data evidence
-    const officialGameDataWeapons = [
-      'weapon.ak47',
-      'weapon.m4a1',
-      'weapon.m4a1-silencer',
-      'weapon.mp9',
-      'weapon.awp',
-      'weapon.glock',
-      'weapon.usp-silencer',
-      'weapon.galilar',
-    ];
+    for (const shotgun of shotguns) {
+      const evidence = shotgun.evidence.find((e) => e.kind === 'official-game-data');
+      expect(
+        evidence,
+        `Shotgun ${shotgun.canonicalKey} must have official game-data evidence`,
+      ).toBeDefined();
+      expect(evidence?.reference).toContain('Steam build 25218825');
+    }
 
-    for (const canonicalKey of officialGameDataWeapons) {
-      const item = getCs2Item(canonicalKey);
-      expect(item).toBeDefined();
-      expect(item?.ammoPresentation).toBe('magazine');
-      expect(item?.evidence.length).toBeGreaterThanOrEqual(1);
+    // Machinegun family: M249 and Negev both report magazine, not reserve-rounds
+    const machineguns = CS2_ITEM_CATALOG.filter((item) => item.family === 'machinegun');
+    expect(machineguns.length).toBe(2);
+    for (const mg of machineguns) {
+      expect(mg.ammoPresentation).toBe('magazine');
+      const evidence = mg.evidence.find((e) => e.kind === 'official-game-data');
+      expect(evidence, `Machine gun ${mg.canonicalKey} must cite official game-data`).toBeDefined();
+      expect(evidence?.reference).toContain('Steam build 25218825');
+    }
 
-      // Must cite official game data, not fabricate non-existent live-gsi references
-      const officialData = item?.evidence.find((e) => e.kind === 'official-game-data');
-      expect(officialData).toBeDefined();
-      expect(officialData?.reference).toContain('Steam build 25218825');
+    // Sniper rifle family: each item has explicit official game-data evidence
+    const snipers = CS2_ITEM_CATALOG.filter((item) => item.family === 'sniper-rifle');
+    expect(snipers.length).toBeGreaterThanOrEqual(4);
+    for (const sniper of snipers) {
+      expect(sniper.ammoPresentation).toBe('magazine');
+      const evidence = sniper.evidence.find((e) => e.kind === 'official-game-data');
+      expect(evidence, `Sniper ${sniper.canonicalKey} must cite official game-data`).toBeDefined();
+      expect(evidence?.reference).toContain('Steam build 25218825');
     }
   });
 
