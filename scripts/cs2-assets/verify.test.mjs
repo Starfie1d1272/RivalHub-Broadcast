@@ -27,7 +27,6 @@ async function writeFixture({ mutateCatalog, mutateManifest } = {}) {
   const svg = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1 1">\n</svg>\n';
   const outputSha256 = createHash('sha256').update(svg).digest('hex');
   const outputPath = `/assets/cs2/weapon/ak47.${outputSha256.slice(0, 12)}.svg`;
-  await writeFile(join(packageRoot, 'generated', 'public', outputPath.slice(1)), svg);
   const catalog = {
     schemaVersion: 1,
     items: [
@@ -63,6 +62,17 @@ async function writeFixture({ mutateCatalog, mutateManifest } = {}) {
     },
   };
   mutateManifest?.(manifest);
+  const manifestAsset = manifest.assets['weapon.ak47'];
+  if (manifestAsset !== undefined) {
+    await mkdir(
+      join(packageRoot, 'generated', 'public', ...manifestAsset.outputPath.slice(1).split('/').slice(0, -1)),
+      { recursive: true },
+    );
+    await writeFile(
+      join(packageRoot, 'generated', 'public', manifestAsset.outputPath.slice(1)),
+      svg,
+    );
+  }
   await mkdir(join(packageRoot, 'catalog'), { recursive: true });
   await writeFile(
     join(packageRoot, 'catalog', 'items.json'),
@@ -93,6 +103,47 @@ describe('cs2-assets verify', () => {
     });
   });
 
+  it('accepts a valid 16-hex expanded output hash prefix', async () => {
+    const root = await writeFixture({
+      mutateManifest: (manifest) => {
+        const asset = manifest.assets['weapon.ak47'];
+        asset.outputPath = `/assets/cs2/weapon/ak47.${asset.outputSha256.slice(0, 16)}.svg`;
+      },
+    });
+
+    await expect(verifyCs2Assets({ rootDir: root })).resolves.toMatchObject({
+      catalogItems: 1,
+      assets: 1,
+    });
+  });
+
+  it('rejects an expanded output hash prefix that does not match outputSha256', async () => {
+    const root = await writeFixture({
+      mutateManifest: (manifest) => {
+        const asset = manifest.assets['weapon.ak47'];
+        const wrongSuffix = asset.outputSha256[12] === '0' ? '1' : '0';
+        asset.outputPath = `/assets/cs2/weapon/ak47.${asset.outputSha256.slice(0, 12)}${wrongSuffix}${asset.outputSha256.slice(13, 16)}.svg`;
+      },
+    });
+
+    await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
+      'outputPath hash prefix 必须匹配 outputSha256',
+    );
+  });
+
+  it('rejects unsupported content hash prefix lengths between expansion steps', async () => {
+    const root = await writeFixture({
+      mutateManifest: (manifest) => {
+        const asset = manifest.assets['weapon.ak47'];
+        asset.outputPath = `/assets/cs2/weapon/ak47.${asset.outputSha256.slice(0, 13)}.svg`;
+      },
+    });
+
+    await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
+      'outputPath hash prefix 长度必须为 12/16/20/.../64',
+    );
+  });
+
   it('rejects an output hash mismatch', async () => {
     const root = await writeFixture({
       mutateManifest: (manifest) => {
@@ -100,7 +151,7 @@ describe('cs2-assets verify', () => {
       },
     });
     await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
-      'outputPath 必须包含 outputSha256',
+      'outputPath hash prefix 必须匹配 outputSha256',
     );
   });
 
