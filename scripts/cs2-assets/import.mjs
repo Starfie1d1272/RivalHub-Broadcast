@@ -337,7 +337,7 @@ export async function importCs2Assets({
 async function main() {
   const options = parseArgs(process.argv.slice(2));
   const result = await importCs2Assets({ options });
-  await verifyCs2Assets();
+  await verifyCs2Assets({ generatedRoot: result.outputRoot });
   console.log(`CS2_ASSETS_IMPORT_PASS ${JSON.stringify(result)}`);
 }
 
