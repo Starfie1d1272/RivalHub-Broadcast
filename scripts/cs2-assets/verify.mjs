@@ -71,14 +71,24 @@ function validateAssetRecord(assetId, record) {
   assert(isRecord(record), `${label} 必须是 object`);
   validateSourcePath(record.sourcePath);
   assert(SHA256_PATTERN.test(record.sourceSha256), `${label}.sourceSha256 无效`);
+  assert(SHA256_PATTERN.test(record.outputSha256), `${label}.outputSha256 无效`);
   const relativeOutputPath = validateOutputPath(record.outputPath);
   assert(record.mediaType === 'image/svg+xml', `${label}.mediaType 必须为 image/svg+xml`);
   assert(record.tintMode === 'mask' || record.tintMode === 'none', `${label}.tintMode 无效`);
+
+  const hashMatch = /\.([a-f0-9]{12,64})\.svg$/.exec(basename(relativeOutputPath));
+  assert(hashMatch !== null, `${label}.outputPath 必须以 12-64 位 content hash prefix 结尾`);
+  const outputHashPrefix = hashMatch[1];
   assert(
-    basename(relativeOutputPath).includes(`.${record.outputSha256?.slice(0, 12) ?? ''}.`),
-    `${label}.outputPath 必须包含 outputSha256 前 12 位`,
+    outputHashPrefix.length >= 12 &&
+      outputHashPrefix.length <= 64 &&
+      (outputHashPrefix.length - 12) % 4 === 0,
+    `${label}.outputPath hash prefix 长度必须为 12/16/20/.../64`,
   );
-  assert(SHA256_PATTERN.test(record.outputSha256), `${label}.outputSha256 无效`);
+  assert(
+    record.outputSha256.startsWith(outputHashPrefix),
+    `${label}.outputPath hash prefix 必须匹配 outputSha256`,
+  );
   return relativeOutputPath;
 }
 
