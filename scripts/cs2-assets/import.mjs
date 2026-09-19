@@ -85,11 +85,12 @@ export function parseArgs(argv) {
 }
 
 function runCommand(command, args, options = {}) {
+  const isWindowsBatch = process.platform === 'win32' && /\.(?:cmd|bat)$/i.test(command);
   return new Promise((resolvePromise, reject) => {
     const child = spawn(command, args, {
       cwd: options.cwd ?? REPOSITORY_ROOT,
       stdio: ['ignore', 'pipe', 'pipe'],
-      shell: false,
+      shell: isWindowsBatch,
     });
     let stdout = '';
     let stderr = '';
