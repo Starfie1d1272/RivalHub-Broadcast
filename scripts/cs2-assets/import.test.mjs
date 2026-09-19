@@ -406,7 +406,7 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
     expect(manifest1.includes('timestamp')).toBe(false);
   });
 
-  it('E. performs atomic replacement, cleans stale orphans, and preserves target on midway failure', async () => {
+  it('E. replaces the generated tree, cleans stale orphans, and preserves target on pre-swap failure', async () => {
     const root = await createTempDir();
     const fixture = await createFixtureRepo(root);
     const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
@@ -476,10 +476,40 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
     }
   });
 
-  it('F. verifies staging tree before swap: aborts if staging verification fails and leaves target untouched', async () => {
+  it('F. verifies staging tree before swap: verifier failure leaves the existing target untouched', async () => {
     const root = await createTempDir();
-    // Catalog with a known item whose generated output is deliberately mutated
-    const fixture = await createFixtureRepo(root);
+    const collisionCatalog = {
+      schemaVersion: 1,
+      items: [
+        {
+          canonicalKey: 'collision.ak47',
+          gsiWeaponNames: ['weapon_collision_ak47'],
+          sourcePath: 'panorama/images/icons/equipment/knife.vsvg_c',
+          kind: 'melee',
+          family: 'melee',
+          displayCategory: 'melee',
+          assetId: 'melee.ak47',
+          ammoPresentation: 'none',
+          tintMode: 'mask',
+          aliases: [],
+          evidence: [{ kind: 'official-game-data', reference: 'fixture collision' }],
+        },
+        {
+          canonicalKey: 'weapon.ak47',
+          gsiWeaponNames: ['weapon_ak47'],
+          sourcePath: 'panorama/images/icons/equipment/ak47.vsvg_c',
+          kind: 'firearm',
+          family: 'rifle',
+          displayCategory: 'rifle',
+          assetId: 'weapon.ak47',
+          ammoPresentation: 'magazine',
+          tintMode: 'mask',
+          aliases: [],
+          evidence: [{ kind: 'official-game-data', reference: 'fixture collision' }],
+        },
+      ],
+    };
+    const fixture = await createFixtureRepo(root, { customCatalog: collisionCatalog });
     const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
     const { cliExecutable, launcher } = await createFakeCli(root, {
       defaultVersion: pinnedVersion,
@@ -491,20 +521,23 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
     const fakeVpk = join(root, 'pak01_dir.vpk');
     await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
 
-    // Introduce an invalid catalog item that will fail verifier's allowlist rule if it bypasses catalog validation
-    // Here we test that if staging verify fails, targetOutputRoot is preserved
-    // Specifically mutate catalog to have an item whose sourcePath is invalid or test verify failure
-    // We can also test normal verify pass on staging tree
-    await importCs2Assets({
-      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable, _launcher: launcher },
-      repositoryRoot: fixture.repositoryRoot,
-      packageRoot: fixture.packageRoot,
-    });
+    // The fake CLI emits identical SVG bytes for both items. Because firearm and melee
+    // both publish under /weapon and both assetIds have the same slug, staging produces
+    // duplicate outputPath values that only the full verifier rejects.
+    await expect(
+      importCs2Assets({
+        options: {
+          vpk: fakeVpk,
+          steamBuildId: '25218825',
+          cli: cliExecutable,
+          _launcher: launcher,
+        },
+        repositoryRoot: fixture.repositoryRoot,
+        packageRoot: fixture.packageRoot,
+      }),
+    ).rejects.toThrow('manifest outputPath 重复');
 
-    // After a verified pass, the new manifest is on disk
-    expect(await readFile(join(fixture.targetOutputRoot, 'manifest.json'), 'utf8')).toContain(
-      'weapon.ak47',
-    );
+    expect(await readFile(targetSentinel, 'utf8')).toBe('original-target-unmodified\n');
   });
 
   it('G. records comprehensive provenance without leaking machine absolute paths', async () => {
@@ -552,29 +585,5 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
       expect(asset.mediaType).toBe('image/svg+xml');
     }
   });
-  it('H. tests atomicReplaceDirectory rollback failure handling when target replacement fails', async () => {
-    const root = await createTempDir();
-    const fixture = await createFixtureRepo(root);
-    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
-    const { cliExecutable, launcher } = await createFakeCli(root, {
-      defaultVersion: pinnedVersion,
-    });
 
-    // Initial valid target state
-    const originalSentinel = join(fixture.targetOutputRoot, 'target-initial-checkpoint.txt');
-    await writeFile(originalSentinel, 'intact-initial-data\n', 'utf8');
-
-    const fakeVpk = join(root, 'pak01_dir.vpk');
-    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
-
-    // Perform successful import first to populate full valid target
-    await importCs2Assets({
-      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable, _launcher: launcher },
-      repositoryRoot: fixture.repositoryRoot,
-      packageRoot: fixture.packageRoot,
-    });
-    expect(await readFile(join(fixture.targetOutputRoot, 'manifest.json'), 'utf8')).toContain(
-      'weapon.ak47',
-    );
-  });
 });
