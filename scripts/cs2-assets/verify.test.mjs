@@ -65,7 +65,12 @@ async function writeFixture({ mutateCatalog, mutateManifest } = {}) {
   const manifestAsset = manifest.assets['weapon.ak47'];
   if (manifestAsset !== undefined) {
     await mkdir(
-      join(packageRoot, 'generated', 'public', ...manifestAsset.outputPath.slice(1).split('/').slice(0, -1)),
+      join(
+        packageRoot,
+        'generated',
+        'public',
+        ...manifestAsset.outputPath.slice(1).split('/').slice(0, -1),
+      ),
       { recursive: true },
     );
     await writeFile(
@@ -122,7 +127,8 @@ describe('cs2-assets verify', () => {
       mutateManifest: (manifest) => {
         const asset = manifest.assets['weapon.ak47'];
         const wrongSuffix = asset.outputSha256[12] === '0' ? '1' : '0';
-        asset.outputPath = `/assets/cs2/weapon/ak47.${asset.outputSha256.slice(0, 12)}${wrongSuffix}${asset.outputSha256.slice(13, 16)}.svg`;
+        asset.outputPath =
+          `/assets/cs2/weapon/ak47.${asset.outputSha256.slice(0, 12)}${wrongSuffix}${asset.outputSha256.slice(13, 16)}.svg`;
       },
     });
 
