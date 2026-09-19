@@ -103,7 +103,6 @@ describe('cs2-assets verify', () => {
     );
   });
 
-
   it('rejects a catalog-known item when its manifest asset is missing', async () => {
     const root = await writeFixture({
       mutateManifest: (manifest) => {
@@ -122,7 +121,7 @@ describe('cs2-assets verify', () => {
           ...catalog.items[0],
           canonicalKey: 'weapon.ak47-duplicate',
           assetId: 'weapon.ak47-duplicate',
-          gsiWeaponNames: [],
+          gsiWeaponNames: ['weapon_ak47_alt'],
           aliases: ['weapon_ak47'],
         });
       },

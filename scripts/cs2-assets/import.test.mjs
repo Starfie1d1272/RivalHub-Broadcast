@@ -1,7 +1,163 @@
-import { describe, expect, it } from 'vitest';
-import { resolve } from 'node:path';
+import { Buffer } from 'node:buffer';
+import { createHash } from 'node:crypto';
+import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { dirname, join, resolve } from 'node:path';
+import { afterEach, describe, expect, it } from 'vitest';
 
-import { parseArgs } from './import.mjs';
+import { importCs2Assets, parseArgs } from './import.mjs';
+import { readJson } from './common.mjs';
+
+const temporaryRoots = [];
+
+afterEach(async () => {
+  await Promise.all(
+    temporaryRoots.splice(0).map((root) => rm(root, { recursive: true, force: true })),
+  );
+});
+
+async function createTempDir(prefix = '.agent-tmp-cs2-import-test-') {
+  const directory = await mkdtemp(join(process.cwd(), prefix));
+  temporaryRoots.push(directory);
+  return directory;
+}
+
+async function createFakeCli(directory, { defaultVersion } = {}) {
+  const cliScriptPath = join(directory, 'fake-source2viewer-cli.mjs');
+  const cliCmdPath = join(directory, 'fake-source2viewer-cli.cmd');
+  const logPath = join(directory, 'fake-cli-invocations.json');
+
+  await writeFile(logPath, '[]', 'utf8');
+
+  const versionLiteral = JSON.stringify(defaultVersion ?? '20.0.0');
+  const base64Svg = Buffer.from(
+    "<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'>\r\n  <path d='M0 0h32v32H0z'/>\r\n</svg>   \r\n\r\n",
+  ).toString('base64');
+  const scriptContent = [
+    '#!/usr/bin/env node',
+    'import { Buffer } from "node:buffer";',
+    'import { appendFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";',
+    'import { dirname, join } from "node:path";',
+    '',
+    'const args = process.argv.slice(2);',
+    'const logPath = process.env.FAKE_VRF_LOG_PATH;',
+    'if (logPath) {',
+    '  const logs = JSON.parse(readFileSync(logPath, "utf8") || "[]");',
+    '  logs.push({ args, env: { failOnDecompile: process.env.FAKE_VRF_FAIL_ON_DECOMPILE } });',
+    '  writeFileSync(logPath, JSON.stringify(logs, null, 2), "utf8");',
+    '}',
+    '',
+    'if (args.includes("--version")) {',
+    '  const version = process.env.FAKE_VRF_VERSION || ' + versionLiteral + ';',
+    '  process.stdout.write("Source2Viewer " + version + String.fromCharCode(10));',
+    '  process.exit(0);',
+    '}',
+    '',
+    'const fIndex = args.indexOf("-f");',
+    'const oIndex = args.indexOf("-o");',
+    'const dIndex = args.indexOf("-d");',
+    'if (fIndex !== -1 && oIndex !== -1 && dIndex === -1) {',
+    '  const sourcePath = args[fIndex + 1];',
+    '  const outDir = args[oIndex + 1];',
+    '  const targetRawFile = join(outDir, sourcePath);',
+    '  mkdirSync(dirname(targetRawFile), { recursive: true });',
+    '  const mockBytes = Buffer.from("MOCK_VSVG_C_COMPILED_BYTES_FOR:" + sourcePath + String.fromCharCode(10), "utf8");',
+    '  writeFileSync(targetRawFile, mockBytes);',
+    '  process.exit(0);',
+    '}',
+    '',
+    'if (dIndex !== -1) {',
+    '  if (process.env.FAKE_VRF_FAIL_ON_DECOMPILE === "1") {',
+    '    process.stderr.write("Simulated VRF decompile failure" + String.fromCharCode(10));',
+    '    process.exit(2);',
+    '  }',
+    '  const iIndex = args.indexOf("-i");',
+    '  const rawPath = args[iIndex + 1];',
+    '  const svgPath = args[oIndex + 1];',
+    '  mkdirSync(dirname(svgPath), { recursive: true });',
+    '  const bom = Buffer.from([0xef, 0xbb, 0xbf]);',
+    '  const body = Buffer.from(' + JSON.stringify(base64Svg) + ', "base64");',
+    '  writeFileSync(svgPath, Buffer.concat([bom, body]));',
+    '  process.exit(0);',
+    '}',
+    '',
+    'process.stderr.write("Unknown fake CLI arguments: " + args.join(" ") + String.fromCharCode(10));',
+    'process.exit(1);',
+  ].join('\n');
+
+  await writeFile(cliScriptPath, scriptContent, 'utf8');
+  await chmod(cliScriptPath, 0o755);
+
+  if (process.platform === 'win32') {
+    const cmdContent = '@echo off\r\nnode "%~dp0fake-source2viewer-cli.mjs" %*\r\n';
+    await writeFile(cliCmdPath, cmdContent, 'utf8');
+  }
+
+  const cliExecutable = process.platform === 'win32' ? cliCmdPath : cliScriptPath;
+  return { cliExecutable, cliScriptPath, logPath };
+}
+
+async function createFixtureRepo(root, { customToolchain, customCatalog } = {}) {
+  const repositoryRoot = root;
+  const packageRoot = join(repositoryRoot, 'packages', 'cs2-assets');
+  const scriptsRoot = join(repositoryRoot, 'scripts', 'cs2-assets');
+  const targetOutputRoot = join(packageRoot, 'generated');
+
+  await mkdir(join(packageRoot, 'catalog'), { recursive: true });
+  await mkdir(targetOutputRoot, { recursive: true });
+  await mkdir(scriptsRoot, { recursive: true });
+
+  const toolchain = customToolchain ?? {
+    valveResourceFormat: {
+      project: 'ValveResourceFormat',
+      tool: 'Source2Viewer-CLI',
+      version: '20.0.6980+a06886f7d06049052d32a7381ec05523064a2ca0',
+    },
+  };
+  await writeFile(
+    join(scriptsRoot, 'toolchain.json'),
+    `${JSON.stringify(toolchain, null, 2)}\n`,
+    'utf8',
+  );
+
+  const catalog = customCatalog ?? {
+    schemaVersion: 1,
+    items: [
+      {
+        canonicalKey: 'utility.flashbang',
+        gsiWeaponNames: ['weapon_flashbang'],
+        sourcePath: 'panorama/images/icons/equipment/flashbang.vsvg_c',
+        kind: 'utility',
+        family: 'grenade',
+        displayCategory: 'utility',
+        assetId: 'utility.flashbang',
+        ammoPresentation: 'utility',
+        tintMode: 'mask',
+        aliases: [],
+        evidence: [{ kind: 'live-gsi', reference: 'fixture' }],
+      },
+      {
+        canonicalKey: 'weapon.ak47',
+        gsiWeaponNames: ['weapon_ak47'],
+        sourcePath: 'panorama/images/icons/equipment/ak47.vsvg_c',
+        kind: 'firearm',
+        family: 'rifle',
+        displayCategory: 'rifle',
+        assetId: 'weapon.ak47',
+        ammoPresentation: 'magazine',
+        tintMode: 'mask',
+        aliases: [],
+        evidence: [{ kind: 'live-gsi', reference: 'fixture' }],
+      },
+    ],
+  };
+  await writeFile(
+    join(packageRoot, 'catalog', 'items.json'),
+    `${JSON.stringify(catalog, null, 2)}\n`,
+    'utf8',
+  );
+
+  return { repositoryRoot, packageRoot, scriptsRoot, targetOutputRoot, toolchain, catalog };
+}
 
 describe('cs2-assets import arguments', () => {
   it('requires an explicit build id for direct VPK input', () => {
@@ -32,5 +188,294 @@ describe('cs2-assets import arguments', () => {
       vpk: resolve('/tmp/pak01_dir.vpk'),
       steamBuildId: '123456',
     });
+  });
+});
+
+describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
+  it('A. accepts pinned toolchain version and fails fast on wrong version before touching target', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+
+    // Create target initial sentinel file
+    const sentinelFile = join(fixture.targetOutputRoot, 'sentinel.txt');
+    await writeFile(sentinelFile, 'initial-target-state\n', 'utf8');
+
+    // Test wrong version fails fast
+    const { cliExecutable: wrongCli } = await createFakeCli(root, {
+      defaultVersion: '19.9.9-unsupported',
+    });
+    const fakeVpk = join(root, 'pak01_dir.vpk');
+    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
+
+    await expect(
+      importCs2Assets({
+        options: {
+          vpk: fakeVpk,
+          steamBuildId: '987654',
+          cli: wrongCli,
+        },
+        repositoryRoot: fixture.repositoryRoot,
+        packageRoot: fixture.packageRoot,
+      }),
+    ).rejects.toThrow('Source2Viewer-CLI 版本不匹配');
+
+    // Target must NOT have been modified
+    expect(await readFile(sentinelFile, 'utf8')).toBe('initial-target-state\n');
+  });
+
+  it('B. supports CS2-root input mode and only extracts catalog-declared allowlisted .vsvg_c paths', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
+    const { cliExecutable, logPath } = await createFakeCli(root, {
+      defaultVersion: pinnedVersion,
+    });
+
+    // Create CS2 root layout: <cs2Root>/game/csgo/pak01_dir.vpk and appmanifest_730.acf alongside steamapps
+    // appmanifest path in import.mjs: join(dirname(dirname(cs2Root)), 'appmanifest_730.acf')
+    // Let cs2Root = root/steamapps/common/Counter-Strike Global Offensive
+    const steamappsDir = join(root, 'steamapps');
+    const cs2Root = join(steamappsDir, 'common', 'Counter-Strike Global Offensive');
+    const vpkDir = join(cs2Root, 'game', 'csgo');
+    await mkdir(vpkDir, { recursive: true });
+    await writeFile(join(vpkDir, 'pak01_dir.vpk'), 'dummy-vpk-bytes', 'utf8');
+    await writeFile(
+      join(steamappsDir, 'appmanifest_730.acf'),
+      '"AppState"\n{\n\t"appid"\t"730"\n\t"buildid"\t"25218825"\n}\n',
+      'utf8',
+    );
+
+    const prevLogEnv = process.env.FAKE_VRF_LOG_PATH;
+    process.env.FAKE_VRF_LOG_PATH = logPath;
+
+    try {
+      const result = await importCs2Assets({
+        options: {
+          cs2Root,
+          cli: cliExecutable,
+        },
+        repositoryRoot: fixture.repositoryRoot,
+        packageRoot: fixture.packageRoot,
+      });
+
+      expect(result.assets).toBe(2);
+      expect(result.input.steamBuildId).toBe('25218825');
+
+      const logs = await readJson(logPath);
+      // Invocations should only be: 1 version check + 2 resource extractions (-f) + 2 decompiles (-d)
+      const extractInvocations = logs.filter((l) => l.args.includes('-f'));
+      expect(extractInvocations).toHaveLength(2);
+
+      const extractedFiles = extractInvocations.map((l) => l.args[l.args.indexOf('-f') + 1]);
+      expect(extractedFiles).toEqual([
+        'panorama/images/icons/equipment/flashbang.vsvg_c',
+        'panorama/images/icons/equipment/ak47.vsvg_c',
+      ]);
+      // Verify no broad extraction without -f
+      expect(logs.some((l) => l.args.includes('-e') && !l.args.includes('-f'))).toBe(false);
+    } finally {
+      if (prevLogEnv !== undefined) process.env.FAKE_VRF_LOG_PATH = prevLogEnv;
+      else delete process.env.FAKE_VRF_LOG_PATH;
+    }
+  });
+
+  it('C. verifies hashing and normalization: strips BOM, normalizes CRLF, hashes content into filename', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
+    const { cliExecutable } = await createFakeCli(root, { defaultVersion: pinnedVersion });
+
+    const fakeVpk = join(root, 'pak01_dir.vpk');
+    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
+
+    await importCs2Assets({
+      options: {
+        vpk: fakeVpk,
+        steamBuildId: '25218825',
+        cli: cliExecutable,
+      },
+      repositoryRoot: fixture.repositoryRoot,
+      packageRoot: fixture.packageRoot,
+    });
+
+    const manifest = await readJson(join(fixture.targetOutputRoot, 'manifest.json'));
+    const ak47Asset = manifest.assets['weapon.ak47'];
+    expect(ak47Asset).toBeDefined();
+
+    // Verify raw sourceSha256 matches the raw bytes emitted by fake CLI
+    const expectedRawSourceBytes = Buffer.from(
+      'MOCK_VSVG_C_COMPILED_BYTES_FOR:panorama/images/icons/equipment/ak47.vsvg_c\n',
+      'utf8',
+    );
+    const expectedSourceHash = createHash('sha256').update(expectedRawSourceBytes).digest('hex');
+    expect(ak47Asset.sourceSha256).toBe(expectedSourceHash);
+
+    // Verify output SVG content: BOM stripped, CRLF replaced with LF, trailing newline present
+    const diskSvgPath = join(fixture.targetOutputRoot, 'public', ak47Asset.outputPath.slice(1));
+    const svgBytes = await readFile(diskSvgPath);
+    const svgText = svgBytes.toString('utf8');
+
+    expect(svgText.startsWith('<svg')).toBe(true);
+    expect(svgText.includes('\r\n')).toBe(false);
+    expect(svgText.endsWith('\n')).toBe(true);
+    expect(svgText.startsWith('\uFEFF')).toBe(false);
+
+    // Output hash matches file on disk
+    const expectedOutputSha256 = createHash('sha256').update(svgBytes).digest('hex');
+    expect(ak47Asset.outputSha256).toBe(expectedOutputSha256);
+
+    // Output filename embeds first 12 characters of outputSha256
+    expect(ak47Asset.outputPath).toContain(`.${expectedOutputSha256.slice(0, 12)}.`);
+  });
+
+  it('D. guarantees determinism: identical inputs produce identical manifest, paths, and SVGs without wall-clock noise', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
+    const { cliExecutable } = await createFakeCli(root, { defaultVersion: pinnedVersion });
+
+    const fakeVpk = join(root, 'pak01_dir.vpk');
+    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
+
+    const output1 = join(root, 'output1');
+    const output2 = join(root, 'output2');
+
+    await importCs2Assets({
+      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable, output: output1 },
+      repositoryRoot: fixture.repositoryRoot,
+      packageRoot: fixture.packageRoot,
+    });
+
+    await importCs2Assets({
+      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable, output: output2 },
+      repositoryRoot: fixture.repositoryRoot,
+      packageRoot: fixture.packageRoot,
+    });
+
+    const manifest1 = await readFile(join(output1, 'manifest.json'), 'utf8');
+    const manifest2 = await readFile(join(output2, 'manifest.json'), 'utf8');
+    expect(manifest1).toBe(manifest2);
+
+    const publicManifest1 = await readFile(
+      join(output1, 'public', 'assets', 'cs2', 'manifest.json'),
+      'utf8',
+    );
+    const publicManifest2 = await readFile(
+      join(output2, 'public', 'assets', 'cs2', 'manifest.json'),
+      'utf8',
+    );
+    expect(publicManifest1).toBe(publicManifest2);
+    expect(manifest1).toBe(publicManifest1);
+
+    // No wall-clock noise like generatedAt
+    expect(manifest1.includes('generatedAt')).toBe(false);
+    expect(manifest1.includes('timestamp')).toBe(false);
+  });
+
+  it('E. performs atomic replacement, cleans stale orphans, and preserves target on midway failure', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
+    const { cliExecutable } = await createFakeCli(root, { defaultVersion: pinnedVersion });
+
+    const fakeVpk = join(root, 'pak01_dir.vpk');
+    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
+
+    // Pre-populate targetOutputRoot with an orphan asset and an old manifest
+    const orphanSvgPath = join(
+      fixture.targetOutputRoot,
+      'public',
+      'assets',
+      'cs2',
+      'weapon',
+      'old-orphan.111111111111.svg',
+    );
+    await mkdir(dirname(orphanSvgPath), { recursive: true });
+    await writeFile(orphanSvgPath, '<svg id="orphan"/>\n', 'utf8');
+    const oldManifestPath = join(fixture.targetOutputRoot, 'manifest.json');
+    await writeFile(oldManifestPath, '{"old": true}\n', 'utf8');
+
+    // Successful run should atomically replace target and wipe out old-orphan.svg
+    await importCs2Assets({
+      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable },
+      repositoryRoot: fixture.repositoryRoot,
+      packageRoot: fixture.packageRoot,
+    });
+
+    // Check old orphan is gone
+    let orphanExists = true;
+    try {
+      await readFile(orphanSvgPath);
+    } catch {
+      orphanExists = false;
+    }
+    expect(orphanExists).toBe(false);
+
+    // Now test midway failure: pre-populate a sentinel and set fail-on-decompile
+    const preservedSentinel = join(fixture.targetOutputRoot, 'preserved-manifest-checkpoint.txt');
+    await writeFile(preservedSentinel, 'checkpoint-data\n', 'utf8');
+
+    const prevFailEnv = process.env.FAKE_VRF_FAIL_ON_DECOMPILE;
+    process.env.FAKE_VRF_FAIL_ON_DECOMPILE = '1';
+
+    try {
+      await expect(
+        importCs2Assets({
+          options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable },
+          repositoryRoot: fixture.repositoryRoot,
+          packageRoot: fixture.packageRoot,
+        }),
+      ).rejects.toThrow('Simulated VRF decompile failure');
+
+      // The previous directory must be intact and preserved!
+      expect(await readFile(preservedSentinel, 'utf8')).toBe('checkpoint-data\n');
+    } finally {
+      if (prevFailEnv !== undefined) process.env.FAKE_VRF_FAIL_ON_DECOMPILE = prevFailEnv;
+      else delete process.env.FAKE_VRF_FAIL_ON_DECOMPILE;
+    }
+  });
+
+  it('F. records comprehensive provenance without leaking machine absolute paths', async () => {
+    const root = await createTempDir();
+    const fixture = await createFixtureRepo(root);
+    const pinnedVersion = fixture.toolchain.valveResourceFormat.version;
+    const { cliExecutable } = await createFakeCli(root, { defaultVersion: pinnedVersion });
+
+    const fakeVpk = join(root, 'pak01_dir.vpk');
+    await writeFile(fakeVpk, 'dummy-vpk', 'utf8');
+
+    await importCs2Assets({
+      options: { vpk: fakeVpk, steamBuildId: '25218825', cli: cliExecutable },
+      repositoryRoot: fixture.repositoryRoot,
+      packageRoot: fixture.packageRoot,
+    });
+
+    const manifestRaw = await readFile(join(fixture.targetOutputRoot, 'manifest.json'), 'utf8');
+    const manifest = JSON.parse(manifestRaw);
+
+    expect(manifest.schemaVersion).toBe(1);
+    expect(manifest.source).toEqual({
+      appId: 730,
+      steamBuildId: '25218825',
+      container: 'game/csgo/pak01_dir.vpk',
+    });
+    expect(manifest.extractor).toEqual({
+      project: 'ValveResourceFormat',
+      tool: 'Source2Viewer-CLI',
+      version: pinnedVersion,
+    });
+
+    // Check no machine absolute paths in JSON
+    expect(manifestRaw.includes(root)).toBe(false);
+    expect(manifestRaw.includes('/Users/')).toBe(false);
+    expect(manifestRaw.includes('C:\\')).toBe(false);
+    expect(manifestRaw.includes('\\\\')).toBe(false);
+
+    // All sourcePath and outputPath are relative POSIX paths
+    for (const asset of Object.values(manifest.assets)) {
+      expect(asset.sourcePath.startsWith('panorama/')).toBe(true);
+      expect(asset.outputPath.startsWith('/assets/cs2/')).toBe(true);
+      expect(asset.mediaType).toBe('image/svg+xml');
+    }
   });
 });
