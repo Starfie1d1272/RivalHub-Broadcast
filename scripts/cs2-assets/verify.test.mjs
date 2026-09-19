@@ -4,6 +4,7 @@ import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
 
+import { validateCatalog } from './common.mjs';
 import { verifyCs2Assets } from './verify.mjs';
 
 const temporaryRoots = [];
@@ -129,5 +130,26 @@ describe('cs2-assets verify', () => {
     await expect(verifyCs2Assets({ rootDir: root })).rejects.toThrow(
       'GSI weapon name/alias 冲突：weapon_ak47',
     );
+  });
+  it('strictly rejects catalog items with empty evidence even if ammoPresentation is none', () => {
+    const invalidCatalog = {
+      schemaVersion: 1,
+      items: [
+        {
+          canonicalKey: 'weapon.knife',
+          gsiWeaponNames: ['weapon_knife'],
+          aliases: [],
+          kind: 'melee',
+          family: 'knife',
+          displayCategory: 'Melee',
+          assetId: 'weapon.knife',
+          sourcePath: 'panorama/images/icons/equipment/knife.vsvg_c',
+          ammoPresentation: 'none',
+          tintMode: 'mask',
+          evidence: [],
+        },
+      ],
+    };
+    expect(() => validateCatalog(invalidCatalog)).toThrow(/必须至少包含一条 evidence/);
   });
 });

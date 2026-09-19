@@ -161,10 +161,42 @@ async function resolveInput(options) {
   return { vpk, steamBuildId };
 }
 
-function canonicalOutputPath(item, outputSha256) {
+export function allocateContentHashedOutputPath({ item, outputSha256, occupiedPaths = new Map() }) {
   const category = item.kind === 'firearm' || item.kind === 'melee' ? 'weapon' : item.kind;
   const slug = item.assetId.replace(/^[^.]+\./, '');
-  return `/assets/cs2/${category}/${slug}.${outputSha256.slice(0, 12)}.svg`;
+  const baseRoute = `/assets/cs2/${category}/${slug}`;
+
+  for (const [existingPath, existing] of occupiedPaths.entries()) {
+    if (
+      existing.assetId !== item.assetId &&
+      existing.outputSha256 === outputSha256 &&
+      existingPath.startsWith(`${baseRoute}.`)
+    ) {
+      throw new Error(
+        `CS2 asset output route collision: 资产 ${item.assetId} 与既有资产 ${existing.assetId} 产生无法通过 64-hex SHA-256 消解的输出路径冲突（base route: ${baseRoute}）`,
+      );
+    }
+  }
+
+  for (let length = 12; length <= 64; length += 4) {
+    const candidatePath = `${baseRoute}.${outputSha256.slice(0, length)}.svg`;
+    const existing = occupiedPaths.get(candidatePath);
+    if (!existing) {
+      occupiedPaths.set(candidatePath, { assetId: item.assetId, outputSha256 });
+      return candidatePath;
+    }
+    if (existing.assetId === item.assetId && existing.outputSha256 === outputSha256) {
+      return candidatePath;
+    }
+  }
+
+  throw new Error(
+    `CS2 asset output route collision: 资产 ${item.assetId} 与既有路径产生无法通过 64-hex SHA-256 消解的输出路径冲突（base route: ${baseRoute}）`,
+  );
+}
+
+export function canonicalOutputPath(item, outputSha256, occupiedPaths = new Map()) {
+  return allocateContentHashedOutputPath({ item, outputSha256, occupiedPaths });
 }
 
 function normalizeSvg(value) {
@@ -195,25 +227,90 @@ async function findExportedRawFile(root, sourcePath) {
   }
 }
 
-async function atomicReplaceDirectory(sourceDirectory, targetDirectory) {
-  const backup = `${targetDirectory}.previous-${process.pid}`;
-  await rm(backup, { recursive: true, force: true });
+export const DEFAULT_DIRECTORY_FILE_OPS = Object.freeze({
+  rename,
+  rm,
+  access,
+});
+
+export async function recoverInterruptedTransaction(
+  targetDirectory,
+  fileOps = DEFAULT_DIRECTORY_FILE_OPS,
+) {
+  const backupDirectory = `${targetDirectory}.previous`;
+  let targetExists = false;
+  let backupExists = false;
+
   try {
-    await rename(targetDirectory, backup);
-  } catch (error) {
-    if (error?.code !== 'ENOENT') throw error;
+    await fileOps.access(targetDirectory);
+    targetExists = true;
+  } catch {
+    // target absent
   }
+
   try {
-    await rename(sourceDirectory, targetDirectory);
-  } catch (error) {
-    try {
-      await rename(backup, targetDirectory);
-    } catch {
-      // Preserve the original error; the recovery failure is reported by the caller's next verify.
+    await fileOps.access(backupDirectory);
+    backupExists = true;
+  } catch {
+    // backup absent
+  }
+
+  // State B: target absent, backup exists -> recover target from backup
+  if (!targetExists && backupExists) {
+    await fileOps.rename(backupDirectory, targetDirectory);
+  } else if (targetExists && backupExists) {
+    // State C: target exists, backup exists -> stale backup left after completed swap
+    await fileOps.rm(backupDirectory, { recursive: true, force: true });
+  }
+  // State A (target exists, backup absent) & State D (both absent) require no recovery
+}
+
+export async function replaceDirectoryTransactionally(
+  stagingDirectory,
+  targetDirectory,
+  fileOps = DEFAULT_DIRECTORY_FILE_OPS,
+) {
+  const backupDirectory = `${targetDirectory}.previous`;
+
+  // Step 1: Recover any previous interrupted transaction before touching anything
+  await recoverInterruptedTransaction(targetDirectory, fileOps);
+
+  let targetExists = false;
+  try {
+    await fileOps.access(targetDirectory);
+    targetExists = true;
+  } catch {
+    // target absent
+  }
+
+  // Step 2: Target -> Backup if target exists
+  if (targetExists) {
+    await fileOps.rename(targetDirectory, backupDirectory);
+  }
+
+  // Step 3: Staging -> Target
+  try {
+    await fileOps.rename(stagingDirectory, targetDirectory);
+  } catch (replacementError) {
+    // Step 4: If replacement fails and target was moved to backup, attempt rollback
+    if (targetExists) {
+      try {
+        await fileOps.rename(backupDirectory, targetDirectory);
+      } catch (rollbackError) {
+        throw new AggregateError(
+          [replacementError, rollbackError],
+          `CS2 asset directory replacement failed and rollback failed; previous tree remains at ${backupDirectory}`,
+          { cause: rollbackError },
+        );
+      }
     }
-    throw error;
+    throw replacementError;
   }
-  await rm(backup, { recursive: true, force: true });
+
+  // Step 5: Clean backup on successful replacement
+  if (targetExists) {
+    await fileOps.rm(backupDirectory, { recursive: true, force: true });
+  }
 }
 
 export async function importCs2Assets({
@@ -241,7 +338,9 @@ export async function importCs2Assets({
     `Source2Viewer-CLI 版本不匹配：期望 ${expectedVersion}，实际输出 ${actualVersion}`,
   );
 
-  const temporaryRoot = await mkdtemp(join(repositoryRoot, '.agent-tmp-cs2-assets-'));
+  const targetParent = dirname(targetOutputRoot);
+  await mkdir(targetParent, { recursive: true });
+  const temporaryRoot = await mkdtemp(join(targetParent, '.rivalhub-cs2-assets-'));
   const rawRoot = join(temporaryRoot, 'raw');
   const svgRoot = join(temporaryRoot, 'svg');
   const outputStagingRoot = join(temporaryRoot, 'generated');
@@ -252,6 +351,7 @@ export async function importCs2Assets({
       validateSourcePath(item.sourcePath);
       return [{ item, sourcePath: item.sourcePath }];
     });
+    const occupiedPaths = new Map();
     for (const [index, { item, sourcePath }] of sourcePaths.entries()) {
       const rawExportRoot = join(rawRoot, `asset-${index}`);
       await mkdir(rawExportRoot, { recursive: true });
@@ -281,7 +381,7 @@ export async function importCs2Assets({
       void decompileResult;
       const outputBytes = normalizeSvg(await readFile(svgPath));
       const outputSha256 = await sha256(outputBytes);
-      const outputPath = canonicalOutputPath(item, outputSha256);
+      const outputPath = canonicalOutputPath(item, outputSha256, occupiedPaths);
       const destination = outputRecordPath(outputPublicRoot, outputPath);
       await mkdir(dirname(destination), { recursive: true });
       await writeFile(destination, outputBytes, 'utf8');
@@ -327,7 +427,7 @@ export async function importCs2Assets({
       rootDir: repositoryRoot,
       generatedRoot: outputStagingRoot,
     });
-    await atomicReplaceDirectory(outputStagingRoot, targetOutputRoot);
+    await replaceDirectoryTransactionally(outputStagingRoot, targetOutputRoot, options._fileOps);
     return { input, assets: Object.keys(assets).length, outputRoot: targetOutputRoot };
   } finally {
     await rm(temporaryRoot, { recursive: true, force: true });

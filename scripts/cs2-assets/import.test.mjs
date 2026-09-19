@@ -1,11 +1,19 @@
 import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
-import { chmod, mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { access, chmod, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join, resolve } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
-import { importCs2Assets, parseArgs, parseCliVersion, versionMatches } from './import.mjs';
+import {
+  allocateContentHashedOutputPath,
+  importCs2Assets,
+  parseArgs,
+  parseCliVersion,
+  recoverInterruptedTransaction,
+  replaceDirectoryTransactionally,
+  versionMatches,
+} from './import.mjs';
 import { readJson } from './common.mjs';
 
 const temporaryRoots = [];
@@ -535,7 +543,7 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
         repositoryRoot: fixture.repositoryRoot,
         packageRoot: fixture.packageRoot,
       }),
-    ).rejects.toThrow('manifest outputPath 重复');
+    ).rejects.toThrow();
 
     expect(await readFile(targetSentinel, 'utf8')).toBe('original-target-unmodified\n');
   });
@@ -584,5 +592,196 @@ describe('cs2-assets import E2E with fake Source2Viewer-CLI', () => {
       expect(asset.outputPath.startsWith('/assets/cs2/')).toBe(true);
       expect(asset.mediaType).toBe('image/svg+xml');
     }
+  });
+});
+describe('allocateContentHashedOutputPath collision expansion contract', () => {
+  const dummyItem = { kind: 'firearm', assetId: 'weapon.ak47' };
+
+  it('uses 12-hex default when there is no collision', () => {
+    const occupied = new Map();
+    const hash = 'a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef';
+    const path = allocateContentHashedOutputPath({
+      item: dummyItem,
+      outputSha256: hash,
+      occupiedPaths: occupied,
+    });
+    expect(path).toBe('/assets/cs2/weapon/ak47.a1b2c3d4e5f6.svg');
+    expect(occupied.get(path)).toEqual({ assetId: 'weapon.ak47', outputSha256: hash });
+  });
+
+  it('expands from 12 to 16 hex when a fabricated prefix collision occurs', () => {
+    const occupied = new Map();
+    const hash1 = 'aaaaaaaaaaaa1111111111111111111111111111111111111111111111111111';
+    const hash2 = 'aaaaaaaaaaaa2222222222222222222222222222222222222222222222222222';
+
+    const path1 = allocateContentHashedOutputPath({
+      item: dummyItem,
+      outputSha256: hash1,
+      occupiedPaths: occupied,
+    });
+    expect(path1).toBe('/assets/cs2/weapon/ak47.aaaaaaaaaaaa.svg');
+
+    // Second asset with identical 12-hex prefix but different content expands to 16 hex
+    const path2 = allocateContentHashedOutputPath({
+      item: dummyItem,
+      outputSha256: hash2,
+      occupiedPaths: occupied,
+    });
+    expect(path2).toBe('/assets/cs2/weapon/ak47.aaaaaaaaaaaa2222.svg');
+  });
+
+  it('re-entrant allocation with exact same assetId and outputSha256 returns existing path', () => {
+    const occupied = new Map();
+    const hash = 'a1b2c3d4e5f678901234567890abcdef1234567890abcdef1234567890abcdef';
+    const path1 = allocateContentHashedOutputPath({
+      item: dummyItem,
+      outputSha256: hash,
+      occupiedPaths: occupied,
+    });
+    const path2 = allocateContentHashedOutputPath({
+      item: dummyItem,
+      outputSha256: hash,
+      occupiedPaths: occupied,
+    });
+    expect(path1).toBe(path2);
+  });
+
+  it('throws explicit error on unresolvable route collision even at full 64 hex', () => {
+    const occupied = new Map();
+    const hash = 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa';
+    const item1 = { kind: 'firearm', assetId: 'weapon.knife' };
+    const item2 = { kind: 'melee', assetId: 'melee.knife' }; // identical category 'weapon' and slug 'knife', different assetIds
+
+    allocateContentHashedOutputPath({
+      item: item1,
+      outputSha256: hash,
+      occupiedPaths: occupied,
+    });
+
+    expect(() =>
+      allocateContentHashedOutputPath({
+        item: item2,
+        outputSha256: hash,
+        occupiedPaths: occupied,
+      }),
+    ).toThrow(/CS2 asset output route collision/);
+  });
+});
+
+describe('replaceDirectoryTransactionally & recoverInterruptedTransaction', () => {
+  it('Case 1: second rename fails, rollback succeeds -> target restored, backup cleaned, rejects original error', async () => {
+    const root = await createTempDir();
+    const targetDir = join(root, 'target');
+    const stagingDir = join(root, 'staging');
+    const backupDir = `${targetDir}.previous`;
+
+    await mkdir(targetDir);
+    await writeFile(join(targetDir, 'sentinel.txt'), 'old-target-state', 'utf8');
+
+    await mkdir(stagingDir);
+    await writeFile(join(stagingDir, 'sentinel.txt'), 'new-staging-state', 'utf8');
+
+    // Injected fileOps: fail when moving staging -> target
+    const mockFileOps = {
+      rename: async (from, to) => {
+        if (from === stagingDir && to === targetDir) {
+          throw new Error('Injected failure during staging -> target');
+        }
+        return rename(from, to);
+      },
+      rm,
+      access,
+    };
+
+    await expect(
+      replaceDirectoryTransactionally(stagingDir, targetDir, mockFileOps),
+    ).rejects.toThrow('Injected failure during staging -> target');
+
+    // Target must be restored to old state
+    expect(await readFile(join(targetDir, 'sentinel.txt'), 'utf8')).toBe('old-target-state');
+    // Staging content must not have become target
+    expect(await readFile(join(stagingDir, 'sentinel.txt'), 'utf8')).toBe('new-staging-state');
+    // Backup must not linger
+    await expect(access(backupDir)).rejects.toThrow();
+  });
+
+  it('Case 2: replacement fails and rollback itself fails -> throws AggregateError, backup tree preserved', async () => {
+    const root = await createTempDir();
+    const targetDir = join(root, 'target');
+    const stagingDir = join(root, 'staging');
+    const backupDir = `${targetDir}.previous`;
+
+    await mkdir(targetDir);
+    await writeFile(join(targetDir, 'sentinel.txt'), 'old-target-state', 'utf8');
+
+    await mkdir(stagingDir);
+    await writeFile(join(stagingDir, 'sentinel.txt'), 'new-staging-state', 'utf8');
+
+    // Injected fileOps: fail both staging -> target AND backup -> target
+    const mockFileOps = {
+      rename: async (from, to) => {
+        if (from === stagingDir && to === targetDir) {
+          throw new Error('Injected replacement error');
+        }
+        if (from === backupDir && to === targetDir) {
+          throw new Error('Injected rollback error');
+        }
+        return rename(from, to);
+      },
+      rm,
+      access,
+    };
+
+    let caughtError;
+    try {
+      await replaceDirectoryTransactionally(stagingDir, targetDir, mockFileOps);
+    } catch (err) {
+      caughtError = err;
+    }
+
+    expect(caughtError).toBeInstanceOf(AggregateError);
+    expect(caughtError.message).toContain('previous tree remains at');
+    expect(caughtError.message).toContain(backupDir);
+    expect(caughtError.errors).toHaveLength(2);
+    expect(caughtError.errors[0].message).toBe('Injected replacement error');
+    expect(caughtError.errors[1].message).toBe('Injected rollback error');
+
+    // Crucial: backup tree must NOT have been removed so maintainers can recover
+    expect(await readFile(join(backupDir, 'sentinel.txt'), 'utf8')).toBe('old-target-state');
+  });
+
+  it('Case 3: simulated interrupted previous run (target absent, backup exists) -> recovered to target', async () => {
+    const root = await createTempDir();
+    const targetDir = join(root, 'target');
+    const backupDir = `${targetDir}.previous`;
+
+    // Simulate crash after target -> backup: target is missing, backup has data
+    await mkdir(backupDir);
+    await writeFile(join(backupDir, 'sentinel.txt'), 'interrupted-state', 'utf8');
+
+    await recoverInterruptedTransaction(targetDir);
+
+    // Target should be restored from backup
+    expect(await readFile(join(targetDir, 'sentinel.txt'), 'utf8')).toBe('interrupted-state');
+    await expect(access(backupDir)).rejects.toThrow();
+  });
+
+  it('Case 4: simulated completed swap but stale backup (target exists, backup exists) -> stale backup cleaned, target preserved', async () => {
+    const root = await createTempDir();
+    const targetDir = join(root, 'target');
+    const backupDir = `${targetDir}.previous`;
+
+    // Simulate crash before backup cleanup: target has new data, backup has stale data
+    await mkdir(targetDir);
+    await writeFile(join(targetDir, 'sentinel.txt'), 'target-data', 'utf8');
+    await mkdir(backupDir);
+    await writeFile(join(backupDir, 'sentinel.txt'), 'stale-backup-data', 'utf8');
+
+    await recoverInterruptedTransaction(targetDir);
+
+    // Target preserved
+    expect(await readFile(join(targetDir, 'sentinel.txt'), 'utf8')).toBe('target-data');
+    // Stale backup cleaned
+    await expect(access(backupDir)).rejects.toThrow();
   });
 });

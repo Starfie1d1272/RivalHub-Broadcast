@@ -103,9 +103,7 @@ export function validateCatalog(catalog) {
     assert(validAmmo.has(item.ammoPresentation), `${label}.ammoPresentation 无效`);
     assert(item.tintMode === 'mask' || item.tintMode === 'none', `${label}.tintMode 无效`);
     assert(Array.isArray(item.evidence), `${label}.evidence 必须是数组`);
-    if (item.ammoPresentation !== 'none') {
-      assert(item.evidence.length > 0, `${label} 的非 none ammoPresentation 必须有 evidence`);
-    }
+    assert(item.evidence.length > 0, `${label} 必须至少包含一条 evidence`);
 
     for (const key of ['gsiWeaponNames', 'aliases']) {
       const values = item[key];
