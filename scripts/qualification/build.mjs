@@ -306,6 +306,10 @@ async function main() {
     await cp(deployedAppDir, appDir, { recursive: true, dereference: true });
     await rm(deployedAppDir, { recursive: true, force: true });
     await restorePortableWorkspaceDependencySpecifiers(appDir);
+    await cp(join(rootDir, 'apps', 'web', 'dist'), join(stagingDir, 'web', 'dist'), {
+      recursive: true,
+      dereference: true,
+    });
     const nodeVersion = options.skipNodeRuntime
       ? QUALIFICATION_NODE_VERSION
       : await downloadNodeRuntime(join(stagingDir, 'runtime'), options.nodeVersion, downloadDir);

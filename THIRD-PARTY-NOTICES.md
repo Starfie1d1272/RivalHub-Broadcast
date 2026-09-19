@@ -32,6 +32,13 @@
 | `vitest` | 5.0.0 | 单元与集成测试 | MIT |
 | `zod` | 4.6.2 | Runtime schema validation | MIT |
 
+## Development-time asset tooling
+
+| 工具/来源                               |                              当前版本或来源 | 用途                                                            | 许可证/说明                                                                              |
+| --------------------------------------- | ------------------------------------------: | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
+| ValveResourceFormat / Source2Viewer-CLI | 20.0.6980+a06886f7d06049052d32a7381ec05523064a2ca0 | 从维护者提供的 CS2 VPK allowlist 提取并 decompile `vsvg_c` | MIT（工具）；reverse-engineered tooling，不是 Valve 官方 SDK |
+| Counter-Strike 2 game resources         | Steam App ID 730；每次导入记录具体 build ID | `@rivalhub-broadcast/cs2-assets` 的 SVG presentation asset 来源 | Valve / Counter-Strike 2 origin；本条只记录工程 provenance，不作所有权、商标或再许可判断 |
+
 `cs2parser` 只通过 `packages/telemetry-cstv` 内部 binding 使用；其第三方类型不成为 Broadcast 公共 contract。本仓库未因研究参考而复制 HOT、Boltobserv、Lexogrine HUD Manager、Obserview、Zhenhai HUD Manager 等应用的代码或图片资产。
 
 许可证参考：

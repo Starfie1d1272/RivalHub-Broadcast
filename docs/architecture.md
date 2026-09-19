@@ -106,6 +106,10 @@ packages/radar
   framework-neutral Radar domain：RadarFrame、world→radar、MapGeometryProvider、floor、marker / utility semantics。
   不拥有 React/SVG/Canvas/DOM，也不拥有 temporal interpolation、smoothing、autozoom/crop animation state。
 
+packages/cs2-assets
+  CS2 official presentation asset 的唯一 owner：semantic catalog、content-hashed generated SVG、manifest、provenance 与 framework-neutral resolver。
+  不拥有 RuntimeState、Program protocol、Raw GSI/CSTV、React renderer 或地图 geometry；Source 2 解包只通过 pinned development-time VRF CLI adapter 完成。
+
 packages/testkit
   capture 读取、replay、simulation、fault injection 和 deterministic assertions。
   不得成为 production runtime dependency。

@@ -92,6 +92,7 @@ apps/
   web/                  正式节目、制作控制、运行诊断
 
 packages/
+  cs2-assets/           CS2 official presentation assets、semantic catalog 与 provenance
   core/                 RuntimeState、连续性、身份、transition、Projection
   protocol/             Broadcast 自有的 Local Protocol
   radar/                与前端框架无关的 Radar domain
@@ -141,3 +142,7 @@ CI 根据改动面选择必要的验证 lane；未知路径、工具链、workfl
 RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only（AGPL-3.0-only）**。
 
 直接第三方依赖及其许可证见 [`THIRD-PARTY-NOTICES.md`](THIRD-PARTY-NOTICES.md)。研究参考项目不等于本仓库包含其代码或资产，相关边界见 [`docs/references.md`](docs/references.md)。
+
+## 致谢与第三方说明
+
+- Counter-Strike 2 官方矢量资产与元数据管道基于开源工具 [ValveResourceFormat / Source 2 Viewer](https://github.com/ValveResourceFormat/ValveResourceFormat) 提取并反编译生成。详细许可证与版权信息参见 `THIRD-PARTY-NOTICES.md`。
