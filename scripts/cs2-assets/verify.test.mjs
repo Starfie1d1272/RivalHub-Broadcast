@@ -1,5 +1,6 @@
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, describe, expect, it } from 'vitest';
@@ -16,7 +17,7 @@ afterEach(async () => {
 });
 
 async function writeFixture({ mutateCatalog, mutateManifest } = {}) {
-  const root = await mkdtemp(join(process.cwd(), '.agent-tmp-cs2-assets-test-'));
+  const root = await mkdtemp(join(tmpdir(), 'rivalhub-cs2-assets-verify-test-'));
   temporaryRoots.push(root);
   const packageRoot = join(root, 'packages', 'cs2-assets');
   const publicRoot = join(packageRoot, 'generated', 'public', 'assets', 'cs2', 'weapon');
