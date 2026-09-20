@@ -209,4 +209,44 @@ describe('objective timing capture analyzer', () => {
       await rm(run.root, { recursive: true, force: true });
     }
   });
+
+  it('does not count a defuse abort as a restart until defusing actually resumes', async () => {
+    const run = await createCapture([
+      frame(0, 0, { bomb: { state: 'planted', countdown: '30' } }),
+      frame(1, 100, { bomb: { state: 'defusing', countdown: '5' } }),
+      frame(2, 200, { bomb: { state: 'planted', countdown: '29.8' } }),
+      frame(3, 300, { bomb: { state: 'exploded' } }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.evidence.scenarioCoverage.scenarios['defuse-abort-restart']).toBe(false);
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('clears the qualification-only explosion anchor when a new plant action begins', async () => {
+    const run = await createCapture([
+      frame(0, 0, { bomb: { state: 'planted', countdown: '2' } }),
+      frame(1, 100, { bomb: { state: 'planting', countdown: '3' } }),
+      frame(2, 200, { bomb: { state: 'exploded' } }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.metrics.terminalEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'explosion',
+            sourceClock: 'unavailable',
+            remainingAtTerminalMs: null,
+          }),
+        ]),
+      );
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
 });
