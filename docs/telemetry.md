@@ -184,6 +184,8 @@ countdown 时才建立或重新校准 anchor。planted countdown 暂缺时保留
 保留 anchor 且不使用 defuse countdown 覆盖它；没有 anchor 的首次 defusing 保持 explosion
 为 `null`，不合成 40 秒。carried、dropped、planting、terminal、unknown、bomb absent 或
 degraded、map epoch 变化和 Program source generation 变化都会清除/失效 objective timing。
+同一 generation / map epoch 内一旦发生 `gap-resync` 或 `stale-recovery`，也不得跨断点继承旧
+explosion anchor；恢复帧只有携带新的 authoritative planted countdown 才能重新建立它。
 
 plant/defuse action 由当前 observation 即时派生。actor 缺失不清除 action time；defuse kit
 只从当前 matching player 的 `hasDefuser` evidence 读取，未知就是 `null`，不做 heuristic。
