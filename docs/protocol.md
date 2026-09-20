@@ -208,6 +208,26 @@ Local Protocol 版本与各 channel schema 版本独立。单个 channel payload
 channel。每个 channel 有独立 Zod schema、DTO、发布器和接收状态，不存在一个包含全部字段的万能
 union payload。
 
+### 4.2.1 HUD presentation control-plane
+
+HUD 配置不进入上述 WebSocket channel，也不扩展 `ProgramSnapshot`。Companion 通过：
+
+```text
+GET  /local/v1/hud-config
+POST /operator/hud-config
+```
+
+`GET` 返回严格 v1 `HudConfigDocument`、当前已启用的 `HudResolvedPreset`、`activationStale` 与
+基于 resolved canonical JSON 的 SHA-256 ETag。浏览器每 500ms 使用 `If-None-Match` 条件请求；
+保存布局/外观/预设资源不会改变 ETag，重复启用同一 resolved preset 也必须保持 ETag 不变，只有
+启用新的 resolved preset 才改变 ETag。读取、解析或持久化失败时，Companion 保留
+last-known-valid 配置，不能清除或猜测 gameplay snapshot。
+
+`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令，复用本地 Web Origin
+policy 与 `x-operator-token` / Bearer credential。内置 `builtin:*` 资源只读；配置文件由 Companion
+以同目录临时文件加原子 rename 保存。该 control-plane 的版本与 Local Protocol / channel schema
+版本独立。
+
 ### 4.3 快照 envelope
 
 通用 envelope：

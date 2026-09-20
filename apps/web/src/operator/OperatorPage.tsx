@@ -98,6 +98,7 @@ export function OperatorPage() {
         <a aria-current="page" href="/operator">
           制作控制
         </a>
+        <a href="/operator/hud">HUD 控制台</a>
         <a href="/debug">运行诊断</a>
       </nav>
 

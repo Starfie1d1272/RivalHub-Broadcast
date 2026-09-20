@@ -73,7 +73,7 @@ DAK、OCR 或其它赛后来源属于 evidence / reconciliation 链，不进入�
 ```text
 apps/companion
   本地服务与 composition root。
-  组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、capture 与 qualification tooling。
+  组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、HUD 配置持久化、capture 与 qualification tooling。
   拥有 ProgramCueCoordinator 与 transient delivery publisher。
 
 apps/web
@@ -85,6 +85,12 @@ packages/core
   纯 TypeScript Runtime domain。
   拥有 continuity、identity、RuntimeState、RuntimeTransition、accumulator、Projection 和
   framework-neutral ProgramCue projector。
+
+packages/hud-config
+  framework-neutral HUD 配置 owner：HudPreset、HudLayout、HudTheme、组件 registry、严格 v1 schema、
+  逻辑坐标几何约束和纯 Theme resolver。
+  不依赖 React、ProgramSnapshot、GSI、RuntimeState、浏览器 API 或 Node 文件系统；Companion 负责持久化，
+  Web 负责编辑器与 renderer host。
 
 packages/protocol
   Broadcast 自有的 Local Protocol、schema 和 acceptance rules。
@@ -317,6 +323,14 @@ Snapshot channel 与 `program-cue` transient channel 各自有 schema version、
 state。Program cue 只来自 delayed Program CSTV，不进入 snapshot `LocalChannelStore`，也不共享
 Lookahead source 或通用 event bus。protocol version 与 channel schema version 分离，因此单个 payload
 演进不要求整个 Local Protocol 同步升级。
+
+HUD 配置属于独立的 presentation control-plane，不是 Local Protocol channel，也不修改
+`ProgramSnapshot` schema。`packages/hud-config` 定义并解析 `HudPreset`、`HudLayout`、`HudTheme` 和
+组件 registry；Companion 的 `GET /local/v1/hud-config` 返回当前已启用的 resolved preset，Web
+编辑器通过带 Operator credential 的本地 HTTP mutation 保存资源或启用 preset。保存资源不会改变正式
+节目的 ETag；只有启用 preset 才会冻结新的 resolved snapshot。该 endpoint 使用 500ms conditional
+polling 与 ETag，配置读取/解析失败保留 last-known-valid runtime，不让 HUD 配置故障伪造或中断
+Gameplay telemetry。
 
 连接建立后立即发送当前 baseline；断线重连重新取得 current baseline，不补发历史 snapshot。
 

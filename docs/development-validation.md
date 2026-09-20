@@ -43,6 +43,7 @@
 - Fastify Companion；
 - 静态网页与本地 WebSocket；
 - ``/program`` / ``/operator`` / ``/debug``；
+- ``/operator/hud`` 的三类配置工作区、共享 ``GameplayHud`` 预览与 HUD ETag conditional polling；
 - 浏览器 reconnect；
 - current baseline；
 - Origin / subprotocol / LAN policy；

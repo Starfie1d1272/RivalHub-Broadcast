@@ -1,6 +1,8 @@
 import { ProgramCanvas } from '../ProgramCanvas';
+import { GameplayHud } from '../GameplayHud';
 import { getProgramFixture } from '../fixtures';
 import { ProgramFoundationProbe } from './ProgramFoundationProbe';
+import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: string }) {
   const snapshot = getProgramFixture(fixtureId);
@@ -11,6 +13,7 @@ export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: st
 
   return (
     <ProgramCanvas>
+      <GameplayHud mode="program" resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
       <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
     </ProgramCanvas>
   );
