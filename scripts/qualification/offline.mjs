@@ -69,6 +69,8 @@ async function assertBundleSmoke(outputRoot) {
     'scripts/evidence/contract.mjs',
     'scripts/evidence/capture.mjs',
     'scripts/evidence/objective-timing.mjs',
+    'scripts/evidence/production-gsi-config.json',
+    'scripts/evidence/objective-timing-policy.json',
     'scripts/evidence/scenario.mjs',
     'scripts/evidence/checks.mjs',
     'scripts/evidence/integrity.mjs',

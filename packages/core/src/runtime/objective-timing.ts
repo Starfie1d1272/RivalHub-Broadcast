@@ -1,7 +1,10 @@
 import type { TelemetryObservation } from '../telemetry/observation.js';
+import policy from './objective-timing-policy.json' with { type: 'json' };
 
-export const DEFAULT_OBJECTIVE_CLOCK_LEASE_MS = 1_000;
-export const MAX_OBJECTIVE_CLOCK_LEASE_MS = 2_000;
+export const DEFAULT_OBJECTIVE_CLOCK_LEASE_MS = policy.defaultLeaseMs;
+export const MAX_OBJECTIVE_CLOCK_LEASE_MS = policy.maxLeaseMs;
+
+export type ObjectiveTimingContinuity = 'baseline' | 'contiguous' | 'gap-resync' | 'stale-recovery';
 
 export interface RuntimeObjectiveTimingAnchor {
   readonly remainingSecondsAtSample: number;
@@ -50,9 +53,13 @@ export function reduceObjectiveTiming(
   observation: TelemetryObservation,
   sourceGeneration: number,
   mapEpoch: number,
+  continuity: ObjectiveTimingContinuity,
 ): RuntimeObjectiveTimingState {
+  const canRetainPreviousAnchor = continuity === 'contiguous';
   const previousAnchor =
-    previous.sourceGeneration === sourceGeneration && previous.mapEpoch === mapEpoch
+    canRetainPreviousAnchor &&
+    previous.sourceGeneration === sourceGeneration &&
+    previous.mapEpoch === mapEpoch
       ? previous.explosionAnchor
       : null;
   const bomb = observation.coverage.bomb === 'present' ? observation.telemetry.bomb : undefined;

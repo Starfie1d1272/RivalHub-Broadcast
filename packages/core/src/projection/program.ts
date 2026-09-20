@@ -498,8 +498,20 @@ function currentDefuseKit(
     ...(telemetry.telemetry.allPlayers ?? []),
     ...(telemetry.telemetry.player === undefined ? [] : [telemetry.telemetry.player]),
   ];
-  const player = candidates.find((candidate) => candidate.sourcePlayerId === sourcePlayerId);
-  return player?.state?.hasDefuser ?? null;
+  const evidence = candidates
+    .filter((candidate) => candidate.sourcePlayerId === sourcePlayerId)
+    .map((candidate) => candidate.state?.hasDefuser)
+    .filter((value): value is boolean => value !== undefined);
+  if (evidence.length === 0) return null;
+  const values = new Set(evidence);
+  return values.size === 1 ? evidence[0]! : null;
+}
+
+function roundIsOver(runtime: ProgramSafeRuntimeView): boolean {
+  return (
+    runtime.telemetry?.coverage.round === 'present' &&
+    runtime.telemetry.telemetry.round?.phase === 'over'
+  );
 }
 
 function projectBomb(
@@ -512,6 +524,9 @@ function projectBomb(
 
   const state = nullable(bomb.state);
   const sourcePlayerId = nullable(bomb.sourcePlayerId);
+  if (roundIsOver(runtime)) {
+    return { state, sourcePlayerId, explosion: null, action: null };
+  }
   if (!objectiveSampleIsCurrent(runtime)) {
     return { state, sourcePlayerId, explosion: null, action: null };
   }
@@ -519,6 +534,7 @@ function projectBomb(
   const lastAccepted = runtime.programSourceLastAccepted;
   const objectiveClockLive =
     lastAccepted !== null &&
+    getProgramSafeRuntimeFreshness(runtime, nowMonotonicMs, continuityPolicy) === 'fresh' &&
     nowMonotonicMs - lastAccepted.receivedMonotonicMs <= getObjectiveClockLeaseMs(continuityPolicy);
   const explosionAnchor = runtime.objectiveTiming.explosionAnchor;
   const explosion =

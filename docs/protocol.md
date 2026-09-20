@@ -180,19 +180,11 @@ Companion → Program 的短生命周期 transient cue。两类消息共享 WebS
 
 ### 4.1 版本
 
-当前常量：
+当前精确版本的唯一代码来源是 `packages/protocol/src/version.ts`；本文不复制各 channel 的
+数字常量，避免 schema 演进后文档形成第二份版本真相。Local Protocol 版本与各 channel
+schema 版本独立。单个 channel payload 演进时，不要求其它 channel 或 WebSocket 子协议同步升级。
 
-```text
-localProtocolVersion = 1
-programSchemaVersion  = 5
-radarSchemaVersion    = 1
-operatorSchemaVersion = 3
-assistSchemaVersion   = 1
-programCueSchemaVersion = 1
-subprotocol = rivalhub-broadcast.local.v1
-```
-
-Local Protocol 版本与各 channel schema 版本独立。单个 channel payload 演进时，不要求其它 channel 或 WebSocket 子协议同步升级。
+当前 Local Protocol 子协议仍为 `rivalhub-broadcast.local.v1`，路由前缀见下节。
 
 ### 4.2 路由
 
@@ -269,7 +261,7 @@ CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、sou
 delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
 `programReceiveSequence`。
 
-### 4.4 Program schema v6
+### 4.4 Program payload
 
 Program payload 只包含正式节目允许显示的信息：
 
@@ -358,7 +350,7 @@ acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把
 接收方必须：
 
 - 拒绝 protocol / channel / schema version 不兼容；
-- Program v5 与 v6 不是兼容 envelope；旧 receiver 必须拒绝 v6，当前 receiver 必须拒绝 v5，不能按字段猜测版本；
+- 旧 Program receiver 与当前 Program schema 不是兼容 envelope；旧 receiver 必须拒绝当前 schema，当前 receiver 必须拒绝旧 schema，不能按字段猜测版本；
 - 忽略重复或倒序 ``channelSeq``；
 - 拒绝同一 producer 下 ``runtimeSeq`` 回退；
 - 拒绝一个连接中途切换 ``producerInstanceId``；

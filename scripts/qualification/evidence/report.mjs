@@ -58,6 +58,8 @@ export function renderReport({
       lines.push(
         `  - Objective Clock 0.1 s：**${objectiveTimingLabel(objective.qualification.numeric01s.result)}**；active interval p99 ${objective.metrics.activePacketIntervalMs.p99 === null ? 'n/a' : `${objective.metrics.activePacketIntervalMs.p99.toFixed(1)} ms`}；reconnect gaps ${objective.metrics.reconnectGaps.count}`,
         `  - Objective Clock 0.01 s：**${objectiveTimingLabel(objective.qualification.numeric001s.result)}**`,
+        `  - Objective evidence：scenario coverage ${objective.evidence.scenarioCoverage.observed.length}/${objective.evidence.scenarioCoverage.required.length}；terminal residual coverage ${objective.qualification.numeric01s.gates.terminalResidualCoverage === true ? 'complete' : 'incomplete'}；independent references ${objective.evidence.independentObjectiveReferences.length}`,
+        `  - Objective lease：configured ${objective.metrics.lease.configuredLeaseMs.toFixed(1)} ms；required minimum ${objective.metrics.lease.requiredMinimumLeaseMs === null ? 'n/a' : `${objective.metrics.lease.requiredMinimumLeaseMs.toFixed(1)} ms`}；sufficient ${objective.metrics.lease.sufficient === true ? 'yes' : objective.metrics.lease.sufficient === false ? 'no' : 'inconclusive'}`,
       );
     }
   }

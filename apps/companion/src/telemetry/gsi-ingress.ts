@@ -5,6 +5,7 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
 import {
   adaptGsiPayload,
+  PRODUCTION_GSI_CONFIG,
   type GsiAdaptResult,
   type GsiDiagnosticBatch,
   type TelemetryReceiveContext,
@@ -15,35 +16,7 @@ import type { CaptureRecorder } from './capture-recorder.js';
 export const GSI_BODY_LIMIT_BYTES = 64 * 1024;
 export const GSI_REQUEST_TIMEOUT_MS = 5_000;
 
-export const PRODUCTION_GSI_CONFIG: Record<string, unknown> = {
-  uri: 'http://127.0.0.1:3000/gsi',
-  timeout: 1.1,
-  buffer: 0,
-  throttle: 0,
-  heartbeat: 10,
-  precision_time: 3,
-  precision_position: 1,
-  precision_vector: 3,
-  components: [
-    'provider',
-    'map',
-    'map_round_wins',
-    'round',
-    'player_id',
-    'player_state',
-    'player_weapons',
-    'player_match_stats',
-    'player_position',
-    'phase_countdowns',
-    'allplayers_id',
-    'allplayers_state',
-    'allplayers_match_stats',
-    'allplayers_weapons',
-    'allplayers_position',
-    'allgrenades',
-    'bomb',
-  ],
-};
+export { PRODUCTION_GSI_CONFIG };
 
 export interface GsiClockSample {
   readonly receivedAt: string;

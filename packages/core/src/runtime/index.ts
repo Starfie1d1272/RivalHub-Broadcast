@@ -18,6 +18,7 @@ export {
   reduceObjectiveTiming,
 } from './objective-timing.js';
 export type {
+  ObjectiveTimingContinuity,
   RuntimeObjectiveTimingAnchor,
   RuntimeObjectiveTimingState,
 } from './objective-timing.js';

@@ -27,6 +27,7 @@
 - objective clock anchor、map/source reset、defuse kit evidence 与 short-lease expiry；
 - identity / session / map epoch；
 - source continuity；
+- gap-resync / stale-recovery objective anchor invalidation；
 - Program / Assist non-leak；
 - projection 与 wire schema；
 - Radar 数学；
@@ -61,6 +62,7 @@ Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromi
 - update cadence；
 - planting / planted / defusing overloaded countdown semantics；
 - objective timing qualification report 与真实 Capture V1 cadence / residual evidence；
+- qualification measurement、provenance、scenario coverage 与独立 CSTV/demo reference gate；
 - 回合与地图生命周期；
 - stale / reconnect；
 - source generation；

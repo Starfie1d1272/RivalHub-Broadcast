@@ -149,6 +149,7 @@ function reduceProgramTelemetry(
       input.observation,
       currentGeneration,
       mapResult.map.epoch,
+      continuity.staleRecovery ? 'stale-recovery' : continuity.sequenceReason,
     ),
     programTelemetry: input.observation,
   };

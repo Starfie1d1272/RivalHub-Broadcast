@@ -42,6 +42,7 @@ async function createCapture(frames, options = {}) {
           buffer: '0',
           throttle: '0',
           heartbeat: '10',
+          ...(options.config ?? {}),
         },
       },
       complete: options.complete ?? true,
@@ -51,6 +52,13 @@ async function createCapture(frames, options = {}) {
     })}\n`,
     'utf8',
   );
+  if (options.objectiveEvents !== undefined) {
+    await writeFile(
+      join(captureDir, 'objective-events.jsonl'),
+      `${options.objectiveEvents.map((value) => JSON.stringify(value)).join('\n')}\n`,
+      'utf8',
+    );
+  }
   return { root, captureDir };
 }
 
@@ -88,13 +96,22 @@ describe('objective timing capture analyzer', () => {
       expect(result.metrics.countdownDeltaResidualMs.max).toBeCloseTo(0, 8);
       expect(result.metrics.stateTransitionToFirstCountMs.p95).toBe(0);
       expect(result.metrics.phaseComparisonResidualMs.max).toBeCloseTo(0, 8);
+      expect(result.metrics.terminalResidualMs.defuse.p95).toBe(4_800);
       expect(result.metrics.terminalEvents).toEqual(
         expect.arrayContaining([
           expect.objectContaining({ kind: 'plant', to: 'planted' }),
           expect.objectContaining({ kind: 'defuse', remainingAtTerminalMs: 4_800 }),
         ]),
       );
-      expect(result.qualification.numeric01s.result).toBe('PASS');
+      expect(result.qualification.numeric01s.result).toBe('INCONCLUSIVE');
+      expect(result.qualification.numeric01s.measurementGates).toEqual({
+        captureComplete: true,
+        activePacketP99Within200Ms: true,
+        sourceInternalPhaseConsistencyWithin100Ms: true,
+      });
+      expect(result.qualification.numeric01s.gates.realObserverProvenance).toBeNull();
+      expect(result.qualification.numeric01s.gates.independentTransitionReference).toBeNull();
+      expect(result.qualification.numeric01s.gates.terminalResidualCoverage).toBeNull();
       expect(result.qualification.numeric001s.result).toBe('NOT_PROMISED');
       expect(renderObjectiveTimingReport(result)).toContain('precision_time');
     } finally {
@@ -117,6 +134,77 @@ describe('objective timing capture analyzer', () => {
       expect(result.metrics.reconnectGaps).toMatchObject({ count: 1, maxMs: 1_400 });
       expect(result.qualification.numeric01s.result).toBe('FAIL');
       expect(result.qualification.numeric01s.gates.captureComplete).toBe(false);
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses independent objective references for transition residual instead of state visibility time', async () => {
+    const run = await createCapture(
+      [
+        frame(0, 0, { bomb: { state: 'planted', countdown: '30' } }),
+        frame(1, 110, { bomb: { state: 'defusing', countdown: '5', player: 'defuser' } }),
+        frame(2, 220, { bomb: { state: 'defused' } }),
+      ],
+      {
+        objectiveEvents: [
+          {
+            version: 1,
+            referenceId: 'cstv-defuse-start',
+            kind: 'defuse',
+            source: 'cstv',
+            occurredAtMs: 100,
+          },
+        ],
+      },
+    );
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.metrics.stateTransitionToFirstCountMs.p95).toBe(0);
+      expect(result.metrics.observerReferenceResidualMs.p95).toBe(10);
+      expect(result.qualification.numeric01s.gates.transitionP95Within100Ms).toBe(true);
+      expect(result.qualification.numeric01s.gates.independentObserverOffsetWithin100Ms).toBe(true);
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('uses the planted anchor for a defusing-to-exploded terminal residual', async () => {
+    const run = await createCapture([
+      frame(0, 0, { bomb: { state: 'planted', countdown: '2' } }),
+      frame(1, 500, { bomb: { state: 'defusing', countdown: '5' } }),
+      frame(2, 1_000, { bomb: { state: 'exploded' } }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.metrics.terminalEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            kind: 'explosion',
+            sourceClock: 'planted-explosion-anchor',
+            remainingAtTerminalMs: 1_000,
+          }),
+        ]),
+      );
+      expect(result.metrics.terminalResidualMs.explosion.p95).toBe(1_000);
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('reports a production config mismatch as a failed evidence gate', async () => {
+    const run = await createCapture(
+      [frame(0, 0, { bomb: { state: 'planted', countdown: '30' } })],
+      { config: { buffer: '0.1' } },
+    );
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.capture.productionConfig.matches).toBe(false);
+      expect(result.qualification.numeric01s.gates.productionGsiConfig).toBe(false);
+      expect(result.qualification.numeric01s.result).toBe('FAIL');
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }

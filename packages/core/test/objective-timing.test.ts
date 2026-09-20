@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 
 import { emptyActiveLineup, unboundIdentityResolution } from '../src/identity/index.js';
 import { projectProgram, selectProgramSafeRuntimeView } from '../src/projection/index.js';
-import { createInitialRuntimeState, reduceRuntime } from '../src/runtime/index.js';
+import {
+  createInitialRuntimeState,
+  reduceRuntime,
+  type RuntimeContinuityPolicy,
+} from '../src/runtime/index.js';
 import type {
   BombState,
   CountdownPhase,
@@ -10,7 +14,10 @@ import type {
   TelemetryObservation,
 } from '../src/telemetry/index.js';
 
-const POLICY = { staleAfterMs: 20_000, objectiveClockLeaseMs: 1_000 } as const;
+const POLICY: RuntimeContinuityPolicy = {
+  staleAfterMs: 20_000,
+  objectiveClockLeaseMs: 1_000,
+};
 
 function player(sourcePlayerId: string, hasDefuser: boolean): ObservedPlayer {
   return {
@@ -32,6 +39,7 @@ function observation(
     readonly phaseEndsSeconds?: number;
     readonly roundPhase?: 'live' | 'over';
     readonly allPlayers?: readonly ObservedPlayer[];
+    readonly player?: ObservedPlayer;
   } = {},
 ): TelemetryObservation {
   const bombCoverage = options.bombCoverage ?? 'present';
@@ -50,7 +58,7 @@ function observation(
       map: 'present',
       round: 'present',
       phaseCountdowns: options.phase === undefined ? 'absent' : 'present',
-      player: 'absent',
+      player: options.player === undefined ? 'absent' : 'present',
       allPlayers: options.allPlayers === undefined ? 'absent' : 'present',
       bomb: bombCoverage,
       grenades: 'absent',
@@ -69,6 +77,7 @@ function observation(
             },
           }),
       ...(options.allPlayers === undefined ? {} : { allPlayers: options.allPlayers }),
+      ...(options.player === undefined ? {} : { player: options.player }),
       ...(hasBomb
         ? {
             bomb: {
@@ -98,13 +107,17 @@ function accept(
   ).state;
 }
 
-function project(state: ReturnType<typeof createInitialRuntimeState>, nowMonotonicMs: number) {
+function project(
+  state: ReturnType<typeof createInitialRuntimeState>,
+  nowMonotonicMs: number,
+  continuityPolicy = POLICY,
+) {
   return projectProgram({
     runtime: selectProgramSafeRuntimeView(state),
     identity: unboundIdentityResolution(),
     activeLineup: emptyActiveLineup(state.programSource.generation, state.map.epoch),
     nowMonotonicMs,
-    continuityPolicy: POLICY,
+    continuityPolicy,
   });
 }
 
@@ -192,6 +205,110 @@ describe('objective timing normalization', () => {
       durationSeconds: null,
     });
     expect(project(state, 3_000).bomb?.action?.remainingSeconds).toBe(8);
+  });
+
+  it('accepts a newer planted sample as an authoritative upward recalibration', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planted', countdownSeconds: 30 }));
+    state = accept(state, observation(2, 1_000, { bombState: 'planted', countdownSeconds: 35 }));
+
+    expect(state.objectiveTiming.explosionAnchor).toMatchObject({
+      remainingSecondsAtSample: 35,
+      sampledAtMonotonicMs: 1_000,
+    });
+    expect(project(state, 1_000).bomb?.explosion?.remainingSeconds).toBe(35);
+  });
+
+  it('clears the plant action and explosion on a plant abort', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planting', countdownSeconds: 3 }));
+    state = accept(state, observation(2, 1_000, { bombState: 'carried' }));
+
+    expect(project(state, 1_000).bomb).toEqual({
+      state: 'carried',
+      sourcePlayerId: null,
+      explosion: null,
+      action: null,
+    });
+  });
+
+  it('invalidates an explosion anchor after stale recovery or a sequence gap', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planted', countdownSeconds: 30 }));
+    state = accept(
+      state,
+      observation(2, 20_001, {
+        bombState: 'defusing',
+        countdownSeconds: 5,
+        sourcePlayerId: 'defuser',
+        allPlayers: [player('defuser', false)],
+      }),
+    );
+    expect(project(state, 20_001).bomb?.explosion).toBeNull();
+
+    state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planted', countdownSeconds: 30 }));
+    state = accept(
+      state,
+      observation(3, 1, {
+        bombState: 'defusing',
+        countdownSeconds: 5,
+        sourcePlayerId: 'defuser',
+        allPlayers: [player('defuser', false)],
+      }),
+    );
+    expect(project(state, 1).bomb?.explosion).toBeNull();
+  });
+
+  it('gates objective numerics by global freshness when staleAfterMs is shorter than the lease', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planted', countdownSeconds: 30 }));
+
+    expect(
+      project(state, 101, { staleAfterMs: 100, objectiveClockLeaseMs: 1_000 }).bomb?.explosion,
+    ).toEqual({ remainingSeconds: null, durationSeconds: null });
+  });
+
+  it('fails closed when current defuser evidence conflicts across player blocks', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(
+      state,
+      observation(1, 0, {
+        bombState: 'defusing',
+        countdownSeconds: 5,
+        sourcePlayerId: 'defuser',
+        allPlayers: [player('defuser', true)],
+        player: player('defuser', false),
+      }),
+    );
+
+    expect(project(state, 0).bomb?.action).toMatchObject({
+      kind: 'defuse',
+      durationSeconds: null,
+      hasDefuseKit: null,
+    });
+  });
+
+  it('clears round-over bomb residue before projecting actions', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(state, observation(1, 0, { bombState: 'planted', countdownSeconds: 30 }));
+    state = accept(
+      state,
+      observation(2, 1, {
+        bombState: 'defusing',
+        countdownSeconds: 5,
+        sourcePlayerId: 'defuser',
+        roundPhase: 'over',
+        allPlayers: [player('defuser', true)],
+      }),
+    );
+
+    expect(project(state, 1).bomb).toEqual({
+      state: 'defusing',
+      sourcePlayerId: 'defuser',
+      explosion: null,
+      action: null,
+    });
   });
 
   it('clears timing on terminal, absent/degraded bomb blocks, map resets, and source generations', () => {

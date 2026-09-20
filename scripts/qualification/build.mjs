@@ -332,6 +332,14 @@ async function main() {
       recursive: true,
     });
     await cp(
+      join(rootDir, 'packages', 'telemetry-gsi', 'src', 'production-config.json'),
+      join(stagingDir, 'scripts', 'evidence', 'production-gsi-config.json'),
+    );
+    await cp(
+      join(rootDir, 'packages', 'core', 'src', 'runtime', 'objective-timing-policy.json'),
+      join(stagingDir, 'scripts', 'evidence', 'objective-timing-policy.json'),
+    );
+    await cp(
       join(scriptDir, 'supervisor.mjs'),
       join(stagingDir, 'scripts', 'qualification-supervisor.mjs'),
     );

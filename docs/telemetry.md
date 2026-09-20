@@ -188,7 +188,9 @@ degraded、map epoch 变化和 Program source generation 变化都会清除/失�
 plant/defuse action 由当前 observation 即时派生。actor 缺失不清除 action time；defuse kit
 只从当前 matching player 的 `hasDefuser` evidence 读取，未知就是 `null`，不做 heuristic。
 所有 duration / interpolation / lease 使用 monotonic clock；UTC 只用于 capture、报告和审计。
-短 objective-clock lease 初始为 1000 ms，最大 2000 ms；它独立于全局 `staleAfterMs = 20000`。
+短 objective-clock lease 的 canonical policy 在
+`packages/core/src/runtime/objective-timing-policy.json`；当前默认值为 1000 ms、上限为
+2000 ms。它独立于全局 `staleAfterMs = 20000`。
 lease 过期时 Program 保留当前 bomb semantic state，但 numeric remaining fail closed 为
 `null`。浏览器 reconnect 只重新取得 baseline，Core 才负责 anchor continuation。
 
@@ -353,16 +355,39 @@ capture 做离线分析：
 pnpm qualification:objective-timing <capture-dir>
 ```
 
-分析器报告 active packet interval 的 p50/p95/p99/max、countdown delta 与 monotonic residual、
-state transition 到首个 matching countdown 的 gap、同语义 bomb/phase residual、plant/defuse/
-explosion terminal residual、missing countdown spans 和 reconnect gaps。报告只打印 allowlisted
-GSI config，不打印 token；原始 frames、manifest 和 SHA-256 仍是证据源。
+分析器分三层输出：measurement 只计算 active packet interval 的 p50/p95/p99/max、countdown
+delta 与 monotonic residual、source-local state/phase residual、plant/defuse/explosion terminal
+residual、provider/receive 时间证据、missing countdown spans 和 reconnect gaps；evidence
+coverage 再验证真实 observer provenance、canonical production GSI config、8 个最小 objective
+scenario，以及独立的 `objective-events.jsonl` CSTV/demo reference；qualification decision 最后
+才组合这些 gate。报告只打印 allowlisted GSI config，不打印 token；原始 frames、manifest、
+reference file 和 SHA-256 仍是证据源。
 
-当前数值 gate 是：active packet interval p99 ≤ 200 ms、transition residual p95 ≤ 100 ms，且
-没有 >100 ms 的 unexplained random offset。满足这些 gate 只能说明该 exact capture 支持
-0.1 s numeric objective clock；`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。没有
-真实 observer capture 时，报告结果必须保持 `INCONCLUSIVE`，不能用 synthetic fixture 冒充
-production qualification。
+同一个 GSI payload 内的 bomb/phase 对齐只能作为 source-local consistency，不能证明 observer-visible
+transition residual、common-mode fixed offset 或 random delay。没有独立 reference、真实 observer
+provenance 或完整 scenario coverage 时，numeric result 必须保持 `INCONCLUSIVE`；synthetic fixture
+可以测试 measurement 算法，但不能冒充 production qualification。
+
+numeric 0.1 s 的 evidence gate 为 active packet interval p99 ≤ 200 ms、独立 reference transition
+residual p95 ≤ 100 ms、独立 absolute offset ≤ 100 ms、canonical production config 匹配、完整
+scenario coverage，并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy
+上限。lease 与 Core 共用 canonical policy；因此一次 capture 即使 0.1 s gate FAIL，也必须单独
+报告 lease sufficiency。plant、defuse、explosion 三类 terminal residual 也必须各自有统计样本，
+否则 terminal residual coverage gate 保持 `INCONCLUSIVE`；它们当前是 source-local measurement，
+独立 reference 覆盖数量单独报告。`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。
+
+canonical production GSI config 的唯一代码来源是
+`packages/telemetry-gsi/src/production-config.json`；analyzer 会对 capture manifest 的
+`timeout`、`precision_time`、`buffer`、`throttle` 和 `heartbeat` 做规范化比较。
+
+`objective-events.jsonl` 每行格式为：
+
+```json
+{"version":1,"referenceId":"cstv-plant-001","kind":"plant","source":"cstv","occurredAtMs":1234.5}
+```
+
+其中 `source` 只能是独立的 `cstv` 或 `demo` reference；没有该文件时 transition/absolute-offset
+gate 为 `INCONCLUSIVE`。
 
 ## 12. 隐私与安全
 
