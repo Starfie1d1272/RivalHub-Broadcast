@@ -248,5 +248,4 @@ describe('objective timing capture analyzer', () => {
       await rm(run.root, { recursive: true, force: true });
     }
   });
-
 });
