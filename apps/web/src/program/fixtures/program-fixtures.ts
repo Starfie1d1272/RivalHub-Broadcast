@@ -20,6 +20,19 @@ export const PROGRAM_FIXTURE_IDS = [
 
 export type ProgramFixtureId = (typeof PROGRAM_FIXTURE_IDS)[number];
 
+export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> = {
+  'awaiting-neutral': '等待初始状态',
+  'live-neutral': '实时中 · 未绑定队伍',
+  'live-canonical': '实时中 · 已匹配队伍',
+  'context-stale': '比赛上下文过期',
+  'identity-degraded': '选手身份部分确认',
+  'identity-mismatch': '选手身份不匹配',
+  'bomb-planted': '炸弹已安装',
+  'bomb-defusing': '正在拆弹',
+  'timeout-ct': 'CT 暂停',
+  'stress-long-labels': '长名称压力场景',
+};
+
 type ProgramPlayer = ProgramPayload['players'][number];
 type PlayerState = NonNullable<ProgramPlayer['state']>;
 type MatchStats = NonNullable<ProgramPlayer['matchStats']>;

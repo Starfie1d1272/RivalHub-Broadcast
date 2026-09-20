@@ -18,6 +18,7 @@ import {
   parseHudLayout,
   parseHudResolvedPreset,
   placementToBox,
+  normalizeHudPlacement,
   resetLayoutDraft,
   resolveHudTheme,
   resizeRadarPlacement,
@@ -59,11 +60,35 @@ describe('hud-config schema and framework contract', () => {
     ).toThrow();
     expect(() => parseHudResolvedPreset({ ...getBuiltinResolvedPreset(), widgets: {} })).toThrow();
     expect(() =>
+      parseHudResolvedPreset({
+        ...getBuiltinResolvedPreset(),
+        theme: {
+          ...getBuiltinResolvedPreset().theme,
+          semantic: {
+            ...getBuiltinResolvedPreset().theme.semantic,
+            colors: {
+              ...getBuiltinResolvedPreset().theme.semantic.colors,
+              textPrimary: '#ffffff',
+            },
+          },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
       parseHudLayout({
         ...getBuiltinLayout(),
         widgets: {
           ...getBuiltinLayout().widgets,
           radar: { ...getBuiltinLayout().widgets.radar, width: 10 },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseHudLayout({
+        ...getBuiltinLayout(),
+        widgets: {
+          ...getBuiltinLayout().widgets,
+          radar: { ...getBuiltinLayout().widgets.radar, offsetX: 1_000 },
         },
       }),
     ).toThrow();
@@ -119,5 +144,19 @@ describe('hud-config logical geometry', () => {
 
   it('canonicalizes object key order for stable revisions', () => {
     expect(canonicalJson({ b: 2, a: { d: 4, c: 3 } })).toBe('{"a":{"c":3,"d":4},"b":2}');
+  });
+
+  it('normalizes numeric edits to a canonical in-canvas placement', () => {
+    const placement = getBuiltinLayout().widgets.radar;
+    const normalized = normalizeHudPlacement('radar', {
+      ...placement,
+      offsetX: 1_000,
+      offsetY: -1_000,
+    });
+    const box = placementToBox('radar', normalized);
+    expect(box.left).toBe(1_600);
+    expect(box.top).toBe(0);
+    expect(box.left + box.width).toBeLessThanOrEqual(HUD_CANVAS_WIDTH);
+    expect(box.top + box.height).toBeLessThanOrEqual(HUD_CANVAS_HEIGHT);
   });
 });

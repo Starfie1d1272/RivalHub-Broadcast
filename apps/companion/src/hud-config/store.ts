@@ -146,56 +146,59 @@ export class HudConfigStore {
   async saveResource(kind: HudResourceKind, value: unknown): Promise<HudConfigState> {
     const parsed = parseResource(kind, value);
     if (parsed.id.startsWith('builtin:')) throw new Error('内置 HUD 资源只读，请使用另存为');
-    const resources = resourceList(this.document, kind);
-    if (!resources.some((item) => item.id === parsed.id)) {
-      throw new Error('只能保存已经存在的自定义 HUD 资源');
-    }
-    const next = withResourceList(
-      this.document,
-      kind,
-      resources.map((item) => (item.id === parsed.id ? parsed : item)),
-    );
-    return this.commit(next);
+    return this.commit(() => {
+      const resources = resourceList(this.document, kind);
+      if (!resources.some((item) => item.id === parsed.id)) {
+        throw new Error('只能保存已经存在的自定义 HUD 资源');
+      }
+      return withResourceList(
+        this.document,
+        kind,
+        resources.map((item) => (item.id === parsed.id ? parsed : item)),
+      );
+    });
   }
 
   async saveAs(kind: HudResourceKind, value: unknown): Promise<HudConfigState> {
     const parsed = parseResource(kind, value);
     const resource = { ...parsed, id: randomUUID(), name: parsed.name.trim() } as HudResource;
-    const next = withResourceList(this.document, kind, [
-      ...resourceList(this.document, kind),
-      resource,
-    ]);
-    return this.commit(next);
+    return this.commit(() =>
+      withResourceList(this.document, kind, [...resourceList(this.document, kind), resource]),
+    );
   }
 
   async activatePreset(sourceId: string): Promise<HudConfigState> {
-    if (sourceId === BUILTIN_PRESET_ID) {
-      return this.commit({
+    return this.commit(() => {
+      if (sourceId === BUILTIN_PRESET_ID) {
+        return {
+          ...this.document,
+          activePreset: { kind: 'builtin', sourceId: BUILTIN_PRESET_ID },
+        };
+      }
+      const preset = this.document.customPresets.find((item) => item.id === sourceId);
+      if (preset === undefined) throw new Error(`找不到要启用的 HUD 预设：${sourceId}`);
+      const layout =
+        preset.layoutId === BUILTIN_LAYOUT_ID
+          ? getBuiltinLayout()
+          : this.document.customLayouts.find((item) => item.id === preset.layoutId);
+      const theme =
+        preset.themeId === BUILTIN_THEME_ID
+          ? getBuiltinTheme()
+          : this.document.customThemes.find((item) => item.id === preset.themeId);
+      if (layout === undefined || theme === undefined) throw new Error('预设引用的资源不存在');
+      const snapshot = resolveHudPreset(preset, layout, theme);
+      return {
         ...this.document,
-        activePreset: { kind: 'builtin', sourceId: BUILTIN_PRESET_ID },
-      });
-    }
-    const preset = this.document.customPresets.find((item) => item.id === sourceId);
-    if (preset === undefined) throw new Error(`找不到要启用的 HUD 预设：${sourceId}`);
-    const layout =
-      preset.layoutId === BUILTIN_LAYOUT_ID
-        ? getBuiltinLayout()
-        : this.document.customLayouts.find((item) => item.id === preset.layoutId);
-    const theme =
-      preset.themeId === BUILTIN_THEME_ID
-        ? getBuiltinTheme()
-        : this.document.customThemes.find((item) => item.id === preset.themeId);
-    if (layout === undefined || theme === undefined) throw new Error('预设引用的资源不存在');
-    const snapshot = resolveHudPreset(preset, layout, theme);
-    return this.commit({
-      ...this.document,
-      activePreset: { kind: 'custom', sourceId: preset.id, snapshot },
+        activePreset: { kind: 'custom', sourceId: preset.id, snapshot },
+      };
     });
   }
 
-  private async commit(next: HudConfigDocument): Promise<HudConfigState> {
-    const candidate = parseHudConfigDocument(next);
-    await this.commits.run(async () => {
+  private async commit(
+    next: HudConfigDocument | (() => HudConfigDocument),
+  ): Promise<HudConfigState> {
+    return this.commits.run(async () => {
+      const candidate = parseHudConfigDocument(typeof next === 'function' ? next() : next);
       try {
         if (this.filePath !== undefined) {
           const committed = await replaceDurableJson(this.filePath, candidate);
@@ -208,8 +211,8 @@ export class HudConfigStore {
         this.onDiagnostic('hud_config_persist_failed');
         throw error;
       }
+      return this.getState();
     });
-    return this.getState();
   }
 
   async flush(): Promise<void> {

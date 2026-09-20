@@ -223,8 +223,11 @@ POST /operator/hud-config
 启用新的 resolved preset 才改变 ETag。读取、解析或持久化失败时，Companion 保留
 last-known-valid 配置，不能清除或猜测 gameplay snapshot。
 
-`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令，复用本地 Web Origin
-policy 与 `x-operator-token` / Bearer credential。内置 `builtin:*` 资源只读；配置文件由 Companion
+`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令。写操作不提供普通
+Operator credential：只允许 Companion 以 loopback bind 接收，且请求必须通过 valid local
+Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也
+必须拒绝 mutation。GSI ingress 继续使用独立的 `GSI_TOKEN`，qualification-only control plane
+继续使用独立的 `QUALIFICATION_CONTROL_TOKEN`。内置 `builtin:*` 资源只读；配置文件由 Companion
 以同目录临时文件加原子 rename 保存。该 control-plane 的版本与 Local Protocol / channel schema
 版本独立。
 
@@ -339,7 +342,12 @@ Radar 快照包含当前雷达领域所需的比赛游标、新鲜度、身份�
 
 Operator 快照包含制作控制需要的比赛上下文、运行转换、身份、ActiveLineup diagnostics、SeriesProgress binding/issues 和 source health。`seriesProgress` 只提供 Operator 恢复所需的有界地图状态、比分与诊断；它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源；`activeLineup.extras` 与 resolver issues 只用于 Operator/debug，不进入正式 Player Rails。
 
-当 `seriesProgress.bindingState = needs_operator` 时，已配置 `OPERATOR_CONTROL_TOKEN` 的 Companion 提供 `POST /operator/series/bind`。请求必须通过本地 Web Origin policy，并携带 `x-operator-token` 或同值 Bearer credential，提交 `bind-current-map-execution-to-series-map`、`mapOrder` 与非空 `reason`；服务只返回 command acknowledgement，不允许通过该入口直接改写比分。
+当 `seriesProgress.bindingState = needs_operator` 时，Companion 提供 `POST /operator/series/bind`。该
+正常 Operator ingress 不接受 token 或 Bearer credential；写操作只允许 loopback bind 且 Origin 通过
+local Web Origin policy，LAN mode 一律拒绝 mutation。请求提交
+`bind-current-map-execution-to-series-map`、`mapOrder` 与非空 `reason`；服务只返回 command
+acknowledgement，不允许通过该入口直接改写比分。qualification-only 路由的
+`QUALIFICATION_CONTROL_TOKEN` 不属于此正常 Operator ingress。
 
 ### 4.7 Assist schema v1
 

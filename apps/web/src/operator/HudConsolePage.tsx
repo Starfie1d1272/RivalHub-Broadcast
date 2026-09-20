@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
-import type { CSSProperties, PointerEvent } from 'react';
+import type { PointerEvent } from 'react';
 
 import {
   BUILTIN_LAYOUT_ID,
@@ -10,6 +10,7 @@ import {
   HUD_CANVAS_WIDTH,
   HUD_GRID_SIZE,
   HUD_WIDGET_IDS,
+  HUD_WIDGET_REGISTRY,
   canonicalJson,
   createDefaultHudConfigDocument,
   getBuiltinLayout,
@@ -17,6 +18,7 @@ import {
   getBuiltinResolvedPreset,
   getBuiltinTheme,
   moveWidgetPlacement,
+  normalizeHudPlacement,
   placementToBox,
   resetLayoutDraft,
   resetPresetDraft,
@@ -26,20 +28,23 @@ import {
   type HudConfigDocument,
   type HudLayout,
   type HudPreset,
-  type HudResolvedPreset,
   type HudTheme,
   type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
-import { GameplayHud } from '../program/GameplayHud';
-import { getProgramFixture } from '../program/fixtures';
+import {
+  getProgramFixture,
+  PROGRAM_FIXTURE_IDS,
+  PROGRAM_FIXTURE_LABELS,
+  type ProgramFixtureId,
+} from '../program/fixtures';
+import { HudCanvasPreview } from './HudCanvasPreview';
 import { createLocalChannelClient, type LocalChannelConnectionState } from '../realtime';
 import {
   mutateHudConfig,
   useHudConfigClient,
   type HudConfigMutation,
-  type HudConfigResponse,
 } from '../realtime/hud-config-client';
 
 import './hud-console.css';
@@ -90,6 +95,10 @@ function resourceName(resource: HudResource | undefined): string {
   return resource?.name ?? '未找到资源';
 }
 
+function widgetLabel(id: HudWidgetId): string {
+  return HUD_WIDGET_REGISTRY.find((descriptor) => descriptor.id === id)?.label ?? id;
+}
+
 function isBuiltin(id: string): boolean {
   return id.startsWith('builtin:');
 }
@@ -136,85 +145,12 @@ function useProgramConnection(): {
   return { current: snapshot.current, state: snapshot.state };
 }
 
-interface HudCanvasPreviewProps {
-  readonly resolvedPreset: HudResolvedPreset;
-  readonly snapshot: ProgramSnapshot | null;
-  readonly connectionState: LocalChannelConnectionState;
-  readonly selectedWidgetId: HudWidgetId | null;
-  readonly showGrid: boolean;
-  readonly showCenter: boolean;
-  readonly showSafeArea: boolean;
-  readonly onWidgetPointerDown?:
-    ((widgetId: HudWidgetId, event: PointerEvent<HTMLDivElement>) => void) | undefined;
-  readonly onRadarResizePointerDown?:
-    ((event: PointerEvent<HTMLButtonElement>) => void) | undefined;
-}
-
-function HudCanvasPreview({
-  resolvedPreset,
-  snapshot,
-  connectionState,
-  selectedWidgetId,
-  showGrid,
-  showCenter,
-  showSafeArea,
-  onWidgetPointerDown,
-  onRadarResizePointerDown,
-}: HudCanvasPreviewProps) {
-  const frameRef = useRef<HTMLDivElement>(null);
-  const [scale, setScale] = useState(1);
-
-  useEffect(() => {
-    const updateScale = () => {
-      const width = frameRef.current?.getBoundingClientRect().width ?? HUD_CANVAS_WIDTH;
-      setScale(width / HUD_CANVAS_WIDTH);
-    };
-    updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
-
-  const guideStyle = { width: HUD_CANVAS_WIDTH, height: HUD_CANVAS_HEIGHT } satisfies CSSProperties;
-
-  return (
-    <div className="hud-console__canvas-frame" ref={frameRef}>
-      <div
-        aria-label="Gameplay HUD 预览画布"
-        className="hud-console__canvas-logical"
-        style={{ transform: `scale(${scale})` }}
-      >
-        {showGrid ? (
-          <div className="hud-console__guide hud-console__guide--grid" style={guideStyle} />
-        ) : null}
-        {showCenter ? (
-          <div className="hud-console__guide hud-console__guide--center" style={guideStyle} />
-        ) : null}
-        {showSafeArea ? (
-          <div className="hud-console__guide hud-console__guide--safe" style={guideStyle} />
-        ) : null}
-        <GameplayHud
-          connectionState={connectionState}
-          mode="editor"
-          onRadarResizePointerDown={onRadarResizePointerDown}
-          onWidgetPointerDown={onWidgetPointerDown}
-          resolvedPreset={resolvedPreset}
-          selectedWidgetId={selectedWidgetId}
-          snapshot={snapshot}
-        />
-      </div>
-    </div>
-  );
-}
-
 export function HudConsolePage() {
   const hudConfig = useHudConfigClient(import.meta.env.VITE_VISUAL_FIXTURES !== '1');
   const program = useProgramConnection();
-  const fixture = useMemo(() => getProgramFixture('live-canonical'), []);
   const initialDocument = hudConfig.document ?? createDefaultHudConfigDocument();
-  const [documentOverride, setDocumentOverride] = useState<HudConfigDocument | null>(null);
-  const configDocument = documentOverride ?? initialDocument;
+  const configDocument = hudConfig.document ?? initialDocument;
   const [workspace, setWorkspace] = useState<HudWorkspace>('preset');
-  const [token, setToken] = useState('');
   const [selectedPresetId, setSelectedPresetId] = useState(() => activePresetId(initialDocument));
   const [selectedLayoutId, setSelectedLayoutId] = useState(() => {
     const preset = resourceFor(initialDocument, 'preset', activePresetId(initialDocument));
@@ -233,14 +169,16 @@ export function HudConsolePage() {
   const [themeDraft, setThemeDraft] = useState<HudTheme>(() =>
     clone(resourceFor(initialDocument, 'theme', selectedThemeId) as HudTheme),
   );
-  const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId>('radar');
+  const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId | null>(null);
   const [previewSource, setPreviewSource] = useState<'fixture' | 'current-live'>('fixture');
+  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>('live-canonical');
   const [showGrid, setShowGrid] = useState(true);
   const [showCenter, setShowCenter] = useState(true);
   const [showSafeArea, setShowSafeArea] = useState(false);
+  const [snapToGridEnabled, setSnapToGridEnabled] = useState(true);
   const [commandState, setCommandState] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [activationStaleOverride, setActivationStaleOverride] = useState<boolean | null>(null);
+  const skipNextExternalSync = useRef(false);
   const [drag, setDrag] = useState<{
     readonly kind: 'move' | 'resize';
     readonly widgetId: HudWidgetId;
@@ -248,12 +186,12 @@ export function HudConsolePage() {
     readonly startY: number;
     readonly placement: HudLayout['widgets'][HudWidgetId];
   } | null>(null);
+  const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
   const previewSourceLive =
     program.state === 'live' &&
     program.current !== null &&
     program.current.payload.status.telemetry === 'fresh';
-  const activePreviewSource =
-    previewSource === 'current-live' && previewSourceLive ? 'current-live' : 'fixture';
+  const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
 
   const savedPreset = resourceFor(configDocument, 'preset', selectedPresetId) as
@@ -265,10 +203,14 @@ export function HudConsolePage() {
   const layoutDirty = savedLayout === undefined || !isSame(savedLayout, layoutDraft);
   const themeDirty = savedTheme === undefined || !isSame(savedTheme, themeDraft);
   const hasDirtyDraft = presetDirty || layoutDirty || themeDirty;
-  const activationStale = activationStaleOverride ?? hudConfig.activationStale;
+  const activationStale = hudConfig.activationStale;
 
   useEffect(() => {
-    if (documentOverride !== null || hudConfig.document === null || hasDirtyDraft) return;
+    if (skipNextExternalSync.current) {
+      skipNextExternalSync.current = false;
+      return;
+    }
+    if (hudConfig.document === null || hasDirtyDraft) return;
     const nextDocument = hudConfig.document;
     const nextPresetId = activePresetId(nextDocument);
     const nextPreset = resourceFor(nextDocument, 'preset', nextPresetId) as HudPreset;
@@ -282,7 +224,7 @@ export function HudConsolePage() {
     setPresetDraft(clone(nextPreset));
     setLayoutDraft(clone(resourceFor(nextDocument, 'layout', nextLayoutId) as HudLayout));
     setThemeDraft(clone(resourceFor(nextDocument, 'theme', nextThemeId) as HudTheme));
-  }, [documentOverride, hasDirtyDraft, hudConfig.document, hudConfig.etag]);
+  }, [hasDirtyDraft, hudConfig.document, hudConfig.etag]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -321,6 +263,7 @@ export function HudConsolePage() {
               drag.placement,
               point.x - drag.startX,
               point.y - drag.startY,
+              snapToGridEnabled,
             ),
           },
         }));
@@ -329,7 +272,7 @@ export function HudConsolePage() {
           ...current,
           widgets: {
             ...current.widgets,
-            radar: resizeRadarPlacement(drag.placement, point.x - drag.startX),
+            radar: resizeRadarPlacement(drag.placement, point.x - drag.startX, snapToGridEnabled),
           },
         }));
       }
@@ -341,7 +284,7 @@ export function HudConsolePage() {
       window.removeEventListener('pointermove', move);
       window.removeEventListener('pointerup', end);
     };
-  }, [drag]);
+  }, [drag, snapToGridEnabled]);
 
   function selectedDraft(kind: HudWorkspace): HudResource {
     if (kind === 'preset') return presetDraft;
@@ -390,9 +333,9 @@ export function HudConsolePage() {
     setCommandState(null);
   }
 
-  function applyResponse(response: HudConfigResponse): void {
-    setDocumentOverride(response.document);
-    setActivationStaleOverride(response.activationStale);
+  function applyResponse(response: Parameters<typeof hudConfig.applyResponse>[0]): void {
+    skipNextExternalSync.current = true;
+    hudConfig.applyResponse(response);
   }
 
   async function submitMutation(kind: HudWorkspace, saveAs: boolean): Promise<void> {
@@ -407,7 +350,7 @@ export function HudConsolePage() {
     setCommandState(null);
     try {
       const beforeIds = new Set(resourceList(configDocument, kind).map((resource) => resource.id));
-      const response = await mutateHudConfig(token, command);
+      const response = await mutateHudConfig(command);
       applyResponse(response);
       let nextId = draft.id;
       if (saveAs) {
@@ -435,12 +378,12 @@ export function HudConsolePage() {
     setBusy(true);
     setCommandState(null);
     try {
-      const response = await mutateHudConfig(token, {
+      const response = await mutateHudConfig({
         kind: 'activate-preset',
         sourceId: selectedPresetId,
       });
       applyResponse(response);
-      setCommandState('已启用当前 HUD 预设；正式节目将在下一次轮询中获取同一 resolved snapshot。');
+      setCommandState('已启用当前 HUD 预设；正式节目将在下一次轮询中获取同一份已验证配置快照。');
     } catch (error: unknown) {
       setCommandState(`HUD 预设未启用：${error instanceof Error ? error.message : '请求失败'}`);
     } finally {
@@ -466,7 +409,7 @@ export function HudConsolePage() {
     setCommandState('已恢复第一版默认值；保存前不会影响正式节目。');
   }
 
-  function startMove(widgetId: HudWidgetId, event: PointerEvent<HTMLDivElement>): void {
+  function startMove(widgetId: HudWidgetId, event: PointerEvent<HTMLButtonElement>): void {
     if (workspace !== 'layout') return;
     event.preventDefault();
     const frame = event.currentTarget.closest('.hud-console__canvas-frame');
@@ -536,8 +479,28 @@ export function HudConsolePage() {
     }
   }, [previewLayout, previewPreset, previewTheme]);
 
-  const selectedPlacement = layoutDraft.widgets[selectedWidgetId];
-  const selectedBox = placementToBox(selectedWidgetId, selectedPlacement);
+  const selectedPlacement =
+    selectedWidgetId === null ? null : layoutDraft.widgets[selectedWidgetId];
+  const selectedBox =
+    selectedWidgetId === null
+      ? null
+      : placementToBox(selectedWidgetId, layoutDraft.widgets[selectedWidgetId]);
+
+  function updateSelectedPlacement(
+    update: (placement: HudLayout['widgets'][HudWidgetId]) => HudLayout['widgets'][HudWidgetId],
+  ): void {
+    if (selectedWidgetId === null) return;
+    setLayoutDraft((current) => ({
+      ...current,
+      widgets: {
+        ...current.widgets,
+        [selectedWidgetId]: normalizeHudPlacement(
+          selectedWidgetId,
+          update(current.widgets[selectedWidgetId]),
+        ),
+      },
+    }));
+  }
 
   function renderResourceActions(kind: HudWorkspace, dirty: boolean, id: string) {
     return (
@@ -567,7 +530,7 @@ export function HudConsolePage() {
       <section className="hud-console__workspace" aria-label="HUD 预设编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">01 / Preset</span>
+            <span className="hud-console__kicker">第一步 · 选择预设</span>
             <h2>决定哪一套配置可以上场</h2>
           </div>
           <span
@@ -651,7 +614,7 @@ export function HudConsolePage() {
           启用当前预设
         </button>
         <p className="hud-console__hint">
-          保存只更新资源；只有明确启用后，正式节目才会获得新的 resolved snapshot。
+          保存只更新资源；只有明确启用后，正式节目才会获得新的已验证配置快照。
         </p>
       </section>
     );
@@ -662,7 +625,7 @@ export function HudConsolePage() {
       <section className="hud-console__workspace" aria-label="HUD 布局编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">02 / Layout</span>
+            <span className="hud-console__kicker">第二步 · 编辑布局</span>
             <h2>用逻辑坐标安排节目结构</h2>
           </div>
           <span className="hud-console__badge">1920 × 1080 · {HUD_GRID_SIZE}px 网格</span>
@@ -688,112 +651,99 @@ export function HudConsolePage() {
             onChange={(event) => setLayoutDraft({ ...layoutDraft, name: event.target.value })}
           />
         </label>
-        <div className="hud-console__widget-list" aria-label="HUD 组件">
+        <div className="hud-console__widget-list" aria-label="可编辑组件">
           {HUD_WIDGET_IDS.map((id) => (
             <button
+              aria-label={`选择${widgetLabel(id)}`}
               className={selectedWidgetId === id ? 'is-selected' : undefined}
               key={id}
               onClick={() => setSelectedWidgetId(id)}
               type="button"
             >
-              <span>{id}</span>
+              <span>{widgetLabel(id)}</span>
               <small>{layoutDraft.widgets[id].visible ? '显示' : '隐藏'}</small>
             </button>
           ))}
         </div>
-        <div className="hud-console__inspector">
-          <div className="hud-console__inspector-heading">
-            <span>组件检查器</span>
-            <strong>{selectedWidgetId}</strong>
+        {selectedWidgetId === null || selectedPlacement === null || selectedBox === null ? (
+          <div className="hud-console__inspector hud-console__inspector--empty">
+            <strong>请选择一个组件</strong>
+            <p className="hud-console__hint">选择画布中的标记或右侧组件列表后编辑位置。</p>
           </div>
-          <label className="hud-console__check">
-            <input
-              checked={selectedPlacement.visible}
-              onChange={(event) =>
-                setLayoutDraft({
-                  ...layoutDraft,
-                  widgets: {
-                    ...layoutDraft.widgets,
-                    [selectedWidgetId]: { ...selectedPlacement, visible: event.target.checked },
-                  },
-                })
-              }
-              type="checkbox"
-            />
-            在节目中显示
-          </label>
-          <label className="hud-console__field">
-            锚点
-            <select
-              value={selectedPlacement.anchor}
-              onChange={(event) =>
-                setLayoutDraft({
-                  ...layoutDraft,
-                  widgets: {
-                    ...layoutDraft.widgets,
-                    [selectedWidgetId]: {
-                      ...selectedPlacement,
-                      anchor: event.target.value as HudLayout['widgets'][HudWidgetId]['anchor'],
-                    },
-                  },
-                })
-              }
-            >
-              {HUD_ANCHORS.map((anchor) => (
-                <option key={anchor} value={anchor}>
-                  {ANCHOR_LABELS[anchor]}
-                </option>
-              ))}
-            </select>
-          </label>
-          <div className="hud-console__field-grid">
-            <label className="hud-console__field">
-              X 偏移
+        ) : (
+          <div className="hud-console__inspector">
+            <div className="hud-console__inspector-heading">
+              <span>组件检查器</span>
+              <strong>{widgetLabel(selectedWidgetId)}</strong>
+            </div>
+            <label className="hud-console__check">
               <input
-                inputMode="numeric"
+                checked={selectedPlacement.visible}
                 onChange={(event) =>
-                  setLayoutDraft({
-                    ...layoutDraft,
-                    widgets: {
-                      ...layoutDraft.widgets,
-                      [selectedWidgetId]: {
-                        ...selectedPlacement,
-                        offsetX: Number(event.target.value) || 0,
-                      },
-                    },
-                  })
+                  updateSelectedPlacement((placement) => ({
+                    ...placement,
+                    visible: event.target.checked,
+                  }))
                 }
-                type="number"
-                value={selectedPlacement.offsetX}
+                type="checkbox"
               />
+              在节目中显示
             </label>
             <label className="hud-console__field">
-              Y 偏移
-              <input
-                inputMode="numeric"
+              锚点
+              <select
+                value={selectedPlacement.anchor}
                 onChange={(event) =>
-                  setLayoutDraft({
-                    ...layoutDraft,
-                    widgets: {
-                      ...layoutDraft.widgets,
-                      [selectedWidgetId]: {
-                        ...selectedPlacement,
-                        offsetY: Number(event.target.value) || 0,
-                      },
-                    },
-                  })
+                  updateSelectedPlacement((placement) => ({
+                    ...placement,
+                    anchor: event.target.value as HudLayout['widgets'][HudWidgetId]['anchor'],
+                  }))
                 }
-                type="number"
-                value={selectedPlacement.offsetY}
-              />
+              >
+                {HUD_ANCHORS.map((anchor) => (
+                  <option key={anchor} value={anchor}>
+                    {ANCHOR_LABELS[anchor]}
+                  </option>
+                ))}
+              </select>
             </label>
+            <div className="hud-console__field-grid">
+              <label className="hud-console__field">
+                X 偏移
+                <input
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    updateSelectedPlacement((placement) => ({
+                      ...placement,
+                      offsetX: Number(event.target.value) || 0,
+                    }))
+                  }
+                  type="number"
+                  value={selectedPlacement.offsetX}
+                />
+              </label>
+              <label className="hud-console__field">
+                Y 偏移
+                <input
+                  inputMode="numeric"
+                  onChange={(event) =>
+                    updateSelectedPlacement((placement) => ({
+                      ...placement,
+                      offsetY: Number(event.target.value) || 0,
+                    }))
+                  }
+                  type="number"
+                  value={selectedPlacement.offsetY}
+                />
+              </label>
+            </div>
+            <p className="hud-console__hint">
+              当前盒子：{Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}，左上角{' '}
+              {Math.round(selectedBox.left)}, {Math.round(selectedBox.top)}
+              。只有雷达支持保持正方形的尺寸调整。
+            </p>
           </div>
-          <p className="hud-console__hint">
-            当前盒子：{Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}，左上角{' '}
-            {Math.round(selectedBox.left)}, {Math.round(selectedBox.top)}。只有 Radar
-            支持保持正方形的尺寸调整。
-          </p>
-        </div>
+        )}
         <div className="hud-console__guide-controls">
           <label className="hud-console__check">
             <input
@@ -819,6 +769,14 @@ export function HudConsolePage() {
             />{' '}
             安全区
           </label>
+          <label className="hud-console__check">
+            <input
+              checked={snapToGridEnabled}
+              onChange={(event) => setSnapToGridEnabled(event.target.checked)}
+              type="checkbox"
+            />{' '}
+            吸附到网格
+          </label>
         </div>
         {renderResourceActions('layout', layoutDirty, selectedLayoutId)}
       </section>
@@ -830,7 +788,7 @@ export function HudConsolePage() {
       <section className="hud-console__workspace" aria-label="HUD 外观编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">03 / Theme</span>
+            <span className="hud-console__kicker">第三步 · 调整外观</span>
             <h2>只调整品牌外观，不改语义状态</h2>
           </div>
           <span className="hud-console__badge">Inter · 固定语义颜色</span>
@@ -860,12 +818,21 @@ export function HudConsolePage() {
           <span>品牌色</span>
           <div className="hud-console__color-row">
             <input
-              aria-label="品牌色"
+              aria-label="品牌色选择器"
               onChange={(event) => setThemeDraft({ ...themeDraft, brandColor: event.target.value })}
               type="color"
+              value={
+                /^#[0-9a-fA-F]{6}$/.test(themeDraft.brandColor) ? themeDraft.brandColor : '#c8ef78'
+              }
+            />
+            <input
+              aria-label="品牌色十六进制值"
+              onChange={(event) => setThemeDraft({ ...themeDraft, brandColor: event.target.value })}
+              placeholder="#RRGGBB"
+              spellCheck={false}
+              type="text"
               value={themeDraft.brandColor}
             />
-            <code>{themeDraft.brandColor}</code>
           </div>
         </div>
         <fieldset className="hud-console__choice-group">
@@ -904,7 +871,7 @@ export function HudConsolePage() {
         </fieldset>
         {renderResourceActions('theme', themeDirty, selectedThemeId)}
         <p className="hud-console__hint">
-          CT、T、danger、warning、success、objective 等状态语义由系统固定，不在此处编辑。
+          CT、T、危险、提醒、成功和目标状态等语义颜色由系统固定，不在此处编辑。
         </p>
       </section>
     );
@@ -914,11 +881,11 @@ export function HudConsolePage() {
     <main className="hud-console" data-surface="hud-console">
       <header className="hud-console__header">
         <div>
-          <p className="hud-console__eyebrow">RivalHub Broadcast / Gameplay HUD</p>
+          <p className="hud-console__eyebrow">RivalHub Broadcast / 节目 HUD</p>
           <h1>把画面边界交给可验证的配置。</h1>
           <p className="hud-console__intro">
-            预设、布局和外观各自保存；只有明确启用的 preset
-            才能进入正式节目。编辑器预览与正式节目共享同一个 GameplayHud。
+            预设、布局和外观各自保存；只有明确启用的预设
+            才能进入正式节目。编辑辅助层只服务于编辑，正式节目不会携带编辑控件。
           </p>
         </div>
         <div className="hud-console__header-meta">
@@ -950,40 +917,48 @@ export function HudConsolePage() {
             </button>
           ))}
         </div>
-        <label className="hud-console__token">
-          Operator token
-          <input
-            autoComplete="current-password"
-            onChange={(event) => setToken(event.target.value)}
-            placeholder="仅保留在当前页面内存"
-            type="password"
-            value={token}
-          />
-        </label>
       </section>
 
       <section className="hud-console__source-bar" aria-label="HUD 预览来源">
         <div>
-          <span className="hud-console__kicker">Preview source</span>
+          <span className="hud-console__kicker">预览来源</span>
           <strong>
-            {activePreviewSource === 'fixture' ? 'Test scene / live-canonical' : 'Current Live'}
+            {activePreviewSource === 'fixture'
+              ? PROGRAM_FIXTURE_LABELS[fixtureId]
+              : previewSourceLive
+                ? '当前实时节目'
+                : '当前实时节目不可用'}
           </strong>
         </div>
         <label>
-          预览来源
+          选择预览来源
           <select
             value={activePreviewSource}
             onChange={(event) => setPreviewSource(event.target.value as 'fixture' | 'current-live')}
           >
-            <option value="fixture">Test scene · live-canonical</option>
-            <option disabled={!previewSourceLive} value="current-live">
-              Current Live ·{' '}
-              {previewSourceLive ? connectionLabel(program.state) : '需已接受 baseline'}
-            </option>
+            <option value="fixture">测试场景</option>
+            <option value="current-live">当前实时节目 · {connectionLabel(program.state)}</option>
           </select>
         </label>
+        {activePreviewSource === 'fixture' ? (
+          <label>
+            测试场景
+            <select
+              aria-label="测试场景"
+              value={fixtureId}
+              onChange={(event) => setFixtureId(event.target.value as ProgramFixtureId)}
+            >
+              {PROGRAM_FIXTURE_IDS.map((id) => (
+                <option key={id} value={id}>
+                  {PROGRAM_FIXTURE_LABELS[id]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : null}
         <span className="hud-console__source-status" data-connection-state={program.state}>
-          Program source · {connectionLabel(program.state)}
+          实时来源 · {connectionLabel(program.state)}
+          {!previewSourceLive && activePreviewSource === 'current-live' ? ' · 已安全隐藏' : ''}
         </span>
       </section>
 
@@ -991,6 +966,7 @@ export function HudConsolePage() {
         <div className="hud-console__preview-column">
           <HudCanvasPreview
             connectionState={program.state}
+            liveSource={activePreviewSource === 'current-live'}
             onRadarResizePointerDown={workspace === 'layout' ? startRadarResize : undefined}
             onWidgetPointerDown={workspace === 'layout' ? startMove : undefined}
             resolvedPreset={previewResolved}
@@ -1001,8 +977,7 @@ export function HudConsolePage() {
             snapshot={activeSnapshot}
           />
           <p className="hud-console__preview-caption">
-            逻辑画布 1920 × 1080 · 拖动组件吸附到 10px 网格 · 生产 renderer 当前对未实现组件
-            fail-closed
+            逻辑画布 1920 × 1080 · 拖动组件可吸附到 10px 网格 · 当前未实现的正式节目组件保持安全隐藏
           </p>
         </div>
         <div className="hud-console__editor-column">

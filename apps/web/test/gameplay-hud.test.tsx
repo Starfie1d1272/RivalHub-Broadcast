@@ -4,7 +4,9 @@ import { describe, expect, it } from 'vitest';
 import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 import { GameplayHud } from '../src/program/GameplayHud';
+import { HudEditorOverlay } from '../src/program/HudEditorOverlay';
 import { getProgramFixture } from '../src/program/fixtures';
+import { programPresentationBoundaryKey } from '../src/program/ProgramPage';
 
 function childrenOf(element: ReturnType<typeof GameplayHud>): readonly unknown[] {
   if (element === null) throw new Error('HUD element should render');
@@ -16,16 +18,12 @@ describe('GameplayHud shared renderer boundary', () => {
     const resolvedPreset = getBuiltinResolvedPreset();
     expect(
       GameplayHud({
-        connectionState: 'live',
-        mode: 'program',
         resolvedPreset,
         snapshot: null,
       }),
     ).toBeNull();
     expect(
       GameplayHud({
-        connectionState: 'live',
-        mode: 'program',
         resolvedPreset,
         snapshot: getProgramFixture('awaiting-neutral'),
       }),
@@ -37,17 +35,31 @@ describe('GameplayHud shared renderer boundary', () => {
     const snapshot = getProgramFixture('live-canonical');
     expect(snapshot).not.toBeNull();
     const program = GameplayHud({
-      connectionState: 'live',
-      mode: 'program',
       resolvedPreset,
       snapshot,
     });
-    const editor = GameplayHud({ mode: 'editor', resolvedPreset, snapshot });
+    const editor = HudEditorOverlay({ resolvedPreset, selectedWidgetId: null });
 
     expect(program).toMatchObject({ props: { 'data-gameplay-hud': 'true' } });
     expect(childrenOf(program)).toHaveLength(9);
     expect(childrenOf(program).every((child) => child === null)).toBe(true);
-    expect(editor).not.toBeNull();
+    expect(editor).toMatchObject({ props: { 'data-hud-editor-overlay': 'true' } });
     expect(childrenOf(editor)).toHaveLength(9);
+  });
+
+  it('changes the presentation boundary for accepted cursor resets and fail-closed states', () => {
+    const snapshot = getProgramFixture('live-canonical');
+    if (snapshot === null) throw new Error('fixture missing');
+
+    const accepted = programPresentationBoundaryKey(snapshot, 'live', null);
+    expect(accepted).toContain('fixture-producer:fixture-session:1:1');
+    expect(programPresentationBoundaryKey(snapshot, 'reconnecting', null)).toBe('fail-closed');
+    expect(
+      programPresentationBoundaryKey(snapshot, 'live', {
+        liveSessionChanged: true,
+        programSourceGenerationChanged: false,
+        mapEpochChanged: false,
+      }),
+    ).not.toBe(accepted);
   });
 });

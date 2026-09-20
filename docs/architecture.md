@@ -191,7 +191,11 @@ RuntimeTransition + MatchContext + 当前已证明的 side mapping
 
 Series checkpoint 是小型、有界、单文件的本地恢复事实，复用 Companion 现有 durable JSON 原子替换与串行提交队列。它按 `matchId + entrants + format + ordered canonical map plan fingerprint` 校验兼容性；不兼容时丢弃旧 checkpoint 并产生诊断。checkpoint 只在回合、地图绑定、地图结束、reset/restore、operator bind 或 Series completion 等业务边界写入，不按每帧 GSI 写盘。Companion shutdown 会先 quiesce Projection / ProgramCue owner，再 await ProgramRuntime checkpoint drain，因此最后一个已提交业务边界可以作为重启恢复的 durability contract。
 
-Operator projection 暴露有界的 SeriesProgress binding、map status、score 与 issues；配置独立的 `OPERATOR_CONTROL_TOKEN` 后，`POST /operator/series/bind` 作为现有 OperatorCommand 的本地 ingress，成功或拒绝都返回明确 acknowledgement。
+Operator projection 暴露有界的 SeriesProgress binding、map status、score 与 issues；`POST
+/operator/series/bind` 作为现有 OperatorCommand 的本地 ingress，不建立普通 Operator credential
+机制，只接受 loopback bind 且 Origin 通过 local Web Origin policy 的写请求；LAN mode 一律拒绝
+mutation。成功或拒绝都返回明确 acknowledgement。GSI 与 qualification-only 路径各自保留自己的
+token 边界。
 
 ## 5. 状态、转换、命令与事件
 
@@ -327,8 +331,9 @@ Lookahead source 或通用 event bus。protocol version 与 channel schema versi
 HUD 配置属于独立的 presentation control-plane，不是 Local Protocol channel，也不修改
 `ProgramSnapshot` schema。`packages/hud-config` 定义并解析 `HudPreset`、`HudLayout`、`HudTheme` 和
 组件 registry；Companion 的 `GET /local/v1/hud-config` 返回当前已启用的 resolved preset，Web
-编辑器通过带 Operator credential 的本地 HTTP mutation 保存资源或启用 preset。保存资源不会改变正式
-节目的 ETag；只有启用 preset 才会冻结新的 resolved snapshot。该 endpoint 使用 500ms conditional
+编辑器通过仅限 loopback 且要求 valid local Origin 的本地 HTTP mutation 保存资源或启用 preset；LAN
+mode 下该 endpoint 只读，任何 mutation 都会拒绝。保存资源不会改变正式节目的 ETag；只有启用 preset
+才会冻结新的 resolved snapshot。该 endpoint 使用 500ms conditional
 polling 与 ETag，配置读取/解析失败保留 last-known-valid runtime，不让 HUD 配置故障伪造或中断
 Gameplay telemetry。
 
@@ -358,12 +363,15 @@ bind = 127.0.0.1
 
 非 loopback 监听必须显式开启，并配置精确 Origin allowlist。
 
-凭据分离：
+凭据分离与本地写入边界：
 
 ```text
 GSI token
-!= local control credential
+!= qualification-only token
 != RivalHub producer credential
+
+normal local mutation = loopback bind + valid local Origin
+LAN mutation = denied
 ```
 
 Local WebSocket 校验 Origin 与 subprotocol；只读 snapshot channel 不接受浏览器业务消息。日志、fixture 和导出文件不得包含不必要的 token 或个人数据。

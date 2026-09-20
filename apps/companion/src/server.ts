@@ -33,7 +33,6 @@ const seriesProgressCheckpointPath =
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
-const operatorControlToken = process.env.OPERATOR_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
 const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
 const qualificationScenarioPath =
@@ -85,9 +84,6 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 } else if (qualificationMode && host !== '127.0.0.1') {
   console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
   process.exitCode = 1;
-} else if (operatorControlToken !== undefined && operatorControlToken.trim().length === 0) {
-  console.error('Companion 启动失败：OPERATOR_CONTROL_TOKEN 必须设置为非空值');
-  process.exitCode = 1;
 } else if (cstvSourceConfigError !== undefined) {
   console.error(`Companion 启动失败：${cstvSourceConfigError}`);
   process.exitCode = 1;
@@ -132,7 +128,6 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     ...(cstvSourceConfig === undefined ? {} : { cstvSources: cstvSourceConfig }),
     qualificationMode,
     ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),
-    ...(operatorControlToken === undefined ? {} : { operatorControlToken }),
     hudConfigPath,
     hudConfigStore,
     ...(qualificationMode

@@ -94,4 +94,26 @@ describe('HudConfigStore', () => {
     expect(store.getState().resolved.preset.id).toBe('builtin:rivalhub-default-preset');
     await expect(readFile(filePath, 'utf8')).resolves.toBe(malformed);
   });
+
+  it('serializes concurrent save-as operations from the latest document', async () => {
+    const store = new HudConfigStore();
+
+    await Promise.all([
+      store.saveAs('theme', {
+        ...getBuiltinTheme(),
+        id: 'draft-theme-a',
+        name: '外观 A',
+      }),
+      store.saveAs('theme', {
+        ...getBuiltinTheme(),
+        id: 'draft-theme-b',
+        name: '外观 B',
+      }),
+    ]);
+
+    expect(store.getState().document.customThemes.map((theme) => theme.name)).toEqual([
+      '外观 A',
+      '外观 B',
+    ]);
+  });
 });

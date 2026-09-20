@@ -150,7 +150,6 @@
   padding: 0.9rem 1rem;
 }
 
-.hud-console__token,
 .hud-console__source-bar label {
   color: var(--hud-muted);
   display: grid;
@@ -159,7 +158,6 @@
   min-width: min(100%, 17rem);
 }
 
-.hud-console__token input,
 .hud-console__field input,
 .hud-console__field select,
 .hud-console__source-bar select {
@@ -417,6 +415,28 @@
   align-items: center;
   display: flex;
   gap: 0.7rem;
+}
+
+.hud-console__color-row input[type='text'] {
+  background: var(--hud-panel-deep);
+  border: 1px solid #526660;
+  border-radius: 0.45rem;
+  box-sizing: border-box;
+  color: var(--hud-ink);
+  font: inherit;
+  min-height: 2.5rem;
+  min-width: 0;
+  padding: 0.55rem 0.7rem;
+  width: 11rem;
+}
+
+.hud-console button:focus-visible,
+.hud-console a:focus-visible,
+.hud-console input:focus-visible,
+.hud-console select:focus-visible,
+.hud-console textarea:focus-visible {
+  outline: 3px solid var(--hud-cyan);
+  outline-offset: 3px;
 }
 
 .hud-console__color-row input {

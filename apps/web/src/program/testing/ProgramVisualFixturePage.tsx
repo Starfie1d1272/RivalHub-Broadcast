@@ -13,7 +13,7 @@ export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: st
 
   return (
     <ProgramCanvas>
-      <GameplayHud mode="program" resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
+      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
       <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
     </ProgramCanvas>
   );

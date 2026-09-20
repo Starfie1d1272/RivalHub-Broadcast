@@ -15,35 +15,50 @@
   box-shadow: 0 14px 30px rgb(0 0 0 / 0.14);
   display: grid;
   place-items: center;
-  pointer-events: auto;
+  pointer-events: none;
   position: absolute;
 }
 
-.gameplay-hud--program .gameplay-hud__widget {
-  border-color: transparent;
-  opacity: 0;
+.hud-editor-overlay {
+  height: 1080px;
+  inset: 0;
+  pointer-events: none;
+  position: absolute;
+  width: 1920px;
 }
 
-.gameplay-hud--editor .gameplay-hud__widget {
+.hud-editor-overlay__widget {
   background: color-mix(in srgb, var(--rh-hud-brand) 10%, var(--rh-hud-surface));
   border-color: color-mix(in srgb, var(--rh-hud-brand) 56%, transparent);
   cursor: grab;
+  color: inherit;
+  font: inherit;
   outline: 1px dashed rgb(255 255 255 / 0.18);
   outline-offset: 5px;
+  padding: 0;
+  pointer-events: auto;
+  place-items: center;
+  display: grid;
+  position: absolute;
 }
 
-.gameplay-hud--editor .gameplay-hud__widget:active {
+.hud-editor-overlay__widget:active {
   cursor: grabbing;
 }
 
-.gameplay-hud__widget.is-selected {
+.hud-editor-overlay__widget.is-selected {
   border-color: var(--rh-hud-brand);
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--rh-hud-brand) 24%, transparent),
     0 18px 40px rgb(0 0 0 / 0.2);
 }
 
-.gameplay-hud__widget-label {
+.hud-editor-overlay__widget:focus-visible {
+  outline: 3px solid var(--rh-hud-side-ct);
+  outline-offset: 5px;
+}
+
+.hud-editor-overlay__widget-label {
   color: var(--rh-hud-text);
   font-size: 22px;
   font-weight: 600;
@@ -51,7 +66,7 @@
   pointer-events: none;
 }
 
-.gameplay-hud__resize-handle {
+.hud-editor-overlay__resize-handle {
   background: var(--rh-hud-brand);
   border: 2px solid var(--rh-hud-surface-strong);
   border-radius: 50%;
@@ -61,11 +76,10 @@
   padding: 0;
   pointer-events: auto;
   position: absolute;
-  right: -10px;
   width: 20px;
 }
 
-.gameplay-hud__resize-handle:focus-visible {
+.hud-editor-overlay__resize-handle:focus-visible {
   outline: 3px solid var(--rh-hud-side-ct);
   outline-offset: 3px;
 }

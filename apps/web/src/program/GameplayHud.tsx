@@ -1,41 +1,20 @@
-import type { CSSProperties, PointerEvent } from 'react';
+import type { CSSProperties } from 'react';
 
 import {
   HUD_WIDGET_REGISTRY,
   placementToBox,
   type HudResolvedPreset,
-  type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
-import type { LocalChannelConnectionState } from '../realtime';
-
 import './gameplay-hud.css';
-
-export type GameplayHudMode = 'program' | 'editor';
 
 export interface GameplayHudProps {
   readonly snapshot: ProgramSnapshot | null;
   readonly resolvedPreset: HudResolvedPreset;
-  readonly mode: GameplayHudMode;
-  readonly connectionState?: LocalChannelConnectionState | undefined;
-  readonly selectedWidgetId?: HudWidgetId | null;
-  readonly onWidgetPointerDown?:
-    ((widgetId: HudWidgetId, event: PointerEvent<HTMLDivElement>) => void) | undefined;
-  readonly onRadarResizePointerDown?:
-    ((event: PointerEvent<HTMLButtonElement>) => void) | undefined;
 }
 
-function canRenderProgram(
-  snapshot: ProgramSnapshot | null,
-  connectionState: LocalChannelConnectionState | undefined,
-): boolean {
-  if (snapshot === null || snapshot.payload.status.telemetry !== 'fresh') return false;
-  if (connectionState === undefined) return true;
-  return connectionState === 'live';
-}
-
-function themeStyle(theme: HudResolvedPreset['theme']): CSSProperties {
+export function themeStyle(theme: HudResolvedPreset['theme']): CSSProperties {
   return {
     '--rh-hud-brand': theme.brandColor,
     '--rh-hud-text': theme.semantic.colors.textPrimary,
@@ -50,20 +29,12 @@ function themeStyle(theme: HudResolvedPreset['theme']): CSSProperties {
   } as CSSProperties;
 }
 
-export function GameplayHud({
-  snapshot,
-  resolvedPreset,
-  mode,
-  connectionState,
-  selectedWidgetId = null,
-  onWidgetPointerDown,
-  onRadarResizePointerDown,
-}: GameplayHudProps) {
-  if (mode === 'program' && !canRenderProgram(snapshot, connectionState)) return null;
+export function GameplayHud({ snapshot, resolvedPreset }: GameplayHudProps) {
+  if (snapshot === null || snapshot.payload.status.telemetry !== 'fresh') return null;
 
   return (
     <div
-      className={`gameplay-hud gameplay-hud--${mode}`}
+      className="gameplay-hud"
       data-gameplay-hud="true"
       data-hud-preset-id={resolvedPreset.preset.id}
       style={themeStyle(resolvedPreset.theme)}
@@ -71,42 +42,21 @@ export function GameplayHud({
       {HUD_WIDGET_REGISTRY.map((descriptor) => {
         const placement = resolvedPreset.layout.widgets[descriptor.id];
         if (placement === undefined || !placement.visible) return null;
-        if (mode === 'program' && descriptor.rendererAvailability === 'unimplemented') return null;
+        if (descriptor.rendererAvailability === 'unimplemented') return null;
         const box = placementToBox(descriptor.id, placement);
-        const selected = selectedWidgetId === descriptor.id;
         return (
           <div
-            aria-label={mode === 'editor' ? `${descriptor.label}，可拖动` : undefined}
-            className={`gameplay-hud__widget${selected ? ' is-selected' : ''}`}
+            className="gameplay-hud__widget"
             data-hud-widget={descriptor.id}
             data-renderer-availability={descriptor.rendererAvailability}
             key={descriptor.id}
-            onPointerDown={
-              mode === 'editor' && onWidgetPointerDown === undefined
-                ? undefined
-                : (event) => onWidgetPointerDown?.(descriptor.id, event)
-            }
             style={{
               height: `${box.height}px`,
               left: `${box.left}px`,
               top: `${box.top}px`,
               width: `${box.width}px`,
             }}
-          >
-            {mode === 'editor' ? (
-              <>
-                <span className="gameplay-hud__widget-label">{descriptor.label}</span>
-                {descriptor.id === 'radar' && selected ? (
-                  <button
-                    aria-label="调整雷达大小"
-                    className="gameplay-hud__resize-handle"
-                    onPointerDown={onRadarResizePointerDown}
-                    type="button"
-                  />
-                ) : null}
-              </>
-            ) : null}
-          </div>
+          />
         );
       })}
     </div>

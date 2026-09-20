@@ -1,5 +1,11 @@
 import { z } from 'zod';
 
+import { canonicalJson } from './canonical-json.js';
+import { resolveHudThemeRecipe } from './theme-recipe.js';
+
+export { canonicalJson } from './canonical-json.js';
+export { HUD_THEME_RECIPE_REGISTRY } from './theme-recipe.js';
+
 export const HUD_CONFIG_SCHEMA_VERSION = 1 as const;
 export const HUD_CANVAS_WIDTH = 1920 as const;
 export const HUD_CANVAS_HEIGHT = 1080 as const;
@@ -91,11 +97,12 @@ export const hudThemeSchema = z
 export const hudWidgetSettingsSchema = z
   .object({
     variant: z.literal('default'),
-    settings: z.object({}).strict(),
+    settings: z.record(z.string(), z.unknown()),
   })
   .strict();
 
 const widgetSettingsRecordSchema = z.record(z.string(), hudWidgetSettingsSchema);
+const emptyWidgetSettingsSchema = z.object({}).strict();
 
 export const hudPresetSchema = z
   .object({
@@ -141,6 +148,14 @@ export interface HudResolvedTheme extends HudTheme {
     readonly radius: HudSemanticRadius;
     readonly fontFamily: 'Inter';
   };
+}
+
+export interface HudThemeRecipe {
+  readonly id: string;
+  readonly colors: HudSemanticColors;
+  readonly surfaces: Record<HudPanelStyle, HudSemanticSurface>;
+  readonly radii: Record<HudCornerStyle, HudSemanticRadius>;
+  readonly fontFamily: 'Inter';
 }
 
 export interface HudLayout extends z.infer<typeof hudLayoutSchema> {
@@ -267,6 +282,8 @@ export interface HudWidgetDescriptor {
   readonly defaultVariant: 'default';
   readonly resizePolicy: HudResizePolicy;
   readonly defaultPlacement: HudWidgetPlacement;
+  /** Registry-owned seam for future widget variants and settings. */
+  readonly validateSettings: (value: unknown) => Record<string, unknown>;
 }
 
 export interface HudWidgetBox {
@@ -307,7 +324,7 @@ const DEFAULT_PLACEMENTS: Record<HudWidgetId, HudWidgetPlacement> = {
   'round-result': { visible: true, anchor: 'center', offsetX: 0, offsetY: 210 },
 };
 
-const WIDGET_LABELS: Record<HudWidgetId, string> = {
+export const HUD_WIDGET_LABELS: Record<HudWidgetId, string> = {
   'top-score-bar': '顶部比分条',
   'team-ct-rail': 'CT 选手栏',
   'team-t-rail': 'T 选手栏',
@@ -315,7 +332,7 @@ const WIDGET_LABELS: Record<HudWidgetId, string> = {
   'focused-player': '当前观察选手',
   'series-strip': '系列赛信息',
   'round-history': '回合历史',
-  objective: 'Objective',
+  objective: '目标状态',
   'round-result': '回合结果',
 };
 
@@ -362,6 +379,7 @@ export function parseHudLayout(value: unknown): HudLayout {
     if (id === 'radar' && placement.size === undefined) {
       throw new Error('Radar 必须显式保存正方形尺寸');
     }
+    validatePlacementWithinCanvas(id, placement);
   }
   return parsed;
 }
@@ -370,6 +388,11 @@ export function parseHudPreset(value: unknown): HudPreset {
   const parsed = hudPresetSchema.parse(value);
   if (!hasExactWidgetKeys(parsed.widgets))
     throw new Error('HudPreset 必须完整包含第一版组件 Registry');
+  for (const id of HUD_WIDGET_IDS) {
+    const settings = parsed.widgets[id];
+    if (settings === undefined) throw new Error(`HudPreset 缺少组件设置：${id}`);
+    getHudWidgetDescriptor(id).validateSettings(settings.settings);
+  }
   return parsed;
 }
 
@@ -378,7 +401,34 @@ export function parseHudResolvedPreset(value: unknown): HudResolvedPreset {
   if (!hasExactWidgetKeys(parsed.widgets)) {
     throw new Error('HudResolvedPreset 必须完整包含第一版组件 Registry');
   }
-  return parsed;
+  const layout = parseHudLayout(parsed.layout);
+  if (parsed.preset.layoutId !== layout.id) {
+    throw new Error('HudResolvedPreset 的 layoutId 与布局 ID 不一致');
+  }
+  if (parsed.preset.themeId !== parsed.theme.id) {
+    throw new Error('HudResolvedPreset 的 themeId 与外观 ID 不一致');
+  }
+  const theme = hudThemeSchema.parse({
+    schemaVersion: parsed.theme.schemaVersion,
+    id: parsed.theme.id,
+    name: parsed.theme.name,
+    brandColor: parsed.theme.brandColor,
+    panelStyle: parsed.theme.panelStyle,
+    cornerStyle: parsed.theme.cornerStyle,
+  });
+  const preset = parseHudPreset({
+    schemaVersion: parsed.schemaVersion,
+    id: parsed.preset.id,
+    name: parsed.preset.name,
+    layoutId: parsed.preset.layoutId,
+    themeId: parsed.preset.themeId,
+    widgets: parsed.widgets,
+  });
+  const expected = resolveHudPreset(preset, layout, theme);
+  if (canonicalJson(parsed) !== canonicalJson(expected)) {
+    throw new Error('HudResolvedPreset 的 resolved snapshot 与基础资源不一致');
+  }
+  return expected;
 }
 
 function assertUniqueCustomIds<T extends { readonly id: string }>(
@@ -419,7 +469,10 @@ export function parseHudConfigDocument(value: unknown): HudConfigDocument {
     if (!presetIds.has(parsed.activePreset.sourceId)) {
       throw new Error(`activePreset 引用不存在的预设：${parsed.activePreset.sourceId}`);
     }
-    parseHudResolvedPreset(parsed.activePreset.snapshot);
+    const snapshot = parseHudResolvedPreset(parsed.activePreset.snapshot);
+    if (parsed.activePreset.sourceId !== snapshot.preset.id) {
+      throw new Error('activePreset.sourceId 与 resolved snapshot 的 preset.id 不一致');
+    }
   }
   return {
     ...parsed,
@@ -432,12 +485,13 @@ export function parseHudConfigDocument(value: unknown): HudConfigDocument {
 export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
   HUD_WIDGET_IDS.map((id) => ({
     id,
-    label: WIDGET_LABELS[id],
+    label: HUD_WIDGET_LABELS[id],
     rendererAvailability: 'unimplemented' as const,
     supportedVariants: ['default'] as const,
     defaultVariant: 'default' as const,
     resizePolicy: id === 'radar' ? ('square' as const) : ('none' as const),
     defaultPlacement: cloneJson(DEFAULT_PLACEMENTS[id]),
+    validateSettings: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
   })),
 );
 
@@ -466,14 +520,14 @@ export function getBuiltinResolvedPreset(): HudResolvedPreset {
 const BUILTIN_LAYOUT: HudLayout = deepFreeze({
   schemaVersion: HUD_CONFIG_SCHEMA_VERSION,
   id: BUILTIN_LAYOUT_ID,
-  name: 'RivalHub Default Layout',
+  name: 'RivalHub 默认布局',
   widgets: completeWidgetRecord((id) => cloneJson(DEFAULT_PLACEMENTS[id])),
 });
 
 const BUILTIN_THEME: HudTheme = deepFreeze({
   schemaVersion: HUD_CONFIG_SCHEMA_VERSION,
   id: BUILTIN_THEME_ID,
-  name: 'RivalHub Default',
+  name: 'RivalHub 默认外观',
   brandColor: '#c8ef78',
   panelStyle: 'standard',
   cornerStyle: 'soft',
@@ -482,7 +536,7 @@ const BUILTIN_THEME: HudTheme = deepFreeze({
 const BUILTIN_PRESET: HudPreset = deepFreeze({
   schemaVersion: HUD_CONFIG_SCHEMA_VERSION,
   id: BUILTIN_PRESET_ID,
-  name: 'RivalHub Default Preset',
+  name: 'RivalHub 默认预设',
   layoutId: BUILTIN_LAYOUT_ID,
   themeId: BUILTIN_THEME_ID,
   widgets: completeWidgetRecord(() => ({ variant: 'default', settings: {} })),
@@ -499,36 +553,7 @@ export function createDefaultHudConfigDocument(): HudConfigDocument {
 }
 
 export function resolveHudTheme(theme: HudTheme): HudResolvedTheme {
-  const surface = {
-    solid: { primary: '#10151d', strong: '#080c12', opacity: 0.98, borderOpacity: 0.28 },
-    standard: { primary: '#111923', strong: '#0b1119', opacity: 0.88, borderOpacity: 0.18 },
-    light: { primary: '#17222d', strong: '#111a22', opacity: 0.7, borderOpacity: 0.14 },
-  }[theme.panelStyle];
-  const radius = {
-    square: { sm: 0, md: 0, lg: 0 },
-    soft: { sm: 4, md: 8, lg: 12 },
-    rounded: { sm: 8, md: 14, lg: 22 },
-  }[theme.cornerStyle];
-  return {
-    ...cloneJson(theme),
-    semantic: {
-      colors: {
-        textPrimary: '#f3f6fa',
-        textMuted: '#aab4c0',
-        sideCt: '#6aa8ff',
-        sideT: '#f2bd4f',
-        stateDanger: '#f06f6f',
-        stateWarning: '#f3bd68',
-        stateSuccess: '#c8ef78',
-        stateUnknown: '#8d9aaa',
-        objectiveBomb: '#f06f6f',
-        objectiveDefuse: '#83d8e8',
-      },
-      surface,
-      radius,
-      fontFamily: 'Inter',
-    },
-  };
+  return resolveHudThemeRecipe(theme, BUILTIN_THEME_ID);
 }
 
 export function resolveHudPreset(
@@ -560,16 +585,6 @@ export function resolveActiveHudPreset(document: HudConfigDocument): HudResolved
   const parsed = parseHudConfigDocument(document);
   if (parsed.activePreset.kind === 'custom') return cloneJson(parsed.activePreset.snapshot);
   return getBuiltinResolvedPreset();
-}
-
-export function canonicalJson(value: unknown): string {
-  if (value === null || typeof value !== 'object') return JSON.stringify(value);
-  if (Array.isArray(value)) return `[${value.map((item) => canonicalJson(item)).join(',')}]`;
-  const object = value as Record<string, unknown>;
-  return `{${Object.keys(object)
-    .sort()
-    .map((key) => `${JSON.stringify(key)}:${canonicalJson(object[key])}`)
-    .join(',')}}`;
 }
 
 export function getWidgetDimensions(
@@ -610,16 +625,37 @@ function anchorAlignment(anchor: HudAnchor): { readonly x: number; readonly y: n
   }[anchor];
 }
 
-export function placementToBox(id: HudWidgetId, placement: HudWidgetPlacement): HudWidgetBox {
+function placementToUnclampedBox(id: HudWidgetId, placement: HudWidgetPlacement): HudWidgetBox {
   const dimensions = getWidgetDimensions(id, placement);
   const point = anchorPoint(placement.anchor);
   const alignment = anchorAlignment(placement.anchor);
-  return clampWidgetBox({
+  return {
     left: point.x + placement.offsetX - dimensions.width * alignment.x,
     top: point.y + placement.offsetY - dimensions.height * alignment.y,
     width: dimensions.width,
     height: dimensions.height,
-  });
+  };
+}
+
+export function placementToBox(id: HudWidgetId, placement: HudWidgetPlacement): HudWidgetBox {
+  return clampWidgetBox(placementToUnclampedBox(id, placement));
+}
+
+export function validatePlacementWithinCanvas(
+  id: HudWidgetId,
+  placement: HudWidgetPlacement,
+): HudWidgetBox {
+  const box = placementToUnclampedBox(id, placement);
+  const clamped = clampWidgetBox(box);
+  if (
+    box.left !== clamped.left ||
+    box.top !== clamped.top ||
+    box.width !== clamped.width ||
+    box.height !== clamped.height
+  ) {
+    throw new Error(`组件 ${id} 的位置或尺寸超出 1920 × 1080 画布边界`);
+  }
+  return box;
 }
 
 function offsetForBox(
@@ -662,6 +698,21 @@ export function placementFromBox(
   };
 }
 
+/** UI drafts use this canonicalizer before persistence so the saved placement matches its box. */
+export function normalizeHudPlacement(
+  id: HudWidgetId,
+  placement: HudWidgetPlacement,
+): HudWidgetPlacement {
+  return placementFromBox(id, placement, placementToBox(id, placement));
+}
+
+export function normalizeHudLayout(layout: HudLayout): HudLayout {
+  return {
+    ...cloneJson(layout),
+    widgets: completeWidgetRecord((id) => normalizeHudPlacement(id, layout.widgets[id])),
+  };
+}
+
 export function snapToGrid(value: number, grid = HUD_GRID_SIZE): number {
   return Math.round(value / grid) * grid;
 }
@@ -685,10 +736,12 @@ export function moveWidgetPlacement(
 export function resizeRadarPlacement(
   placement: HudWidgetPlacement,
   delta: number,
+  snap = true,
 ): HudWidgetPlacement {
   if (placement.size === undefined) throw new Error('Radar placement 缺少 square size');
   const current = placementToBox('radar', placement);
-  const size = Math.max(160, Math.min(640, snapToGrid(current.width + delta)));
+  const nextSize = current.width + delta;
+  const size = Math.max(160, Math.min(640, snap ? snapToGrid(nextSize) : nextSize));
   return placementFromBox('radar', placement, { ...current, width: size, height: size });
 }
 

@@ -1,13 +1,10 @@
-import { timingSafeEqual } from 'node:crypto';
-
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { checkLocalWebOrigin, type LocalWebOriginPolicy } from '../local-web/origin-policy.js';
 import { HudConfigStore, type HudResourceKind } from './store.js';
 
 export interface HudConfigControllerOptions {
   readonly store: HudConfigStore;
-  readonly controlToken?: string;
   readonly originPolicy: LocalWebOriginPolicy;
 }
 
@@ -15,27 +12,12 @@ function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-function tokenMatches(request: FastifyRequest, expected: string): boolean {
-  const header = request.headers['x-operator-token'];
-  const authorization = request.headers.authorization;
-  const provided =
-    typeof header === 'string'
-      ? header
-      : typeof authorization === 'string' && authorization.startsWith('Bearer ')
-        ? authorization.slice('Bearer '.length)
-        : undefined;
-  if (provided === undefined) return false;
-  const actual = Buffer.from(provided, 'utf8');
-  const expectedBytes = Buffer.from(expected, 'utf8');
-  return actual.length === expectedBytes.length && timingSafeEqual(actual, expectedBytes);
-}
-
-function unauthorized(reply: FastifyReply): void {
-  void reply.code(401).send({ error: 'operator_unauthorized' });
-}
-
 function originForbidden(reply: FastifyReply): void {
   void reply.code(403).send({ error: 'operator_origin_forbidden' });
+}
+
+function mutationUnavailableOnLan(reply: FastifyReply): void {
+  void reply.code(403).send({ error: 'operator_mutation_loopback_only' });
 }
 
 function resourceKind(value: unknown): HudResourceKind | undefined {
@@ -59,18 +41,13 @@ export function registerHudConfigRoutes(
     return reply.code(200).send(responseBody(options.store));
   });
 
-  if (options.controlToken === undefined) return;
-  if (options.controlToken.trim().length === 0) {
-    throw new Error('设置 operatorControlToken 时必须为非空值');
-  }
-
   app.post('/operator/hud-config', async (request, reply) => {
-    if (!checkLocalWebOrigin(options.originPolicy, request.headers.origin).allowed) {
-      originForbidden(reply);
+    if (options.originPolicy.mode !== 'loopback') {
+      mutationUnavailableOnLan(reply);
       return;
     }
-    if (!tokenMatches(request, options.controlToken!)) {
-      unauthorized(reply);
+    if (!checkLocalWebOrigin(options.originPolicy, request.headers.origin).allowed) {
+      originForbidden(reply);
       return;
     }
 

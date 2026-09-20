@@ -90,6 +90,17 @@ export class HudConfigClient {
     for (const listener of this.listeners) listener();
   }
 
+  applyResponse = (response: HudConfigResponse): void => {
+    this.update({
+      status: 'ready',
+      current: response.resolved,
+      document: response.document,
+      etag: response.etag,
+      activationStale: response.activationStale,
+      error: null,
+    });
+  };
+
   private schedule(): void {
     if (!this.running || this.timer !== undefined) return;
     this.timer = window.setTimeout(() => {
@@ -110,14 +121,7 @@ export class HudConfigClient {
       } else {
         if (!response.ok) throw new Error(`本地制播服务返回 HTTP ${response.status}`);
         const parsed = parseResponse(await response.json());
-        this.update({
-          status: 'ready',
-          current: parsed.resolved,
-          document: parsed.document,
-          etag: parsed.etag,
-          activationStale: parsed.activationStale,
-          error: null,
-        });
+        this.applyResponse(parsed);
       }
     } catch (error: unknown) {
       this.update({
@@ -131,14 +135,19 @@ export class HudConfigClient {
   }
 }
 
-export function useHudConfigClient(enabled = true): HudConfigClientSnapshot {
+export type HudConfigClientView = HudConfigClientSnapshot & {
+  readonly applyResponse: (response: HudConfigResponse) => void;
+};
+
+export function useHudConfigClient(enabled = true): HudConfigClientView {
   const client = useMemo(() => new HudConfigClient(), []);
   useEffect(() => {
     if (!enabled) return;
     client.start();
     return () => client.stop();
   }, [client, enabled]);
-  return useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  return useMemo(() => ({ ...snapshot, applyResponse: client.applyResponse }), [client, snapshot]);
 }
 
 export interface HudConfigMutation {
@@ -148,16 +157,12 @@ export interface HudConfigMutation {
   readonly sourceId?: string;
 }
 
-export async function mutateHudConfig(
-  token: string,
-  command: HudConfigMutation,
-): Promise<HudConfigResponse> {
+export async function mutateHudConfig(command: HudConfigMutation): Promise<HudConfigResponse> {
   const response = await fetch('/operator/hud-config', {
     method: 'POST',
     headers: {
       Accept: 'application/json',
       'Content-Type': 'application/json',
-      'x-operator-token': token,
     },
     body: JSON.stringify(command),
   });

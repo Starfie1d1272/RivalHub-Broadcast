@@ -10,10 +10,7 @@ import {
 import { buildApp } from '../src/app.js';
 import { HudConfigStore } from '../src/hud-config/store.js';
 
-const OPERATOR_HEADERS = {
-  origin: 'http://127.0.0.1',
-  'x-operator-token': 'operator-secret',
-};
+const LOCAL_MUTATION_HEADERS = { origin: 'http://127.0.0.1' };
 
 interface HudStateBody {
   readonly document: HudConfigDocument;
@@ -38,7 +35,6 @@ describe('HUD config control plane', () => {
   it('serves the resolved preset with conditional ETag polling', async () => {
     app = buildApp({
       hudConfigStore: new HudConfigStore(),
-      operatorControlToken: 'operator-secret',
     });
 
     const first = await app.inject({ method: 'GET', url: '/local/v1/hud-config' });
@@ -58,29 +54,51 @@ describe('HUD config control plane', () => {
     expect(notModified.headers.etag).toBe(first.headers.etag);
   });
 
-  it('requires both local origin and operator token for mutations', async () => {
-    app = buildApp({ operatorControlToken: 'operator-secret' });
+  it('requires a valid local origin and rejects mutations in LAN mode', async () => {
+    app = buildApp();
     const value = { ...getBuiltinTheme(), id: 'draft-theme', name: '现场外观' };
 
     const noOrigin = await app.inject({
       method: 'POST',
       url: '/operator/hud-config',
-      headers: { 'x-operator-token': 'operator-secret' },
       payload: { kind: 'save-as', resource: 'theme', value },
     });
     expect(noOrigin.statusCode).toBe(403);
 
-    const wrongToken = await app.inject({
+    const invalidOrigin = await app.inject({
       method: 'POST',
       url: '/operator/hud-config',
-      headers: { origin: 'http://127.0.0.1', 'x-operator-token': 'wrong' },
+      headers: { origin: 'https://remote.example' },
       payload: { kind: 'save-as', resource: 'theme', value },
     });
-    expect(wrongToken.statusCode).toBe(401);
+    expect(invalidOrigin.statusCode).toBe(403);
+
+    const saved = await app.inject({
+      method: 'POST',
+      url: '/operator/hud-config',
+      headers: LOCAL_MUTATION_HEADERS,
+      payload: { kind: 'save-as', resource: 'theme', value },
+    });
+    expect(saved.statusCode).toBe(200);
+
+    await app.close();
+    app = buildApp({
+      host: '192.168.1.20',
+      localWebLanMode: true,
+      localWebAllowedOrigins: ['http://caster-pc:4173'],
+    });
+    const lanMutation = await app.inject({
+      method: 'POST',
+      url: '/operator/hud-config',
+      headers: { origin: 'http://caster-pc:4173' },
+      payload: { kind: 'save-as', resource: 'theme', value },
+    });
+    expect(lanMutation.statusCode).toBe(403);
+    expect(lanMutation.json()).toEqual({ error: 'operator_mutation_loopback_only' });
   });
 
   it('keeps save and activate as separate mutations', async () => {
-    app = buildApp({ operatorControlToken: 'operator-secret' });
+    app = buildApp();
     const initial = await app.inject({ method: 'GET', url: '/local/v1/hud-config' });
     const initialEtag = initial.headers.etag;
     const preset = { ...getBuiltinPreset(), id: 'draft-preset', name: '现场预设' };
@@ -88,7 +106,7 @@ describe('HUD config control plane', () => {
     const saved = await app.inject({
       method: 'POST',
       url: '/operator/hud-config',
-      headers: OPERATOR_HEADERS,
+      headers: LOCAL_MUTATION_HEADERS,
       payload: { kind: 'save-as', resource: 'preset', value: preset },
     });
     expect(saved.statusCode).toBe(200);
@@ -101,7 +119,7 @@ describe('HUD config control plane', () => {
     const activated = await app.inject({
       method: 'POST',
       url: '/operator/hud-config',
-      headers: OPERATOR_HEADERS,
+      headers: LOCAL_MUTATION_HEADERS,
       payload: { kind: 'activate-preset', sourceId: customPreset.id },
     });
     expect(activated.statusCode).toBe(200);
@@ -115,7 +133,7 @@ describe('HUD config control plane', () => {
     const repeated = await app.inject({
       method: 'POST',
       url: '/operator/hud-config',
-      headers: OPERATOR_HEADERS,
+      headers: LOCAL_MUTATION_HEADERS,
       payload: { kind: 'activate-preset', sourceId: customPreset.id },
     });
     const repeatedBody = parseHudStateBody(repeated.json());

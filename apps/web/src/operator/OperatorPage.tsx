@@ -46,7 +46,6 @@ export function OperatorPage() {
   const connection = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   const snapshot = connection.current;
   const series = snapshot?.payload.seriesProgress ?? null;
-  const [token, setToken] = useState('');
   const [mapOrder, setMapOrder] = useState('1');
   const [reason, setReason] = useState('');
   const [commandState, setCommandState] = useState<string | null>(null);
@@ -62,7 +61,6 @@ export function OperatorPage() {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'x-operator-token': token,
         },
         body: JSON.stringify({
           kind: 'bind-current-map-execution-to-series-map',
@@ -162,16 +160,6 @@ export function OperatorPage() {
           <span>02 / OperatorCommand</span>
           <h2>绑定当前地图执行</h2>
         </header>
-        <label>
-          Operator token
-          <input
-            autoComplete="current-password"
-            onChange={(event) => setToken(event.target.value)}
-            required
-            type="password"
-            value={token}
-          />
-        </label>
         <label>
           计划地图序号
           <input

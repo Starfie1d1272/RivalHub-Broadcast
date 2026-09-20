@@ -158,6 +158,7 @@ function ProgramRoute() {
       <ProgramPage
         connectionState={programConnection.state}
         resolvedPreset={hudConfig.current}
+        reset={programConnection.reset}
         snapshot={programConnection.current}
       />
     </>

@@ -73,7 +73,6 @@ export interface CompanionAppOptions {
   readonly clock?: GsiClock;
   readonly qualificationMode?: boolean;
   readonly qualificationControlToken?: string;
-  readonly operatorControlToken?: string;
   readonly hudConfigPath?: string;
   readonly hudConfigStore?: HudConfigStore;
   readonly qualificationRunId?: string;
@@ -200,9 +199,6 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   registerLocalWebSocketTransport(app, localWebTransport);
   registerHudConfigRoutes(app, {
     store: hudConfigStore,
-    ...(options.operatorControlToken === undefined
-      ? {}
-      : { controlToken: options.operatorControlToken }),
     originPolicy: localWebTransport.getOriginPolicy(),
   });
   const qualificationMode = options.qualificationMode ?? false;
@@ -314,16 +310,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     registerQualificationRoutes(app, qualificationOptions);
   }
 
-  if (options.operatorControlToken !== undefined) {
-    if (options.operatorControlToken.trim().length === 0) {
-      throw new Error('设置 operatorControlToken 时必须为非空值');
-    }
-    registerOperatorCommandRoutes(app, {
-      controlToken: options.operatorControlToken,
-      originPolicy: localWebTransport.getOriginPolicy(),
-      execute: (command) => projectionCoordinator.executeOperatorCommand(command),
-    });
-  }
+  registerOperatorCommandRoutes(app, {
+    originPolicy: localWebTransport.getOriginPolicy(),
+    execute: (command) => projectionCoordinator.executeOperatorCommand(command),
+  });
 
   app.addHook('onClose', async () => {
     await Promise.all([

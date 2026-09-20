@@ -145,6 +145,8 @@ pnpm qualification:verify <evidence-dir-or-zip>
 
 具体 PR 由 planner 选择子集；手工排查时可直接运行需要的完整命令。
 
+HUD 控制台的视觉回归必须同时检查测试场景选择、当前实时来源不可用时的 fail-closed 状态、编辑层拖动/尺寸控件、品牌色十六进制输入以及正式节目路由不包含编辑辅助层；截图断言使用仓库已有的 Darwin/Linux 平台基线。视觉测试中的 fixture 不是生产 telemetry，也不能作为当前实时来源失效时的 fallback。
+
 ## 5. Windows + CS2 现场验收包
 
 真实 CS2 输入使用绑定 exact git SHA 的便携式 Windows 验收包。目标机不需要安装 Git、pnpm 或 Node，也不在现场改代码。
