@@ -413,6 +413,7 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
   let missingSpan;
   let plantedExplosionAnchor;
   let firstObjectiveState;
+  let defuseAbortPending = false;
   let defuseRestartObserved = false;
 
   for await (const frame of iterateCaptureFrames(captureDir)) {
@@ -454,7 +455,13 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
           previousFrame.state === 'defusing' &&
           ['planted', 'carried', 'dropped', 'unknown'].includes(bomb.state)
         ) {
+          defuseAbortPending = true;
+        } else if (bomb.state === 'defusing' && defuseAbortPending) {
           defuseRestartObserved = true;
+          defuseAbortPending = false;
+        }
+        if (['defused', 'exploded', 'planting'].includes(bomb.state)) {
+          defuseAbortPending = false;
         }
 
         const kind = terminalKind(previousFrame.state, bomb.state);
@@ -496,11 +503,11 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       pendingCountTransition = active
         ? { from: previousFrame?.state ?? null, to: bomb.state, atMs: elapsedMs }
         : undefined;
-      if (!active && bomb.state !== 'defusing') {
-        plantedExplosionAnchor = undefined;
-      }
     }
 
+    if (bomb.state !== 'planted' && bomb.state !== 'defusing') {
+      plantedExplosionAnchor = undefined;
+    }
     if (bomb.state === 'planted' && bomb.countdownSeconds !== undefined) {
       plantedExplosionAnchor = {
         remainingMs: bomb.countdownSeconds * 1_000,
