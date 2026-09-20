@@ -546,7 +546,12 @@ function projectBomb(
             : null,
           durationSeconds: null,
         };
-  const remainingSeconds = objectiveClockLive ? finiteNonNegative(bomb.countdownSeconds) : null;
+  const remainingSeconds =
+    objectiveClockLive && lastAccepted !== null && bomb.countdownSeconds !== undefined
+      ? finiteNonNegative(
+          bomb.countdownSeconds - (nowMonotonicMs - lastAccepted.receivedMonotonicMs) / 1_000,
+        )
+      : null;
 
   let action: ProgramBombActionProjection | null = null;
   switch (bomb.state ?? 'unknown') {
