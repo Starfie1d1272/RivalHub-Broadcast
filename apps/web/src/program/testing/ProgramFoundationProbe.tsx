@@ -139,7 +139,7 @@ export function ProgramFoundationProbe({
       </section>
 
       <footer className="program-foundation-probe__footer">
-        local fixture · schema {snapshot.schemaVersion} · no external assets
+        local fixture · no external assets
       </footer>
     </div>
   );
