@@ -349,6 +349,25 @@ describe('objective timing normalization', () => {
     expect(selectProgramSafeRuntimeView(state).telemetry).toBeNull();
   });
 
+  it('advances action remaining from the accepted receive monotonic time on later projections', () => {
+    let state = createInitialRuntimeState('objective-timing');
+    state = accept(
+      state,
+      observation(1, 1_000, {
+        bombState: 'defusing',
+        countdownSeconds: 5,
+        sourcePlayerId: 'defuser',
+        allPlayers: [player('defuser', true)],
+      }),
+    );
+
+    expect(project(state, 1_500).bomb?.action).toMatchObject({
+      kind: 'defuse',
+      remainingSeconds: 4.5,
+      durationSeconds: 5,
+    });
+  });
+
   it('expires numeric interpolation after the short objective-clock lease', () => {
     let state = createInitialRuntimeState('objective-timing');
     state = accept(
