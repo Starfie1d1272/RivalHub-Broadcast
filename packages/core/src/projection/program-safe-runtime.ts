@@ -1,6 +1,7 @@
 import type {
   MapPlayerStatsAccumulator,
   RuntimeContinuityPolicy,
+  RuntimeObjectiveTimingState,
   RuntimeState,
 } from '../runtime/index.js';
 import type { TelemetryObservation } from '../telemetry/observation.js';
@@ -15,6 +16,7 @@ export interface ProgramSafeRuntimeView {
     readonly receivedMonotonicMs: number;
   };
   readonly playerStats: MapPlayerStatsAccumulator;
+  readonly objectiveTiming: RuntimeObjectiveTimingState;
   readonly telemetry: TelemetryObservation | null;
 }
 
@@ -31,6 +33,7 @@ export function selectProgramSafeRuntimeView(state: RuntimeState): ProgramSafeRu
             receivedAt: currentGenerationLastAccepted.receivedAt,
             receivedMonotonicMs: currentGenerationLastAccepted.receivedMonotonicMs,
           },
+    objectiveTiming: state.objectiveTiming,
     playerStats: state.playerStats,
     telemetry:
       currentGenerationLastAccepted === undefined ? null : (state.programTelemetry ?? null),

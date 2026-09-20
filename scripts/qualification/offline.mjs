@@ -68,6 +68,7 @@ async function assertBundleSmoke(outputRoot) {
     'scripts/verify-evidence.mjs',
     'scripts/evidence/contract.mjs',
     'scripts/evidence/capture.mjs',
+    'scripts/evidence/objective-timing.mjs',
     'scripts/evidence/scenario.mjs',
     'scripts/evidence/checks.mjs',
     'scripts/evidence/integrity.mjs',

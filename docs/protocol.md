@@ -269,14 +269,14 @@ CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、sou
 delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
 `programReceiveSequence`。
 
-### 4.4 Program schema v5
+### 4.4 Program schema v6
 
 Program payload 只包含正式节目允许显示的信息：
 
 - telemetry / context / identity 状态；
 - 比赛、赛事和 BO 信息；
 - canonical 或 neutral team presentation；
-- 地图、比分、回合与时钟；
+- 地图、比分、回合与时钟；其中 `clock` 只表达 `phase_countdowns` 的 phase clock，不表达永久保留的爆炸倒计时；
 - Core 解析后的稳定 5+5 on-air player cohort；raw `allplayers` 中未进入 cohort 的 extra 不进入 Player Rails；
 - 选手显示身份和装备状态；
 - `identityEvidence: canonical | observed | unresolved`，表达 canonical identity 是否已核验；
@@ -284,8 +284,31 @@ Program payload 只包含正式节目允许显示的信息：
 - `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
 - `completedAdr`，只按已完成 counted rounds 的 damage / rounds 计算；在当前回合进行中保持稳定，尚无 counted round 时为 `null`；
 - ``lifeState: alive | dead | unknown``；
-- C4；
+- C4 的状态、爆炸时钟和当前 plant/defuse action；爆炸时钟只来自 Core 保留的 planted countdown anchor，defusing frame 的 overloaded countdown 不会覆盖它；
 - 数据覆盖状态。
+
+Program 的 `bomb` 结构为：
+
+```ts
+{
+  state: BombState | null,
+  sourcePlayerId: string | null,
+  explosion: { remainingSeconds: number | null, durationSeconds: null } | null,
+  action:
+    | { kind: "plant", sourcePlayerId: string | null,
+        remainingSeconds: number | null, durationSeconds: null }
+    | { kind: "defuse", sourcePlayerId: string | null,
+        remainingSeconds: number | null, durationSeconds: number | null,
+        hasDefuseKit: boolean | null }
+    | null
+}
+```
+
+`planting` 的 action duration 保持 `null`；`defusing` 只有当前 player evidence 明确提供
+`hasDefuser` 时才给出 5 秒或 10 秒 duration，不能用默认值猜测。没有已知 planted anchor
+时，defusing 不合成爆炸倒计时。numeric objective clock 只在短 lease 内由 Core 使用
+monotonic time 插值；lease 过期后保留语义状态但将 numeric remaining 置为 `null`。Renderer
+可以在收到的当前值之间做视觉插值，但不能在本地 retention、reconnect 或 stale 后继续推演。
 
 Program 不包含：
 
@@ -294,6 +317,7 @@ Program 不包含：
 - 地图几何；
 - identity issue 细节；
 - Raw GSI / Raw CSTV；
+- Raw GSI 的 `bomb.countdown`；它只保留在 telemetry observation，不能作为 Program wire 字段；
 - LKG metadata；
 - Lookahead / future 信息。
 
@@ -334,6 +358,7 @@ acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把
 接收方必须：
 
 - 拒绝 protocol / channel / schema version 不兼容；
+- Program v5 与 v6 不是兼容 envelope；旧 receiver 必须拒绝 v6，当前 receiver 必须拒绝 v5，不能按字段猜测版本；
 - 忽略重复或倒序 ``channelSeq``；
 - 拒绝同一 producer 下 ``runtimeSeq`` 回退；
 - 拒绝一个连接中途切换 ``producerInstanceId``；

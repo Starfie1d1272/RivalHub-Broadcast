@@ -93,13 +93,13 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
 
     expect(LOCAL_PROTOCOL_SUBPROTOCOL).toBe('rivalhub-broadcast.local.v1');
     expect(LOCAL_PROTOCOL_VERSION).toBe(1);
-    expect(PROGRAM_SCHEMA_VERSION).toBe(5);
+    expect(PROGRAM_SCHEMA_VERSION).toBe(6);
     expect(parsed.channel).toBe('program');
     expect(parsed).not.toHaveProperty('lookahead');
     expect(parsed.payload).not.toHaveProperty('futureCue');
   });
 
-  it('requires the Program v5 series, player evidence, ADR views, and life state fields', () => {
+  it('requires the Program v6 series, player evidence, ADR views, and life state fields', () => {
     const player = {
       sourcePlayerId: 'player-1',
       canonicalPlayerId: null,
@@ -147,6 +147,15 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
         }),
       ).toThrow();
     }
+  });
+
+  it('fails closed on the retired Program v5 envelope', () => {
+    expect(() =>
+      programSnapshotSchema.parse({
+        ...snapshot(1),
+        schemaVersion: 5,
+      }),
+    ).toThrow();
   });
 
   it('accepts monotonic snapshots, ignores duplicates, and emits epoch reset signals', () => {

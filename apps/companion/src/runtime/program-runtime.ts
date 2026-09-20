@@ -32,6 +32,7 @@ import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
 export const PROGRAM_RUNTIME_RECENT_TRANSITIONS_MAX = 32;
 export const PRODUCTION_RUNTIME_CONTINUITY_POLICY: RuntimeContinuityPolicy = Object.freeze({
   staleAfterMs: 20_000,
+  objectiveClockLeaseMs: 1_000,
 });
 
 export interface ProgramRuntimeOptions {

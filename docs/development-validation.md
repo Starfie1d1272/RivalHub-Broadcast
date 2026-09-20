@@ -24,6 +24,7 @@
 任意开发机和 CI 都应尽量覆盖：
 
 - RuntimeState / RuntimeTransition；
+- objective clock anchor、map/source reset、defuse kit evidence 与 short-lease expiry；
 - identity / session / map epoch；
 - source continuity；
 - Program / Assist non-leak；
@@ -58,6 +59,8 @@ Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromi
 - GSI cfg 安装与发现；
 - observer payload；
 - update cadence；
+- planting / planted / defusing overloaded countdown semantics；
+- objective timing qualification report 与真实 Capture V1 cadence / residual evidence；
 - 回合与地图生命周期；
 - stale / reconnect；
 - source generation；
@@ -139,6 +142,7 @@ pnpm local-web:production-smoke
 ```text
 pnpm qualification:build
 pnpm qualification:offline
+pnpm qualification:objective-timing <capture-dir>
 pnpm qualification:verify <evidence-dir-or-zip>
 ```
 

@@ -20,6 +20,7 @@
     "typecheck": "pnpm --recursive --sort run typecheck && tsc -p tsconfig.json --noEmit",
     "qualification:build": "node scripts/qualification/build.mjs",
     "qualification:offline": "node scripts/qualification/offline.mjs",
+    "qualification:objective-timing": "node scripts/qualification/evidence/objective-timing.mjs",
     "qualification:verify": "node scripts/qualification/verify.mjs",
     "local-web:production-smoke": "node scripts/local-web-production-smoke.mjs",
     "cstv:probe": "pnpm --filter @rivalhub-broadcast/companion exec tsx src/cstv-probe.ts",

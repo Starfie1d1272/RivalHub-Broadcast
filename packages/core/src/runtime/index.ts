@@ -1,4 +1,5 @@
 export { getProgramSourceFreshness } from './freshness.js';
+export { getObjectiveClockLeaseMs } from './freshness.js';
 export type { ProgramSourceFreshness } from './freshness.js';
 export { reduceRuntime } from './reducer.js';
 export { createInitialRuntimeState } from './types.js';
@@ -9,6 +10,17 @@ export {
   invalidateMapPlayerStats,
   reduceMapPlayerStats,
 } from './player-stats.js';
+export {
+  createObjectiveTimingState,
+  DEFAULT_OBJECTIVE_CLOCK_LEASE_MS,
+  MAX_OBJECTIVE_CLOCK_LEASE_MS,
+  remainingFromObjectiveAnchor,
+  reduceObjectiveTiming,
+} from './objective-timing.js';
+export type {
+  RuntimeObjectiveTimingAnchor,
+  RuntimeObjectiveTimingState,
+} from './objective-timing.js';
 export type {
   DamageBySteam64,
   MapPlayerStatsAccumulator,

@@ -15,7 +15,11 @@ export {
   QUALIFICATION_SCHEMA_VERSION,
   QualificationEvidenceError,
 } from './evidence/contract.mjs';
-export { verifyCaptureDirectory } from './evidence/capture.mjs';
+export { iterateCaptureFrames, verifyCaptureDirectory } from './evidence/capture.mjs';
+export {
+  analyzeObjectiveTimingCapture,
+  renderObjectiveTimingReport,
+} from './evidence/objective-timing.mjs';
 export { checksFrom, resultFromChecks } from './evidence/checks.mjs';
 export {
   readJson,

@@ -130,6 +130,13 @@ export function observationKey(observation) {
   return `${observation.sequence}\0${observation.receivedAt}`;
 }
 
+export async function* iterateCaptureFrames(captureDir) {
+  const framesPath = join(captureDir, 'frames.jsonl');
+  for await (const record of streamLines(framesPath, createHash('sha256'))) {
+    yield parseCaptureFrame(record.line, record.lineNumber, captureDir);
+  }
+}
+
 export async function verifyCaptureDirectory(captureDir, observationReferences = []) {
   if (basename(captureDir).endsWith('.partial')) {
     throw new QualificationEvidenceError('UNFINALIZED_CAPTURE', `${captureDir} 尚未发布`);

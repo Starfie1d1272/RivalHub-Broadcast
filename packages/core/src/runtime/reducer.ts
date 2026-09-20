@@ -5,6 +5,7 @@ import {
   invalidateMapPlayerStats,
   reduceMapPlayerStats,
 } from './player-stats.js';
+import { createObjectiveTimingState, reduceObjectiveTiming } from './objective-timing.js';
 import {
   buildTelemetryTransitions,
   explicitMapExecutionChangedTransition,
@@ -143,6 +144,12 @@ function reduceProgramTelemetry(
       observation: input.observation,
       continuity: continuity.staleRecovery ? 'stale-recovery' : continuity.sequenceReason,
     }),
+    objectiveTiming: reduceObjectiveTiming(
+      state.objectiveTiming,
+      input.observation,
+      currentGeneration,
+      mapResult.map.epoch,
+    ),
     programTelemetry: input.observation,
   };
 
@@ -178,6 +185,7 @@ function reduceGenerationAdvance(
     },
     map: state.map,
     playerStats: invalidateMapPlayerStats(state.playerStats),
+    objectiveTiming: createObjectiveTimingState(input.nextGeneration, state.map.epoch),
   };
   return accepted(nextState, { kind: 'accepted', reason: 'source-generation-advanced' });
 }
@@ -198,6 +206,10 @@ function reduceMapReset(state: RuntimeState, input: MapResetInput): RuntimeReduc
       epoch: state.map.epoch + 1,
     },
     playerStats: createMapPlayerStatsAccumulator(state.map.epoch + 1),
+    objectiveTiming: createObjectiveTimingState(
+      state.programSource.generation,
+      state.map.epoch + 1,
+    ),
   };
   const transition = explicitMapExecutionChangedTransition(
     state,

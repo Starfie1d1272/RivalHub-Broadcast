@@ -1,6 +1,10 @@
 import type { SourceSide } from '../telemetry/map.js';
 import type { TelemetryObservation } from '../telemetry/observation.js';
 import { createMapPlayerStatsAccumulator, type MapPlayerStatsAccumulator } from './player-stats.js';
+import {
+  createObjectiveTimingState,
+  type RuntimeObjectiveTimingState,
+} from './objective-timing.js';
 
 export interface RuntimeTime {
   readonly monotonicMs: number;
@@ -35,11 +39,14 @@ export interface RuntimeState {
   readonly programSource: RuntimeProgramSourceState;
   readonly map: RuntimeMapState;
   readonly playerStats: MapPlayerStatsAccumulator;
+  readonly objectiveTiming: RuntimeObjectiveTimingState;
   readonly programTelemetry?: TelemetryObservation;
 }
 
 export interface RuntimeContinuityPolicy {
   readonly staleAfterMs: number;
+  /** Short lease for numeric plant/defuse/explosion interpolation. */
+  readonly objectiveClockLeaseMs?: number;
 }
 
 export type MapExecutionResetReason = 'same-map-restart' | 'restore' | 'operator-correction';
@@ -168,5 +175,6 @@ export function createInitialRuntimeState(
       epoch: 0,
     },
     playerStats: createMapPlayerStatsAccumulator(0),
+    objectiveTiming: createObjectiveTimingState(0, 0),
   };
 }

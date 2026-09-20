@@ -134,6 +134,27 @@ const playerSchema = z.object({
   weapons: z.array(weaponSchema),
 });
 
+const objectiveClockSchema = z.object({
+  remainingSeconds: nullableNumber,
+  durationSeconds: nullableNumber,
+});
+
+const bombActionSchema = z.discriminatedUnion('kind', [
+  z.object({
+    kind: z.literal('plant'),
+    sourcePlayerId: nullableString,
+    remainingSeconds: nullableNumber,
+    durationSeconds: nullableNumber,
+  }),
+  z.object({
+    kind: z.literal('defuse'),
+    sourcePlayerId: nullableString,
+    remainingSeconds: nullableNumber,
+    durationSeconds: nullableNumber,
+    hasDefuseKit: nullableBoolean,
+  }),
+]);
+
 const bombSchema = z.object({
   state: z
     .enum([
@@ -148,7 +169,8 @@ const bombSchema = z.object({
     ])
     .nullable(),
   sourcePlayerId: nullableString,
-  countdownSeconds: nullableNumber,
+  explosion: objectiveClockSchema.nullable(),
+  action: bombActionSchema.nullable(),
 });
 
 export const programPayloadSchema = z.object({

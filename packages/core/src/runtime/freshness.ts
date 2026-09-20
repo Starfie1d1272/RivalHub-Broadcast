@@ -1,4 +1,8 @@
 import type { RuntimeContinuityPolicy, RuntimeState } from './types.js';
+import {
+  DEFAULT_OBJECTIVE_CLOCK_LEASE_MS,
+  MAX_OBJECTIVE_CLOCK_LEASE_MS,
+} from './objective-timing.js';
 
 export type ProgramSourceFreshness = 'awaiting' | 'fresh' | 'stale';
 
@@ -6,6 +10,21 @@ export function assertRuntimeContinuityPolicy(policy: RuntimeContinuityPolicy): 
   if (!Number.isFinite(policy.staleAfterMs) || policy.staleAfterMs < 0) {
     throw new RangeError('staleAfterMs must be a finite non-negative number');
   }
+  const objectiveClockLeaseMs = policy.objectiveClockLeaseMs ?? DEFAULT_OBJECTIVE_CLOCK_LEASE_MS;
+  if (
+    !Number.isFinite(objectiveClockLeaseMs) ||
+    objectiveClockLeaseMs <= 0 ||
+    objectiveClockLeaseMs > MAX_OBJECTIVE_CLOCK_LEASE_MS
+  ) {
+    throw new RangeError(
+      `objectiveClockLeaseMs must be a finite number between 1 and ${MAX_OBJECTIVE_CLOCK_LEASE_MS} ms`,
+    );
+  }
+}
+
+export function getObjectiveClockLeaseMs(policy: RuntimeContinuityPolicy): number {
+  assertRuntimeContinuityPolicy(policy);
+  return policy.objectiveClockLeaseMs ?? DEFAULT_OBJECTIVE_CLOCK_LEASE_MS;
 }
 
 export function getProgramSourceFreshness(

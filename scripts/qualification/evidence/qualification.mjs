@@ -23,6 +23,7 @@ import {
   walkFiles,
 } from './integrity.mjs';
 import { liveObservationReferences, readScenario } from './scenario.mjs';
+import { analyzeObjectiveTimingCapture } from './objective-timing.mjs';
 import { renderReport } from './report.mjs';
 
 async function immediateDirectories(path) {
@@ -48,7 +49,11 @@ async function readCaptureResults(runDir, markers) {
       continue;
     }
     try {
-      captureResults.push(await verifyCaptureDirectory(captureDir, observationReferences));
+      const capture = await verifyCaptureDirectory(captureDir, observationReferences);
+      captureResults.push({
+        ...capture,
+        objectiveTiming: await analyzeObjectiveTimingCapture(captureDir),
+      });
     } catch (error) {
       captureErrors.push(error);
     }

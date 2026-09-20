@@ -13,6 +13,13 @@ function freshnessLabel(value) {
   return value ?? '未知';
 }
 
+function objectiveTimingLabel(value) {
+  if (value === 'PASS') return '通过（PASS）';
+  if (value === 'FAIL') return '失败（FAIL）';
+  if (value === 'NOT_PROMISED') return '不承诺（NOT_PROMISED）';
+  return '证据不足（INCONCLUSIVE）';
+}
+
 export function renderReport({
   qualification,
   artifact,
@@ -42,10 +49,18 @@ export function renderReport({
     `- 已验证采集：${captureResults.length}`,
     `- 采集错误：${captureErrors.length}`,
   );
-  for (const capture of captureResults)
+  for (const capture of captureResults) {
     lines.push(
       `- \`${basename(capture.directory)}\`：${capture.frameCount} 帧，${capture.computedFramesSha256}`,
     );
+    if (capture.objectiveTiming !== undefined) {
+      const objective = capture.objectiveTiming;
+      lines.push(
+        `  - Objective Clock 0.1 s：**${objectiveTimingLabel(objective.qualification.numeric01s.result)}**；active interval p99 ${objective.metrics.activePacketIntervalMs.p99 === null ? 'n/a' : `${objective.metrics.activePacketIntervalMs.p99.toFixed(1)} ms`}；reconnect gaps ${objective.metrics.reconnectGaps.count}`,
+        `  - Objective Clock 0.01 s：**${objectiveTimingLabel(objective.qualification.numeric001s.result)}**`,
+      );
+    }
+  }
   lines.push('', '## 场景标记', '');
   if (scenario.markers.length === 0) lines.push('- 未记录场景标记。');
   else

@@ -1,5 +1,5 @@
 export const LOCAL_PROTOCOL_VERSION = 1 as const;
-export const PROGRAM_SCHEMA_VERSION = 5 as const;
+export const PROGRAM_SCHEMA_VERSION = 6 as const;
 export const PROGRAM_CUE_SCHEMA_VERSION = 1 as const;
 export const RADAR_SCHEMA_VERSION = 1 as const;
 export const OPERATOR_SCHEMA_VERSION = 3 as const;

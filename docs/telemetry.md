@@ -156,7 +156,46 @@ TelemetryObservation
 
 GSI-specific diagnostics 与 `TelemetryObservation` 并列返回，不塞进 Core domain。
 
-### 5.1 Active lineup 与 map-scoped player stats
+### 5.1 Objective Clock 与 overloaded bomb countdown
+
+Raw GSI 的 root `bomb.countdown` 是 state-dependent observation，不是一个跨状态同义的永久
+时钟：
+
+| `bomb.state`                       | `bomb.countdown` 语义                                  |
+| ---------------------------------- | ------------------------------------------------------ |
+| `carried` / `dropped`              | 没有 objective action clock                            |
+| `planting`                         | 当前 plant action remaining                            |
+| `planted`                          | C4 explosion remaining                                 |
+| `defusing`                         | 当前 defuse action remaining，不是 explosion remaining |
+| `defused` / `exploded` / `unknown` | terminal 或不可用                                      |
+
+`phase_countdowns` 只表达当前 phase clock。它可以与 bomb state 做同语义交叉验证，但不能
+在 defusing 时被当作 explosion fallback。
+
+Core 在 `RuntimeState.objectiveTiming` 内维护一个不进入 wire 的 anchor：
+
+```text
+{ remainingSecondsAtSample, sampledAtMonotonicMs,
+  source: "bomb-planted-countdown" }
+```
+
+只有 `coverage.bomb = present`、当前 round 不是 `over` 且 `state = planted` 携带 finite
+countdown 时才建立或重新校准 anchor。planted countdown 暂缺时保留既有 anchor；defusing
+保留 anchor 且不使用 defuse countdown 覆盖它；没有 anchor 的首次 defusing 保持 explosion
+为 `null`，不合成 40 秒。carried、dropped、planting、terminal、unknown、bomb absent 或
+degraded、map epoch 变化和 Program source generation 变化都会清除/失效 objective timing。
+
+plant/defuse action 由当前 observation 即时派生。actor 缺失不清除 action time；defuse kit
+只从当前 matching player 的 `hasDefuser` evidence 读取，未知就是 `null`，不做 heuristic。
+所有 duration / interpolation / lease 使用 monotonic clock；UTC 只用于 capture、报告和审计。
+短 objective-clock lease 初始为 1000 ms，最大 2000 ms；它独立于全局 `staleAfterMs = 20000`。
+lease 过期时 Program 保留当前 bomb semantic state，但 numeric remaining fail closed 为
+`null`。浏览器 reconnect 只重新取得 baseline，Core 才负责 anchor continuation。
+
+Raw `bomb.countdown` 仍只存在于 telemetry adapter / capture 边界。它不能穿透为 Program
+顶层 `bomb.countdownSeconds`，也不能由 React state retention 补回。
+
+### 5.2 Active lineup 与 map-scoped player stats
 
 `telemetry.allPlayers` 是当前 source observation，不是已经筛选好的正式节目名单。Core 在 identity 与 continuity 之后派生两个独立结果：
 
@@ -304,6 +343,26 @@ Reference corpus 应覆盖：
 - long-running / slow-consumer behavior。
 
 新增 capture 只为回答明确问题，不为了样本数量重复录制已经充分证明的场景。
+
+### 11.1 Objective Clock qualification report
+
+Capture V1 的真实 observer evidence 可通过现有 Production Capture Recorder 生成的原始
+capture 做离线分析：
+
+```text
+pnpm qualification:objective-timing <capture-dir>
+```
+
+分析器报告 active packet interval 的 p50/p95/p99/max、countdown delta 与 monotonic residual、
+state transition 到首个 matching countdown 的 gap、同语义 bomb/phase residual、plant/defuse/
+explosion terminal residual、missing countdown spans 和 reconnect gaps。报告只打印 allowlisted
+GSI config，不打印 token；原始 frames、manifest 和 SHA-256 仍是证据源。
+
+当前数值 gate 是：active packet interval p99 ≤ 200 ms、transition residual p95 ≤ 100 ms，且
+没有 >100 ms 的 unexplained random offset。满足这些 gate 只能说明该 exact capture 支持
+0.1 s numeric objective clock；`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。没有
+真实 observer capture 时，报告结果必须保持 `INCONCLUSIVE`，不能用 synthetic fixture 冒充
+production qualification。
 
 ## 12. 隐私与安全
 

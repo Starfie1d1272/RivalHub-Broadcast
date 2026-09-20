@@ -134,7 +134,8 @@ RuntimeState
 ├─ match context
 ├─ program-safe runtime data
 │  ├─ map-scoped player stats accumulator
-│  └─ ActiveLineupResolution input seam
+│  ├─ ActiveLineupResolution input seam
+│  └─ Core-owned objective timing anchor (not wire state)
 ├─ assist-private runtime data
 └─ operational health / incidents
 ```
@@ -164,6 +165,7 @@ RuntimeState
 - ADR 的 `liveAdr` 与 `completedAdr` 是同一 accumulator 的两个 pure read views；当前回合出现 `allPlayers != present` 时 invalidated，不得把有 evidence gap 的回合 finalize。
 - DebugProjection 可以更宽，但不因此成为其它消费面的数据源；
 - domain interpretation 在 Projection 结束，例如 `lifeState` 由 Core 统一推导，Renderer 不重复根据 HP 猜测。
+- objective timing 的 overloaded GSI countdown 只在 Core 解释；Program 只消费短 lease 内的 semantic clock/action projection，Renderer 不保留 anchor 或猜测 explosion/defuse duration。
 
 ### 4.1 SeriesProgress 与本地恢复
 
