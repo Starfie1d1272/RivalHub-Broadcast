@@ -112,8 +112,12 @@ export function qualificationRequestOptions(
   };
 }
 
-const PAGE_SCRIPT = (controlToken: string): string => `
+const PAGE_SCRIPT = (
+  controlToken: string,
+  qualificationProfile: 'base' | 'objective-timing',
+): string => `
 const controlToken = ${JSON.stringify(controlToken).replaceAll('<', '\\u003c')};
+const qualificationProfile = ${JSON.stringify(qualificationProfile)};
 const requestOptions = ${qualificationRequestOptions.toString()};
 const stateLabels = {
   waiting: '等待 CS2',
@@ -163,13 +167,19 @@ function resultLabel(value) {
 
 function render(data) {
   if (finalizationComplete) return;
+  const objectiveMode = qualificationProfile === 'objective-timing';
   stateText.textContent = stateLabels[data.state] || '正在读取状态';
   signal.dataset.tone = data.state === 'receiving' || data.state === 'ready' ? 'good' : 'neutral';
   result.textContent = resultLabel(data.result);
   result.dataset.tone = data.result.toLowerCase();
-  checks.innerHTML = Object.entries(data.checks).map(([key, check]) =>
-    '<div class="qualification-check" data-status="' + escapeHtml(check.status) + '"><dt>' + escapeHtml(checkLabels[key] || check.label) + '</dt><dd>' + escapeHtml(checkStatus(check.status)) + '</dd></div>'
-  ).join('');
+  checks.innerHTML = objectiveMode
+    ? [
+        '<div class="qualification-check" data-status="' + (data.objectiveScenarioProgress?.complete ? 'PASS' : 'INCONCLUSIVE') + '"><dt>目标时钟场景窗口</dt><dd>' + escapeHtml(String(data.objectiveScenarioProgress?.completed ?? 0) + '/' + String(data.objectiveScenarioProgress?.required ?? 8)) + '</dd></div>',
+        '<div class="qualification-check" data-status="' + escapeHtml(data.checks.captureIntegrity.status) + '"><dt>采集记录状态</dt><dd>' + escapeHtml(checkStatus(data.checks.captureIntegrity.status)) + '</dd></div>',
+      ].join('')
+    : Object.entries(data.checks).map(([key, check]) =>
+        '<div class="qualification-check" data-status="' + escapeHtml(check.status) + '"><dt>' + escapeHtml(checkLabels[key] || check.label) + '</dt><dd>' + escapeHtml(checkStatus(check.status)) + '</dd></div>'
+      ).join('');
   for (const step of flow) {
     const card = document.querySelector('[data-step="' + step.id + '"]');
     const completed = step.markers.every((marker) => data.markers.includes(marker));
@@ -178,12 +188,20 @@ function render(data) {
     card.querySelector('[data-step-status]').textContent = completed ? '已完成' : active ? '进行中' : '等待操作';
   }
   const receiving = data.state === 'receiving';
-  byId('confirm-a').disabled = !receiving || data.markers.includes('demo-a-live');
-  byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');
-  byId('next-execution').disabled = data.result === 'FAIL' || !data.markers.includes('runtime-stale') || !data.markers.includes('cs2-closed') || data.markers.includes('next-execution');
-  byId('confirm-reopen').disabled = !data.markers.includes('next-execution') || data.markers.includes('cs2-reopened');
-  byId('confirm-b').disabled = !data.markers.includes('cs2-reopened') || !receiving || data.markers.includes('demo-b-live');
-  byId('finish').disabled = data.result === 'FAIL' || !data.markers.includes('demo-b-live');
+  const baseActionIds = ['confirm-a', 'confirm-stop', 'next-execution', 'confirm-reopen', 'confirm-b'];
+  for (const id of baseActionIds) byId(id).hidden = objectiveMode;
+  document.querySelector('.qualification-flow').hidden = objectiveMode;
+  byId('confirm-a').disabled = objectiveMode || !receiving || data.markers.includes('demo-a-live');
+  byId('confirm-stop').disabled = objectiveMode || !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');
+  byId('next-execution').disabled = objectiveMode || data.result === 'FAIL' || !data.markers.includes('runtime-stale') || !data.markers.includes('cs2-closed') || data.markers.includes('next-execution');
+  byId('confirm-reopen').disabled = objectiveMode || !data.markers.includes('next-execution') || data.markers.includes('cs2-reopened');
+  byId('confirm-b').disabled = objectiveMode || !data.markers.includes('cs2-reopened') || !receiving || data.markers.includes('demo-b-live');
+  byId('finish').disabled = data.result === 'FAIL' || (objectiveMode ? !data.objectiveScenarioProgress?.complete : !data.markers.includes('demo-b-live'));
+  if (objectiveMode) {
+    message.textContent = data.objectiveScenarioProgress?.complete
+      ? '八类目标时钟场景窗口已记录；可结束测试并生成离线验收结论。'
+      : '目标时钟专项验收进行中；使用 mark.ps1 为八类场景记录开始/结束窗口。';
+  }
 }
 
 async function refresh() {
@@ -264,7 +282,11 @@ void refresh();
 window.setInterval(() => { if (!finalizationComplete) void refresh(); }, 1000);
 `;
 
-export function qualificationPageHtml(controlToken: string): string {
+export function qualificationPageHtml(
+  controlToken: string,
+  qualificationProfile: 'base' | 'objective-timing' = 'base',
+): string {
+  const objectiveMode = qualificationProfile === 'objective-timing';
   return `<!doctype html>
 <html lang="zh-CN">
   <head>
@@ -279,7 +301,7 @@ export function qualificationPageHtml(controlToken: string): string {
       <header class="qualification-header">
         <p class="qualification-kicker">RivalHub Broadcast / 现场验收</p>
         <h1>让真实比赛<br />自己作证。</h1>
-        <p>这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。</p>
+        <p>${objectiveMode ? '这个页面用于目标时钟专项验收：八类场景由 PowerShell 标记明确圈定，页面只显示采集状态与场景窗口进度；最终语义与数值结论由离线证据验证器计算。' : '这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。'}</p>
       </header>
 
       <section class="qualification-signal" aria-live="polite">
@@ -316,7 +338,7 @@ export function qualificationPageHtml(controlToken: string): string {
 
       <footer class="qualification-footer">本地现场验收页面 · 不进入正式节目或 OBS 输出 · 机器结果保存在 evidence/REPORT.md 与 qualification.json</footer>
     </main>
-    <script>${PAGE_SCRIPT(controlToken)}</script>
+    <script>${PAGE_SCRIPT(controlToken, qualificationProfile)}</script>
   </body>
 </html>`;
 }
