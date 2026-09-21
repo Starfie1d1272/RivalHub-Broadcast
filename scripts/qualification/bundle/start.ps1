@@ -1,4 +1,7 @@
-﻿. (Join-Path $PSScriptRoot 'common.ps1')
+﻿param([switch]$ObjectiveTiming)
+. (Join-Path $PSScriptRoot 'common.ps1')
+
+$qualificationProfile = if ($ObjectiveTiming) { 'objective-timing' } else { 'base' }
 
 $install = Read-InstallState
 Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$install.cfgPath)) -CanonicalCfgPath ([string]$install.cfgPath) | Out-Null
@@ -36,7 +39,7 @@ Write-JsonFile -Path (Join-Path $runDir 'environment.json') -Value ([ordered]@{
     runId = $runId
     windowsVersion = $windowsVersion
     cs2Version = $cs2Version
-    qualificationProfile = 'objective-timing'
+    qualificationProfile = $qualificationProfile
     startedAt = (Get-Date).ToUniversalTime().ToString('o')
 })
 

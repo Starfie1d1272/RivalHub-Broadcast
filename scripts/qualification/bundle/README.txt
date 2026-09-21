@@ -7,13 +7,13 @@ RivalHub Broadcast Windows 现场验收包
 1. 在此目录打开 PowerShell。
 2. 执行：`powershell -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1`
    安装器会读取 Steam 库信息并寻找 CS2。若无法唯一定位，请使用 `-Cs2Root <path>` 指定 CS2 安装根目录或 `game\csgo\cfg`。
-3. 执行：`powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`
+3. 执行：`powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1`；这会启动常规现场验收。若要进行目标时钟专项验收，执行：`powershell -ExecutionPolicy Bypass -File .\scripts\start.ps1 -ObjectiveTiming`。
 4. 打开 http://127.0.0.1:3000/qualification。
 5. 按页面依次完成：播放 Demo A → 在 CS2 中执行 `quit` → 等待页面显示比赛数据已过期（即一段时间未收到新的有效数据）→ 确认已退出 CS2 → 开始下一场 → 重开 CS2 → 播放 Demo B → 导出结果。
 6. 页面会自动整理并验证验收证据、恢复原 GSI 配置，然后显示“通过”“失败”或“证据不足”以及报告路径。
 7. 最终证据写入 `evidence\<runId>\`；`REPORT.md` 是便于人工阅读的报告，`qualification.json` 是机器可读结果。
 
-目标时钟的八类专项场景需要使用 `scripts\mark.ps1` 记录开始与结束。重连或接收端重启场景的操作顺序是：先在已下包或拆弹状态记录 `-Phase before`，实际重连或重启接收端后执行 `scripts\rotate.ps1`，等待新的已下包观测，再记录 `-Phase after`。`rotate.ps1` 会在同一轮现场验收中开始新的采集记录并推进接收端世代，不会新建验收轮次；没有新的正常观测时，结束标记会被拒绝。
+目标时钟专项验收的八类场景需要使用 `scripts\mark.ps1` 记录开始与结束。重连或接收端重启场景的操作顺序是：先在已下包或拆弹状态记录 `-Phase before`，实际重连或重启接收端后执行 `scripts\rotate.ps1`，等待新的已下包观测，再记录 `-Phase after`。`rotate.ps1` 会在同一轮现场验收中开始新的采集记录并推进接收端世代，不会新建验收轮次；没有新的正常观测时，结束标记会被拒绝。
 
 备用自动化命令：
 
