@@ -4,9 +4,14 @@
  * GSI props, donor domain types, and donor lifecycle semantics are omitted.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
-import type { PlayerRailSide, TeamSummaryPresentation } from './presentation';
+import {
+  teamUtilityAsset,
+  type PlayerRailSide,
+  type TeamSummaryPresentation,
+  type TeamUtilityFamily,
+} from './presentation';
 
 const SUMMARY_HOLD_MS = 5_000;
 
@@ -16,6 +21,39 @@ function formatMoney(value: number | null): string {
 
 function formatUtility(value: number | null): string {
   return value === null ? '—' : String(value);
+}
+
+const UTILITY_SLOTS: readonly { readonly family: TeamUtilityFamily; readonly label: string }[] = [
+  { family: 'smoke', label: '烟雾弹' },
+  { family: 'fire', label: '燃烧弹' },
+  { family: 'flash', label: '闪光弹' },
+  { family: 'he', label: '高爆手雷' },
+  { family: 'decoy', label: '诱饵弹' },
+];
+
+function UtilityAsset({
+  side,
+  family,
+  label,
+}: {
+  readonly side: PlayerRailSide;
+  readonly family: TeamUtilityFamily;
+  readonly label: string;
+}) {
+  const asset = teamUtilityAsset(side, family);
+  if (asset === null) return null;
+  const style = {
+    '--player-rail-icon': `url("${asset.outputPath}")`,
+  } as CSSProperties;
+  return (
+    <span
+      aria-label={label}
+      className="player-rail__icon"
+      data-asset-id={asset.canonicalKey}
+      role="img"
+      style={style}
+    />
+  );
 }
 
 export function TeamSummary({
@@ -77,11 +115,12 @@ export function TeamSummary({
           <strong>—</strong>
         ) : (
           <div className="player-rail__utility-values">
-            <span data-utility="smoke">S {formatUtility(utility.smoke)}</span>
-            <span data-utility="fire">F {formatUtility(utility.fire)}</span>
-            <span data-utility="flash">FL {formatUtility(utility.flash)}</span>
-            <span data-utility="he">HE {formatUtility(utility.he)}</span>
-            <span data-utility="decoy">D {formatUtility(utility.decoy)}</span>
+            {UTILITY_SLOTS.map(({ family, label }) => (
+              <span className="player-rail__utility-item" data-utility={family} key={family}>
+                <UtilityAsset family={family} label={label} side={side} />
+                <b>×{formatUtility(utility[family])}</b>
+              </span>
+            ))}
           </div>
         )}
       </div>

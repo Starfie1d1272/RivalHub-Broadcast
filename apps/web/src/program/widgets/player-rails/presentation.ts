@@ -69,6 +69,8 @@ export interface TeamUtilitySummary {
   readonly decoy: number;
 }
 
+export type TeamUtilityFamily = keyof TeamUtilitySummary;
+
 export interface TeamSummaryPresentation {
   readonly side: PlayerRailSide;
   readonly money: number | null;
@@ -116,6 +118,28 @@ function assetForCanonicalKey(canonicalKey: string): PlayerRailAsset | null {
   const asset = getCs2Asset(item.assetId);
   if (asset === undefined) return null;
   return { canonicalKey, outputPath: asset.outputPath };
+}
+
+function utilityCanonicalKey(side: PlayerRailSide, family: TeamUtilityFamily): string {
+  switch (family) {
+    case 'smoke':
+      return 'utility.smokegrenade';
+    case 'fire':
+      return side === 'CT' ? 'utility.incgrenade' : 'utility.molotov';
+    case 'flash':
+      return 'utility.flashbang';
+    case 'he':
+      return 'utility.hegrenade';
+    case 'decoy':
+      return 'utility.decoy';
+  }
+}
+
+export function teamUtilityAsset(
+  side: PlayerRailSide,
+  family: TeamUtilityFamily,
+): PlayerRailAsset | null {
+  return assetForCanonicalKey(utilityCanonicalKey(side, family));
 }
 
 function weaponPresentation(

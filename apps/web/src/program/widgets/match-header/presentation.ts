@@ -29,6 +29,7 @@ export interface MatchHeaderSeriesMapPresentation {
   readonly statusText: string;
   readonly finalScore: { readonly a: number; readonly b: number } | null;
   readonly winner: MatchHeaderEntrantKey | null;
+  readonly winnerName: string | null;
 }
 
 export interface MatchHeaderRoundPresentation {
@@ -173,23 +174,30 @@ function selectionText(
 function buildSeriesMaps(
   series: NonNullable<ProgramPayload['series']>,
 ): readonly MatchHeaderSeriesMapPresentation[] {
-  return series.maps.map((map) => ({
-    mapOrder: map.mapOrder,
-    mapName: displayMapName(map.mapName) ?? map.mapName,
-    selectionText: selectionText(map.selection, series.entrants),
-    status: map.status,
-    statusText:
-      map.status === 'completed' && map.finalScore !== null
-        ? `${map.finalScore.a} : ${map.finalScore.b}`
-        : MAP_STATUS_LABELS[map.status],
-    finalScore: map.finalScore,
-    winner:
+  return series.maps.map((map) => {
+    const winner =
       map.winnerEntryId === series.entrants.a.entryId
         ? 'a'
         : map.winnerEntryId === series.entrants.b.entryId
           ? 'b'
+          : null;
+    return {
+      mapOrder: map.mapOrder,
+      mapName: displayMapName(map.mapName) ?? map.mapName,
+      selectionText: selectionText(map.selection, series.entrants),
+      status: map.status,
+      statusText:
+        map.status === 'completed' && map.finalScore !== null
+          ? `${map.finalScore.a}–${map.finalScore.b}`
+          : MAP_STATUS_LABELS[map.status],
+      finalScore: map.finalScore,
+      winner,
+      winnerName:
+        map.status === 'completed' && map.finalScore !== null && winner !== null
+          ? series.entrants[winner].name
           : null,
-  }));
+    };
+  });
 }
 
 function buildRoundHistory(

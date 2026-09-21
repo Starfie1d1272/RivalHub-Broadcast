@@ -43,6 +43,21 @@ test.describe('Match Header HUD', () => {
     await expect(
       page.locator('[data-match-header-widget="series-strip"] [data-map-order]'),
     ).toHaveCount(5);
+    await expect(
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-winner-name',
+      ),
+    ).toHaveText('Northstar');
+    await expect(
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-winner-mark',
+      ),
+    ).toHaveText('✓');
+    await expect(
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-order="2"] .match-header__series-map-winner-name',
+      ),
+    ).toHaveText('Southpoint');
     await expect(page.locator('[data-program-canvas="true"]')).toHaveScreenshot(
       'bo5.png',
       SCREENSHOT_OPTIONS,

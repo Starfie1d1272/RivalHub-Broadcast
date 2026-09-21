@@ -818,6 +818,7 @@ const stressPlayers = [
               : [makeWeapon(`stress-weapon-${index + 1}`, 'weapon_ak47', 'active')],
     weaponsAvailable: index !== 3,
     currentRoundDamage: [128, 64, 96, null, 91][index % 5] ?? null,
+    liveAdr: [81.2, 76.4, 74.3, null, 91.2][index % 5] ?? null,
     roundMoneySpent: [0, 1_800, 2_400, null, 950][index % 5] ?? null,
   });
 });

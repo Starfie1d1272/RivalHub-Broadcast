@@ -35,10 +35,41 @@ async function assertDeadCardGeometry(page: Page, side: 'CT' | 'T' = 'CT') {
     spacerHeight: card
       .querySelector<HTMLElement>('[data-health-spacer="true"]')
       ?.getBoundingClientRect().height,
+    kadColumns: Array.from(
+      card.querySelectorAll<HTMLElement>(
+        '.player-rail__dead-stats > .player-rail__kad.is-dead > span',
+      ),
+    ).map((column) => {
+      const rect = column.getBoundingClientRect();
+      return { left: rect.left, top: rect.top };
+    }),
   }));
   expect(geometry.cardHeight).toBe(100);
   expect(geometry.spacerHeight).toBe(3);
   expect(geometry.deadStatsHeight).toBe(34);
+  expect(geometry.kadColumns).toHaveLength(3);
+  expect(
+    Math.max(...geometry.kadColumns.map(({ top }) => top)) -
+      Math.min(...geometry.kadColumns.map(({ top }) => top)),
+  ).toBeLessThanOrEqual(1);
+  expect(geometry.kadColumns[0]?.left).toBeLessThan(geometry.kadColumns[1]?.left ?? Infinity);
+  expect(geometry.kadColumns[1]?.left).toBeLessThan(geometry.kadColumns[2]?.left ?? Infinity);
+}
+
+async function assertTeamUtilityAssets(page: Page, side: 'CT' | 'T') {
+  const expectedAssets = {
+    smoke: 'utility.smokegrenade',
+    fire: side === 'CT' ? 'utility.incgrenade' : 'utility.molotov',
+    flash: 'utility.flashbang',
+    he: 'utility.hegrenade',
+    decoy: 'utility.decoy',
+  } as const;
+  const summary = page.locator(`[data-player-rail="${side}"] [data-team-summary="${side}"]`);
+  for (const [family, assetId] of Object.entries(expectedAssets)) {
+    await expect(
+      summary.locator(`[data-utility="${family}"] [data-asset-id="${assetId}"]`),
+    ).toHaveCount(1);
+  }
 }
 
 test.describe('Player Rails HUD', () => {
@@ -55,6 +86,8 @@ test.describe('Player Rails HUD', () => {
       'data-summary-visible',
       'true',
     );
+    await assertTeamUtilityAssets(page, 'CT');
+    await assertTeamUtilityAssets(page, 'T');
     await expect(page.locator('[data-player-rail="CT"]')).toHaveScreenshot(
       'freezetime-ct.png',
       SCREENSHOT_OPTIONS,
@@ -89,6 +122,9 @@ test.describe('Player Rails HUD', () => {
       ),
     ).toHaveCount(1);
     await assertDeadCardGeometry(page);
+    await expect(
+      page.locator('[data-player-rail="CT"] [data-life-state="dead"] .player-rail__dead-stats'),
+    ).toContainText('74');
     await expect(page.locator('[data-player-rail="CT"]')).toHaveScreenshot(
       'live-stress-ct.png',
       SCREENSHOT_OPTIONS,

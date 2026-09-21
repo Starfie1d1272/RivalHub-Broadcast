@@ -331,6 +331,31 @@
   line-height: 16px;
 }
 
+.match-header__series-map-status--winner {
+  align-items: baseline;
+  color: var(--rh-hud-text-primary);
+  display: flex;
+  gap: 4px;
+  min-width: 0;
+}
+
+.match-header__series-map-winner-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-header__series-map-winner-score,
+.match-header__series-map-winner-mark {
+  flex: 0 0 auto;
+  white-space: nowrap;
+}
+
+.match-header__series-map-winner-mark {
+  color: var(--rh-hud-state-success);
+}
+
 .match-header__round-history {
   align-items: center;
   display: grid;
