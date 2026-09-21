@@ -81,15 +81,6 @@ function parseCaptureFrame(line, lineNumber, captureDir) {
       `${captureDir}/frames.jsonl 第 ${lineNumber} 行的采集记录结构无效`,
     );
   }
-  if (
-    frame.receiverGeneration !== undefined &&
-    !isSafeNonNegativeInteger(frame.receiverGeneration)
-  ) {
-    throw new QualificationEvidenceError(
-      'INVALID_CAPTURE_FRAME',
-      `${captureDir}/frames.jsonl 第 ${lineNumber} 行的接收端世代无效`,
-    );
-  }
   assertUtc(frame.receivedAt, `frame ${lineNumber}.receivedAt`);
   return frame;
 }
