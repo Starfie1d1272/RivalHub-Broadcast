@@ -7,7 +7,7 @@ import {
 } from '../src/program/widgets/player-rails/presentation';
 
 function payload() {
-  const snapshot = getProgramFixture('stress-long-labels');
+  const snapshot = getProgramFixture('player-rails-dead-observed');
   if (snapshot === null) throw new Error('fixture missing');
   return snapshot.payload;
 }
@@ -69,7 +69,7 @@ describe('Player Rails presentation selector', () => {
   });
 
   it('exposes complete five-player team totals and utility only with complete evidence', () => {
-    const snapshot = getProgramFixture('series-bo1');
+    const snapshot = getProgramFixture('player-rails-freezetime');
     if (snapshot === null) throw new Error('fixture missing');
     const presentation = buildPlayerRailsPresentation(snapshot.payload);
 

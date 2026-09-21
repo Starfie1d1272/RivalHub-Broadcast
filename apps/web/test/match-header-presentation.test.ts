@@ -17,23 +17,23 @@ describe('Match Header presentation selector', () => {
     const normal = presentation('live-canonical');
     expect(normal.currentSideMapping).toBe('resolved');
     expect(normal.teamA).toMatchObject({
-      name: 'Northstar',
+      name: 'Fixture Team 001',
       side: 'CT',
-      mapScore: 7,
+      mapScore: 2,
       timeoutsRemaining: 1,
-      seriesScore: 1,
+      seriesScore: 0,
     });
     expect(normal.teamB).toMatchObject({
-      name: 'Southpoint',
+      name: 'Fixture Team 002',
       side: 'T',
-      mapScore: 5,
-      timeoutsRemaining: 2,
+      mapScore: 0,
+      timeoutsRemaining: 1,
       seriesScore: 0,
     });
 
     const swapped = presentation('series-halftime-swap');
-    expect(swapped.teamA).toMatchObject({ name: 'Northstar', side: 'T', mapScore: 7 });
-    expect(swapped.teamB).toMatchObject({ name: 'Southpoint', side: 'CT', mapScore: 5 });
+    expect(swapped.teamA).toMatchObject({ name: 'Fixture Team 001', side: 'T', mapScore: 7 });
+    expect(swapped.teamB).toMatchObject({ name: 'Fixture Team 002', side: 'CT', mapScore: 5 });
   });
 
   it('fails closed for side-owned facts when canonical mapping is unavailable', () => {
@@ -53,18 +53,18 @@ describe('Match Header presentation selector', () => {
     const value = presentation('series-timeout-b');
     expect(value.timeoutPanel).toMatchObject({
       owner: 'b',
-      ownerName: 'Southpoint',
+      ownerName: 'Fixture Team 002',
       remaining: 2,
-      clockText: '0:22',
+      clockText: '0:30',
     });
   });
 
   it('covers entrant A tactical timeout facts with the canonical series', () => {
     expect(presentation('series-timeout-a').timeoutPanel).toMatchObject({
       owner: 'a',
-      ownerName: 'Northstar',
-      remaining: 1,
-      clockText: '0:22',
+      ownerName: 'Fixture Team 001',
+      remaining: 2,
+      clockText: '0:30',
     });
   });
 

@@ -1,5 +1,7 @@
 export {
   getProgramFixture,
+  getProgramFixtureProvenance,
+  PROGRAM_FIXTURE_PROVENANCE,
   PROGRAM_FIXTURE_IDS,
   PROGRAM_FIXTURE_LABELS,
   programFixtures,

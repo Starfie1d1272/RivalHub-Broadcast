@@ -69,10 +69,10 @@ test.describe('Match Header HUD', () => {
   }) => {
     await openFixture(page, 'series-timeout-a');
     await expect(page.locator('[data-timeout-panel="true"][data-timeout-owner="a"]')).toContainText(
-      'Northstar',
+      'Fixture Team 001',
     );
-    await expect(page.locator('[data-timeout-remaining]')).toHaveText('剩余 1 次');
-    await expect(page.locator('[data-timeout-countdown]')).toHaveText('0:22');
+    await expect(page.locator('[data-timeout-remaining]')).toHaveText('剩余 2 次');
+    await expect(page.locator('[data-timeout-countdown]')).toHaveText('0:30');
     await expect(page.locator('[data-program-canvas="true"]')).toHaveScreenshot(
       'tactical-timeout.png',
       SCREENSHOT_OPTIONS,

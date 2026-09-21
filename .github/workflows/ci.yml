@@ -87,6 +87,9 @@ jobs:
       - name: Typecheck
         run: pnpm typecheck
 
+      - name: Verify real-derived Program fixtures
+        run: pnpm fixtures:program:verify
+
       - name: Test
         run: pnpm test
 
