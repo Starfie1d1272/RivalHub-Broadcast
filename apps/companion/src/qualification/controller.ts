@@ -384,6 +384,10 @@ function boundedStatus(
   qualificationProfile: 'base' | 'objective-timing',
 ): Record<string, unknown> {
   const checks = evaluateChecks(response, snapshot, recorderHealth);
+  const captureIntegrity = checks.captureIntegrity;
+  if (captureIntegrity === undefined) {
+    throw new Error('现场验收检查缺少 captureIntegrity');
+  }
   const objectiveProgress = objectiveScenarioProgress(snapshot.markers);
   const state =
     qualificationProfile === 'objective-timing' && objectiveProgress.complete
@@ -404,7 +408,7 @@ function boundedStatus(
     freshness: response.freshness,
     result:
       qualificationProfile === 'objective-timing'
-        ? checks.captureIntegrity.status === 'FAIL'
+        ? captureIntegrity.status === 'FAIL'
           ? 'FAIL'
           : 'INCONCLUSIVE'
         : resultFor(checks),
