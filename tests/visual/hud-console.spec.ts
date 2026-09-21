@@ -1,4 +1,4 @@
-import { PROGRAM_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol';
+import { PROGRAM_SCHEMA_VERSION } from '../../packages/protocol/src/version.js';
 import { expect, test } from '@playwright/test';
 
 const CURRENT_LIVE_BASELINE = {
