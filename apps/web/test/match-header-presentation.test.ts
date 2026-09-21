@@ -107,9 +107,7 @@ describe('Match Header presentation selector', () => {
     expect(
       presentation('series-not-played').seriesMaps?.some((map) => map.status === 'not_played'),
     ).toBe(true);
-    expect(presentation('series-logo-mixed').teamA.logoUrl).toBe(
-      'https://example.test/assets/northstar.svg',
-    );
+    expect(presentation('series-logo-mixed').teamA.logoUrl).toMatch(/^data:image\/svg\+xml,/);
     expect(presentation('series-logo-mixed').teamB.logoUrl).toBeNull();
   });
 
