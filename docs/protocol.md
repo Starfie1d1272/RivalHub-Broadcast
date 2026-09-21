@@ -10,7 +10,7 @@
 
 ## 1. RivalHub 只读赛事上下文
 
-RivalHub 连接模式通过 ``packages/rivalhub`` 消费公开、版本化的只读契约。Broadcast 不直连 RivalHub 数据库，也不导入 RivalHub 内部 domain 类型。
+RivalHub 连接模式通过 `packages/rivalhub` 消费公开、版本化的只读契约。Broadcast 不直连 RivalHub 数据库，也不导入 RivalHub 内部 domain 类型。
 
 ```text
 RivalHub API / 同形 fixture / 本地 LKG
@@ -22,7 +22,7 @@ packages/core
   MatchContext / ScheduleWindow / identity
 ```
 
-``schemaVersion``、``revision``、来源和新鲜度属于 acquisition metadata，不进入纯 ``MatchContext``。
+`schemaVersion`、`revision`、来源和新鲜度属于 acquisition metadata，不进入纯 `MatchContext`。
 
 ### 1.1 BroadcastManifestV1
 
@@ -68,9 +68,9 @@ rivalhub.broadcast-manifest.v1
 }
 ```
 
-Entrant 包含 ``entryId / name / logoUrl / roster``。Roster 中的选手包含 ``playerId / steam64 / displayName / avatarUrl / isStarter``。
+Entrant 包含 `entryId / name / logoUrl / roster`。Roster 中的选手包含 `playerId / steam64 / displayName / avatarUrl / isStarter`。
 
-地图包含 ``mapId / mapOrder / mapName / pickedByEntryId / teamAStartSide / scoreA / scoreB / completedAt``。``teamAStartSide`` 只表示地图起始边，不是整场永久 CT/T 映射。
+地图包含 `mapId / mapOrder / mapName / pickedByEntryId / teamAStartSide / scoreA / scoreB / completedAt`。`teamAStartSide` 只表示地图起始边，不是整场永久 CT/T 映射。
 
 时间字段保持赛事 authority 的原始语义：
 
@@ -170,7 +170,7 @@ MatchContext 与 ScheduleWindow 分别维护独立的 Last Known Good（LKG）�
 - ScheduleWindow 失败不清除当前 MatchContext；
 - latest-wins generation 防止旧请求晚返回后覆盖当前选择。
 
-``stale`` 表示上下文获取或新鲜度问题，不等于 identity mismatch。
+`stale` 表示上下文获取或新鲜度问题，不等于 identity mismatch。
 
 ## 4. Local Protocol V1
 
@@ -200,6 +200,46 @@ schema 版本独立。单个 channel payload 演进时，不要求其它 channel
 channel。每个 channel 有独立 Zod schema、DTO、发布器和接收状态，不存在一个包含全部字段的万能
 union payload。
 
+### 4.2.1 HUD presentation control-plane
+
+HUD 配置不进入上述 WebSocket channel，也不扩展 `ProgramSnapshot`。Companion 通过：
+
+```text
+GET  /local/v1/hud-config
+GET  /operator/hud-config
+POST /operator/hud-config
+```
+
+`GET /local/v1/hud-config` 是 Program/on-air read model，只返回当前已启用的
+`HudResolvedPreset`、`activeRevision` 和基于 resolved canonical JSON 的 SHA-256 ETag。浏览器每 500ms
+使用 `If-None-Match` 条件请求；保存布局/外观/预设资源不会改变该 ETag，重复启用同一 resolved preset
+也必须保持 ETag 不变，只有启用新的 resolved preset 才改变它。它的 HTTP representation 在 active
+revision 不变时不得改变。
+
+`GET /operator/hud-config` 是编辑器 read model，返回完整的 `HudConfigDocument`、`activationStale`、
+编辑器 `revision` 和针对这整个 representation 计算的 ETag。保存资源会更新编辑器 revision，但不
+改变 on-air ETag；启用预设会同时更新编辑器 read model，并在 resolved 内容变化时更新 on-air revision。
+读取、解析或持久化失败时，Companion 保留 last-known-valid 配置，不能清除或猜测 gameplay snapshot。
+
+每个 mutation 都必须提交客户端刚读取并实际编辑的 `expectedEditorRevision`（实现上可由同一值映射到
+`If-Match`）。Companion 在 `SerialCommitQueue` 内执行该 revision 的 compare-and-swap：revision 过期时返回
+`409`，不覆盖磁盘或内存中的新配置；命令或 schema 无效返回 `400`；持久化或内部错误返回 `500`。
+`500` 的 response 只包含 bounded user-facing message，详细的底层错误只写入 Companion diagnostics/log。
+编辑器收到 `409` 后必须保留本地 draft，并明确提示用户先处理 conflict；不能把 stale mutation 当成成功。
+
+`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令。正常 Operator ingress
+不接受 Operator token、Bearer credential 或其他普通凭据；写操作只允许 Companion 以 loopback bind
+接收，且请求必须通过 valid local Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也
+必须拒绝 mutation。GSI ingress 继续使用独立的 `GSI_TOKEN`，qualification-only control plane
+继续使用独立的 `QUALIFICATION_CONTROL_TOKEN`。mutation response 必须返回本次 command 的明确
+`resourceId` / `sourceId`，客户端不得从前后资源 ID 集合差推断本次创建的资源。内置 `builtin:*` 资源只读；
+配置文件由 Companion 以同目录临时文件加原子 rename 保存。`HudResolvedPreset` activation snapshot 有独立的 v1
+compatibility boundary：严格校验 schema version、exact widget keys、嵌入布局、preset/layout/theme
+引用一致性、descriptor-owned settings，以及颜色、透明度、圆角和字体等 semantic value 的安全域；
+加载时不得通过当前 Theme recipe 重算并要求 canonical bytes 相同。recipe 变化不会改写旧 custom
+snapshot，重新 Activate 才产生当前 recipe 的新 snapshot；真正不兼容的版本必须在该 boundary 增加显式
+migration。该 control-plane 的版本与 Local Protocol / channel schema 版本独立。
+
 ### 4.3 快照 envelope
 
 通用 envelope：
@@ -223,9 +263,9 @@ union payload。
 }
 ```
 
-``schemaVersion`` 由具体 channel schema 决定，不能假定所有 channel 都是 1。
+`schemaVersion` 由具体 channel schema 决定，不能假定所有 channel 都是 1。
 
-``channelSeq`` 在 ``producerInstanceId + channel`` 范围内单调递增。``runtimeSeq``、``programSourceGeneration`` 与 ``mapEpoch`` 分别表达不同的连续性语义，不能互相替代。
+`channelSeq` 在 `producerInstanceId + channel` 范围内单调递增。`runtimeSeq`、`programSourceGeneration` 与 `mapEpoch` 分别表达不同的连续性语义，不能互相替代。
 
 ### 4.3.1 Program transient cue envelope
 
@@ -335,7 +375,12 @@ Radar 快照包含当前雷达领域所需的比赛游标、新鲜度、身份�
 
 Operator 快照包含制作控制需要的比赛上下文、运行转换、身份、ActiveLineup diagnostics、SeriesProgress binding/issues 和 source health。`seriesProgress` 只提供 Operator 恢复所需的有界地图状态、比分与诊断；它可以比 Program 拥有更多运行诊断，但不能成为 Program 的数据来源；`activeLineup.extras` 与 resolver issues 只用于 Operator/debug，不进入正式 Player Rails。
 
-当 `seriesProgress.bindingState = needs_operator` 时，已配置 `OPERATOR_CONTROL_TOKEN` 的 Companion 提供 `POST /operator/series/bind`。请求必须通过本地 Web Origin policy，并携带 `x-operator-token` 或同值 Bearer credential，提交 `bind-current-map-execution-to-series-map`、`mapOrder` 与非空 `reason`；服务只返回 command acknowledgement，不允许通过该入口直接改写比分。
+当 `seriesProgress.bindingState = needs_operator` 时，Companion 提供 `POST /operator/series/bind`。该
+正常 Operator ingress 不接受 token 或 Bearer credential；写操作只允许 loopback bind 且 Origin 通过
+local Web Origin policy，LAN mode 一律拒绝 mutation。请求提交
+`bind-current-map-execution-to-series-map`、`mapOrder` 与非空 `reason`；服务只返回 command
+acknowledgement，不允许通过该入口直接改写比分。qualification-only 路由的
+`QUALIFICATION_CONTROL_TOKEN` 不属于此正常 Operator ingress。
 
 ### 4.7 Assist schema v1
 
@@ -351,10 +396,10 @@ acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把
 
 - 拒绝 protocol / channel / schema version 不兼容；
 - 旧 Program receiver 与当前 Program schema 不是兼容 envelope；旧 receiver 必须拒绝当前 schema，当前 receiver 必须拒绝旧 schema，不能按字段猜测版本；
-- 忽略重复或倒序 ``channelSeq``；
-- 拒绝同一 producer 下 ``runtimeSeq`` 回退；
-- 拒绝一个连接中途切换 ``producerInstanceId``；
-- 在 ``liveSessionId``、``programSourceGeneration`` 或 ``mapEpoch`` 改变时重置对应连续性证明；
+- 忽略重复或倒序 `channelSeq`；
+- 拒绝同一 producer 下 `runtimeSeq` 回退；
+- 拒绝一个连接中途切换 `producerInstanceId`；
+- 在 `liveSessionId`、`programSourceGeneration` 或 `mapEpoch` 改变时重置对应连续性证明；
 - `program-cue` 连接在 baseline 前不接受 cue；重复或倒序 `channelSeq` 忽略，允许 sequence gap；
   每个 baseline 最多保留最近 128 个 cue id 做 bounded dedupe。
 
@@ -387,19 +432,19 @@ Companion 使用同一 Fastify 实例提供网页静态资源和 Local Protocol 
 
 当前传输约束：
 
-- 子协议：``rivalhub-broadcast.local.v1``；
-- 默认监听：``127.0.0.1``；
+- 子协议：`rivalhub-broadcast.local.v1`；
+- 默认监听：`127.0.0.1`；
 - 本机回环模式只接受本机 HTTP(S) Origin；
-- 非回环监听必须显式开启 ``LOCAL_WEB_LAN_MODE=1``；
-- ``LOCAL_WEB_ALLOWED_ORIGINS`` 使用精确 Origin 允许列表；
+- 非回环监听必须显式开启 `LOCAL_WEB_LAN_MODE=1`；
+- `LOCAL_WEB_ALLOWED_ORIGINS` 使用精确 Origin 允许列表；
 - 本地 snapshot 与 transient channel 均为 server → browser 只读；
-- 浏览器发送业务消息时以 close code ``1008`` 关闭；
-- ``perMessageDeflate`` 关闭；
+- 浏览器发送业务消息时以 close code `1008` 关闭；
+- `perMessageDeflate` 关闭；
 - 单条 WebSocket payload 上限 64 KiB；
-- ``bufferedAmount`` 与序列化快照使用 256 KiB hard guard；
+- `bufferedAmount` 与序列化快照使用 256 KiB hard guard；
 - ping/pong heartbeat 周期 15 秒，约 30 秒无 pong 时清理连接。
 
-浏览器从当前页面 Origin 推导 ``ws:`` / ``wss:`` 地址。每次新连接建立独立 acceptance state；
+浏览器从当前页面 Origin 推导 `ws:` / `wss:` 地址。每次新连接建立独立 acceptance state；
 收到第一份有效基线后重连退避重新计时。Program cue 还必须与当前 Program snapshot 的
 `producerInstanceId`、`liveSessionId` 和 `mapEpoch` 相同；不一致时立即丢弃，不等待未来 snapshot，
 也不比较 CSTV generation 与 GSI source generation。断线、刷新、baseline 或 Program continuity
