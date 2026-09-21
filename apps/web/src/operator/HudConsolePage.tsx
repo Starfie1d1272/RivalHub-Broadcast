@@ -68,6 +68,10 @@ const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }
   { id: 'theme', label: '外观' },
 ];
 
+function fixtureLabel(id: ProgramFixtureId): string {
+  return id === 'awaiting-neutral' ? '等待数据' : PROGRAM_FIXTURE_LABELS[id];
+}
+
 function connectionLabel(state: LocalChannelConnectionState): string {
   switch (state) {
     case 'live':
@@ -666,7 +670,7 @@ export function HudConsolePage() {
               <span className="hud-console__kicker">预览</span>
               <strong>
                 {activePreviewSource === 'fixture'
-                  ? PROGRAM_FIXTURE_LABELS[fixtureId]
+                  ? fixtureLabel(fixtureId)
                   : previewSourceLive
                     ? '实时比赛'
                     : '实时数据不可用'}
@@ -697,7 +701,7 @@ export function HudConsolePage() {
                 >
                   {PROGRAM_FIXTURE_IDS.map((id) => (
                     <option key={id} value={id}>
-                      {PROGRAM_FIXTURE_LABELS[id]}
+                      {fixtureLabel(id)}
                     </option>
                   ))}
                 </select>
