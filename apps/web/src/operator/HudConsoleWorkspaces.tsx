@@ -392,7 +392,7 @@ export function HudConsoleWorkspaces({
                     }))
                   }
                   type="number"
-                  value={selectedPlacement.offsetX}
+                  value={Math.round(selectedPlacement.offsetX)}
                 />
               </label>
               <label className="hud-console__field">
@@ -406,7 +406,7 @@ export function HudConsoleWorkspaces({
                     }))
                   }
                   type="number"
-                  value={selectedPlacement.offsetY}
+                  value={Math.round(selectedPlacement.offsetY)}
                 />
               </label>
             </div>

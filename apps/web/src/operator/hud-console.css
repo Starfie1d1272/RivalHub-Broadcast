@@ -288,8 +288,11 @@
 }
 
 .hud-console__editor-column > .hud-console__tabs button {
-  background: transparent;
   padding: 0.55rem 0.85rem;
+}
+
+.hud-console__editor-column > .hud-console__tabs button:not(.is-active) {
+  background: transparent;
 }
 
 .hud-console__editor-fieldset {
@@ -388,8 +391,11 @@
 
 .hud-console__actions button,
 .hud-console__primary-action {
-  background: transparent;
   padding: 0.6rem 0.85rem;
+}
+
+.hud-console__actions button {
+  background: transparent;
 }
 
 .hud-console__actions button:disabled,
