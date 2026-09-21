@@ -10,27 +10,40 @@ import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: string }) {
   const snapshot = getProgramFixture(fixtureId);
-  const carryoverSource =
-    fixtureId === 'player-rails-carryover' ? getProgramFixture('series-bo1') : null;
-  const [displayedSnapshot, setDisplayedSnapshot] = useState<ProgramSnapshot | null>(
-    carryoverSource ?? snapshot,
-  );
-
-  useEffect(() => {
-    if (carryoverSource === null || snapshot === null) return;
-    const timer = window.setTimeout(() => setDisplayedSnapshot(snapshot), 50);
-    return () => window.clearTimeout(timer);
-  }, [carryoverSource, snapshot]);
-
-  if (snapshot === null || displayedSnapshot === null) {
+  if (snapshot === null) {
     return <ProgramVisualFixtureNotFound fixtureId={fixtureId} />;
   }
 
   return (
     <ProgramCanvas>
-      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={displayedSnapshot} />
-      <ProgramFoundationProbe fixtureId={fixtureId} snapshot={displayedSnapshot} />
+      {fixtureId === 'player-rails-carryover' ? (
+        <CarryoverVisualFixture snapshot={snapshot} />
+      ) : (
+        <>
+          <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
+          <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+        </>
+      )}
     </ProgramCanvas>
+  );
+}
+
+function CarryoverVisualFixture({ snapshot }: { readonly snapshot: ProgramSnapshot }) {
+  const carryoverSource = getProgramFixture('series-bo1');
+  const [displayedSnapshot, setDisplayedSnapshot] = useState<ProgramSnapshot>(
+    carryoverSource ?? snapshot,
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDisplayedSnapshot(snapshot), 50);
+    return () => window.clearTimeout(timer);
+  }, [snapshot]);
+
+  return (
+    <>
+      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={displayedSnapshot} />
+      <ProgramFoundationProbe fixtureId="player-rails-carryover" snapshot={displayedSnapshot} />
+    </>
   );
 }
 
