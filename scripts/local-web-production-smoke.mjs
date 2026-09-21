@@ -46,42 +46,8 @@ function parseFrame(buffer) {
   };
 }
 
-function maskedCloseFrame() {
-  const payload = Buffer.from([0x03, 0xe8]);
-  const mask = Buffer.from([0x13, 0x32, 0x57, 0x79]);
-  const maskedPayload = Buffer.from(payload.map((value, index) => value ^ mask[index]));
-  return Buffer.concat([Buffer.from([0x88, 0x82]), mask, maskedPayload]);
-}
-
-function waitForSocketClose(socket) {
-  return new Promise((resolvePromise, reject) => {
-    const cleanup = () => {
-      socket.off('close', onClose);
-      socket.off('error', onError);
-    };
-    const onClose = () => {
-      cleanup();
-      resolvePromise();
-    };
-    const onError = (error) => {
-      cleanup();
-      reject(error);
-    };
-    socket.once('close', onClose);
-    socket.once('error', onError);
-  });
-}
-
-async function closeWebSocket(socket) {
-  if (socket.destroyed) return;
-  const closed = waitForSocketClose(socket);
-  socket.end(maskedCloseFrame());
-  try {
-    await withTimeout(closed, 'WebSocket cleanup timed out');
-  } catch (error) {
-    socket.destroy();
-    throw error;
-  }
+function closeWebSocket(socket) {
+  if (!socket.destroyed) socket.destroy();
 }
 
 function readUpgradeResponse(socket) {
@@ -189,7 +155,7 @@ async function assertProgramBaseline(port, subprotocol, route) {
     assert(snapshot.channel === 'program', 'Program WebSocket baseline has the wrong channel');
   } finally {
     console.log('[production-smoke] WS cleanup');
-    await closeWebSocket(socket);
+    closeWebSocket(socket);
   }
 }
 
