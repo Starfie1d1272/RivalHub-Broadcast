@@ -4,8 +4,13 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
+import { getProgramFixture } from '../src/program/fixtures';
+import { PlayerCard } from '../src/program/widgets/player-rails/PlayerCard';
 import { SUMMARY_HOLD_MS, TeamSummary } from '../src/program/widgets/player-rails/TeamSummary';
-import type { TeamSummaryPresentation } from '../src/program/widgets/player-rails/presentation';
+import {
+  buildPlayerRailsPresentation,
+  type TeamSummaryPresentation,
+} from '../src/program/widgets/player-rails/presentation';
 
 const summary = (money: number): TeamSummaryPresentation => ({
   side: 'CT',
@@ -42,7 +47,8 @@ describe('Player Rails summary lifecycle', () => {
     act(() => {
       root?.render(<TeamSummary phase="live" side="CT" summary={summary(1_000)} />);
     });
-    expect(container.textContent).toContain('$4,200');
+    expect(container.textContent).toContain('$1,000');
+    expect(container.textContent).not.toContain('$4,200');
     expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
 
     act(() => {
@@ -85,5 +91,96 @@ describe('Player Rails summary lifecycle', () => {
       );
     });
     expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+  });
+
+  it('clears carryover when an unknown phase interrupts the transition', () => {
+    vi.useFakeTimers();
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(<TeamSummary phase="freezetime" side="CT" summary={summary(4_200)} />);
+    });
+    act(() => {
+      root?.render(<TeamSummary phase="live" side="CT" summary={summary(1_000)} />);
+    });
+    expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
+
+    act(() => {
+      root?.render(<TeamSummary phase="unknown" side="CT" summary={summary(900)} />);
+    });
+    expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+
+    act(() => {
+      root?.render(<TeamSummary phase="live" side="CT" summary={summary(800)} />);
+    });
+    expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+  });
+});
+
+describe('Player Rails card presentation', () => {
+  let root: Root | undefined;
+
+  afterEach(() => {
+    if (root !== undefined) {
+      act(() => root?.unmount());
+      root = undefined;
+    }
+  });
+
+  it('keeps live armor, kit, and C4 owner equipment visible', () => {
+    const snapshot = getProgramFixture('stress-long-labels');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const carrier = presentation.ct.players.find(
+      (player) => player.sourcePlayerId === 'stress-player-1',
+    );
+    if (carrier === undefined) throw new Error('carrier missing');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={carrier} />);
+    });
+
+    expect(container.querySelector('[data-player-equipment="true"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="护甲"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="拆弹器"]')).not.toBeNull();
+    expect(container.querySelector('[aria-label="C4"]')).not.toBeNull();
+  });
+
+  it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
+    const snapshot = getProgramFixture('series-bo1');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const player = presentation.ct.players[0];
+    if (player === undefined) throw new Error('player missing');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={{ ...player, roundMoneySpent: null }} />);
+    });
+    expect(container.querySelector('.player-rail__spent')?.textContent).toBe('—');
+    expect(container.querySelector('.player-rail__spent')?.textContent).not.toBe('-—');
+
+    act(() => {
+      root?.render(<PlayerCard player={{ ...player, roundMoneySpent: 1_200 }} />);
+    });
+    expect(container.querySelector('.player-rail__spent')?.textContent).toBe('-$1,200');
+
+    const dead = buildPlayerRailsPresentation(
+      getProgramFixture('stress-long-labels')?.payload ?? snapshot.payload,
+    ).ct.players.find((candidate) => candidate.mode === 'dead');
+    if (dead === undefined) throw new Error('dead player missing');
+    act(() => {
+      root?.render(<PlayerCard player={dead} />);
+    });
+    expect(container.querySelector('[data-health-spacer="true"]')).not.toBeNull();
+    expect(container.querySelector('.player-rail__dead-stats')).not.toBeNull();
+    expect(container.querySelector('[data-player-equipment="true"]')).toBeNull();
   });
 });

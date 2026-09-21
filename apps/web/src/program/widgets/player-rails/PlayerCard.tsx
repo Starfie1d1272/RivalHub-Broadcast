@@ -1,3 +1,10 @@
+/**
+ * Presentation adaptation based on Lexogrine cs2-react-hud at
+ * 7874750c97fcecd8f72eb3fad382917e035ec651 (MIT), using Player.tsx and
+ * TeamBox.tsx. Raw GSI props, donor domain types, and donor lifecycle
+ * semantics are intentionally omitted.
+ */
+
 import type { CSSProperties } from 'react';
 
 import type { PlayerCardPresentation, PlayerRailAsset, PlayerRailWeapon } from './presentation';
@@ -8,6 +15,10 @@ function displayNumber(value: number | null): string {
 
 function displayMoney(value: number | null): string {
   return value === null ? '—' : `$${Math.round(value).toLocaleString('en-US')}`;
+}
+
+function displaySpent(value: number | null): string {
+  return value === null ? '—' : `-${displayMoney(value)}`;
 }
 
 function MaskIcon({
@@ -115,7 +126,9 @@ export function PlayerCard({ player }: { readonly player: PlayerCardPresentation
         ) : null}
       </div>
 
-      {dead ? null : (
+      {dead ? (
+        <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true" />
+      ) : (
         <div className="player-rail__health-bar">
           <span style={healthStyle} />
         </div>
@@ -153,8 +166,8 @@ export function PlayerCard({ player }: { readonly player: PlayerCardPresentation
             ) : null}
             {player.zeus ? <WeaponIcon className="is-zeus" weapon={player.zeus} /> : null}
           </div>
-          {player.mode === 'freezetime' ? (
-            <div className="player-rail__equipment">
+          {player.mode === 'freezetime' || player.mode === 'live' ? (
+            <div className="player-rail__equipment" data-player-equipment="true">
               <MaskIcon asset={player.armorAsset} label="护甲" />
               {player.hasDefuser ? <MaskIcon asset={player.defuserAsset} label="拆弹器" /> : null}
               {player.hasC4 ? <MaskIcon asset={player.c4Asset} label="C4" /> : null}
@@ -175,7 +188,7 @@ export function PlayerCard({ player }: { readonly player: PlayerCardPresentation
               {displayMoney(player.money)}
             </span>
             {player.mode === 'freezetime' ? (
-              <span className="player-rail__spent">-{displayMoney(player.roundMoneySpent)}</span>
+              <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
             ) : null}
             <KAD dead={false} player={player} />
           </>

@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+
+import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+
 import { ProgramCanvas } from '../ProgramCanvas';
 import { GameplayHud } from '../GameplayHud';
 import { getProgramFixture } from '../fixtures';
@@ -6,15 +10,26 @@ import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: string }) {
   const snapshot = getProgramFixture(fixtureId);
+  const carryoverSource =
+    fixtureId === 'player-rails-carryover' ? getProgramFixture('series-bo1') : null;
+  const [displayedSnapshot, setDisplayedSnapshot] = useState<ProgramSnapshot | null>(
+    carryoverSource ?? snapshot,
+  );
 
-  if (snapshot === null) {
+  useEffect(() => {
+    if (carryoverSource === null || snapshot === null) return;
+    const timer = window.setTimeout(() => setDisplayedSnapshot(snapshot), 50);
+    return () => window.clearTimeout(timer);
+  }, [carryoverSource, snapshot]);
+
+  if (snapshot === null || displayedSnapshot === null) {
     return <ProgramVisualFixtureNotFound fixtureId={fixtureId} />;
   }
 
   return (
     <ProgramCanvas>
-      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
-      <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={displayedSnapshot} />
+      <ProgramFoundationProbe fixtureId={fixtureId} snapshot={displayedSnapshot} />
     </ProgramCanvas>
   );
 }

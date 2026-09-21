@@ -16,6 +16,10 @@ export const PROGRAM_FIXTURE_IDS = [
   'bomb-defusing',
   'timeout-ct',
   'stress-long-labels',
+  'player-rails-eco',
+  'player-rails-dead-observed',
+  'player-rails-missing-summary',
+  'player-rails-carryover',
   'series-bo1',
   'series-bo3-map1',
   'series-bo5',
@@ -47,6 +51,10 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'bomb-defusing': '正在拆弹',
   'timeout-ct': 'CT 暂停',
   'stress-long-labels': '长名称压力场景',
+  'player-rails-eco': '选手栏 · 经济局',
+  'player-rails-dead-observed': '选手栏 · 已阵亡且被观察',
+  'player-rails-missing-summary': '选手栏 · 汇总证据缺失',
+  'player-rails-carryover': '选手栏 · 回合切换延续',
   'series-bo1': 'BO1 系列赛',
   'series-bo3-map1': 'BO3 · Map 1',
   'series-bo5': 'BO5 中盘',
@@ -852,6 +860,52 @@ const freezetimePlayers = stressPlayers.map((player, index) =>
   ),
 );
 
+const ecoPlayers = freezetimePlayers.map((player, index) => ({
+  ...player,
+  state:
+    player.state === null
+      ? null
+      : {
+          ...player.state,
+          armor: 0,
+          hasHelmet: false,
+          hasDefuser: false,
+          money: 1_400,
+          equipValue: 0,
+        },
+  weapons:
+    index % 2 === 0
+      ? [
+          {
+            ...makeWeapon(`eco-pistol-${index + 1}`, 'weapon_glock', 'active'),
+            type: 'pistol' as const,
+            ammoClip: 20,
+            ammoClipMax: 20,
+            ammoReserve: 120,
+          },
+        ]
+      : [],
+  roundMoneySpent: 0,
+}));
+
+const missingSummaryPlayers = freezetimePlayers.map((player, index) =>
+  index === 0
+    ? {
+        ...player,
+        state: player.state === null ? null : { ...player.state, money: null, equipValue: null },
+        weapons: [],
+        weaponsAvailable: false,
+        roundMoneySpent: null,
+      }
+    : player,
+);
+
+const carryoverLivePlayers = freezetimePlayers.map((player) => ({
+  ...player,
+  state: player.state === null ? null : { ...player.state, money: 1_000, equipValue: 500 },
+  roundMoneySpent: null,
+}));
+
 const stressMatch = fixtureMatch({
   format: 'bo5',
   competition: {
@@ -986,6 +1040,72 @@ const fixtureRecord = {
         action: null,
       },
       coverage: BOMB_COVERAGE,
+    }),
+  ),
+  'player-rails-eco': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: ecoPlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'freezetime', winnerSide: 'unknown' },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
+  'player-rails-dead-observed': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: stressMatch,
+      teams: canonicalTeams,
+      series: LONG_SERIES,
+      players: stressPlayers,
+      roundNumber: 19,
+      score: { ct: 10, t: 8 },
+      clock: { phase: 'live', endsInSeconds: 17 },
+      observedPlayerSourceId: 'stress-player-3',
+      bomb: {
+        state: 'carried',
+        sourcePlayerId: 'stress-player-1',
+        explosion: null,
+        action: null,
+      },
+      coverage: BOMB_COVERAGE,
+    }),
+  ),
+  'player-rails-missing-summary': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: missingSummaryPlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'freezetime', winnerSide: 'unknown' },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
+  'player-rails-carryover': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: carryoverLivePlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'live', winnerSide: 'unknown' },
+      clock: { phase: 'live', endsInSeconds: 74 },
     }),
   ),
   'series-bo1': makeSnapshot(

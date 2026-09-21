@@ -368,7 +368,12 @@ export function getPlayerCurrentRoundMoneySpent(
   }
   if (!Number.isFinite(currentMoney) || currentMoney < 0) return null;
   const currentRound = accumulator.currentRound;
-  if (currentRound === null || currentRound.invalidated || !currentRound.hasCompleteEvidence) {
+  if (
+    currentRound === null ||
+    currentRound.phase !== 'freezetime' ||
+    currentRound.invalidated ||
+    !currentRound.hasCompleteEvidence
+  ) {
     return null;
   }
   const startMoney = currentRound.startMoneyBySteam64[sourcePlayerId];

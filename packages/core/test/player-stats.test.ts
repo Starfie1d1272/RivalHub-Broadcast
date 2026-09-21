@@ -127,11 +127,12 @@ describe('map-scoped player stats accumulator', () => {
     state = accept(state, frame(1, 1, 'freezetime', 1, 0, 4_200)).state;
     state = accept(state, frame(2, 2, 'freezetime', 1, 0, 3_800)).state;
     expect(state.playerStats.currentRound?.startMoneyBySteam64[PLAYER_A]).toBe(4_200);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_800)).toBe(400);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 4_500)).toBe(0);
 
     state = accept(state, frame(3, 3, 'live', 1, 80, 3_700)).state;
     expect(getPlayerCurrentRoundDamage(state.playerStats, PLAYER_A)).toBe(80);
-    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_700)).toBe(500);
-    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 4_500)).toBe(0);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_700)).toBeNull();
 
     state = accept(state, frame(5, 5, 'live', 1, 0, 4_500)).state;
     expect(getPlayerCurrentRoundDamage(state.playerStats, PLAYER_A)).toBeNull();
@@ -139,7 +140,7 @@ describe('map-scoped player stats accumulator', () => {
 
     state = accept(state, frame(6, 6, 'freezetime', 2, 0, 3_500)).state;
     state = accept(state, frame(7, 7, 'live', 2, 20, 3_400)).state;
-    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_400)).toBe(100);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_400)).toBeNull();
   });
 
   it('finalizes when map.round advances at phase=over', () => {

@@ -179,6 +179,10 @@
   overflow: hidden;
 }
 
+.player-rail__health-spacer {
+  background: rgb(255 255 255 / 8%);
+}
+
 .player-rail__health-bar span {
   background: var(--rh-hud-side-ct);
   display: block;

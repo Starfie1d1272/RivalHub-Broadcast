@@ -1,3 +1,9 @@
+/**
+ * Presentation adaptation based on Lexogrine cs2-react-hud at
+ * 7874750c97fcecd8f72eb3fad382917e035ec651 (MIT), using TeamBox.tsx. Raw
+ * GSI props, donor domain types, and donor lifecycle semantics are omitted.
+ */
+
 import { useEffect, useRef, useState } from 'react';
 
 import type { PlayerRailSide, TeamSummaryPresentation } from './presentation';
@@ -22,37 +28,31 @@ export function TeamSummary({
   readonly summary: TeamSummaryPresentation;
 }) {
   const previousPhase = useRef(phase);
-  const latestFreezetimeSummary = useRef<TeamSummaryPresentation | null>(null);
-  const [carryover, setCarryover] = useState<TeamSummaryPresentation | null>(null);
-
-  useEffect(() => {
-    if (phase === 'freezetime') latestFreezetimeSummary.current = summary;
-  }, [phase, summary]);
+  const [carryoverActive, setCarryoverActive] = useState(false);
 
   useEffect(() => {
     const wasFreezetime = previousPhase.current === 'freezetime';
     previousPhase.current = phase;
 
-    if (phase === 'freezetime') {
+    if (phase !== 'live' || !wasFreezetime) {
+      setCarryoverActive(false);
       return;
     }
-    if (phase !== 'live' || !wasFreezetime) return;
 
-    const retained = latestFreezetimeSummary.current;
-    if (retained === null) return;
-    setCarryover(retained);
-    const timer = window.setTimeout(() => setCarryover(null), SUMMARY_HOLD_MS);
+    setCarryoverActive(true);
+    const timer = window.setTimeout(() => setCarryoverActive(false), SUMMARY_HOLD_MS);
     return () => window.clearTimeout(timer);
   }, [phase]);
 
-  const visible = phase === 'freezetime' || (phase === 'live' && carryover !== null);
-  const displayed = phase === 'freezetime' ? summary : phase === 'live' ? carryover : null;
+  const visible = phase === 'freezetime' || (phase === 'live' && carryoverActive);
+  const displayed = visible ? summary : null;
   const utility = displayed?.utility ?? null;
 
   return (
     <div
       aria-hidden={!visible}
       className={`player-rail__summary${visible ? ' is-visible' : ''}`}
+      data-summary-carryover={carryoverActive}
       data-summary-phase={phase}
       data-summary-visible={visible}
       data-team-summary={side}
