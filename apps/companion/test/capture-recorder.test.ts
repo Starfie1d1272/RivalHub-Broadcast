@@ -366,7 +366,6 @@ describe('production capture recorder', () => {
       cs2Build: '1.0.0',
       artifactSha256: 'c'.repeat(64),
       qualificationRunId: 'qualification-run',
-      receiverGeneration: 7,
       gsiConfig: GSI_CONFIG,
       monotonicNow: () => 100,
       writerFactory: () => Promise.resolve(writer),
@@ -392,7 +391,7 @@ describe('production capture recorder', () => {
         sourceArtifact: { id: 'cstv-live', sha256: 'b'.repeat(64) },
       }),
     ).toBe(true);
-    expect(recorder.tryRecord({ ...frameInput(0), receiverGeneration: 7 })).toBe(true);
+    expect(recorder.tryRecord(frameInput(0))).toBe(true);
     await recorder.finalize();
 
     const manifest = JSON.parse(
@@ -407,7 +406,6 @@ describe('production capture recorder', () => {
         elapsedUnit: 'microseconds',
         originMonotonicMs: 100,
       },
-      receiverGeneration: 7,
       provenance: {
         kind: 'production-recorder',
         recorderVersion: 1,
@@ -417,7 +415,6 @@ describe('production capture recorder', () => {
         qualificationRunId: 'qualification-run',
       },
     });
-    expect(JSON.parse(writer.bytes.toString('utf8'))).toMatchObject({ receiverGeneration: 7 });
     expect(
       JSON.parse(await readFile(join(root, 'qualified-capture', 'objective-events.jsonl'), 'utf8')),
     ).toMatchObject({
