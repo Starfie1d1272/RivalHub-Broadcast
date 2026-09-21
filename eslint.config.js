@@ -22,6 +22,7 @@ export default tseslint.config(
         projectService: {
           allowDefaultProject: [
             'packages/cs2-assets/test/*.ts',
+            'packages/hud-config/test/*.ts',
             'packages/protocol/test/*.ts',
             'packages/radar/test/*.ts',
           ],

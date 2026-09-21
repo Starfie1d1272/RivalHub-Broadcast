@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@rivalhub-broadcast/core": "workspace:*",
+    "@rivalhub-broadcast/hud-config": "workspace:*",
     "@rivalhub-broadcast/protocol": "workspace:*",
     "@rivalhub-broadcast/radar": "workspace:*",
     "@rivalhub-broadcast/rivalhub": "workspace:*",

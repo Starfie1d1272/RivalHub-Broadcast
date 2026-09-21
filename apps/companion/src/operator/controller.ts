@@ -1,14 +1,11 @@
-import { timingSafeEqual } from 'node:crypto';
-
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { OperatorCommand, SeriesProgress } from '@rivalhub-broadcast/core/series-progress';
 
 import { checkLocalWebOrigin, type LocalWebOriginPolicy } from '../local-web/origin-policy.js';
 import type { SeriesOperatorCommandResult } from '../runtime/program-runtime.js';
 
 export interface OperatorCommandControllerOptions {
-  readonly controlToken: string;
-  readonly originPolicy?: LocalWebOriginPolicy;
+  readonly originPolicy: LocalWebOriginPolicy;
   readonly execute: (command: OperatorCommand) => SeriesOperatorCommandResult;
 }
 
@@ -20,27 +17,12 @@ function isPositiveInteger(value: unknown): value is number {
   return typeof value === 'number' && Number.isSafeInteger(value) && value > 0;
 }
 
-function tokenMatches(request: FastifyRequest, expected: string): boolean {
-  const header = request.headers['x-operator-token'];
-  const authorization = request.headers.authorization;
-  const provided =
-    typeof header === 'string'
-      ? header
-      : typeof authorization === 'string' && authorization.startsWith('Bearer ')
-        ? authorization.slice('Bearer '.length)
-        : undefined;
-  if (provided === undefined) return false;
-  const actualBytes = Buffer.from(provided, 'utf8');
-  const expectedBytes = Buffer.from(expected, 'utf8');
-  return actualBytes.length === expectedBytes.length && timingSafeEqual(actualBytes, expectedBytes);
-}
-
-function unauthorized(reply: FastifyReply): void {
-  void reply.code(401).send({ error: 'operator_unauthorized' });
-}
-
 function originForbidden(reply: FastifyReply): void {
   void reply.code(403).send({ error: 'operator_origin_forbidden' });
+}
+
+function mutationUnavailableOnLan(reply: FastifyReply): void {
+  void reply.code(403).send({ error: 'operator_mutation_loopback_only' });
 }
 
 function commandResult(result: SeriesOperatorCommandResult): Record<string, unknown> {
@@ -65,20 +47,13 @@ export function registerOperatorCommandRoutes(
   app: FastifyInstance,
   options: OperatorCommandControllerOptions,
 ): void {
-  if (options.controlToken.trim().length === 0) {
-    throw new Error('operator control token 不能为空');
-  }
-
   app.post('/operator/series/bind', (request, reply) => {
-    if (
-      options.originPolicy !== undefined &&
-      !checkLocalWebOrigin(options.originPolicy, request.headers.origin).allowed
-    ) {
-      originForbidden(reply);
+    if (options.originPolicy.mode !== 'loopback') {
+      mutationUnavailableOnLan(reply);
       return;
     }
-    if (!tokenMatches(request, options.controlToken)) {
-      unauthorized(reply);
+    if (!checkLocalWebOrigin(options.originPolicy, request.headers.origin).allowed) {
+      originForbidden(reply);
       return;
     }
 

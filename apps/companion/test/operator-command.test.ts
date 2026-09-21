@@ -2,10 +2,11 @@ import Fastify from 'fastify';
 import { describe, expect, it, vi } from 'vitest';
 
 import { buildApp } from '../src/app.js';
+import { createLocalWebOriginPolicy } from '../src/local-web/origin-policy.js';
 import { registerOperatorCommandRoutes } from '../src/operator/controller.js';
 
 describe('operator SeriesProgress command ingress', () => {
-  it('requires the local operator credential and returns a command acknowledgement', async () => {
+  it('requires a valid local origin and returns a command acknowledgement', async () => {
     const app = Fastify();
     const execute = vi.fn(() => ({
       ok: true,
@@ -13,7 +14,7 @@ describe('operator SeriesProgress command ingress', () => {
       code: 'operator_bind_applied' as const,
     }));
     registerOperatorCommandRoutes(app, {
-      controlToken: 'operator-secret',
+      originPolicy: createLocalWebOriginPolicy(),
       execute,
     });
 
@@ -29,14 +30,14 @@ describe('operator SeriesProgress command ingress', () => {
           },
         })
       ).statusCode,
-    ).toBe(401);
+    ).toBe(403);
 
     expect(
       (
         await app.inject({
           method: 'POST',
           url: '/operator/series/bind',
-          headers: { 'x-operator-token': 'operator-secret' },
+          headers: { origin: 'http://127.0.0.1' },
           payload: { kind: 'bind-current-map-execution-to-series-map', mapOrder: 0, reason: 'bad' },
         })
       ).statusCode,
@@ -45,7 +46,7 @@ describe('operator SeriesProgress command ingress', () => {
     const response = await app.inject({
       method: 'POST',
       url: '/operator/series/bind',
-      headers: { 'x-operator-token': 'operator-secret' },
+      headers: { origin: 'http://127.0.0.1' },
       payload: {
         kind: 'bind-current-map-execution-to-series-map',
         mapOrder: 1,
@@ -67,14 +68,13 @@ describe('operator SeriesProgress command ingress', () => {
     await app.close();
   });
 
-  it('is wired into the Companion app when an operator token is configured', async () => {
-    const app = buildApp({ operatorControlToken: 'operator-secret' });
+  it('is wired into the Companion app without a normal operator credential', async () => {
+    const app = buildApp();
     const response = await app.inject({
       method: 'POST',
       url: '/operator/series/bind',
       headers: {
         origin: 'http://127.0.0.1',
-        'x-operator-token': 'operator-secret',
       },
       payload: {
         kind: 'bind-current-map-execution-to-series-map',
@@ -84,6 +84,27 @@ describe('operator SeriesProgress command ingress', () => {
     });
     expect(response.statusCode).toBe(409);
     expect(response.json()).toMatchObject({ ok: false, code: 'series_unbound' });
+    await app.close();
+  });
+
+  it('rejects operator mutations in LAN mode even for an allowed Origin', async () => {
+    const app = buildApp({
+      host: '192.168.1.20',
+      localWebLanMode: true,
+      localWebAllowedOrigins: ['http://caster-pc:4173'],
+    });
+    const response = await app.inject({
+      method: 'POST',
+      url: '/operator/series/bind',
+      headers: { origin: 'http://caster-pc:4173' },
+      payload: {
+        kind: 'bind-current-map-execution-to-series-map',
+        mapOrder: 1,
+        reason: 'LAN mutation must be rejected',
+      },
+    });
+    expect(response.statusCode).toBe(403);
+    expect(response.json()).toEqual({ error: 'operator_mutation_loopback_only' });
     await app.close();
   });
 });

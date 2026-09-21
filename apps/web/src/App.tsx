@@ -12,15 +12,17 @@ import {
 import { ProgramCueRendererBridge } from './program/ProgramCueRendererBridge';
 import { ProgramPage } from './program/ProgramPage';
 import { OperatorPage } from './operator/OperatorPage';
+import { HudConsolePage } from './operator/HudConsolePage';
+import { useHudConfigClient } from './realtime/hud-config-client';
 import {
   ProgramVisualFixtureNotFound,
   ProgramVisualFixturePage,
 } from './program/testing/ProgramVisualFixturePage';
 import {
-  createLocalChannelClient,
   createProgramCueClient,
   type LocalChannelClient,
   type LocalChannelConnectionState,
+  useLocalChannelClient,
 } from './realtime';
 import type { LocalSnapshotChannel } from '@rivalhub-broadcast/protocol/version';
 
@@ -44,6 +46,13 @@ export const surfaceDefinitions = [
     path: '/debug',
     title: '运行诊断',
     description: '查看本地制播服务当前的输入、归一化结果、运行状态与退化信号。',
+    realtimeChannel: null,
+  },
+  {
+    id: 'hud',
+    path: '/operator/hud',
+    title: 'HUD 控制台',
+    description: '编辑并预览 Gameplay HUD 的预设、布局与外观。',
     realtimeChannel: null,
   },
 ] as const;
@@ -93,12 +102,7 @@ function recorderStateLabel(state: string | undefined): string {
 function useLocalChannelConnection<C extends LocalSnapshotChannel>(
   channel: C,
 ): LocalChannelClient<C> {
-  const client = useMemo(() => createLocalChannelClient(channel), [channel]);
-  useEffect(() => {
-    client.start();
-    return () => client.dispose();
-  }, [client]);
-  return client;
+  return useLocalChannelClient(channel);
 }
 
 function SurfaceConnectionMarker({ channel }: { readonly channel: LocalSnapshotChannel }) {
@@ -118,6 +122,12 @@ function SurfaceConnectionMarker({ channel }: { readonly channel: LocalSnapshotC
 
 function ProgramRoute() {
   const programClient = useLocalChannelConnection('program');
+  const programConnection = useSyncExternalStore(
+    programClient.subscribe,
+    programClient.getSnapshot,
+    programClient.getSnapshot,
+  );
+  const hudConfig = useHudConfigClient(import.meta.env.VITE_VISUAL_FIXTURES !== '1');
   const cueClient = useMemo(
     () =>
       createProgramCueClient({
@@ -140,7 +150,11 @@ function ProgramRoute() {
   return (
     <>
       <ProgramCueRendererBridge client={cueClient} />
-      <ProgramPage />
+      <ProgramPage
+        connectionState={programConnection.state}
+        resolvedPreset={hudConfig.current}
+        snapshot={programConnection.current}
+      />
     </>
   );
 }
@@ -447,5 +461,6 @@ export function App() {
   if (surface.id === 'debug') return <DebugPage />;
   if (surface.id === 'program') return <ProgramRoute />;
   if (surface.id === 'operator') return <OperatorPage />;
+  if (surface.id === 'hud') return <HudConsolePage />;
   return <SurfacePage surface={surface} />;
 }

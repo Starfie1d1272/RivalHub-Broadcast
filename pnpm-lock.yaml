@@ -232,6 +232,9 @@ importers:
       '@rivalhub-broadcast/core':
         specifier: workspace:*
         version: link:../../packages/core
+      '@rivalhub-broadcast/hud-config':
+        specifier: workspace:*
+        version: link:../../packages/hud-config
       '@rivalhub-broadcast/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -278,6 +281,9 @@ importers:
       '@rivalhub-broadcast/cs2-assets':
         specifier: workspace:*
         version: link:../../packages/cs2-assets
+      '@rivalhub-broadcast/hud-config':
+        specifier: workspace:*
+        version: link:../../packages/hud-config
       '@rivalhub-broadcast/protocol':
         specifier: workspace:*
         version: link:../../packages/protocol
@@ -317,6 +323,16 @@ importers:
         version: typescript@7.0.2
 
   packages/cs2-assets:
+    devDependencies:
+      '@typescript/native':
+        specifier: 'catalog:'
+        version: typescript@7.0.2
+
+  packages/hud-config:
+    dependencies:
+      zod:
+        specifier: 'catalog:'
+        version: 4.6.2
     devDependencies:
       '@typescript/native':
         specifier: 'catalog:'

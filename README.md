@@ -65,6 +65,7 @@ CS2 数据源 → RuntimeState
 ```text
 /program   正式节目画面
 /operator  制作控制
+/operator/hud  Gameplay HUD 控制台
 /debug     运行诊断
 ```
 
@@ -94,6 +95,7 @@ apps/
 packages/
   cs2-assets/           CS2 official presentation assets、semantic catalog 与 provenance
   core/                 RuntimeState、连续性、身份、transition、Projection
+  hud-config/           HUD preset、layout、theme、组件 registry 与逻辑几何
   protocol/             Broadcast 自有的 Local Protocol
   radar/                与前端框架无关的 Radar domain
   rivalhub/             RivalHub 赛事上下文 adapter
