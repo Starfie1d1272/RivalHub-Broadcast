@@ -504,6 +504,18 @@ export function registerQualificationRoutes(
             message: '当前无法为场景标记绑定采集记录时间。',
           });
         }
+        if (
+          kind === 'objective-reconnect-restart' &&
+          phase === 'after' &&
+          (freshnessFromDebug(debug) !== 'fresh' ||
+            runtime.current.programSource.lastAccepted === undefined ||
+            recorder.getHealth().frameCount < 1)
+        ) {
+          return reply.code(409).send({
+            error: 'objective_recovery_observation_required',
+            message: '重连或接收端重启后的结束标记必须绑定新的正常观测。',
+          });
+        }
         await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug), {
           phase,
           captureId,

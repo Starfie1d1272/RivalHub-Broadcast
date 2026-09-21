@@ -6,6 +6,7 @@ export interface CaptureFrameInput {
   readonly receivedAt: string;
   readonly receivedMonotonicMs: number;
   readonly payload: Record<string, unknown>;
+  readonly receiverGeneration?: number;
 }
 
 export type ObjectiveReferenceKind =
@@ -64,6 +65,7 @@ export interface ProductionCaptureFrameV1 {
   readonly elapsedUs: number;
   readonly receivedAt: string;
   readonly payload: Record<string, unknown>;
+  readonly receiverGeneration?: number;
 }
 
 /** Mirrors Capture V1; testkit verifyCapture validates the persisted contract. */
@@ -78,6 +80,7 @@ export interface ProductionCaptureManifestV1 {
   readonly scenario: string;
   readonly gsiConfig: Record<string, unknown>;
   readonly clock: CaptureClockV1;
+  readonly receiverGeneration?: number;
   readonly provenance?: ProductionCaptureProvenanceV1;
   readonly complete: boolean;
   readonly frameCount: number;
@@ -117,6 +120,9 @@ export function serializeCaptureFrame(input: CaptureFrameInput, elapsedUs: numbe
     elapsedUs,
     receivedAt: input.receivedAt,
     payload: input.payload,
+    ...(input.receiverGeneration === undefined
+      ? {}
+      : { receiverGeneration: input.receiverGeneration }),
   };
   return Buffer.from(`${JSON.stringify(frame)}\n`, 'utf8');
 }
@@ -153,6 +159,7 @@ export function createCaptureManifest(
     readonly cs2Build?: string;
     readonly artifactSha256?: string;
     readonly qualificationRunId?: string;
+    readonly receiverGeneration?: number;
     readonly monotonicOriginMs: number;
   },
 ): ProductionCaptureManifestV1 {
@@ -184,6 +191,9 @@ export function createCaptureManifest(
       elapsedUnit: 'microseconds',
       originMonotonicMs: options.monotonicOriginMs,
     },
+    ...(options.receiverGeneration === undefined
+      ? {}
+      : { receiverGeneration: options.receiverGeneration }),
     ...(provenance === undefined ? {} : { provenance }),
     complete,
     frameCount,

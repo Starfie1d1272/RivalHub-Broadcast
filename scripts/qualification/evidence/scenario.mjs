@@ -206,6 +206,10 @@ export function liveObservationReferences(markers) {
     .filter((observation) => observation !== null);
 }
 
+export function captureObservationReferences(markers) {
+  return markers.map((marker) => marker.observation).filter((observation) => observation !== null);
+}
+
 export function markerIndex(markers, kind, start = 0) {
   for (let index = start; index < markers.length; index += 1) {
     if (markers[index]?.kind === kind) return index;

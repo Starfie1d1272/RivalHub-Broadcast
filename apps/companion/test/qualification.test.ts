@@ -63,6 +63,15 @@ function payload(mapName = 'de_ancient'): Record<string, unknown> {
   };
 }
 
+function plantedPayload(mapName = 'de_ancient'): Record<string, unknown> {
+  return {
+    ...payload(mapName),
+    bomb: { state: 'planted', countdown: '30' },
+    phase_countdowns: { phase: 'bomb', phase_ends_in: '30' },
+    round: { phase: 'live', bomb: 'planted' },
+  };
+}
+
 async function closeApp(app: FastifyInstance | undefined): Promise<void> {
   if (app !== undefined) await app.close();
 }
@@ -155,15 +164,22 @@ describe('qualification-only Companion surface', () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-rotation-'));
     const first = new ClockedFakeRecorder('capture-a');
     const second = new ClockedFakeRecorder('capture-b');
+    let monotonicMs = 100;
+    let receiverGeneration = 0;
+    let sequence = 0;
     app = buildApp({
       gsiToken: GSI_TOKEN,
       recorder: first,
+      gsiSequenceSource: () => sequence++,
+      gsiReceiverGenerationSource: () => receiverGeneration,
       qualificationMode: true,
       qualificationControlToken: CONTROL_TOKEN,
       qualificationRunId: 'qualification-rotation-run',
       qualificationScenarioPath: join(temporaryDirectory, 'scenario.jsonl'),
       onQualificationRecorderRotate: (current) => {
         expect(current).toBe(first);
+        receiverGeneration = 1;
+        sequence = 0;
         return Promise.resolve({
           previousCaptureId: current.captureId,
           captureId: second.captureId,
@@ -171,10 +187,29 @@ describe('qualification-only Companion surface', () => {
         });
       },
       qualificationClock: {
-        now: () => ({ monotonicMs: 100, utc: '2026-09-21T00:00:00.100Z' }),
+        now: () => ({
+          monotonicMs,
+          utc: `2026-09-21T00:00:00.${String(monotonicMs).padStart(3, '0')}Z`,
+        }),
+      },
+      clock: {
+        now: () => ({
+          receivedAt: `2026-09-21T00:00:00.${String(monotonicMs).padStart(3, '0')}Z`,
+          receivedMonotonicMs: monotonicMs,
+        }),
       },
     });
     const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/gsi',
+          payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
+        })
+      ).statusCode,
+    ).toBe(204);
 
     expect(
       (
@@ -200,6 +235,26 @@ describe('qualification-only Companion surface', () => {
       captureId: 'capture-b',
     });
     expect(first.getHealth().state).toBe('closed');
+    const missingRecoveryObservation = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-reconnect-restart', phase: 'after' },
+    });
+    expect(missingRecoveryObservation.statusCode).toBe(409);
+    expect(missingRecoveryObservation.json()).toMatchObject({
+      error: 'objective_recovery_observation_required',
+    });
+    monotonicMs = 200;
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/gsi',
+          payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
+        })
+      ).statusCode,
+    ).toBe(204);
     expect(
       (
         await app.inject({

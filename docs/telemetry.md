@@ -362,23 +362,26 @@ pnpm qualification:objective-timing <capture-dir>
 分析器分三层输出：measurement 只计算 active packet interval 的 p50/p95/p99/max、countdown
 delta 与 monotonic residual、source-local state/phase residual、plant/defuse/explosion terminal
 residual、provider/receive 时间证据、missing countdown spans 和 packet/sequence gaps；evidence
-coverage 再验证 raw recorder provenance、canonical production GSI config、Issue #49 的 8 个
-最小 objective scenario，以及独立的 `objective-events.jsonl` CSTV/demo reference；qualification
-decision 最后才组合这些 gate。报告只打印 allowlisted GSI config，不打印 token；原始 frames、
+coverage 再验证 raw recorder provenance、canonical production GSI config 和 Issue #49 的 8 个
+最小 objective scenario。若同一场 CSTV/demo 可用，再把独立的 `objective-events.jsonl` 作为
+精度交叉核验；它不是仅用 GSI 数据完成生命周期语义验收的前置条件。验收判定最后才组合这些 gate。报告只打印 allowlisted GSI config，不打印 token；原始 frames、
 manifest、reference file、scenario marker 和 SHA-256 仍是证据源。
 
 同一个 GSI payload 内的 bomb/phase 对齐只能作为 source-local consistency，不能证明 observer-visible
-transition residual、common-mode fixed offset 或 random delay。没有独立 reference、raw production
-provenance 或完整 scenario coverage 时，production decision 必须保持 `INCONCLUSIVE` 或 `FAIL`，
-不能是 `PASS`；synthetic fixture 和 sanitized fixture 只能测试 measurement/analyzer 回归，不能
-冒充 production qualification。
+transition residual、common-mode fixed offset 或 random delay。缺少 raw production provenance、完整
+scenario coverage 或来源语义证据时，目标证据基础判定必须保持
+`INCONCLUSIVE` 或 `FAIL`；缺少可选独立 reference 只会让 0.1 秒数值能力保持
+`INCONCLUSIVE`，不能把它误报为 `PASS`。synthetic fixture 和 sanitized fixture 只能测试
+measurement/analyzer 回归，不能冒充 production qualification。
 
-source semantics/lifecycle qualification 与 numeric precision qualification 是两个独立结论。
+目标证据基础、来源语义/生命周期验收与数值精度能力是三个独立结论。
 前者必须处理 overloaded countdown 的 phase 切换、`round.bomb`、matching defuser 的 kit
 evidence、abort/restart 和显式场景 consequence；显式 semantic mismatch 为 `FAIL`，缺少语义证据为
 `INCONCLUSIVE`。terminal residual 与 countdown sample completeness 属于 numeric/availability
 gate：终止时刻误差超过 100 ms 为 numeric `FAIL`，缺少终止样本或倒计时样本时 numeric 保持
-`INCONCLUSIVE`，不把数值/可用性缺口误判成 source semantic `FAIL`。后者的 0.1 s gate
+`INCONCLUSIVE`，不把数值/可用性缺口误判成来源语义 `FAIL`。目标证据基础只要求真实采集记录完整、正式配置和来源可追溯、八类场景
+覆盖、短时有效窗口足够且来源语义通过；0.1 s 数值能力即使 `FAIL`，基础验收
+仍可为 `PASS`，这表示 HUD 不得承诺 0.1 秒。后者的 0.1 s gate
 包括 active packet interval p99 ≤ 200 ms、独立 reference transition residual p95 ≤ 100 ms、
 独立 absolute offset ≤ 100 ms、canonical production config 匹配、完整 scenario coverage，
 countdown samples complete、terminal residual coverage/bound，并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy 上限。lease 与 Core
@@ -392,10 +395,12 @@ plant、defuse、explosion 三类 terminal residual 必须各自有统计样本�
 `reconnect-restart`。每个窗口必须有同一 Capture V1 `captureId` 绑定的 `before`/`after`
 marker；raw frames 验证实际 consequence。fast-defuse 只看窗口内的第一帧，不能看整段 capture
 的第一帧。reconnect 不由 heartbeat 间隙或 sequence gap 推断，只能由显式 marker 绑定不同
-recorder capture identity 的 run-level aggregator 验证。现场验收通过 `rotate.ps1` 在同一
-qualification run 内切换到新的 recorder capture identity；Windows 备用入口为：
-`mark.ps1 objective-plant-abort -Phase before` / `-Phase after`，重连场景还需在实际重连或
-接收端重启后执行 `rotate.ps1`，再记录 `objective-reconnect-restart -Phase after`。
+采集记录身份的整轮汇总验证；同时必须有开始侧已下包/拆弹状态、结束侧
+新采集记录中的正常观测，以及采集帧中递增的接收端世代。现场验收通过 `rotate.ps1` 在同一
+现场验收轮次内切换采集记录身份并推进接收端世代；结束标记在新采集记录尚未
+收到正常 GSI 观测时会被拒绝。Windows 备用入口为：`mark.ps1 objective-plant-abort -Phase before`
+/ `-Phase after`，重连场景还需在实际重连或接收端重启后执行 `rotate.ps1`，等待新的已下包链路
+观测，再记录 `objective-reconnect-restart -Phase after`。
 
 canonical production GSI config 的唯一代码来源是
 `packages/telemetry-gsi/src/production-config.json`；analyzer 会对 capture manifest 的
@@ -415,8 +420,8 @@ canonical production GSI config 的唯一代码来源是
 identity hash 写入 `sourceArtifact`；离线 CSTV/demo extractor 应写入对应输入 artifact 的内容
 SHA-256，不能把 endpoint identity 当作内容完整性证明。`occurredAtUs` 由同一进程的 CSTV observation monotonic
 time 按 manifest 的 `clock.originMonotonicMs` 对齐，analyzer 会拒绝无法复现 common clock alignment
-的记录。没有该文件、clock、source provenance 或对齐证明时 transition/absolute-offset gate
-为 `INCONCLUSIVE`。
+的记录。没有该文件、clock、source provenance 或对齐证明时 transition/absolute-offset precision
+gate 为 `INCONCLUSIVE`；仅用 GSI 数据的生命周期语义仍可由原始帧和显式场景窗口完成。
 
 ## 12. 隐私与安全
 

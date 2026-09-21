@@ -54,6 +54,7 @@ export interface CompanionAppOptions {
   readonly recorder?: CaptureRecorder;
   readonly producerInstanceId?: string;
   readonly gsiSequenceSource?: GsiSequenceSource;
+  readonly gsiReceiverGenerationSource?: () => number;
   readonly programRuntime?: ProgramRuntime;
   readonly seriesProgressCheckpointStore?: SeriesProgressCheckpointStore;
   readonly onSeriesProgressDiagnostic?: (diagnostic: { readonly code: string }) => void;
@@ -282,6 +283,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       ...(options.gsiSequenceSource === undefined
         ? {}
         : { sequenceSource: options.gsiSequenceSource }),
+      ...(options.gsiReceiverGenerationSource === undefined
+        ? {}
+        : { receiverGenerationSource: options.gsiReceiverGenerationSource }),
       onAcceptedRaw: (input) => {
         debugEvidenceStore.recordAcceptedRaw(input);
         options.onAcceptedRaw?.(input);

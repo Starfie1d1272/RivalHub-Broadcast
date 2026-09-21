@@ -22,6 +22,10 @@ function objectiveTimingLabel(value) {
   return '证据不足';
 }
 
+function qualificationProfileLabel(value) {
+  return value === 'objective-timing' ? '目标时钟专项验收' : '常规现场验收';
+}
+
 function truthLabel(value, inconclusive = '证据不足') {
   if (value === true) return '完整';
   if (value === false) return '不完整';
@@ -54,6 +58,7 @@ export function renderReport({
   captureErrors,
   objectiveTimingCoverage,
   objectiveTiming,
+  qualificationProfile = qualification.profile ?? 'base',
   checks,
 }) {
   const lines = [
@@ -63,6 +68,7 @@ export function renderReport({
     `- 运行编号：\`${qualification.runId}\``,
     `- Git SHA：\`${artifact.gitSha}\``,
     `- Node 运行时：\`${artifact.nodeVersion}\``,
+    `- 现场验收类型：${qualificationProfileLabel(qualificationProfile)}`,
     '',
     '## 验收检查',
     '',
@@ -83,7 +89,7 @@ export function renderReport({
     if (capture.objectiveTiming !== undefined) {
       const objective = capture.objectiveTiming;
       lines.push(
-        `  - 目标时钟正式环境判定：**${objectiveTimingLabel(objective.qualification.production.result)}**`,
+        `  - 目标证据基础判定：**${objectiveTimingLabel(objective.qualification.foundation.result)}**`,
         `  - 目标时钟数值精度 0.1 秒：**${objectiveTimingLabel(objective.qualification.numeric01s.result)}**；活动数据间隔 p99 ${objective.metrics.activePacketIntervalMs.p99 === null ? '未知' : `${objective.metrics.activePacketIntervalMs.p99.toFixed(1)} 毫秒`}；重连间隔 ${objective.metrics.reconnectGaps.count} 次`,
         `  - 目标时钟数值精度 0.01 秒：**${objectiveTimingLabel(objective.qualification.numeric001s.result)}**`,
         `  - 目标时钟证据：场景覆盖 ${objective.evidence.scenarioCoverage.observed.length}/${objective.evidence.scenarioCoverage.required.length}；终止时刻误差样本 ${truthLabel(objective.qualification.numeric01s.gates.terminalResidualCoverage, '证据不足')}；独立事件记录 ${objective.evidence.independentObjectiveReferences.length} 条`,
@@ -110,7 +116,7 @@ export function renderReport({
       '## 目标时钟现场验收（整轮汇总）',
       '',
       `- 采集记录：${objectiveTiming.captureIds.join('、') || '无'}`,
-      `- 正式环境判定：**${objectiveTimingLabel(objectiveTiming.qualification.production.result)}**`,
+      `- 目标证据基础判定：**${objectiveTimingLabel(objectiveTiming.qualification.foundation.result)}**`,
       `- 数值精度 0.1 秒：**${objectiveTimingLabel(objectiveTiming.qualification.numeric01s.result)}**`,
       `- 来源语义与生命周期：**${objectiveTimingLabel(objectiveTiming.qualification.sourceSemantics.result)}**`,
       `- 场景覆盖：${objectiveTiming.evidence.scenarioCoverage.observed.length}/${objectiveTiming.evidence.scenarioCoverage.required.length}`,

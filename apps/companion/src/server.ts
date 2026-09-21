@@ -47,6 +47,8 @@ const producerInstanceId = randomUUID();
 let cstvSourceConfig: CstvSourceManagers | undefined;
 let programCstvUrl: string | undefined;
 let cstvSourceConfigError: string | undefined;
+let receiverGeneration = 0;
+let receiverSequence = 0;
 try {
   const programUrl = parseCstvSourceUrl(process.env.PROGRAM_CSTV_URL, 'PROGRAM_CSTV_URL');
   programCstvUrl = programUrl;
@@ -94,7 +96,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
-  const createRecorder = () =>
+  const createRecorder = (generation = receiverGeneration) =>
     createCaptureRecorder({
       captureDir,
       broadcastCommit,
@@ -106,6 +108,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
             ...(process.env.QUALIFICATION_ARTIFACT_SHA256 === undefined
               ? {}
               : { artifactSha256: process.env.QUALIFICATION_ARTIFACT_SHA256 }),
+            receiverGeneration: generation,
             qualificationRunId,
           }
         : {}),
@@ -131,6 +134,12 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     logger: true,
     gsiToken,
     recorder,
+    ...(qualificationMode
+      ? {
+          gsiSequenceSource: () => receiverSequence++,
+          gsiReceiverGenerationSource: () => receiverGeneration,
+        }
+      : {}),
     programRuntime,
     ...(webRoot === undefined ? {} : { webRoot }),
     host,
@@ -148,8 +157,11 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
             if (currentRecorder !== recorder) {
               throw new Error('采集记录在切换过程中发生了意外变化。');
             }
-            const nextRecorder = await createRecorder();
+            const nextGeneration = receiverGeneration + 1;
+            const nextRecorder = await createRecorder(nextGeneration);
             const previousCaptureId = currentRecorder.captureId;
+            receiverGeneration = nextGeneration;
+            receiverSequence = 0;
             recorder = nextRecorder;
             return {
               previousCaptureId,

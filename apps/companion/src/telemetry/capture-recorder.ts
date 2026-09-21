@@ -86,6 +86,7 @@ export interface CaptureRecorderOptions {
   readonly cs2Build?: string;
   readonly artifactSha256?: string;
   readonly qualificationRunId?: string;
+  readonly receiverGeneration?: number;
   readonly monotonicNow?: () => number;
   readonly wallClockNow?: () => string;
   readonly writerFactory?: CaptureWriterFactory;
@@ -122,6 +123,7 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   private readonly cs2Build: string | undefined;
   private readonly artifactSha256: string | undefined;
   private readonly qualificationRunId: string | undefined;
+  private readonly receiverGeneration: number | undefined;
   private readonly startedMonotonicMs: number;
   private readonly writerFactory: CaptureWriterFactory;
   private readonly shutdownDrainTimeoutMs: number;
@@ -162,6 +164,7 @@ class ProductionCaptureRecorder implements CaptureRecorder {
     this.cs2Build = options.cs2Build;
     this.artifactSha256 = options.artifactSha256;
     this.qualificationRunId = options.qualificationRunId;
+    this.receiverGeneration = options.receiverGeneration;
     this.gsiConfig = { ...options.gsiConfig };
     delete this.gsiConfig.auth;
     delete this.gsiConfig.token;
@@ -542,6 +545,9 @@ class ProductionCaptureRecorder implements CaptureRecorder {
         ...(this.qualificationRunId === undefined
           ? {}
           : { qualificationRunId: this.qualificationRunId }),
+        ...(this.receiverGeneration === undefined
+          ? {}
+          : { receiverGeneration: this.receiverGeneration }),
         monotonicOriginMs: this.startedMonotonicMs,
       },
     );

@@ -36,6 +36,7 @@ Write-JsonFile -Path (Join-Path $runDir 'environment.json') -Value ([ordered]@{
     runId = $runId
     windowsVersion = $windowsVersion
     cs2Version = $cs2Version
+    qualificationProfile = 'objective-timing'
     startedAt = (Get-Date).ToUniversalTime().ToString('o')
 })
 

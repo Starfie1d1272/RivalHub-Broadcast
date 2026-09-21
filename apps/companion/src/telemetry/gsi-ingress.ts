@@ -54,6 +54,7 @@ export interface GsiIngressOptions {
   readonly gsiToken: string;
   readonly recorder: CaptureRecorderSource;
   readonly sequenceSource?: GsiSequenceSource;
+  readonly receiverGenerationSource?: () => number;
   readonly onAcceptedRaw?: AcceptedRawSink;
   readonly onObservation?: ObservationSink;
   readonly onGsiDiagnostics?: GsiDiagnosticsSink;
@@ -146,11 +147,13 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       };
 
       try {
+        const receiverGeneration = options.receiverGenerationSource?.();
         resolveCaptureRecorder(options.recorder).tryRecord({
           sequence: acceptedSequence,
           receivedAt: receive.receivedAt,
           receivedMonotonicMs: receive.receivedMonotonicMs,
           payload,
+          ...(receiverGeneration === undefined ? {} : { receiverGeneration }),
         });
       } catch {
         reportRuntimeDiagnostic(options, 'recorder_unexpected_failure');

@@ -117,7 +117,11 @@ function objectiveMarker(scenario, phase, captureElapsedUs, captureId = 'capture
   };
 }
 
-function analyzedRunCapture(captureId, observedScenarios = []) {
+function clone(value) {
+  return JSON.parse(JSON.stringify(value));
+}
+
+function analyzedRunCapture(captureId, observedScenarios = [], markerEvidence = []) {
   const scenarioEntries = Object.fromEntries(
     [
       'freezetime-live',
@@ -136,6 +140,7 @@ function analyzedRunCapture(captureId, observedScenarios = []) {
     objectiveTiming: {
       evidence: {
         scenarioCoverage: { scenarios: scenarioEntries },
+        scenarioMarkerEvidence: markerEvidence,
         independentObjectiveReferences: [{ matched: true, residualMs: 10 }],
       },
       metrics: {
@@ -284,6 +289,53 @@ describe('objective timing capture analyzer', () => {
     }
   });
 
+  it('matches every supported objective event kind to a state transition', async () => {
+    const run = await createCapture(
+      [
+        frame(0, 0, { bomb: { state: 'carried' } }),
+        frame(1, 100, { bomb: { state: 'planting' } }),
+        frame(2, 110, { bomb: { state: 'carried' } }),
+        frame(3, 200, { bomb: { state: 'planting' } }),
+        frame(4, 300, { bomb: { state: 'planted' } }),
+        frame(5, 400, { bomb: { state: 'defusing' } }),
+        frame(6, 410, { bomb: { state: 'planted' } }),
+        frame(7, 500, { bomb: { state: 'defusing' } }),
+        frame(8, 600, { bomb: { state: 'defused' } }),
+        frame(9, 700, { bomb: { state: 'planting' } }),
+        frame(10, 800, { bomb: { state: 'planted' } }),
+        frame(11, 900, { bomb: { state: 'exploded' } }),
+      ],
+      {
+        objectiveEvents: [
+          ['bomb-begin-plant', 100],
+          ['bomb-abort-plant', 110],
+          ['bomb-planted', 300],
+          ['bomb-begin-defuse', 400],
+          ['bomb-abort-defuse', 410],
+          ['bomb-defused', 600],
+          ['bomb-exploded', 900],
+        ].map(([kind, occurredAtMs]) => ({
+          referenceId: `cstv-${kind}`,
+          kind,
+          source: 'cstv',
+          occurredAtMs,
+        })),
+      },
+    );
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.evidence.independentObjectiveReferences).toHaveLength(7);
+      expect(
+        result.evidence.independentObjectiveReferences.every((reference) => reference.matched),
+      ).toBe(true);
+      expect(result.qualification.numeric01s.gates.independentTransitionReference).toBe(true);
+      expect(result.metrics.observerReferenceResidualMs.max).toBe(0);
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
   it('uses the planted anchor for a defusing-to-exploded terminal residual', async () => {
     const run = await createCapture([
       frame(0, 0, { bomb: { state: 'planted', countdown: '2' } }),
@@ -399,7 +451,40 @@ describe('objective timing capture analyzer', () => {
       objectiveMarker('reconnect-restart', 'after', 1_000, 'capture-b'),
     ];
     const result = aggregateObjectiveScenarioCoverage(
-      [{ manifest: { captureId: 'capture-a' } }, { manifest: { captureId: 'capture-b' } }],
+      [
+        {
+          manifest: { captureId: 'capture-a' },
+          objectiveTiming: {
+            evidence: {
+              scenarioMarkerEvidence: [
+                {
+                  kind: 'objective-reconnect-restart',
+                  phase: 'before',
+                  captured: true,
+                  bombState: 'planted',
+                  receiverGeneration: 0,
+                },
+              ],
+            },
+          },
+        },
+        {
+          manifest: { captureId: 'capture-b' },
+          objectiveTiming: {
+            evidence: {
+              scenarioMarkerEvidence: [
+                {
+                  kind: 'objective-reconnect-restart',
+                  phase: 'after',
+                  captured: true,
+                  bombState: 'planted',
+                  receiverGeneration: 1,
+                },
+              ],
+            },
+          },
+        },
+      ],
       markers,
     );
     expect(result.scenarios['reconnect-restart']).toMatchObject({
@@ -410,16 +495,40 @@ describe('objective timing capture analyzer', () => {
   });
 
   it('makes one run-level decision from complete multi-capture evidence', () => {
-    const captureA = analyzedRunCapture('capture-a', [
-      'freezetime-live',
-      'plant-abort',
-      'planted-explode',
-      'defuse-kit-abort-restart',
-      'defuse-no-kit-abort-restart',
-      'too-late-defuse',
-      'fast-defuse-missing-planted-sample',
-    ]);
-    const captureB = analyzedRunCapture('capture-b');
+    const captureA = analyzedRunCapture(
+      'capture-a',
+      [
+        'freezetime-live',
+        'plant-abort',
+        'planted-explode',
+        'defuse-kit-abort-restart',
+        'defuse-no-kit-abort-restart',
+        'too-late-defuse',
+        'fast-defuse-missing-planted-sample',
+      ],
+      [
+        {
+          kind: 'objective-reconnect-restart',
+          phase: 'before',
+          captured: true,
+          bombState: 'planted',
+          receiverGeneration: 0,
+        },
+      ],
+    );
+    const captureB = analyzedRunCapture(
+      'capture-b',
+      [],
+      [
+        {
+          kind: 'objective-reconnect-restart',
+          phase: 'after',
+          captured: true,
+          bombState: 'planted',
+          receiverGeneration: 1,
+        },
+      ],
+    );
     const markers = [
       ...[
         'freezetime-live',
@@ -444,6 +553,13 @@ describe('objective timing capture analyzer', () => {
     expect(complete.qualification.sourceSemantics.result).toBe('PASS');
     expect(complete.qualification.production.result).toBe('PASS');
 
+    const precisionFailure = clone(captureA);
+    precisionFailure.objectiveTiming.qualification.numeric01s.measurementGates.activePacketP99Within200Ms = false;
+    const qualifiedButCoarse = evaluateObjectiveTimingRun([precisionFailure, captureB], markers);
+    expect(qualifiedButCoarse.qualification.numeric01s.result).toBe('FAIL');
+    expect(qualifiedButCoarse.qualification.foundation.result).toBe('PASS');
+    expect(qualifiedButCoarse.qualification.production.result).toBe('PASS');
+
     const missingReconnect = evaluateObjectiveTimingRun(
       [captureA, captureB],
       markers.filter(
@@ -456,6 +572,13 @@ describe('objective timing capture analyzer', () => {
       captureErrors: [new Error('rejected capture')],
     });
     expect(rejectedCapture.qualification.production.result).not.toBe('PASS');
+
+    const lateReference = clone(captureA);
+    lateReference.objectiveTiming.evidence.independentObjectiveReferences[0].residualMs = -500;
+    const delayed = evaluateObjectiveTimingRun([lateReference, captureB], markers);
+    expect(delayed.metrics.observerReferenceResidualMs.max).toBe(500);
+    expect(delayed.qualification.numeric01s.gates.independentObserverOffsetWithin100Ms).toBe(false);
+    expect(delayed.qualification.numeric01s.result).toBe('FAIL');
   });
 
   it('fails numeric precision when terminal residuals exceed the 100 ms bound', async () => {
@@ -494,8 +617,48 @@ describe('objective timing capture analyzer', () => {
         result.qualification.sourceSemantics.gates.terminalResidualWithin100Ms,
       ).toBeUndefined();
       expect(result.qualification.sourceSemantics.result).toBe('INCONCLUSIVE');
-      expect(result.qualification.production.result).toBe('FAIL');
+      expect(result.qualification.production.result).toBe('INCONCLUSIVE');
       expect(result.qualification.numeric01s.result).toBe('FAIL');
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps late terminal residuals signed so delayed terminals cannot pass precision', async () => {
+    const run = await createCapture([
+      frame(0, 0, { bomb: { state: 'planting', countdown: '0.1' } }),
+      frame(1, 100, {
+        bomb: { state: 'planted', countdown: '0.1' },
+        phase_countdowns: { phase: 'bomb', phase_ends_in: '0.1' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(2, 200, {
+        bomb: { state: 'defusing', countdown: '0.1' },
+        phase_countdowns: { phase: 'defuse', phase_ends_in: '0.1' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(3, 800, { bomb: { state: 'defused' }, round: { phase: 'live', bomb: 'defused' } }),
+      frame(4, 900, { bomb: { state: 'planting', countdown: '0.1' } }),
+      frame(5, 1_000, {
+        bomb: { state: 'planted', countdown: '0.1' },
+        phase_countdowns: { phase: 'bomb', phase_ends_in: '0.1' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(6, 1_800, { bomb: { state: 'exploded' }, round: { phase: 'live', bomb: 'exploded' } }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.metrics.terminalEvents).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ kind: 'defuse', remainingAtTerminalMs: -500 }),
+          expect.objectContaining({ kind: 'explosion', remainingAtTerminalMs: -700 }),
+        ]),
+      );
+      expect(result.metrics.terminalResidualMs.defuse.max).toBe(500);
+      expect(result.metrics.terminalResidualMs.explosion.max).toBe(700);
+      expect(result.qualification.numeric01s.gates.terminalResidualWithin100Ms).toBe(false);
+      expect(result.qualification.numeric01s.result).not.toBe('PASS');
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }

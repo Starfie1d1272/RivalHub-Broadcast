@@ -39,6 +39,7 @@ export {
   writeQualificationEvidence,
 } from './evidence/qualification.mjs';
 export {
+  captureObservationReferences,
   hasOrderedMarkers,
   liveObservationReferences,
   markerIndex,

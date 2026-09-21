@@ -22,13 +22,33 @@ import {
   verifyHashes,
   walkFiles,
 } from './integrity.mjs';
-import { liveObservationReferences, readScenario } from './scenario.mjs';
+import { captureObservationReferences, readScenario } from './scenario.mjs';
 import {
   aggregateObjectiveScenarioCoverage,
   analyzeObjectiveTimingCapture,
   evaluateObjectiveTimingRun,
 } from './objective-timing.mjs';
 import { renderReport } from './report.mjs';
+
+export const QUALIFICATION_PROFILE_VALUES = new Set(['base', 'objective-timing']);
+
+function qualificationProfile(value, name) {
+  const profile = value === undefined ? 'base' : requireString(value, name);
+  if (!QUALIFICATION_PROFILE_VALUES.has(profile)) {
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', `${name} 无效`);
+  }
+  return profile;
+}
+
+function resultForProfile(profile, checks, objectiveTiming) {
+  if (profile !== 'objective-timing') return resultFromChecks(checks);
+  const foundationResult = objectiveTiming?.qualification?.foundation?.result;
+  return QUALIFICATION_RESULT_VALUES.has(foundationResult) ? foundationResult : 'INCONCLUSIVE';
+}
+
+function serializedEqual(left, right) {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
 
 async function immediateDirectories(path) {
   try {
@@ -44,7 +64,7 @@ async function readCaptureResults(runDir, markers, qualificationContext) {
   const recorderEntries = await immediateDirectories(recorderDir);
   const captureResults = [];
   const captureErrors = [];
-  const observationReferences = liveObservationReferences(markers);
+  const observationReferences = captureObservationReferences(markers);
   for (const captureDir of recorderEntries) {
     if (basename(captureDir).endsWith('.partial')) {
       captureErrors.push(
@@ -82,6 +102,7 @@ export async function readQualificationEvidence(runDir) {
       'qualification.json 的格式版本不受支持',
     );
   }
+  const profile = qualificationProfile(qualification.profile, 'qualification.profile');
   const runId = requireString(qualification.runId, 'qualification.runId');
   if (!isRecord(qualification.artifact))
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '缺少验收包身份信息');
@@ -131,6 +152,16 @@ export async function readQualificationEvidence(runDir) {
   requireString(environment.runId, 'environment.runId');
   requireString(environment.windowsVersion, 'environment.windowsVersion');
   requireString(environment.cs2Version, 'environment.cs2Version');
+  const environmentProfile = qualificationProfile(
+    environment.qualificationProfile,
+    'environment.qualificationProfile',
+  );
+  if (environmentProfile !== profile) {
+    throw new QualificationEvidenceError(
+      'EVIDENCE_MISMATCH',
+      'environment.json 的现场验收类型与 qualification.json 不一致',
+    );
+  }
   if (environment.runId !== runId) {
     throw new QualificationEvidenceError(
       'EVIDENCE_MISMATCH',
@@ -159,6 +190,7 @@ export async function readQualificationEvidence(runDir) {
     captureErrors,
     objectiveTimingCoverage,
     objectiveTiming,
+    qualificationProfile: profile,
     checks: checksFrom({
       markers: scenario.markers,
       finalRuntime,
@@ -179,7 +211,22 @@ export async function readQualificationEvidence(runDir) {
       );
     }
   }
-  if (qualification.result !== resultFromChecks(result.checks)) {
+  if (
+    qualification.objectiveTiming !== undefined &&
+    !serializedEqual(qualification.objectiveTiming, objectiveTiming.qualification)
+  ) {
+    throw new QualificationEvidenceError(
+      'CHECK_MISMATCH',
+      'qualification.json 中的目标时钟判定与重新计算的证据不一致',
+    );
+  }
+  if (profile === 'objective-timing' && qualification.objectiveTiming === undefined) {
+    throw new QualificationEvidenceError(
+      'INVALID_EVIDENCE',
+      '目标时钟现场验收缺少 objectiveTiming 判定',
+    );
+  }
+  if (qualification.result !== resultForProfile(profile, result.checks, objectiveTiming)) {
     throw new QualificationEvidenceError('CHECK_MISMATCH', '现场验收结果与重新计算的证据不一致');
   }
   await verifyHashes(resolvedRunDir);
@@ -204,6 +251,10 @@ export async function writeQualificationEvidence({
       windowsVersion: environment.windowsVersion,
       cs2Version: environment.cs2Version,
     });
+  const profile = qualificationProfile(
+    environment.qualificationProfile,
+    'environment.qualificationProfile',
+  );
   const checks = checksFrom({
     markers: scenario.markers,
     finalRuntime,
@@ -211,7 +262,7 @@ export async function writeQualificationEvidence({
     captureErrors,
     artifact,
   });
-  const result = resultFromChecks(checks);
+  const result = resultForProfile(profile, checks, objectiveTiming);
   const artifactSha256 =
     archiveSha256 ?? artifact.artifactSha256 ?? sha256Text(JSON.stringify(artifact));
   if (!SHA256_PATTERN.test(artifactSha256)) {
@@ -231,8 +282,11 @@ export async function writeQualificationEvidence({
       windowsVersion:
         typeof environment.windowsVersion === 'string' ? environment.windowsVersion : 'unknown',
       cs2Version: typeof environment.cs2Version === 'string' ? environment.cs2Version : 'unknown',
+      qualificationProfile: profile,
     },
+    profile,
     result,
+    objectiveTiming: objectiveTiming.qualification,
     checks: Object.fromEntries(Object.entries(checks).map(([key, check]) => [key, check.status])),
   };
   const qualificationPath = join(resolvedRunDir, 'qualification.json');
@@ -246,6 +300,7 @@ export async function writeQualificationEvidence({
     captureErrors,
     objectiveTimingCoverage,
     objectiveTiming,
+    qualificationProfile: profile,
     checks,
   });
   await writeFile(join(resolvedRunDir, 'REPORT.md'), report, 'utf8');
