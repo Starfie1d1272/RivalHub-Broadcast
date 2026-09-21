@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useSyncExternalStore } from 'react';
 
 import {
-  createDefaultHudConfigDocument,
   getBuiltinResolvedPreset,
   parseHudConfigDocument,
   parseHudResolvedPreset,
@@ -35,6 +34,18 @@ export interface HudConfigMutationResponse {
   readonly command: HudConfigCommandResult;
   readonly onAir: HudConfigResponse;
   readonly editor: HudConfigEditorResponse;
+}
+
+export class HudConfigMutationError extends Error {
+  readonly status: number;
+  readonly code: string | null;
+
+  constructor(status: number, message: string, code: string | null) {
+    super(message);
+    this.name = 'HudConfigMutationError';
+    this.status = status;
+    this.code = code;
+  }
 }
 
 export interface HudConfigClientSnapshot {
@@ -209,7 +220,7 @@ export class HudConfigClient {
 export class HudConfigEditorClient {
   private snapshot: HudConfigEditorClientSnapshot = {
     status: 'loading',
-    document: createDefaultHudConfigDocument(),
+    document: null,
     etag: null,
     revision: null,
     activationStale: false,
@@ -325,6 +336,7 @@ export interface HudConfigMutation {
   readonly resource?: 'preset' | 'layout' | 'theme';
   readonly value?: unknown;
   readonly sourceId?: string;
+  readonly expectedEditorRevision: string;
 }
 
 export async function mutateHudConfig(
@@ -340,14 +352,20 @@ export async function mutateHudConfig(
   });
   const body: unknown = await response.json();
   if (!response.ok) {
+    const bodyRecord =
+      typeof body === 'object' && body !== null && !Array.isArray(body)
+        ? (body as Record<string, unknown>)
+        : null;
+    const code = typeof bodyRecord?.error === 'string' ? bodyRecord.error : null;
     const message =
-      typeof body === 'object' &&
-      body !== null &&
-      'message' in body &&
-      typeof body.message === 'string'
-        ? body.message
-        : 'HUD 操作未完成';
-    throw new Error(message);
+      response.status === 409
+        ? '已在另一页面更新，请先处理冲突。'
+        : response.status >= 500
+          ? 'HUD 配置暂时无法保存，请查看本机诊断日志。'
+          : typeof bodyRecord?.message === 'string'
+            ? bodyRecord.message
+            : 'HUD 操作参数无效。';
+    throw new HudConfigMutationError(response.status, message, code);
   }
   return parseMutationResponse(body);
 }

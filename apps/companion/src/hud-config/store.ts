@@ -33,6 +33,35 @@ export interface HudConfigStoreOptions {
   readonly onDiagnostic?: (code: string) => void;
 }
 
+export class HudConfigEditorConflictError extends Error {
+  readonly expectedRevision: string;
+  readonly actualRevision: string;
+
+  constructor(expectedRevision: string, actualRevision: string) {
+    super('HUD 配置已在另一页面更新');
+    this.name = 'HudConfigEditorConflictError';
+    this.expectedRevision = expectedRevision;
+    this.actualRevision = actualRevision;
+  }
+}
+
+export class HudConfigCommandError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'HudConfigCommandError';
+  }
+}
+
+export class HudConfigPersistenceError extends Error {
+  readonly cause: unknown;
+
+  constructor(cause: unknown) {
+    super('HUD 配置持久化失败');
+    this.name = 'HudConfigPersistenceError';
+    this.cause = cause;
+  }
+}
+
 export interface HudConfigState {
   readonly document: HudConfigDocument;
   readonly resolved: HudResolvedPreset;
@@ -167,9 +196,19 @@ export class HudConfigStore {
     return createState(this.document, this.persistenceError);
   }
 
-  async saveResource(kind: HudResourceKind, value: unknown): Promise<HudConfigMutationState> {
-    const parsed = parseResource(kind, value);
-    if (parsed.id.startsWith('builtin:')) throw new Error('内置 HUD 资源只读，请使用另存为');
+  async saveResource(
+    kind: HudResourceKind,
+    value: unknown,
+    expectedEditorRevision?: string,
+  ): Promise<HudConfigMutationState> {
+    let parsed: HudResource;
+    try {
+      parsed = parseResource(kind, value);
+    } catch (error: unknown) {
+      throw new HudConfigCommandError(error instanceof Error ? error.message : 'HUD 资源无效');
+    }
+    if (parsed.id.startsWith('builtin:'))
+      throw new HudConfigCommandError('内置 HUD 资源只读，请使用另存为');
     return this.commit(
       () => {
         const resources = resourceList(this.document, kind);
@@ -183,19 +222,33 @@ export class HudConfigStore {
         );
       },
       { kind: 'save-resource', resource: kind, resourceId: parsed.id },
+      expectedEditorRevision,
     );
   }
 
-  async saveAs(kind: HudResourceKind, value: unknown): Promise<HudConfigMutationState> {
-    const parsed = parseResource(kind, value);
+  async saveAs(
+    kind: HudResourceKind,
+    value: unknown,
+    expectedEditorRevision?: string,
+  ): Promise<HudConfigMutationState> {
+    let parsed: HudResource;
+    try {
+      parsed = parseResource(kind, value);
+    } catch (error: unknown) {
+      throw new HudConfigCommandError(error instanceof Error ? error.message : 'HUD 资源无效');
+    }
     const resource = { ...parsed, id: randomUUID(), name: parsed.name.trim() } as HudResource;
     return this.commit(
       () => withResourceList(this.document, kind, [...resourceList(this.document, kind), resource]),
       { kind: 'save-as', resource: kind, resourceId: resource.id },
+      expectedEditorRevision,
     );
   }
 
-  async activatePreset(sourceId: string): Promise<HudConfigMutationState> {
+  async activatePreset(
+    sourceId: string,
+    expectedEditorRevision?: string,
+  ): Promise<HudConfigMutationState> {
     return this.commit(
       () => {
         if (sourceId === BUILTIN_PRESET_ID) {
@@ -222,15 +275,28 @@ export class HudConfigStore {
         };
       },
       { kind: 'activate-preset', sourceId },
+      expectedEditorRevision,
     );
   }
 
   private async commit(
     next: HudConfigDocument | (() => HudConfigDocument),
     command: HudConfigCommandResult,
+    expectedEditorRevision?: string,
   ): Promise<HudConfigMutationState> {
     return this.commits.run(async () => {
-      const candidate = parseHudConfigDocument(typeof next === 'function' ? next() : next);
+      if (expectedEditorRevision !== undefined) {
+        const actualRevision = createState(this.document, this.persistenceError).editorRevision;
+        if (actualRevision !== expectedEditorRevision) {
+          throw new HudConfigEditorConflictError(expectedEditorRevision, actualRevision);
+        }
+      }
+      let candidate: HudConfigDocument;
+      try {
+        candidate = parseHudConfigDocument(typeof next === 'function' ? next() : next);
+      } catch (error: unknown) {
+        throw new HudConfigCommandError(error instanceof Error ? error.message : 'HUD 配置无效');
+      }
       try {
         if (this.filePath !== undefined) {
           const committed = await replaceDurableJson(this.filePath, candidate);
@@ -241,7 +307,7 @@ export class HudConfigStore {
       } catch (error: unknown) {
         this.persistenceError = error instanceof Error ? error.message : String(error);
         this.onDiagnostic('hud_config_persist_failed');
-        throw error;
+        throw new HudConfigPersistenceError(error);
       }
       return { ...this.getState(), command };
     });

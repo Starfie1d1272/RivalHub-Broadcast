@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  createDefaultHudConfigDocument,
   getBuiltinLayout,
   getBuiltinPreset,
   getBuiltinTheme,
@@ -92,6 +93,24 @@ describe('HudConfigStore', () => {
     await store.load();
 
     expect(store.getState().resolved.preset.id).toBe('builtin:rivalhub-default-preset');
+    await expect(readFile(filePath, 'utf8')).resolves.toBe(malformed);
+  });
+
+  it('keeps the last valid document when a later reload is malformed', async () => {
+    const filePath = await temporaryConfigPath();
+    const valid = {
+      ...createDefaultHudConfigDocument(),
+      customThemes: [{ ...getBuiltinTheme(), id: 'theme-valid', name: '有效外观' }],
+    };
+    await writeFile(filePath, `${JSON.stringify(valid)}\n`, 'utf8');
+    const store = new HudConfigStore({ filePath });
+    await store.load();
+    expect(store.getState().document.customThemes[0]?.name).toBe('有效外观');
+
+    const malformed = '{"schemaVersion":999}\n';
+    await writeFile(filePath, malformed, 'utf8');
+    await store.load();
+    expect(store.getState().document.customThemes[0]?.name).toBe('有效外观');
     await expect(readFile(filePath, 'utf8')).resolves.toBe(malformed);
   });
 

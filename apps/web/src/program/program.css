@@ -1,27 +1,8 @@
 .program-canvas {
-  --rh-program-font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif;
-  --rh-program-text: #f3f6fa;
-  --rh-program-muted: #aab4c0;
-  --rh-program-surface: rgb(14 20 28 / 88%);
-  --rh-program-surface-strong: rgb(8 12 18 / 96%);
-  --rh-program-border: rgb(255 255 255 / 14%);
-  --rh-program-ct: #6aa8ff;
-  --rh-program-t: #f2bd4f;
-  --rh-program-accent: #c8ef78;
-  --rh-program-warning: #f3bd68;
-  --rh-program-danger: #f06f6f;
-  --rh-program-radius-sm: 4px;
-  --rh-program-radius-md: 8px;
-  --rh-program-space-1: 4px;
-  --rh-program-space-2: 8px;
-  --rh-program-space-3: 12px;
-  --rh-program-space-4: 16px;
-  --rh-program-space-6: 24px;
-
   background: transparent;
   box-sizing: border-box;
-  color: var(--rh-program-text);
-  font-family: var(--rh-program-font-sans);
+  color: inherit;
+  font-family: inherit;
   height: 1080px;
   isolation: isolate;
   overflow: hidden;

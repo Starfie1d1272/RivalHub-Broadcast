@@ -1,6 +1,6 @@
 .gameplay-hud {
-  color: var(--rh-hud-text);
-  font-family: Inter, ui-sans-serif, system-ui, sans-serif;
+  color: var(--rh-hud-text-primary);
+  font-family: var(--rh-hud-font-family), ui-sans-serif, system-ui, sans-serif;
   height: 1080px;
   inset: 0;
   pointer-events: none;
@@ -9,12 +9,6 @@
 }
 
 .gameplay-hud__widget {
-  background: color-mix(in srgb, var(--rh-hud-surface) 92%, transparent);
-  border: 1px solid rgb(255 255 255 / var(--rh-hud-border-opacity));
-  border-radius: var(--rh-hud-radius-md);
-  box-shadow: 0 14px 30px rgb(0 0 0 / 0.14);
-  display: grid;
-  place-items: center;
   pointer-events: none;
   position: absolute;
 }
@@ -29,9 +23,18 @@
 
 .hud-editor-overlay__placeholder,
 .hud-editor-overlay__widget {
-  background: color-mix(in srgb, var(--rh-hud-brand) 10%, var(--rh-hud-surface));
-  border-color: color-mix(in srgb, var(--rh-hud-brand) 56%, transparent);
-  color: inherit;
+  background: color-mix(
+    in srgb,
+    var(--rh-hud-surface-primary) calc(var(--rh-hud-surface-opacity) * 100%),
+    transparent
+  );
+  border-color: color-mix(
+    in srgb,
+    var(--rh-hud-brand) calc(var(--rh-hud-border-opacity) * 100%),
+    transparent
+  );
+  border-radius: var(--rh-hud-radius-md);
+  color: var(--rh-hud-text-primary);
   font: inherit;
   outline: 1px dashed rgb(255 255 255 / 0.18);
   outline-offset: 5px;
@@ -68,7 +71,7 @@
 }
 
 .hud-editor-overlay__placeholder .hud-editor-overlay__widget-label {
-  color: var(--rh-hud-text);
+  color: var(--rh-hud-text-primary);
 }
 
 .hud-editor-overlay__widget:focus-visible {
@@ -77,7 +80,7 @@
 }
 
 .hud-editor-overlay__widget-label {
-  color: var(--rh-hud-text);
+  color: var(--rh-hud-text-primary);
   font-size: 22px;
   font-weight: 600;
   letter-spacing: -0.02em;

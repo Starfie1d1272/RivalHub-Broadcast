@@ -15,6 +15,13 @@ export interface HudSelectedResourceIds {
   readonly theme: string;
 }
 
+export function hudResourceNameError(name: string): string | null {
+  const trimmed = name.trim();
+  if (trimmed.length === 0) return '名称不能为空。';
+  if ([...trimmed].length > 80) return '名称最多 80 个 Unicode 字符。';
+  return null;
+}
+
 export function hudResourceNavigationBlockReason(
   kind: HudWorkspace,
   nextResource: HudResource,

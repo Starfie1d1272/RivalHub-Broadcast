@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { ComponentType } from 'react';
 
 import {
   HUD_WIDGET_IDS,
@@ -20,12 +20,14 @@ export interface HudWidgetRendererProps {
   readonly settings: HudWidgetSettings;
 }
 
-export type HudWidgetRenderer = (props: HudWidgetRendererProps) => ReactNode;
+export type HudWidgetRenderer = ComponentType<HudWidgetRendererProps>;
 
 export interface HudRendererEntry {
   readonly availability: 'implemented' | 'unimplemented';
   readonly renderer: HudWidgetRenderer | null;
 }
+
+export type HudRendererRegistry = Readonly<Record<HudWidgetId, HudRendererEntry>>;
 
 const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
   availability: 'unimplemented',
@@ -33,15 +35,18 @@ const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
 });
 
 /** Web-owned React seam. Future component Issues add their renderer here only. */
-export const HUD_RENDERER_REGISTRY: Readonly<Record<HudWidgetId, HudRendererEntry>> = Object.freeze(
+export const HUD_RENDERER_REGISTRY: HudRendererRegistry = Object.freeze(
   Object.fromEntries(HUD_WIDGET_IDS.map((id) => [id, UNIMPLEMENTED_RENDERER_ENTRY])) as Record<
     HudWidgetId,
     HudRendererEntry
   >,
 );
 
-export function getHudRendererEntry(id: HudWidgetId): HudRendererEntry {
-  const entry = HUD_RENDERER_REGISTRY[id];
+export function getHudRendererEntry(
+  id: HudWidgetId,
+  registry: HudRendererRegistry = HUD_RENDERER_REGISTRY,
+): HudRendererEntry {
+  const entry = registry[id];
   if (entry === undefined) throw new Error(`缺少 Web HUD renderer registry entry：${id}`);
   return entry;
 }

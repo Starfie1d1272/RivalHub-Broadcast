@@ -8,7 +8,11 @@ import {
 } from '@rivalhub-broadcast/hud-config';
 
 import { themeStyle } from './GameplayHud';
-import { getHudRendererEntry } from './hud-renderer-registry';
+import {
+  getHudRendererEntry,
+  HUD_RENDERER_REGISTRY,
+  type HudRendererRegistry,
+} from './hud-renderer-registry';
 
 export interface HudEditorOverlayProps {
   readonly resolvedPreset: HudResolvedPreset;
@@ -18,6 +22,8 @@ export interface HudEditorOverlayProps {
     ((widgetId: HudWidgetId, event: PointerEvent<HTMLButtonElement>) => void) | undefined;
   readonly onRadarResizePointerDown?:
     ((event: PointerEvent<HTMLButtonElement>) => void) | undefined;
+  readonly rendererRegistry?: HudRendererRegistry;
+  readonly interactive?: boolean;
 }
 
 /** Editor-only chrome. It is a sibling overlay and never enters the Program renderer. */
@@ -27,6 +33,8 @@ export function HudEditorOverlay({
   selectedWidgetId,
   onWidgetPointerDown,
   onRadarResizePointerDown,
+  rendererRegistry = HUD_RENDERER_REGISTRY,
+  interactive = true,
 }: HudEditorOverlayProps) {
   return (
     <div
@@ -38,7 +46,7 @@ export function HudEditorOverlay({
       {HUD_WIDGET_REGISTRY.map((descriptor) => {
         const placement = resolvedPreset.layout.widgets[descriptor.id];
         if (placement === undefined || !placement.visible) return null;
-        const rendererEntry = getHudRendererEntry(descriptor.id);
+        const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
         const isPlaceholder = rendererEntry.renderer === null;
         if (mode === 'preview' && !isPlaceholder) return null;
         const box = placementToBox(descriptor.id, placement);
@@ -67,7 +75,10 @@ export function HudEditorOverlay({
               aria-pressed={selected}
               className={`hud-editor-overlay__widget${selected ? ' is-selected' : ''}${isPlaceholder ? ' is-placeholder' : ' is-chrome'}`}
               data-hud-widget={descriptor.id}
-              onPointerDown={(event) => onWidgetPointerDown?.(descriptor.id, event)}
+              disabled={!interactive}
+              onPointerDown={
+                interactive ? (event) => onWidgetPointerDown?.(descriptor.id, event) : undefined
+              }
               style={{
                 height: `${box.height}px`,
                 left: `${box.left}px`,
@@ -84,6 +95,7 @@ export function HudEditorOverlay({
               <button
                 aria-label="调整雷达大小"
                 className="hud-editor-overlay__resize-handle"
+                disabled={!interactive}
                 onPointerDown={onRadarResizePointerDown}
                 style={{
                   left: `${box.left + box.width - 10}px`,

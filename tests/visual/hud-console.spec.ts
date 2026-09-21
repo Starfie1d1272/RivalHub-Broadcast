@@ -226,6 +226,22 @@ test.describe('节目 HUD 控制台', () => {
     await page.mouse.up();
     await expect(page.getByText('只有雷达支持保持正方形的尺寸调整。')).toBeVisible();
 
+    const moveTarget = page.getByRole('button', { name: '顶部比分条，可拖动' });
+    const moveBox = await moveTarget.boundingBox();
+    if (moveBox === null) throw new Error('未找到顶部比分条拖动控件');
+    await page.mouse.move(moveBox.x + moveBox.width / 2, moveBox.y + moveBox.height / 2);
+    await page.mouse.down();
+    await page.mouse.move(moveBox.x + moveBox.width / 2 + 50, moveBox.y + moveBox.height / 2);
+    await page.mouse.up();
+    await expect(page.getByLabel('X 偏移')).not.toHaveValue('0');
+
+    await page.getByRole('button', { name: '选择雷达' }).click();
+    await page.getByRole('checkbox', { name: '在节目中显示' }).uncheck();
+    await expect(page.getByRole('button', { name: '调整雷达大小' })).toHaveCount(0);
+    await page.getByRole('checkbox', { name: '在节目中显示' }).check();
+    await page.getByRole('checkbox', { name: '安全区' }).check();
+    await expect(page.locator('.hud-console__guide--safe')).toBeVisible();
+
     await expect(page.locator('.hud-console')).toHaveScreenshot(
       'hud-console-layout.png',
       HUD_SCREENSHOT_OPTIONS,
@@ -266,6 +282,16 @@ test.describe('节目 HUD 控制台', () => {
       'style',
       /--rh-hud-brand: #ff00aa/,
     );
+  });
+
+  test('所有资源名称都使用本地校验并阻止保存', async ({ page }) => {
+    await page.goto('/operator/hud');
+    await page.getByRole('button', { name: 'HUD 预设' }).click();
+    const name = page.getByLabel('名称');
+    await name.fill('');
+    await expect(page.getByRole('alert')).toContainText('名称不能为空');
+    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
+    await expect(page.getByRole('button', { name: 'HUD 布局' })).toBeVisible();
   });
 
   test('切换工作区保留三套独立草稿', async ({ page }) => {

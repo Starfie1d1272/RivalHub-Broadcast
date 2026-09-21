@@ -229,6 +229,12 @@ revision 不变时不得改变。
 改变 on-air ETag；启用预设会同时更新编辑器 read model，并在 resolved 内容变化时更新 on-air revision。
 读取、解析或持久化失败时，Companion 保留 last-known-valid 配置，不能清除或猜测 gameplay snapshot。
 
+每个 mutation 都必须提交客户端刚读取并实际编辑的 `expectedEditorRevision`（实现上可由同一值映射到
+`If-Match`）。Companion 在 `SerialCommitQueue` 内执行该 revision 的 compare-and-swap：revision 过期时返回
+`409`，不覆盖磁盘或内存中的新配置；命令或 schema 无效返回 `400`；持久化或内部错误返回 `500`。
+`500` 的 response 只包含 bounded user-facing message，详细的底层错误只写入 Companion diagnostics/log。
+编辑器收到 `409` 后必须保留本地 draft，并明确提示用户先处理 conflict；不能把 stale mutation 当成成功。
+
 `POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令。正常 Operator ingress
 不接受 Operator token、Bearer credential 或其他普通凭据；写操作只允许 Companion 以 loopback bind
 接收，且请求必须通过 valid local Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也

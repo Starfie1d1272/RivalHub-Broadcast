@@ -9,6 +9,7 @@ import {
   HUD_GRID_SIZE,
   HUD_WIDGET_IDS,
   canonicalJson,
+  changePlacementAnchor,
   createDefaultHudConfigDocument,
   defineHudWidgetDescriptor,
   getBuiltinLayout,
@@ -106,6 +107,15 @@ describe('hud-config schema and framework contract', () => {
         ...getBuiltinLayout(),
         widgets: {
           ...getBuiltinLayout().widgets,
+          objective: { ...getBuiltinLayout().widgets.objective, scale: 1.1 },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      parseHudLayout({
+        ...getBuiltinLayout(),
+        widgets: {
+          ...getBuiltinLayout().widgets,
           radar: { ...getBuiltinLayout().widgets.radar, offsetX: 1_000 },
         },
       }),
@@ -126,8 +136,42 @@ describe('hud-config schema and framework contract', () => {
     expect(standard.semantic.colors.sideCt).toBe('#6aa8ff');
     expect(light.semantic.colors.sideT).toBe('#f2bd4f');
     expect(light.semantic.colors.stateDanger).toBe('#f06f6f');
+    expect(light.semantic.colors.objectiveBomb).toBe('#f06f6f');
+    expect(light.brandColor).toBe('#ff00aa');
     expect(light.semantic.surface.opacity).toBeLessThan(1);
     expect(light.semantic.radius.lg).toBeGreaterThan(0);
+
+    const surfaceVariants = [
+      ['solid', 0.98],
+      ['standard', 0.88],
+      ['light', 0.7],
+    ] as const;
+    for (const [panelStyle, opacity] of surfaceVariants) {
+      expect(
+        resolveHudTheme({ ...getBuiltinTheme(), id: `theme-${panelStyle}`, panelStyle }).semantic
+          .surface.opacity,
+      ).toBe(opacity);
+    }
+
+    const radiusVariants = [
+      ['square', 0],
+      ['soft', 8],
+      ['rounded', 14],
+    ] as const;
+    for (const [cornerStyle, radius] of radiusVariants) {
+      expect(
+        resolveHudTheme({ ...getBuiltinTheme(), id: `theme-${cornerStyle}`, cornerStyle }).semantic
+          .radius.md,
+      ).toBe(radius);
+    }
+  });
+
+  it('canonicalizes valid HEX values at the schema boundary', () => {
+    const parsed = parseHudConfigDocument({
+      ...createDefaultHudConfigDocument(),
+      customThemes: [{ ...getBuiltinTheme(), id: 'theme-uppercase', brandColor: '#Aa66Ff' }],
+    });
+    expect(parsed.customThemes[0]?.brandColor).toBe('#aa66ff');
   });
 
   it('keeps a valid custom activation snapshot across a recipe change', () => {
@@ -260,6 +304,33 @@ describe('hud-config logical geometry', () => {
     expect(resized.size?.width).toBe(400);
     expect(snapToGrid(24)).toBe(20);
     expect(() => resizeRadarPlacement(getBuiltinLayout().widgets['top-score-bar'], 20)).toThrow();
+    expect(resizeRadarPlacement(getBuiltinLayout().widgets.radar, 10_000).size?.width).toBe(
+      HUD_CANVAS_HEIGHT,
+    );
+    expect(resizeRadarPlacement(getBuiltinLayout().widgets.radar, -10_000).size?.width).toBe(
+      HUD_GRID_SIZE,
+    );
+  });
+
+  it('preserves the visual box when changing any anchor', () => {
+    const placement = getBuiltinLayout().widgets['round-result'];
+    const before = placementToBox('round-result', placement);
+    const anchors = [
+      'top-left',
+      'top-center',
+      'top-right',
+      'center-left',
+      'center',
+      'center-right',
+      'bottom-left',
+      'bottom-center',
+      'bottom-right',
+    ] as const;
+    for (const anchor of anchors) {
+      expect(
+        placementToBox('round-result', changePlacementAnchor('round-result', placement, anchor)),
+      ).toEqual(before);
+    }
   });
 
   it('canonicalizes object key order for stable revisions', () => {

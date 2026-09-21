@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { CSSProperties, PointerEvent } from 'react';
+import type { CSSProperties, PointerEvent, RefObject } from 'react';
 
 import {
   HUD_CANVAS_HEIGHT,
@@ -27,6 +27,8 @@ export interface HudCanvasPreviewProps {
   readonly showGrid: boolean;
   readonly showCenter: boolean;
   readonly showSafeArea: boolean;
+  readonly editorInteractive?: boolean;
+  readonly canvasFrameRef?: RefObject<HTMLDivElement | null>;
   readonly onWidgetPointerDown?:
     ((widgetId: HudWidgetId, event: PointerEvent<HTMLButtonElement>) => void) | undefined;
   readonly onRadarResizePointerDown?:
@@ -43,21 +45,28 @@ export function HudCanvasPreview({
   showGrid,
   showCenter,
   showSafeArea,
+  editorInteractive = true,
+  canvasFrameRef,
   onWidgetPointerDown,
   onRadarResizePointerDown,
 }: HudCanvasPreviewProps) {
-  const frameRef = useRef<HTMLDivElement>(null);
+  const internalFrameRef = useRef<HTMLDivElement>(null);
+  const frameRef = canvasFrameRef ?? internalFrameRef;
   const [scale, setScale] = useState(1);
 
   useEffect(() => {
+    const frame = frameRef.current;
+    if (frame === null) return;
     const updateScale = () => {
-      const width = frameRef.current?.getBoundingClientRect().width ?? HUD_CANVAS_WIDTH;
+      const width = frame.getBoundingClientRect().width || HUD_CANVAS_WIDTH;
       setScale(width / HUD_CANVAS_WIDTH);
     };
     updateScale();
-    window.addEventListener('resize', updateScale);
-    return () => window.removeEventListener('resize', updateScale);
-  }, []);
+    if (typeof ResizeObserver === 'undefined') return;
+    const observer = new ResizeObserver(updateScale);
+    observer.observe(frame);
+    return () => observer.disconnect();
+  }, [frameRef]);
 
   const guideStyle = { width: HUD_CANVAS_WIDTH, height: HUD_CANVAS_HEIGHT } satisfies CSSProperties;
   const presentationSnapshot = liveSource
@@ -97,6 +106,7 @@ export function HudCanvasPreview({
           onWidgetPointerDown={onWidgetPointerDown}
           resolvedPreset={resolvedPreset}
           selectedWidgetId={selectedWidgetId}
+          interactive={editorInteractive}
         />
       </div>
     </div>

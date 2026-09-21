@@ -1,9 +1,23 @@
 import { z } from 'zod';
 
 import { resolveHudThemeRecipe } from './theme-recipe.js';
+import { DEFAULT_PLACEMENTS, validatePlacementWithinCanvas } from './geometry.js';
 
 export { canonicalJson } from './canonical-json.js';
 export { HUD_THEME_RECIPE_REGISTRY } from './theme-recipe.js';
+export {
+  changePlacementAnchor,
+  clampWidgetBox,
+  getWidgetDimensions,
+  moveWidgetPlacement,
+  normalizeHudLayout,
+  normalizeHudPlacement,
+  placementFromBox,
+  placementToBox,
+  resizeRadarPlacement,
+  snapToGrid,
+  validatePlacementWithinCanvas,
+} from './geometry.js';
 
 export const HUD_CONFIG_SCHEMA_VERSION = 1 as const;
 /**
@@ -60,7 +74,10 @@ const resourceNameSchema = z
   .string()
   .refine((value) => value.trim().length > 0, '名称不能为空')
   .refine((value) => [...value.trim()].length <= 80, '名称最多 80 个 Unicode 字符');
-const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, '必须是 #RRGGBB 格式');
+const hexColorSchema = z
+  .string()
+  .regex(/^#[0-9a-fA-F]{6}$/, '必须是 #RRGGBB 格式')
+  .transform((value) => value.toLowerCase());
 const unitIntervalSchema = finiteNumber
   .refine((value) => value >= 0, '透明度不能小于 0')
   .refine((value) => value <= 1, '透明度不能大于 1');
@@ -356,37 +373,6 @@ export interface HudWidgetBox {
   readonly height: number;
 }
 
-const WIDGET_DIMENSIONS: Record<HudWidgetId, { readonly width: number; readonly height: number }> =
-  {
-    'top-score-bar': { width: 600, height: 96 },
-    'team-ct-rail': { width: 300, height: 640 },
-    'team-t-rail': { width: 300, height: 640 },
-    radar: { width: 320, height: 320 },
-    'focused-player': { width: 420, height: 180 },
-    'series-strip': { width: 520, height: 96 },
-    'round-history': { width: 380, height: 220 },
-    objective: { width: 360, height: 160 },
-    'round-result': { width: 500, height: 160 },
-  };
-
-const DEFAULT_PLACEMENTS: Record<HudWidgetId, HudWidgetPlacement> = {
-  'top-score-bar': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 28 },
-  'team-ct-rail': { visible: true, anchor: 'center-left', offsetX: 28, offsetY: 0 },
-  'team-t-rail': { visible: true, anchor: 'center-right', offsetX: -28, offsetY: 0 },
-  radar: {
-    visible: true,
-    anchor: 'center',
-    offsetX: 0,
-    offsetY: 0,
-    size: { width: 320, height: 320 },
-  },
-  'focused-player': { visible: true, anchor: 'bottom-left', offsetX: 28, offsetY: -28 },
-  'series-strip': { visible: true, anchor: 'top-left', offsetX: 28, offsetY: 28 },
-  'round-history': { visible: true, anchor: 'bottom-right', offsetX: -28, offsetY: -28 },
-  objective: { visible: true, anchor: 'top-right', offsetX: -28, offsetY: 28 },
-  'round-result': { visible: true, anchor: 'center', offsetX: 0, offsetY: 210 },
-};
-
 export const HUD_WIDGET_LABELS: Record<HudWidgetId, string> = {
   'top-score-bar': '顶部比分条',
   'team-ct-rail': 'CT 选手栏',
@@ -430,17 +416,19 @@ export function parseHudLayout(value: unknown): HudLayout {
   for (const id of HUD_WIDGET_IDS) {
     const placement = parsed.widgets[id];
     if (placement === undefined) throw new Error(`HudLayout 缺少组件：${id}`);
-    if (placement.scale !== undefined) throw new Error('第一版不允许持久化组件 scale');
-    if (id !== 'radar' && placement.size !== undefined) {
-      throw new Error(`组件 ${id} 不允许调整尺寸`);
-    }
-    if (id === 'radar' && placement.size !== undefined) {
+    const descriptor = getHudWidgetDescriptor(id);
+    if (descriptor.resizePolicy === 'none') {
+      if (placement.scale !== undefined) throw new Error(`组件 ${id} 不允许持久化 scale`);
+      if (placement.size !== undefined) throw new Error(`组件 ${id} 不允许调整尺寸`);
+    } else if (descriptor.resizePolicy === 'square') {
+      if (placement.scale !== undefined) throw new Error(`组件 ${id} 不允许持久化 scale`);
+      if (placement.size === undefined)
+        throw new Error(`${descriptor.label} 必须显式保存正方形尺寸`);
       if (placement.size.width !== placement.size.height) {
-        throw new Error('Radar 只能使用正方形尺寸');
+        throw new Error(`${descriptor.label} 只能使用正方形尺寸`);
       }
-    }
-    if (id === 'radar' && placement.size === undefined) {
-      throw new Error('Radar 必须显式保存正方形尺寸');
+    } else {
+      throw new Error(`第一版暂不支持组件 ${id} 的 ${descriptor.resizePolicy} 尺寸策略`);
     }
     validatePlacementWithinCanvas(id, placement);
   }
@@ -647,164 +635,6 @@ export function resolveActiveHudPreset(document: HudConfigDocument): HudResolved
   const parsed = parseHudConfigDocument(document);
   if (parsed.activePreset.kind === 'custom') return cloneJson(parsed.activePreset.snapshot);
   return getBuiltinResolvedPreset();
-}
-
-export function getWidgetDimensions(
-  id: HudWidgetId,
-  placement: HudWidgetPlacement = DEFAULT_PLACEMENTS[id],
-): { readonly width: number; readonly height: number } {
-  if (id === 'radar' && placement.size !== undefined) {
-    return { width: placement.size.width, height: placement.size.height };
-  }
-  return WIDGET_DIMENSIONS[id];
-}
-
-function anchorPoint(anchor: HudAnchor): { readonly x: number; readonly y: number } {
-  return {
-    'top-left': { x: 0, y: 0 },
-    'top-center': { x: HUD_CANVAS_WIDTH / 2, y: 0 },
-    'top-right': { x: HUD_CANVAS_WIDTH, y: 0 },
-    'center-left': { x: 0, y: HUD_CANVAS_HEIGHT / 2 },
-    center: { x: HUD_CANVAS_WIDTH / 2, y: HUD_CANVAS_HEIGHT / 2 },
-    'center-right': { x: HUD_CANVAS_WIDTH, y: HUD_CANVAS_HEIGHT / 2 },
-    'bottom-left': { x: 0, y: HUD_CANVAS_HEIGHT },
-    'bottom-center': { x: HUD_CANVAS_WIDTH / 2, y: HUD_CANVAS_HEIGHT },
-    'bottom-right': { x: HUD_CANVAS_WIDTH, y: HUD_CANVAS_HEIGHT },
-  }[anchor];
-}
-
-function anchorAlignment(anchor: HudAnchor): { readonly x: number; readonly y: number } {
-  return {
-    'top-left': { x: 0, y: 0 },
-    'top-center': { x: 0.5, y: 0 },
-    'top-right': { x: 1, y: 0 },
-    'center-left': { x: 0, y: 0.5 },
-    center: { x: 0.5, y: 0.5 },
-    'center-right': { x: 1, y: 0.5 },
-    'bottom-left': { x: 0, y: 1 },
-    'bottom-center': { x: 0.5, y: 1 },
-    'bottom-right': { x: 1, y: 1 },
-  }[anchor];
-}
-
-function placementToUnclampedBox(id: HudWidgetId, placement: HudWidgetPlacement): HudWidgetBox {
-  const dimensions = getWidgetDimensions(id, placement);
-  const point = anchorPoint(placement.anchor);
-  const alignment = anchorAlignment(placement.anchor);
-  return {
-    left: point.x + placement.offsetX - dimensions.width * alignment.x,
-    top: point.y + placement.offsetY - dimensions.height * alignment.y,
-    width: dimensions.width,
-    height: dimensions.height,
-  };
-}
-
-export function placementToBox(id: HudWidgetId, placement: HudWidgetPlacement): HudWidgetBox {
-  return clampWidgetBox(placementToUnclampedBox(id, placement));
-}
-
-export function validatePlacementWithinCanvas(
-  id: HudWidgetId,
-  placement: HudWidgetPlacement,
-): HudWidgetBox {
-  const box = placementToUnclampedBox(id, placement);
-  const clamped = clampWidgetBox(box);
-  if (
-    box.left !== clamped.left ||
-    box.top !== clamped.top ||
-    box.width !== clamped.width ||
-    box.height !== clamped.height
-  ) {
-    throw new Error(`组件 ${id} 的位置或尺寸超出 1920 × 1080 画布边界`);
-  }
-  return box;
-}
-
-function offsetForBox(
-  anchor: HudAnchor,
-  box: HudWidgetBox,
-): { readonly offsetX: number; readonly offsetY: number } {
-  const point = anchorPoint(anchor);
-  const alignment = anchorAlignment(anchor);
-  return {
-    offsetX: box.left + box.width * alignment.x - point.x,
-    offsetY: box.top + box.height * alignment.y - point.y,
-  };
-}
-
-export function clampWidgetBox(box: HudWidgetBox): HudWidgetBox {
-  const width = Math.min(box.width, HUD_CANVAS_WIDTH);
-  const height = Math.min(box.height, HUD_CANVAS_HEIGHT);
-  return {
-    left: Math.max(0, Math.min(box.left, HUD_CANVAS_WIDTH - width)),
-    top: Math.max(0, Math.min(box.top, HUD_CANVAS_HEIGHT - height)),
-    width,
-    height,
-  };
-}
-
-export function placementFromBox(
-  id: HudWidgetId,
-  base: HudWidgetPlacement,
-  box: HudWidgetBox,
-): HudWidgetPlacement {
-  const clamped = clampWidgetBox(box);
-  const offsets = offsetForBox(base.anchor, clamped);
-  return {
-    ...base,
-    offsetX: offsets.offsetX,
-    offsetY: offsets.offsetY,
-    ...(id === 'radar' && base.size !== undefined
-      ? { size: { width: clamped.width, height: clamped.height } }
-      : {}),
-  };
-}
-
-/** UI drafts use this canonicalizer before persistence so the saved placement matches its box. */
-export function normalizeHudPlacement(
-  id: HudWidgetId,
-  placement: HudWidgetPlacement,
-): HudWidgetPlacement {
-  return placementFromBox(id, placement, placementToBox(id, placement));
-}
-
-export function normalizeHudLayout(layout: HudLayout): HudLayout {
-  return {
-    ...cloneJson(layout),
-    widgets: completeWidgetRecord((id) => normalizeHudPlacement(id, layout.widgets[id])),
-  };
-}
-
-export function snapToGrid(value: number, grid = HUD_GRID_SIZE): number {
-  return Math.round(value / grid) * grid;
-}
-
-export function moveWidgetPlacement(
-  id: HudWidgetId,
-  placement: HudWidgetPlacement,
-  deltaX: number,
-  deltaY: number,
-  snap = true,
-): HudWidgetPlacement {
-  const box = placementToBox(id, placement);
-  const moved = {
-    ...box,
-    left: snap ? snapToGrid(box.left + deltaX) : box.left + deltaX,
-    top: snap ? snapToGrid(box.top + deltaY) : box.top + deltaY,
-  };
-  return placementFromBox(id, placement, moved);
-}
-
-export function resizeRadarPlacement(
-  placement: HudWidgetPlacement,
-  delta: number,
-  snap = true,
-): HudWidgetPlacement {
-  if (placement.size === undefined) throw new Error('Radar placement 缺少 square size');
-  const current = placementToBox('radar', placement);
-  const nextSize = current.width + delta;
-  const size = Math.max(160, Math.min(640, snap ? snapToGrid(nextSize) : nextSize));
-  return placementFromBox('radar', placement, { ...current, width: size, height: size });
 }
 
 export function resetLayoutDraft(draft: HudLayout): HudLayout {

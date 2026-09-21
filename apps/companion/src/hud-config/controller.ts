@@ -3,7 +3,10 @@ import type { FastifyInstance, FastifyReply } from 'fastify';
 import { checkLocalWebOrigin, type LocalWebOriginPolicy } from '../local-web/origin-policy.js';
 import {
   HudConfigStore,
+  HudConfigCommandError,
+  HudConfigEditorConflictError,
   type HudConfigMutationState,
+  HudConfigPersistenceError,
   type HudConfigState,
   type HudResourceKind,
 } from './store.js';
@@ -92,6 +95,9 @@ export function registerHudConfigRoutes(
       if (!isRecord(body) || typeof body.kind !== 'string') {
         return reply.code(400).send({ error: 'invalid_hud_config_command' });
       }
+      if (typeof body.expectedEditorRevision !== 'string') {
+        return reply.code(400).send({ error: 'invalid_hud_config_command' });
+      }
       if (body.kind === 'save-resource' || body.kind === 'save-as') {
         const resource = resourceKind(body.resource);
         if (resource === undefined || !('value' in body)) {
@@ -99,18 +105,43 @@ export function registerHudConfigRoutes(
         }
         const state =
           body.kind === 'save-resource'
-            ? await options.store.saveResource(resource, body.value)
-            : await options.store.saveAs(resource, body.value);
+            ? await options.store.saveResource(resource, body.value, body.expectedEditorRevision)
+            : await options.store.saveAs(resource, body.value, body.expectedEditorRevision);
         return reply.code(200).send(mutationResponse(state));
       }
       if (body.kind === 'activate-preset' && typeof body.sourceId === 'string') {
-        const state = await options.store.activatePreset(body.sourceId);
+        const state = await options.store.activatePreset(
+          body.sourceId,
+          body.expectedEditorRevision,
+        );
         return reply.code(200).send(mutationResponse(state));
       }
       return reply.code(400).send({ error: 'invalid_hud_config_command' });
     } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : 'HUD 配置命令未执行';
-      return reply.code(400).send({ error: 'hud_config_command_rejected', message });
+      if (error instanceof HudConfigEditorConflictError) {
+        return reply.code(409).send({
+          error: 'hud_config_editor_conflict',
+          message: 'HUD 配置已在另一页面更新，请先处理冲突。',
+        });
+      }
+      if (error instanceof HudConfigCommandError) {
+        return reply.code(400).send({
+          error: 'hud_config_command_rejected',
+          message: error.message,
+        });
+      }
+      if (error instanceof HudConfigPersistenceError) {
+        request.log.error({ err: error.cause }, 'HUD 配置持久化失败');
+        return reply.code(500).send({
+          error: 'hud_config_persistence_failed',
+          message: 'HUD 配置暂时无法保存，请查看本机诊断日志。',
+        });
+      }
+      request.log.error({ err: error }, 'HUD 配置内部错误');
+      return reply.code(500).send({
+        error: 'hud_config_internal_error',
+        message: 'HUD 配置暂时无法保存，请查看本机诊断日志。',
+      });
     }
   });
 }
