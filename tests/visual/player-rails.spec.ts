@@ -117,9 +117,7 @@ test.describe('Player Rails HUD', () => {
       ),
     ).toHaveCount(1);
     await expect(
-      page.locator(
-        '[data-player-rail="T"] [data-player-card="stress-player-6"] [aria-label="C4"]',
-      ),
+      page.locator('[data-player-rail="T"] [data-player-card="stress-player-6"] [aria-label="C4"]'),
     ).toHaveCount(1);
     await assertDeadCardGeometry(page);
     await expect(

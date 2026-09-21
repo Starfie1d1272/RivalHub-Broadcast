@@ -87,10 +87,7 @@ describe('Program fixture provenance policy', () => {
       'currentRoundDamage',
       'players',
     ]) {
-      expect(
-        () => derivePresentationStressFixture(base, { [field]: null }),
-        field,
-      ).toThrow();
+      expect(() => derivePresentationStressFixture(base, { [field]: null }), field).toThrow();
     }
     expect(() =>
       derivePresentationStressFixture(base, {
