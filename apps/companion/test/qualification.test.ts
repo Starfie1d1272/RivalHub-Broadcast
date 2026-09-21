@@ -160,6 +160,33 @@ describe('qualification-only Companion surface', () => {
     expect(missingClock.json()).toMatchObject({ error: 'objective_scenario_capture_unavailable' });
   });
 
+  it('keeps objective timing live status separate from the base Demo A/B result', async () => {
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new ClockedFakeRecorder(),
+      qualificationMode: true,
+      qualificationProfile: 'objective-timing',
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-objective-profile-run',
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/qualification/status',
+      headers,
+    });
+    expect(status.json()).toMatchObject({
+      profile: 'objective-timing',
+      result: 'INCONCLUSIVE',
+      objectiveScenarioProgress: { required: 8, completed: 0, complete: false },
+    });
+
+    const page = await app.inject({ method: 'GET', url: '/qualification' });
+    expect(page.body).toContain('目标时钟专项验收');
+    expect(page.body).toContain('const qualificationProfile = "objective-timing"');
+  });
+
   it('rotates Capture V1 identity inside one qualification run for reconnect evidence', async () => {
     temporaryDirectory = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-rotation-'));
     const first = new ClockedFakeRecorder('capture-a');
