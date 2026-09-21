@@ -63,6 +63,8 @@ Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromi
 - planting / planted / defusing overloaded countdown semantics；
 - objective timing qualification report 与真实 Capture V1 cadence / residual evidence；
 - qualification measurement、provenance、scenario coverage 与独立 CSTV/demo reference gate；
+- Production Capture Recorder 的 raw provenance、capture clock origin、objective reference
+  contract 与显式 8 场景 marker；sanitized fixture 不能作为 production PASS；
 - 回合与地图生命周期；
 - stale / reconnect；
 - source generation；

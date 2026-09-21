@@ -51,8 +51,13 @@ plant abort、爆炸、no-kit、defuse abort/restart 或 reconnect。
 - numeric `0.1 s`：`FAIL`。active p99 `255.8 ms > 200 ms`，且 capture 使用的
   `buffer=0.1`、`throttle=0.1`、`heartbeat=60` 不匹配 canonical production config 的
   `buffer=0`、`throttle=0`、`heartbeat=10`。
-- semantic scenario coverage：只观察到 `defuse-kit`，`8` 个最低场景中为 `1/8`；因此
-  `manifest.complete=true` 不被当作 semantic coverage。
+- semantic scenario coverage：这份历史 sanitized capture 没有新的显式 before/after
+  objective marker；按当前 8 场景 contract 计为 `0/8`。旧版报告里的 `defuse-kit` 形状
+  不能替代 `defuse-kit-abort-restart` 场景，因此 `manifest.complete=true` 不被当作
+  semantic coverage。
+- raw production provenance：`realObserverProvenance=false`。sanitized fixture 只作为
+  regression evidence，不能替代 qualification run 绑定的 raw recorder identity、环境和
+  artifact SHA。
 - independent observer reference：没有 `objective-events.jsonl` CSTV/demo reference，
   因此 observer-visible transition residual、fixed offset 和 random/common-mode delay
   结论均为 `unknown`，不能用 source-local 的 `0 ms` 或 `88 ms` 代替。

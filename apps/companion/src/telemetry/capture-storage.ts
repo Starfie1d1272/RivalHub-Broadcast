@@ -8,6 +8,55 @@ export interface CaptureFrameInput {
   readonly payload: Record<string, unknown>;
 }
 
+export type ObjectiveReferenceKind =
+  | 'bomb-begin-plant'
+  | 'bomb-abort-plant'
+  | 'bomb-planted'
+  | 'bomb-begin-defuse'
+  | 'bomb-abort-defuse'
+  | 'bomb-defused'
+  | 'bomb-exploded';
+
+export interface ObjectiveReferenceInput {
+  readonly referenceId: string;
+  readonly kind: ObjectiveReferenceKind;
+  readonly source: 'cstv' | 'demo';
+  readonly occurredMonotonicMs: number;
+  readonly sourceCursor: {
+    readonly kind: 'cs2-cstv';
+    readonly role: 'program' | 'lookahead';
+    readonly generation: number;
+    readonly sequence: number;
+    readonly tick: number;
+    readonly observedAt: string;
+    readonly observedMonotonicMs: number;
+    readonly mapName: string;
+    readonly ticksPerSecond: number;
+  };
+  readonly sourceArtifact: {
+    readonly id: string;
+    readonly sha256: string;
+  };
+  readonly hasKit?: boolean;
+}
+
+export interface CaptureClockV1 {
+  readonly kind: 'node-performance';
+  readonly origin: 'capture-start';
+  readonly elapsedUnit: 'microseconds';
+  readonly originMonotonicMs: number;
+}
+
+export type ProductionCaptureProvenanceV1 = {
+  readonly kind: 'production-recorder';
+  readonly recorderVersion: 1;
+  readonly captureId: string;
+  readonly artifactGitSha: string;
+  readonly artifactSha256: string | null;
+  readonly qualificationRunId: string | null;
+  readonly framesSha256: string;
+};
+
 /** Mirrors Capture V1; testkit verifyCapture validates the persisted contract. */
 export interface ProductionCaptureFrameV1 {
   readonly version: 1;
@@ -23,9 +72,13 @@ export interface ProductionCaptureManifestV1 {
   readonly captureId: string;
   readonly createdAt: string;
   readonly platform: string;
+  readonly windowsVersion?: string;
+  readonly cs2Build?: string;
   readonly broadcastCommit: string;
   readonly scenario: string;
   readonly gsiConfig: Record<string, unknown>;
+  readonly clock: CaptureClockV1;
+  readonly provenance?: ProductionCaptureProvenanceV1;
   readonly complete: boolean;
   readonly frameCount: number;
   readonly droppedFrames: number;
@@ -95,15 +148,43 @@ export function createCaptureManifest(
   frameCount: number,
   droppedFrames: number,
   framesSha256: string,
+  options: {
+    readonly windowsVersion?: string;
+    readonly cs2Build?: string;
+    readonly artifactSha256?: string;
+    readonly qualificationRunId?: string;
+    readonly monotonicOriginMs: number;
+  },
 ): ProductionCaptureManifestV1 {
+  const provenance: ProductionCaptureProvenanceV1 | undefined =
+    options.qualificationRunId === undefined
+      ? undefined
+      : {
+          kind: 'production-recorder',
+          recorderVersion: 1,
+          captureId,
+          artifactGitSha: broadcastCommit,
+          artifactSha256: options.artifactSha256 ?? null,
+          qualificationRunId: options.qualificationRunId,
+          framesSha256,
+        };
   return {
     formatVersion: 1,
     captureId,
     createdAt,
     platform: process.platform,
+    ...(options.windowsVersion === undefined ? {} : { windowsVersion: options.windowsVersion }),
+    ...(options.cs2Build === undefined ? {} : { cs2Build: options.cs2Build }),
     broadcastCommit,
     scenario: 'production-gsi-session',
     gsiConfig,
+    clock: {
+      kind: 'node-performance',
+      origin: 'capture-start',
+      elapsedUnit: 'microseconds',
+      originMonotonicMs: options.monotonicOriginMs,
+    },
+    ...(provenance === undefined ? {} : { provenance }),
     complete,
     frameCount,
     droppedFrames,

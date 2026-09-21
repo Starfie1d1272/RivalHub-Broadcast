@@ -8,6 +8,7 @@ export {
   QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
   QUALIFICATION_MARKER_PHASES,
+  QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS,
   QUALIFICATION_RESET_DISPOSITIONS,
   QUALIFICATION_RESET_EVIDENCE_FIELDS,
   QUALIFICATION_RESULT_VALUES,
@@ -18,6 +19,7 @@ export {
 export { iterateCaptureFrames, verifyCaptureDirectory } from './evidence/capture.mjs';
 export {
   analyzeObjectiveTimingCapture,
+  aggregateObjectiveScenarioCoverage,
   renderObjectiveTimingReport,
 } from './evidence/objective-timing.mjs';
 export { checksFrom, resultFromChecks } from './evidence/checks.mjs';

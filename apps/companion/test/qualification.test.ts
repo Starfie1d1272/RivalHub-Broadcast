@@ -113,6 +113,34 @@ describe('qualification-only Companion surface', () => {
     ).toBe(409);
   });
 
+  it('requires explicit objective scenario phases and a recorder-bound capture clock', async () => {
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-objective-run',
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+    const missingPhase = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-plant-abort' },
+    });
+    expect(missingPhase.statusCode).toBe(400);
+    expect(missingPhase.json()).toMatchObject({ error: 'invalid_objective_scenario_phase' });
+
+    const missingClock = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-plant-abort', phase: 'before' },
+    });
+    expect(missingClock.statusCode).toBe(409);
+    expect(missingClock.json()).toMatchObject({ error: 'objective_scenario_capture_unavailable' });
+  });
+
   it('hands the final runtime snapshot to the qualification launcher before shutdown', async () => {
     let finishDebug: unknown;
     app = buildApp({

@@ -11,6 +11,7 @@ type QualificationContract = {
   readonly maxMarkers: 128;
   readonly nodeRuntimeVersion: `v24.${number}.${number}`;
   readonly markerKinds: readonly QualificationMarkerKind[];
+  readonly objectiveScenarioMarkerKinds: readonly QualificationMarkerKind[];
   readonly liveMarkerKinds: readonly QualificationMarkerKind[];
   readonly markerPhases: readonly QualificationMarkerPhase[];
   readonly freshnessValues: readonly QualificationFreshness[];
@@ -22,13 +23,25 @@ type QualificationContract = {
   readonly resetReason: 'operator-correction';
 };
 
+// Objective scenario markers use phase=before/after to bind operator intent to
+// the exact capture window that the offline analyzer must verify.
+export type QualificationObjectiveScenarioMarkerKind =
+  | 'objective-freezetime-live'
+  | 'objective-plant-abort'
+  | 'objective-planted-explode'
+  | 'objective-defuse-kit-abort-restart'
+  | 'objective-defuse-no-kit-abort-restart'
+  | 'objective-too-late-defuse'
+  | 'objective-fast-defuse-missing-planted-sample'
+  | 'objective-reconnect-restart';
 export type QualificationMarkerKind =
   | 'demo-a-live'
   | 'cs2-closed'
   | 'runtime-stale'
   | 'next-execution'
   | 'cs2-reopened'
-  | 'demo-b-live';
+  | 'demo-b-live'
+  | QualificationObjectiveScenarioMarkerKind;
 export type QualificationMarkerPhase = 'before' | 'after';
 export type QualificationFreshness = 'awaiting' | 'fresh' | 'stale';
 export type QualificationResult = 'PASS' | 'FAIL' | 'INCONCLUSIVE';
@@ -52,6 +65,8 @@ const qualificationContract = qualificationContractJson as QualificationContract
 export const QUALIFICATION_SCHEMA_VERSION = qualificationContract.schemaVersion;
 export const QUALIFICATION_MAX_MARKERS = qualificationContract.maxMarkers;
 export const QUALIFICATION_MARKER_KINDS = qualificationContract.markerKinds;
+export const QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS =
+  qualificationContract.objectiveScenarioMarkerKinds;
 export const QUALIFICATION_LIVE_MARKER_KINDS = qualificationContract.liveMarkerKinds;
 export const QUALIFICATION_FRESHNESS_VALUES = qualificationContract.freshnessValues;
 export const QUALIFICATION_RESULT_VALUES = qualificationContract.resultValues;
@@ -96,6 +111,8 @@ export interface QualificationMarker {
   readonly sourceGeneration: number;
   readonly freshness: QualificationFreshness;
   readonly observation: QualificationAcceptedObservation | null;
+  readonly captureId?: string;
+  readonly captureElapsedUs?: number;
   readonly phase?: QualificationMarkerPhase;
   readonly reset?: QualificationResetEvidence;
 }
@@ -115,6 +132,12 @@ export interface QualificationEvidenceSnapshot {
 
 function isQualificationMarkerKind(value: unknown): value is QualificationMarkerKind {
   return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
+}
+
+function isObjectiveScenarioMarkerKind(
+  value: QualificationMarkerKind,
+): value is QualificationObjectiveScenarioMarkerKind {
+  return QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.some((kind) => kind === value);
 }
 
 function assertFiniteRuntimeTime(at: RuntimeTime): void {
@@ -179,6 +202,8 @@ export class QualificationEvidenceStore {
     options: {
       readonly phase?: QualificationMarkerPhase;
       readonly reset?: QualificationResetEvidence;
+      readonly captureId?: string;
+      readonly captureElapsedUs?: number;
     } = {},
   ): Promise<QualificationMarker> {
     if (!isQualificationMarkerKind(kind)) {
@@ -187,6 +212,18 @@ export class QualificationEvidenceStore {
     const at = this.clock.now();
     assertFiniteRuntimeTime(at);
     const observation = acceptedObservationFrom(snapshot, freshness);
+    if (isObjectiveScenarioMarkerKind(kind)) {
+      if (
+        options.phase === undefined ||
+        options.captureId === undefined ||
+        options.captureId.trim().length === 0 ||
+        options.captureElapsedUs === undefined ||
+        !Number.isSafeInteger(options.captureElapsedUs) ||
+        options.captureElapsedUs < 0
+      ) {
+        throw new Error(`${kind} 需要 captureId、captureElapsedUs 和 before/after phase`);
+      }
+    }
     if (
       QUALIFICATION_LIVE_MARKER_KINDS.includes(kind) &&
       (freshness !== 'fresh' || observation === null)
@@ -205,6 +242,10 @@ export class QualificationEvidenceStore {
       sourceGeneration: snapshot.current.programSource.generation,
       freshness,
       observation,
+      ...(options.captureId === undefined ? {} : { captureId: options.captureId }),
+      ...(options.captureElapsedUs === undefined
+        ? {}
+        : { captureElapsedUs: options.captureElapsedUs }),
       ...(options.phase === undefined ? {} : { phase: options.phase }),
       ...(options.reset === undefined ? {} : { reset: options.reset }),
     };

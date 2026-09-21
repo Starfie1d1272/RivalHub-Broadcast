@@ -27,6 +27,7 @@ export function renderReport({
   finalRuntime,
   captureResults,
   captureErrors,
+  objectiveTimingCoverage,
   checks,
 }) {
   const lines = [
@@ -56,12 +57,26 @@ export function renderReport({
     if (capture.objectiveTiming !== undefined) {
       const objective = capture.objectiveTiming;
       lines.push(
-        `  - Objective Clock 0.1 s：**${objectiveTimingLabel(objective.qualification.numeric01s.result)}**；active interval p99 ${objective.metrics.activePacketIntervalMs.p99 === null ? 'n/a' : `${objective.metrics.activePacketIntervalMs.p99.toFixed(1)} ms`}；reconnect gaps ${objective.metrics.reconnectGaps.count}`,
+        `  - Objective Clock production decision：**${objectiveTimingLabel(objective.qualification.production.result)}**`,
+        `  - Objective Clock numeric 0.1 s：**${objectiveTimingLabel(objective.qualification.numeric01s.result)}**；active interval p99 ${objective.metrics.activePacketIntervalMs.p99 === null ? 'n/a' : `${objective.metrics.activePacketIntervalMs.p99.toFixed(1)} ms`}；reconnect gaps ${objective.metrics.reconnectGaps.count}`,
         `  - Objective Clock 0.01 s：**${objectiveTimingLabel(objective.qualification.numeric001s.result)}**`,
         `  - Objective evidence：scenario coverage ${objective.evidence.scenarioCoverage.observed.length}/${objective.evidence.scenarioCoverage.required.length}；terminal residual coverage ${objective.qualification.numeric01s.gates.terminalResidualCoverage === true ? 'complete' : 'incomplete'}；independent references ${objective.evidence.independentObjectiveReferences.length}`,
+        `  - Objective semantics：**${objectiveTimingLabel(objective.qualification.sourceSemantics.result)}**；terminal residual bound ${objective.qualification.sourceSemantics.gates.terminalResidualWithin100Ms === true ? 'within 100 ms' : objective.qualification.sourceSemantics.gates.terminalResidualWithin100Ms === false ? 'exceeds 100 ms' : 'inconclusive'}`,
         `  - Objective lease：configured ${objective.metrics.lease.configuredLeaseMs.toFixed(1)} ms；required minimum ${objective.metrics.lease.requiredMinimumLeaseMs === null ? 'n/a' : `${objective.metrics.lease.requiredMinimumLeaseMs.toFixed(1)} ms`}；sufficient ${objective.metrics.lease.sufficient === true ? 'yes' : objective.metrics.lease.sufficient === false ? 'no' : 'inconclusive'}`,
       );
     }
+  }
+  if (objectiveTimingCoverage !== undefined) {
+    lines.push(
+      '',
+      '## Objective scenario coverage (run aggregate)',
+      '',
+      `- Declared：${objectiveTimingCoverage.declared.length}/${objectiveTimingCoverage.required.length}`,
+      `- Verified：${objectiveTimingCoverage.observed.length}/${objectiveTimingCoverage.required.length}`,
+      `- Missing：${objectiveTimingCoverage.missing.length === 0 ? 'none' : objectiveTimingCoverage.missing.join(', ')}`,
+      `- Declared but unverified：${objectiveTimingCoverage.declaredMissing.length === 0 ? 'none' : objectiveTimingCoverage.declaredMissing.join(', ')}`,
+      '- Coverage requires explicit before/after markers bound to Capture V1 identities; packet gaps alone do not count as reconnect evidence.',
+    );
   }
   lines.push('', '## 场景标记', '');
   if (scenario.markers.length === 0) lines.push('- 未记录场景标记。');

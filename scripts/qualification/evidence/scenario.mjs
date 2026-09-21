@@ -6,6 +6,7 @@ import {
   QUALIFICATION_FRESHNESS_VALUES,
   QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
+  QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS,
   QUALIFICATION_MARKER_PHASES,
   QUALIFICATION_RESET_DISPOSITIONS,
   QUALIFICATION_RESET_EVIDENCE_FIELDS,
@@ -103,6 +104,19 @@ export function validateMarker(marker, runId, lineNumber) {
       'INVALID_SCENARIO',
       `scenario 第 ${lineNumber} 行的 phase 无效`,
     );
+  }
+  if (QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.has(marker.kind)) {
+    if (
+      (marker.phase !== 'before' && marker.phase !== 'after') ||
+      typeof marker.captureId !== 'string' ||
+      marker.captureId.length === 0 ||
+      !isSafeNonNegativeInteger(marker.captureElapsedUs)
+    ) {
+      throw new QualificationEvidenceError(
+        'INVALID_SCENARIO',
+        `scenario 第 ${lineNumber} 行的 objective scenario capture window 无效`,
+      );
+    }
   }
   if (marker.reset !== undefined) {
     if (

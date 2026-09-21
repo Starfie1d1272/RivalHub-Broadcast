@@ -23,7 +23,10 @@ import {
   walkFiles,
 } from './integrity.mjs';
 import { liveObservationReferences, readScenario } from './scenario.mjs';
-import { analyzeObjectiveTimingCapture } from './objective-timing.mjs';
+import {
+  aggregateObjectiveScenarioCoverage,
+  analyzeObjectiveTimingCapture,
+} from './objective-timing.mjs';
 import { renderReport } from './report.mjs';
 
 async function immediateDirectories(path) {
@@ -35,7 +38,7 @@ async function immediateDirectories(path) {
   }
 }
 
-async function readCaptureResults(runDir, markers) {
+async function readCaptureResults(runDir, markers, qualificationContext) {
   const recorderDir = join(runDir, 'recorder');
   const recorderEntries = await immediateDirectories(recorderDir);
   const captureResults = [];
@@ -52,13 +55,20 @@ async function readCaptureResults(runDir, markers) {
       const capture = await verifyCaptureDirectory(captureDir, observationReferences);
       captureResults.push({
         ...capture,
-        objectiveTiming: await analyzeObjectiveTimingCapture(captureDir),
+        objectiveTiming: await analyzeObjectiveTimingCapture(captureDir, {
+          qualificationContext,
+          scenarioMarkers: markers.filter((marker) => marker.kind.startsWith('objective-')),
+        }),
       });
     } catch (error) {
       captureErrors.push(error);
     }
   }
-  return { captureResults, captureErrors };
+  return {
+    captureResults,
+    captureErrors,
+    objectiveTimingCoverage: aggregateObjectiveScenarioCoverage(captureResults, markers),
+  };
 }
 
 export async function readQualificationEvidence(runDir) {
@@ -128,9 +138,16 @@ export async function readQualificationEvidence(runDir) {
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
   scanJsonForSecrets(environment, '$.environment');
   if (finalRuntime !== undefined) scanJsonForSecrets(finalRuntime, '$.finalRuntime');
-  const { captureResults, captureErrors } = await readCaptureResults(
+  const { captureResults, captureErrors, objectiveTimingCoverage } = await readCaptureResults(
     resolvedRunDir,
     scenario.markers,
+    {
+      runId,
+      artifactGitSha: qualification.artifact.gitSha,
+      artifactSha256: qualification.artifact.artifactSha256,
+      windowsVersion: environment.windowsVersion,
+      cs2Version: environment.cs2Version,
+    },
   );
   const result = {
     runDir: resolvedRunDir,
@@ -141,6 +158,7 @@ export async function readQualificationEvidence(runDir) {
     finalRuntime,
     captureResults,
     captureErrors,
+    objectiveTimingCoverage,
     checks: checksFrom({
       markers: scenario.markers,
       finalRuntime,
@@ -181,9 +199,16 @@ export async function writeQualificationEvidence({
   validateArtifact(artifact);
   const scenario = await readScenario(resolvedRunDir);
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
-  const { captureResults, captureErrors } = await readCaptureResults(
+  const { captureResults, captureErrors, objectiveTimingCoverage } = await readCaptureResults(
     resolvedRunDir,
     scenario.markers,
+    {
+      runId: scenario.runId ?? environment.runId ?? 'unknown',
+      artifactGitSha: artifact.gitSha,
+      artifactSha256: artifact.artifactSha256,
+      windowsVersion: environment.windowsVersion,
+      cs2Version: environment.cs2Version,
+    },
   );
   const checks = checksFrom({
     markers: scenario.markers,
@@ -228,6 +253,7 @@ export async function writeQualificationEvidence({
     finalRuntime,
     captureResults,
     captureErrors,
+    objectiveTimingCoverage,
     checks,
   });
   await writeFile(join(resolvedRunDir, 'REPORT.md'), report, 'utf8');
@@ -238,5 +264,12 @@ export async function writeQualificationEvidence({
     hashLines.push(`${digest}  ${relative(resolvedRunDir, path).replaceAll('\\', '/')}`);
   }
   await writeFile(join(resolvedRunDir, 'hashes.txt'), `${hashLines.join('\n')}\n`, 'utf8');
-  return { qualification, report, captureResults, captureErrors, checks };
+  return {
+    qualification,
+    report,
+    captureResults,
+    captureErrors,
+    objectiveTimingCoverage,
+    checks,
+  };
 }

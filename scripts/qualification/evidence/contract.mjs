@@ -38,6 +38,7 @@ function validateQualificationContract(contract) {
   }
   for (const key of [
     'markerKinds',
+    'objectiveScenarioMarkerKinds',
     'liveMarkerKinds',
     'markerPhases',
     'freshnessValues',
@@ -70,6 +71,9 @@ export const QUALIFICATION_CONTRACT = validateQualificationContract(loadQualific
 export const QUALIFICATION_SCHEMA_VERSION = QUALIFICATION_CONTRACT.schemaVersion;
 export const QUALIFICATION_REPOSITORY = 'Starfie1d1272/RivalHub-Broadcast';
 export const QUALIFICATION_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.markerKinds);
+export const QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS = new Set(
+  QUALIFICATION_CONTRACT.objectiveScenarioMarkerKinds,
+);
 export const QUALIFICATION_LIVE_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.liveMarkerKinds);
 export const QUALIFICATION_FRESHNESS_VALUES = new Set(QUALIFICATION_CONTRACT.freshnessValues);
 export const QUALIFICATION_RESULT_VALUES = new Set(QUALIFICATION_CONTRACT.resultValues);

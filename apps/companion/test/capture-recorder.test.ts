@@ -353,6 +353,80 @@ describe('production capture recorder', () => {
     expect(manifest.complete).toBe(true);
   });
 
+  it('persists production provenance, a shared capture clock, and objective references', async () => {
+    const root = await makeRoot();
+    roots.push(root);
+    const recorder = await createCaptureRecorder({
+      captureDir: root,
+      captureId: 'qualified-capture',
+      createdAt: CREATED_AT,
+      broadcastCommit: 'a'.repeat(40),
+      windowsVersion: 'Windows 11 test',
+      cs2Build: '1.0.0',
+      artifactSha256: 'c'.repeat(64),
+      qualificationRunId: 'qualification-run',
+      gsiConfig: GSI_CONFIG,
+      monotonicNow: () => 100,
+      writerFactory: () => Promise.resolve(new MemoryWriter()),
+    });
+
+    expect(
+      recorder.tryRecordObjectiveReference?.({
+        referenceId: 'cstv-plant-1',
+        kind: 'bomb-planted',
+        source: 'cstv',
+        occurredMonotonicMs: 101,
+        sourceCursor: {
+          kind: 'cs2-cstv',
+          role: 'program',
+          generation: 0,
+          sequence: 1,
+          tick: 100,
+          observedAt: CREATED_AT,
+          observedMonotonicMs: 101,
+          mapName: 'de_ancient',
+          ticksPerSecond: 64,
+        },
+        sourceArtifact: { id: 'cstv-live', sha256: 'b'.repeat(64) },
+      }),
+    ).toBe(true);
+    expect(recorder.tryRecord(frameInput(0))).toBe(true);
+    await recorder.finalize();
+
+    const manifest = JSON.parse(
+      await readFile(join(root, 'qualified-capture', 'manifest.json'), 'utf8'),
+    ) as Record<string, unknown>;
+    expect(manifest).toMatchObject({
+      windowsVersion: 'Windows 11 test',
+      cs2Build: '1.0.0',
+      clock: {
+        kind: 'node-performance',
+        origin: 'capture-start',
+        elapsedUnit: 'microseconds',
+        originMonotonicMs: 100,
+      },
+      provenance: {
+        kind: 'production-recorder',
+        recorderVersion: 1,
+        captureId: 'qualified-capture',
+        artifactGitSha: 'a'.repeat(40),
+        artifactSha256: 'c'.repeat(64),
+        qualificationRunId: 'qualification-run',
+      },
+    });
+    expect(
+      JSON.parse(await readFile(join(root, 'qualified-capture', 'objective-events.jsonl'), 'utf8')),
+    ).toMatchObject({
+      version: 2,
+      captureId: 'qualified-capture',
+      timebase: 'capture-elapsed-us',
+      occurredAtUs: 1_000,
+      kind: 'bomb-planted',
+      sourceCursor: { sequence: 1, observedMonotonicMs: 101 },
+      sourceArtifact: { id: 'cstv-live', sha256: 'b'.repeat(64) },
+    });
+  });
+
   it('counts active and queued buffers against both hard bounds and drops newest', async () => {
     const root = await makeRoot();
     roots.push(root);

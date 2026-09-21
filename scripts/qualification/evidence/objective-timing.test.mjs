@@ -5,7 +5,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { analyzeObjectiveTimingCapture, renderObjectiveTimingReport } from './objective-timing.mjs';
+import {
+  aggregateObjectiveScenarioCoverage,
+  analyzeObjectiveTimingCapture,
+  renderObjectiveTimingReport,
+} from './objective-timing.mjs';
 
 const CREATED_AT = '2026-09-21T00:00:00.000Z';
 const BROADCAST_COMMIT = 'a'.repeat(40);
@@ -26,6 +30,14 @@ async function createCapture(frames, options = {}) {
   await mkdir(captureDir, { recursive: true });
   const content = `${frames.map((value) => JSON.stringify(value)).join('\n')}\n`;
   await writeFile(join(captureDir, 'frames.jsonl'), content, 'utf8');
+  const framesSha256 = createHash('sha256').update(content, 'utf8').digest('hex');
+  const manifestOverrides = { ...(options.manifest ?? {}) };
+  if (options.provenance !== undefined) {
+    manifestOverrides.provenance = {
+      ...options.provenance,
+      framesSha256,
+    };
+  }
   await writeFile(
     join(captureDir, 'manifest.json'),
     `${JSON.stringify({
@@ -45,21 +57,63 @@ async function createCapture(frames, options = {}) {
           ...(options.config ?? {}),
         },
       },
+      clock: {
+        kind: 'node-performance',
+        origin: 'capture-start',
+        elapsedUnit: 'microseconds',
+        originMonotonicMs: 0,
+      },
       complete: options.complete ?? true,
       frameCount: frames.length,
       droppedFrames: options.droppedFrames ?? 0,
-      framesSha256: createHash('sha256').update(content, 'utf8').digest('hex'),
+      framesSha256,
+      ...manifestOverrides,
     })}\n`,
     'utf8',
   );
   if (options.objectiveEvents !== undefined) {
     await writeFile(
       join(captureDir, 'objective-events.jsonl'),
-      `${options.objectiveEvents.map((value) => JSON.stringify(value)).join('\n')}\n`,
+      `${options.objectiveEvents
+        .map((value) =>
+          JSON.stringify({
+            version: 2,
+            referenceId: value.referenceId,
+            kind: value.kind,
+            source: value.source,
+            captureId: 'capture-1',
+            timebase: 'capture-elapsed-us',
+            occurredAtUs: value.occurredAtMs * 1_000,
+            sourceCursor: {
+              kind: 'cs2-cstv',
+              role: 'program',
+              generation: 0,
+              sequence: 0,
+              tick: 100,
+              observedAt: CREATED_AT,
+              observedMonotonicMs: value.occurredAtMs,
+              mapName: 'de_ancient',
+              ticksPerSecond: 64,
+            },
+            sourceArtifact: { id: 'test-cstv', sha256: 'b'.repeat(64) },
+            ...(value.hasKit === undefined ? {} : { hasKit: value.hasKit }),
+          }),
+        )
+        .join('\n')}\n`,
       'utf8',
     );
   }
   return { root, captureDir };
+}
+
+function objectiveMarker(scenario, phase, captureElapsedUs, captureId = 'capture-1') {
+  return {
+    kind: `objective-${scenario}`,
+    phase,
+    captureId,
+    captureElapsedUs,
+    monotonicMs: captureElapsedUs / 1_000,
+  };
 }
 
 describe('objective timing capture analyzer', () => {
@@ -132,6 +186,7 @@ describe('objective timing capture analyzer', () => {
     try {
       const result = await analyzeObjectiveTimingCapture(run.captureDir);
       expect(result.metrics.reconnectGaps).toMatchObject({ count: 1, maxMs: 1_400 });
+      expect(result.evidence.scenarioCoverage.scenarios['reconnect-restart'].observed).toBe(false);
       expect(result.qualification.numeric01s.result).toBe('FAIL');
       expect(result.qualification.numeric01s.gates.captureComplete).toBe(false);
     } finally {
@@ -151,7 +206,7 @@ describe('objective timing capture analyzer', () => {
           {
             version: 1,
             referenceId: 'cstv-defuse-start',
-            kind: 'defuse',
+            kind: 'bomb-begin-defuse',
             source: 'cstv',
             occurredAtMs: 100,
           },
@@ -220,7 +275,9 @@ describe('objective timing capture analyzer', () => {
 
     try {
       const result = await analyzeObjectiveTimingCapture(run.captureDir);
-      expect(result.evidence.scenarioCoverage.scenarios['defuse-abort-restart']).toBe(false);
+      expect(result.evidence.scenarioCoverage.scenarios['defuse-kit-abort-restart'].observed).toBe(
+        false,
+      );
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }
@@ -244,6 +301,163 @@ describe('objective timing capture analyzer', () => {
           }),
         ]),
       );
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('requires explicit scenario windows and verifies freezetime-to-live from raw frames', async () => {
+    const run = await createCapture([
+      frame(0, 0, { round: { phase: 'freezetime' }, bomb: { state: 'carried' } }),
+      frame(1, 100, { round: { phase: 'live' }, bomb: { state: 'carried' } }),
+      frame(2, 200, { round: { phase: 'live' }, bomb: { state: 'planting', countdown: '3' } }),
+    ]);
+    const markers = [
+      objectiveMarker('freezetime-live', 'before', 0),
+      objectiveMarker('freezetime-live', 'after', 200_000),
+    ];
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir, {
+        scenarioMarkers: markers,
+      });
+      expect(result.evidence.scenarioCoverage).toMatchObject({
+        declared: ['freezetime-live'],
+        observed: ['freezetime-live'],
+        failed: false,
+      });
+      const withoutMarkers = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(withoutMarkers.evidence.scenarioCoverage.observed).not.toContain('freezetime-live');
+      expect(withoutMarkers.qualification.numeric01s.gates.scenarioCoverage).toBeNull();
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('aggregates reconnect evidence only from explicit markers bound to different captures', () => {
+    const markers = [
+      objectiveMarker('reconnect-restart', 'before', 1_000, 'capture-a'),
+      objectiveMarker('reconnect-restart', 'after', 1_000, 'capture-b'),
+    ];
+    const result = aggregateObjectiveScenarioCoverage(
+      [{ manifest: { captureId: 'capture-a' } }, { manifest: { captureId: 'capture-b' } }],
+      markers,
+    );
+    expect(result.scenarios['reconnect-restart']).toMatchObject({
+      declared: true,
+      observed: true,
+      captureIds: ['capture-a', 'capture-b'],
+    });
+  });
+
+  it('fails source semantics when terminal residuals exceed the 100 ms bound', async () => {
+    const run = await createCapture([
+      frame(0, 0, { bomb: { state: 'planting', countdown: '3' } }),
+      frame(1, 100, {
+        bomb: { state: 'planted', countdown: '30' },
+        phase_countdowns: { phase: 'bomb', phase_ends_in: '30' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(2, 200, {
+        bomb: { state: 'defusing', countdown: '5' },
+        phase_countdowns: { phase: 'defuse', phase_ends_in: '5' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(3, 300, { bomb: { state: 'defused' }, round: { phase: 'live', bomb: 'defused' } }),
+      frame(4, 400, { bomb: { state: 'planting', countdown: '3' } }),
+      frame(5, 500, {
+        bomb: { state: 'planted', countdown: '30' },
+        phase_countdowns: { phase: 'bomb', phase_ends_in: '30' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(6, 600, {
+        bomb: { state: 'defusing', countdown: '5' },
+        phase_countdowns: { phase: 'defuse', phase_ends_in: '5' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+      frame(7, 700, { bomb: { state: 'exploded' }, round: { phase: 'live', bomb: 'exploded' } }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.qualification.numeric01s.gates.terminalResidualCoverage).toBe(true);
+      expect(result.qualification.sourceSemantics.gates.terminalResidualWithin100Ms).toBe(false);
+      expect(result.qualification.sourceSemantics.result).toBe('FAIL');
+      expect(result.qualification.production.result).toBe('FAIL');
+      expect(result.qualification.numeric01s.result).toBe('INCONCLUSIVE');
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
+  });
+
+  it('keeps raw production provenance distinct from sanitized fixture provenance', async () => {
+    const productionRun = await createCapture(
+      [frame(0, 0, { bomb: { state: 'planted', countdown: '30' } })],
+      {
+        manifest: { windowsVersion: 'Windows 11 test', cs2Build: 'CS2 test' },
+        provenance: {
+          kind: 'production-recorder',
+          recorderVersion: 1,
+          captureId: 'capture-1',
+          artifactGitSha: BROADCAST_COMMIT,
+          artifactSha256: 'd'.repeat(64),
+          qualificationRunId: 'qualification-run',
+        },
+      },
+    );
+    const sanitizedRun = await createCapture(
+      [frame(0, 0, { bomb: { state: 'planted', countdown: '30' } })],
+      {
+        manifest: { windowsVersion: 'Windows 11 test' },
+        provenance: {
+          fixtureKind: 'sanitized-real-capture',
+          sourceCaptureId: 'raw-capture',
+          sourceFramesSha256: 'c'.repeat(64),
+          sourceFrameSelection: { kind: 'all' },
+          sanitizerVersion: 1,
+          lifecycleCoverage: 'full-match',
+        },
+      },
+    );
+
+    try {
+      const context = {
+        runId: 'qualification-run',
+        artifactGitSha: BROADCAST_COMMIT,
+        artifactSha256: 'd'.repeat(64),
+        windowsVersion: 'Windows 11 test',
+        cs2Version: 'CS2 test',
+      };
+      const production = await analyzeObjectiveTimingCapture(productionRun.captureDir, {
+        qualificationContext: context,
+      });
+      const sanitized = await analyzeObjectiveTimingCapture(sanitizedRun.captureDir, {
+        qualificationContext: context,
+      });
+      expect(production.qualification.numeric01s.gates.realObserverProvenance).toBe(true);
+      expect(sanitized.qualification.numeric01s.gates.realObserverProvenance).toBe(false);
+      expect(production.qualification.production.result).toBe('INCONCLUSIVE');
+      expect(sanitized.qualification.production.result).not.toBe('PASS');
+    } finally {
+      await rm(productionRun.root, { recursive: true, force: true });
+      await rm(sanitizedRun.root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails source semantics on an explicit phase mismatch', async () => {
+    const run = await createCapture([
+      frame(0, 0, {
+        bomb: { state: 'planted', countdown: '30' },
+        phase_countdowns: { phase: 'defuse', phase_ends_in: '30' },
+        round: { phase: 'live', bomb: 'planted' },
+      }),
+    ]);
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.qualification.sourceSemantics.gates.phaseSemanticsConsistent).toBe(false);
+      expect(result.qualification.sourceSemantics.result).toBe('FAIL');
+      expect(result.qualification.production.result).toBe('FAIL');
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }

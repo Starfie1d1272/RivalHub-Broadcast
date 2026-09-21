@@ -8,9 +8,27 @@
     "runtime-stale",
     "next-execution",
     "cs2-reopened",
-    "demo-b-live"
+    "demo-b-live",
+    "objective-freezetime-live",
+    "objective-plant-abort",
+    "objective-planted-explode",
+    "objective-defuse-kit-abort-restart",
+    "objective-defuse-no-kit-abort-restart",
+    "objective-too-late-defuse",
+    "objective-fast-defuse-missing-planted-sample",
+    "objective-reconnect-restart"
   ],
   "liveMarkerKinds": ["demo-a-live", "demo-b-live"],
+  "objectiveScenarioMarkerKinds": [
+    "objective-freezetime-live",
+    "objective-plant-abort",
+    "objective-planted-explode",
+    "objective-defuse-kit-abort-restart",
+    "objective-defuse-no-kit-abort-restart",
+    "objective-too-late-defuse",
+    "objective-fast-defuse-missing-planted-sample",
+    "objective-reconnect-restart"
+  ],
   "markerPhases": ["before", "after"],
   "freshnessValues": ["awaiting", "fresh", "stale"],
   "resultValues": ["PASS", "FAIL", "INCONCLUSIVE"],

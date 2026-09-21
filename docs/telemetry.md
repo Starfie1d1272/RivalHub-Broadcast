@@ -350,8 +350,10 @@ Reference corpus 应覆盖：
 
 ### 11.1 Objective Clock qualification report
 
-Capture V1 的真实 observer evidence 可通过现有 Production Capture Recorder 生成的原始
-capture 做离线分析：
+Capture V1 的真实 observer evidence 可通过 Production Capture Recorder 生成的原始
+capture 做离线分析。qualification 模式下 recorder 会在同一 manifest 写入 raw recorder
+provenance、capture-relative monotonic clock origin、exact CS2 build、验收包 SHA-256 和环境/运行编号绑定；普通或脱敏
+fixture 没有资格伪装成 production capture：
 
 ```text
 pnpm qualification:objective-timing <capture-dir>
@@ -359,37 +361,58 @@ pnpm qualification:objective-timing <capture-dir>
 
 分析器分三层输出：measurement 只计算 active packet interval 的 p50/p95/p99/max、countdown
 delta 与 monotonic residual、source-local state/phase residual、plant/defuse/explosion terminal
-residual、provider/receive 时间证据、missing countdown spans 和 reconnect gaps；evidence
-coverage 再验证真实 observer provenance、canonical production GSI config、8 个最小 objective
-scenario，以及独立的 `objective-events.jsonl` CSTV/demo reference；qualification decision 最后
-才组合这些 gate。报告只打印 allowlisted GSI config，不打印 token；原始 frames、manifest、
-reference file 和 SHA-256 仍是证据源。
+residual、provider/receive 时间证据、missing countdown spans 和 packet/sequence gaps；evidence
+coverage 再验证 raw recorder provenance、canonical production GSI config、Issue #49 的 8 个
+最小 objective scenario，以及独立的 `objective-events.jsonl` CSTV/demo reference；qualification
+decision 最后才组合这些 gate。报告只打印 allowlisted GSI config，不打印 token；原始 frames、
+manifest、reference file、scenario marker 和 SHA-256 仍是证据源。
 
 同一个 GSI payload 内的 bomb/phase 对齐只能作为 source-local consistency，不能证明 observer-visible
-transition residual、common-mode fixed offset 或 random delay。没有独立 reference、真实 observer
-provenance 或完整 scenario coverage 时，numeric result 必须保持 `INCONCLUSIVE`；synthetic fixture
-可以测试 measurement 算法，但不能冒充 production qualification。
+transition residual、common-mode fixed offset 或 random delay。没有独立 reference、raw production
+provenance 或完整 scenario coverage 时，production decision 必须保持 `INCONCLUSIVE` 或 `FAIL`，
+不能是 `PASS`；synthetic fixture 和 sanitized fixture 只能测试 measurement/analyzer 回归，不能
+冒充 production qualification。
 
-numeric 0.1 s 的 evidence gate 为 active packet interval p99 ≤ 200 ms、独立 reference transition
-residual p95 ≤ 100 ms、独立 absolute offset ≤ 100 ms、canonical production config 匹配、完整
-scenario coverage，并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy
-上限。lease 与 Core 共用 canonical policy；因此一次 capture 即使 0.1 s gate FAIL，也必须单独
-报告 lease sufficiency。plant、defuse、explosion 三类 terminal residual 也必须各自有统计样本，
-否则 terminal residual coverage gate 保持 `INCONCLUSIVE`；它们当前是 source-local measurement，
-独立 reference 覆盖数量单独报告。`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。
+source semantics/lifecycle qualification 与 numeric precision qualification 是两个独立结论。
+前者必须处理 overloaded countdown 的 phase 切换、`round.bomb`、matching defuser 的 kit
+evidence、abort/restart、terminal residual 和显式场景 consequence；显式 semantic mismatch
+或 terminal residual 超过 100 ms 为 `FAIL`，缺少样本为 `INCONCLUSIVE`。后者的 0.1 s gate
+包括 active packet interval p99 ≤ 200 ms、独立 reference transition residual p95 ≤ 100 ms、
+独立 absolute offset ≤ 100 ms、canonical production config 匹配、完整 scenario coverage，
+并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy 上限。lease 与 Core
+共用 canonical policy；因此一次 capture 即使 0.1 s gate FAIL，也必须单独报告 lease sufficiency。
+plant、defuse、explosion 三类 terminal residual 必须各自有统计样本；缺样本时 coverage gate
+保持 `INCONCLUSIVE`。`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。
+
+8 个场景不是从形状推断出来的布尔值，而是由 qualification marker 明确声明窗口：
+`freezetime-live`、`plant-abort`、`planted-explode`、`defuse-kit-abort-restart`、
+`defuse-no-kit-abort-restart`、`too-late-defuse`、`fast-defuse-missing-planted-sample`、
+`reconnect-restart`。每个窗口必须有同一 Capture V1 `captureId` 绑定的 `before`/`after`
+marker；raw frames 验证实际 consequence。fast-defuse 只看窗口内的第一帧，不能看整段 capture
+的第一帧。reconnect 不由 heartbeat 间隙或 sequence gap 推断，只能由显式 marker 绑定不同
+recorder capture identity 的 run-level aggregator 验证。Windows 备用入口为：
+`mark.ps1 objective-plant-abort -Phase before` / `-Phase after`。
 
 canonical production GSI config 的唯一代码来源是
 `packages/telemetry-gsi/src/production-config.json`；analyzer 会对 capture manifest 的
 `timeout`、`precision_time`、`buffer`、`throttle` 和 `heartbeat` 做规范化比较。
 
-`objective-events.jsonl` 每行格式为：
+`objective-events.jsonl` 是 Production Capture Recorder 在 Program CSTV source 可用时写入的
+独立 reference contract，每行格式为：
 
 ```json
-{"version":1,"referenceId":"cstv-plant-001","kind":"plant","source":"cstv","occurredAtMs":1234.5}
+{"version":2,"referenceId":"cstv-program-3-41-bomb-planted","kind":"bomb-planted","source":"cstv","captureId":"capture-1","timebase":"capture-elapsed-us","occurredAtUs":1234500,"sourceCursor":{"kind":"cs2-cstv","role":"program","generation":3,"sequence":41,"tick":123456,"observedAt":"2026-09-21T00:00:01.234Z","observedMonotonicMs":1240.5,"mapName":"de_ancient","ticksPerSecond":64},"sourceArtifact":{"id":"program-cstv-endpoint","sha256":"bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb"}}
 ```
 
-其中 `source` 只能是独立的 `cstv` 或 `demo` reference；没有该文件时 transition/absolute-offset
-gate 为 `INCONCLUSIVE`。
+`kind` 必须是精确的 `bomb-begin-plant`、`bomb-abort-plant`、`bomb-planted`、
+`bomb-begin-defuse`、`bomb-abort-defuse`、`bomb-defused` 或 `bomb-exploded`；`sourceCursor`
+必须携带 role、generation、sequence、tick、UTC observation time、map identity 和 tick rate，
+`sourceArtifact` 必须有 id 与 SHA-256。Production Recorder 默认把 Program CSTV endpoint 的
+identity hash 写入 `sourceArtifact`；离线 CSTV/demo extractor 应写入对应输入 artifact 的内容
+SHA-256，不能把 endpoint identity 当作内容完整性证明。`occurredAtUs` 由同一进程的 CSTV observation monotonic
+time 按 manifest 的 `clock.originMonotonicMs` 对齐，analyzer 会拒绝无法复现 common clock alignment
+的记录。没有该文件、clock、source provenance 或对齐证明时 transition/absolute-offset gate
+为 `INCONCLUSIVE`。
 
 ## 12. 隐私与安全
 

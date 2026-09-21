@@ -7,22 +7,35 @@ import { iterateCaptureFrames, verifyCaptureDirectory } from './capture.mjs';
 export const OBJECTIVE_CLOCK_PACKET_P99_LIMIT_MS = 200;
 export const OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS = 100;
 export const OBJECTIVE_CLOCK_OFFSET_LIMIT_MS = 100;
+export const OBJECTIVE_CLOCK_TERMINAL_RESIDUAL_LIMIT_MS = 100;
 
 export const OBJECTIVE_TIMING_REFERENCE_FILE = 'objective-events.jsonl';
 export const REQUIRED_OBJECTIVE_SCENARIOS = Object.freeze([
+  'freezetime-live',
   'plant-abort',
-  'explode',
-  'defuse-kit',
-  'defuse-no-kit',
-  'defuse-abort-restart',
+  'planted-explode',
+  'defuse-kit-abort-restart',
+  'defuse-no-kit-abort-restart',
   'too-late-defuse',
   'fast-defuse-missing-planted-sample',
   'reconnect-restart',
 ]);
 
 const ACTIVE_BOMB_STATES = new Set(['planting', 'planted', 'defusing']);
-const REFERENCE_KINDS = new Set(['plant', 'defuse', 'explosion']);
+const REFERENCE_KINDS = new Set([
+  'bomb-begin-plant',
+  'bomb-abort-plant',
+  'bomb-planted',
+  'bomb-begin-defuse',
+  'bomb-abort-defuse',
+  'bomb-defused',
+  'bomb-exploded',
+]);
 const REFERENCE_SOURCES = new Set(['cstv', 'demo']);
+const REFERENCE_CURSOR_ROLES = new Set(['program', 'lookahead']);
+const REFERENCE_TIMEBASE = 'capture-elapsed-us';
+const PRODUCTION_RECORDER_PROVENANCE = 'production-recorder';
+const SANITIZED_PROVENANCE = 'sanitized-real-capture';
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(MODULE_DIR, '../../..');
 
@@ -44,6 +57,16 @@ function finiteNumber(value) {
 
 function stringValue(value) {
   return typeof value === 'string' ? value.toLowerCase() : undefined;
+}
+
+function isUtcTimestamp(value) {
+  if (
+    typeof value !== 'string' ||
+    !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/.test(value)
+  )
+    return false;
+  const normalized = value.replace(/\.(\d{3})\d+Z$/, '.$1Z');
+  return Number.isFinite(Date.parse(normalized));
 }
 
 function rawBomb(payload) {
@@ -206,21 +229,36 @@ function compareProductionGsiConfig(observed, expected) {
   };
 }
 
-function realObserverProvenance(manifest) {
+function realObserverProvenance(manifest, qualificationContext) {
   const provenance = record(manifest.provenance);
+  if (provenance === undefined) return null;
+  if (provenance.kind === SANITIZED_PROVENANCE) return false;
+  if (provenance.kind !== PRODUCTION_RECORDER_PROVENANCE) return false;
+  if (qualificationContext === undefined) return false;
   return (
     manifest.platform.startsWith('win32') &&
     typeof manifest.windowsVersion === 'string' &&
     manifest.windowsVersion.length > 0 &&
+    manifest.windowsVersion === qualificationContext.windowsVersion &&
+    typeof manifest.cs2Build === 'string' &&
+    manifest.cs2Build.length > 0 &&
+    typeof qualificationContext.cs2Version === 'string' &&
+    qualificationContext.cs2Version.length > 0 &&
+    manifest.cs2Build === qualificationContext.cs2Version &&
     /^[a-f0-9]{40}$/i.test(manifest.broadcastCommit) &&
-    provenance?.fixtureKind === 'sanitized-real-capture' &&
-    provenance.sanitizerVersion === 1 &&
-    typeof provenance.sourceCaptureId === 'string' &&
-    /^[a-f0-9]{64}$/.test(provenance.sourceFramesSha256)
+    manifest.broadcastCommit === qualificationContext.artifactGitSha &&
+    /^[a-f0-9]{64}$/.test(qualificationContext.artifactSha256) &&
+    provenance.recorderVersion === 1 &&
+    provenance.captureId === manifest.captureId &&
+    provenance.qualificationRunId === qualificationContext.runId &&
+    provenance.artifactGitSha === qualificationContext.artifactGitSha &&
+    provenance.artifactSha256 === qualificationContext.artifactSha256 &&
+    typeof manifest.framesSha256 === 'string' &&
+    provenance.framesSha256 === manifest.framesSha256
   );
 }
 
-async function readObjectiveReferences(captureDir) {
+async function readObjectiveReferences(captureDir, manifest) {
   const path = join(captureDir, OBJECTIVE_TIMING_REFERENCE_FILE);
   let content;
   try {
@@ -240,23 +278,70 @@ async function readObjectiveReferences(captureDir) {
         cause: error,
       });
     }
+    const cursor = record(value?.sourceCursor);
+    const sourceArtifact = record(value?.sourceArtifact);
     if (
       !record(value) ||
-      value.version !== 1 ||
+      value.version !== 2 ||
       typeof value.referenceId !== 'string' ||
+      value.referenceId.length === 0 ||
       !REFERENCE_KINDS.has(value.kind) ||
       !REFERENCE_SOURCES.has(value.source) ||
-      !Number.isFinite(value.occurredAtMs) ||
-      value.occurredAtMs < 0
+      value.captureId !== manifest.captureId ||
+      value.timebase !== REFERENCE_TIMEBASE ||
+      !Number.isSafeInteger(value.occurredAtUs) ||
+      value.occurredAtUs < 0 ||
+      !cursor ||
+      cursor.kind !== 'cs2-cstv' ||
+      !REFERENCE_CURSOR_ROLES.has(cursor.role) ||
+      !Number.isSafeInteger(cursor.generation) ||
+      cursor.generation < 0 ||
+      !Number.isSafeInteger(cursor.sequence) ||
+      cursor.sequence < 0 ||
+      !Number.isSafeInteger(cursor.tick) ||
+      cursor.tick < 0 ||
+      !Number.isFinite(cursor.observedMonotonicMs) ||
+      !isUtcTimestamp(cursor.observedAt) ||
+      typeof cursor.mapName !== 'string' ||
+      cursor.mapName.trim().length === 0 ||
+      typeof cursor.ticksPerSecond !== 'number' ||
+      !Number.isFinite(cursor.ticksPerSecond) ||
+      cursor.ticksPerSecond <= 0 ||
+      !sourceArtifact ||
+      typeof sourceArtifact.id !== 'string' ||
+      sourceArtifact.id.length === 0 ||
+      typeof sourceArtifact.sha256 !== 'string' ||
+      !/^[a-f0-9]{64}$/.test(sourceArtifact.sha256) ||
+      (value.hasKit !== undefined && typeof value.hasKit !== 'boolean')
     ) {
       throw new Error(`${path} 第 ${index + 1} 行的 observer objective reference 无效`);
     }
+    if (
+      !manifest.clock ||
+      manifest.clock.kind !== 'node-performance' ||
+      manifest.clock.origin !== 'capture-start' ||
+      manifest.clock.elapsedUnit !== 'microseconds' ||
+      !Number.isFinite(manifest.clock.originMonotonicMs)
+    ) {
+      throw new Error(`${path} 缺少可验证的 capture monotonic clock origin`);
+    }
+    const alignedOccurredAtUs =
+      (cursor.observedMonotonicMs - manifest.clock.originMonotonicMs) * 1_000;
+    if (Math.abs(alignedOccurredAtUs - value.occurredAtUs) > 2_000) {
+      throw new Error(`${path} 第 ${index + 1} 行无法与 capture monotonic clock 对齐`);
+    }
     references.push({
-      version: 1,
+      version: 2,
       referenceId: value.referenceId,
       kind: value.kind,
       source: value.source,
-      occurredAtMs: value.occurredAtMs,
+      captureId: value.captureId,
+      timebase: REFERENCE_TIMEBASE,
+      occurredAtUs: value.occurredAtUs,
+      occurredAtMs: value.occurredAtUs / 1_000,
+      sourceCursor: cursor,
+      sourceArtifact,
+      ...(value.hasKit === undefined ? {} : { hasKit: value.hasKit }),
     });
   }
   return { path, references };
@@ -280,8 +365,16 @@ function rawDefuseKitEvidence(payload, sourcePlayerId) {
 }
 
 function phaseSemanticsFor(bombState, phase, roundPhase) {
-  if (bombState === 'planted') return phase === 'bomb' && roundPhase === 'live';
-  if (bombState === 'defusing') return phase === 'defuse' && roundPhase === 'live';
+  if (bombState === 'planted') {
+    return phase === undefined || roundPhase === undefined
+      ? null
+      : phase === 'bomb' && roundPhase === 'live';
+  }
+  if (bombState === 'defusing') {
+    return phase === undefined || roundPhase === undefined
+      ? null
+      : phase === 'defuse' && roundPhase === 'live';
+  }
   if (roundPhase === 'over') return !isActiveState(bombState);
   return null;
 }
@@ -293,13 +386,14 @@ function expectedRoundBombState(bombState) {
 }
 
 function transitionMatchesReference(reference, transition) {
-  if (reference.kind === 'plant') {
+  if (reference.kind === 'bomb-planted') {
     return transition.from === 'planting' && transition.to === 'planted';
   }
-  if (reference.kind === 'defuse') {
+  if (reference.kind === 'bomb-begin-defuse') {
     return transition.from === 'planted' && transition.to === 'defusing';
   }
-  return transition.to === 'exploded';
+  if (reference.kind === 'bomb-exploded') return transition.to === 'exploded';
+  return false;
 }
 
 function matchObserverReferences(references, transitions) {
@@ -330,44 +424,195 @@ function matchObserverReferences(references, transitions) {
   return { residuals, matches };
 }
 
-function scenarioCoverage({
-  transitions,
-  firstObjectiveState,
-  defuseKitValues,
-  reconnectGaps,
-  sequenceGaps,
-  defuseRestartObserved,
-}) {
-  const observed = new Set();
-  if (
-    transitions.some(
-      ({ from, to }) => from === 'planting' && ['carried', 'dropped', 'unknown'].includes(to),
-    )
-  )
-    observed.add('plant-abort');
-  if (transitions.some(({ to }) => to === 'exploded')) observed.add('explode');
-  if (defuseKitValues.has(true)) observed.add('defuse-kit');
-  if (defuseKitValues.has(false)) observed.add('defuse-no-kit');
-  if (defuseRestartObserved) observed.add('defuse-abort-restart');
-  if (transitions.some(({ from, to }) => from === 'defusing' && to === 'exploded')) {
-    observed.add('too-late-defuse');
+function matchIndependentKitEvidence(references, attempts) {
+  const consumedAttempts = new Set();
+  let matched = 0;
+  let unknown = 0;
+  let mismatched = 0;
+  let unmatched = 0;
+  for (const reference of references) {
+    const attempt = attempts.find(
+      (candidate) =>
+        !consumedAttempts.has(candidate) &&
+        candidate.startMs >= reference.occurredAtMs &&
+        candidate.startMs - reference.occurredAtMs <= OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS,
+    );
+    if (attempt === undefined) {
+      unmatched += 1;
+      continue;
+    }
+    consumedAttempts.add(attempt);
+    matched += 1;
+    if (
+      attempt.kit === 'conflict' ||
+      (typeof attempt.kit === 'boolean' && attempt.kit !== reference.hasKit)
+    ) {
+      mismatched += 1;
+    } else if (attempt.kit === null) {
+      unknown += 1;
+    }
   }
-  if (
-    firstObjectiveState === 'defusing' &&
-    transitions.some(({ from, to }) => from === 'defusing' && ['defused', 'exploded'].includes(to))
-  ) {
-    observed.add('fast-defuse-missing-planted-sample');
-  }
-  if (reconnectGaps.length > 0 || sequenceGaps.length > 0) observed.add('reconnect-restart');
+  return { count: references.length, matched, unknown, mismatched, unmatched };
+}
 
+function scenarioWindow(markers, scenario) {
+  const before = markers.find(
+    (marker) => marker.kind === `objective-${scenario}` && marker.phase === 'before',
+  );
+  const after = markers.find(
+    (marker) => marker.kind === `objective-${scenario}` && marker.phase === 'after',
+  );
+  if (
+    before === undefined ||
+    after === undefined ||
+    before.captureId === undefined ||
+    after.captureId === undefined ||
+    before.captureId !== after.captureId ||
+    before.captureElapsedUs === undefined ||
+    after.captureElapsedUs === undefined ||
+    after.captureElapsedUs < before.captureElapsedUs
+  ) {
+    return { declared: false, beforeMs: null, afterMs: null, captureId: null };
+  }
+  return {
+    declared: true,
+    beforeMs: before.captureElapsedUs / 1_000,
+    afterMs: after.captureElapsedUs / 1_000,
+    captureId: before.captureId,
+  };
+}
+
+function inScenarioWindow(atMs, window) {
+  return window.declared && atMs >= window.beforeMs && atMs <= window.afterMs;
+}
+
+function hasReferenceKind(references, kind, window) {
+  return references.some(
+    (reference) => reference.kind === kind && inScenarioWindow(reference.occurredAtMs, window),
+  );
+}
+
+function scenarioCoverage({
+  captureId,
+  transitions,
+  roundPhaseTransitions,
+  objectiveStates,
+  defuseAttempts,
+  references,
+  scenarioMarkers,
+}) {
+  const captureMarkers = scenarioMarkers.filter((marker) => marker.captureId === captureId);
+  const declared = new Set(
+    REQUIRED_OBJECTIVE_SCENARIOS.filter(
+      (scenario) => scenarioWindow(captureMarkers, scenario).declared,
+    ),
+  );
+  const observed = new Set();
+  const details = {};
+  for (const scenario of REQUIRED_OBJECTIVE_SCENARIOS) {
+    const window = scenarioWindow(captureMarkers, scenario);
+    let verified = false;
+    if (window.declared) {
+      switch (scenario) {
+        case 'freezetime-live':
+          verified = roundPhaseTransitions.some(
+            ({ from, to, atMs }) =>
+              from === 'freezetime' && to === 'live' && inScenarioWindow(atMs, window),
+          );
+          break;
+        case 'plant-abort':
+          verified = transitions.some(
+            ({ from, to, atMs }) =>
+              from === 'planting' &&
+              ['carried', 'dropped', 'unknown'].includes(to) &&
+              inScenarioWindow(atMs, window),
+          );
+          break;
+        case 'planted-explode':
+          verified = transitions.some(
+            ({ from, to, atMs }) =>
+              from === 'planted' && to === 'exploded' && inScenarioWindow(atMs, window),
+          );
+          break;
+        case 'defuse-kit-abort-restart':
+        case 'defuse-no-kit-abort-restart': {
+          const expectedKit = scenario === 'defuse-kit-abort-restart';
+          const attempts = defuseAttempts.filter(
+            (attempt) => attempt.kit === expectedKit && inScenarioWindow(attempt.startMs, window),
+          );
+          verified = attempts.some(
+            (attempt, index) =>
+              attempt.aborted === true &&
+              attempts
+                .slice(index + 1)
+                .some(
+                  (restart) =>
+                    restart.startMs > attempt.startMs &&
+                    restart.terminal !== null &&
+                    inScenarioWindow(restart.terminal.atMs, window),
+                ),
+          );
+          break;
+        }
+        case 'too-late-defuse':
+          verified = transitions.some(
+            ({ from, to, atMs }) =>
+              from === 'defusing' && to === 'exploded' && inScenarioWindow(atMs, window),
+          );
+          break;
+        case 'fast-defuse-missing-planted-sample': {
+          const states = objectiveStates.filter(({ atMs }) => inScenarioWindow(atMs, window));
+          const firstState = states[0]?.state;
+          verified =
+            firstState === 'defusing' &&
+            !states.some(({ state }) => state === 'planted') &&
+            transitions.some(
+              ({ from, to, atMs }) =>
+                from === 'defusing' &&
+                ['defused', 'exploded'].includes(to) &&
+                inScenarioWindow(atMs, window),
+            );
+          break;
+        }
+        case 'reconnect-restart':
+          // A generic packet/sequence gap is deliberately not sufficient. This scenario is
+          // verified at run level only when the explicit markers span recorder identities.
+          verified = false;
+          break;
+      }
+      if (
+        verified &&
+        scenario !== 'reconnect-restart' &&
+        ['planted-explode', 'too-late-defuse'].includes(scenario)
+      ) {
+        verified = hasReferenceKind(references, 'bomb-exploded', window);
+      }
+    }
+    if (verified) observed.add(scenario);
+    details[scenario] = {
+      declared: declared.has(scenario),
+      observed: verified,
+      ...(window.declared
+        ? { captureId: window.captureId, beforeMs: window.beforeMs, afterMs: window.afterMs }
+        : {}),
+    };
+  }
+  const declaredScenarios = REQUIRED_OBJECTIVE_SCENARIOS.filter((scenario) =>
+    declared.has(scenario),
+  );
+  const observedScenarios = REQUIRED_OBJECTIVE_SCENARIOS.filter((scenario) =>
+    observed.has(scenario),
+  );
+  const declaredMissing = declaredScenarios.filter((scenario) => !observed.has(scenario));
   return {
     required: REQUIRED_OBJECTIVE_SCENARIOS,
-    observed: REQUIRED_OBJECTIVE_SCENARIOS.filter((scenario) => observed.has(scenario)),
+    declared: declaredScenarios,
+    observed: observedScenarios,
     missing: REQUIRED_OBJECTIVE_SCENARIOS.filter((scenario) => !observed.has(scenario)),
-    complete: REQUIRED_OBJECTIVE_SCENARIOS.every((scenario) => observed.has(scenario)),
-    scenarios: Object.fromEntries(
-      REQUIRED_OBJECTIVE_SCENARIOS.map((scenario) => [scenario, observed.has(scenario)]),
-    ),
+    declaredMissing,
+    complete: observedScenarios.length === REQUIRED_OBJECTIVE_SCENARIOS.length,
+    failed: declaredMissing.length > 0,
+    scenarios: details,
   };
 }
 
@@ -380,13 +625,68 @@ function gateStatus(values) {
       : 'INCONCLUSIVE';
 }
 
-export async function analyzeObjectiveTimingCapture(captureDir) {
-  const [verified, expectedConfig, objectivePolicy, referencesEvidence] = await Promise.all([
+export function aggregateObjectiveScenarioCoverage(captureResults, scenarioMarkers) {
+  const required = REQUIRED_OBJECTIVE_SCENARIOS;
+  const details = {};
+  for (const scenario of required) {
+    const markers = scenarioMarkers.filter((marker) => marker.kind === `objective-${scenario}`);
+    const before = markers.find((marker) => marker.phase === 'before');
+    const after = markers.find((marker) => marker.phase === 'after');
+    const captureIds = new Set(
+      markers
+        .map((marker) => marker.captureId)
+        .filter((captureId) => typeof captureId === 'string'),
+    );
+    const observed =
+      scenario === 'reconnect-restart'
+        ? before !== undefined &&
+          after !== undefined &&
+          before.captureId !== after.captureId &&
+          captureIds.size >= 2 &&
+          captureResults.some((capture) => capture.manifest.captureId === before.captureId) &&
+          captureResults.some((capture) => capture.manifest.captureId === after.captureId)
+        : captureResults.some(
+            (capture) =>
+              capture.objectiveTiming?.evidence.scenarioCoverage.scenarios[scenario]?.observed,
+          );
+    const declared =
+      before !== undefined &&
+      after !== undefined &&
+      typeof before.captureId === 'string' &&
+      typeof after.captureId === 'string' &&
+      after.monotonicMs >= before.monotonicMs &&
+      (before.captureId === after.captureId || captureIds.size >= 2);
+    details[scenario] = {
+      declared,
+      observed,
+      captureIds: [...captureIds].sort(),
+      ...(declared && !observed ? { failed: true } : {}),
+    };
+  }
+  const observed = required.filter((scenario) => details[scenario].observed);
+  const declared = required.filter((scenario) => details[scenario].declared);
+  const declaredMissing = declared.filter((scenario) => !details[scenario].observed);
+  return {
+    required,
+    declared,
+    observed,
+    missing: required.filter((scenario) => !details[scenario].observed),
+    declaredMissing,
+    complete: observed.length === required.length,
+    failed: declaredMissing.length > 0,
+    scenarios: details,
+  };
+}
+
+export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
+  const [verified, expectedConfig, objectivePolicy] = await Promise.all([
     verifyCaptureDirectory(captureDir),
     canonicalProductionGsiConfig(),
     canonicalObjectivePolicy(),
-    readObjectiveReferences(captureDir),
   ]);
+  const referencesEvidence = await readObjectiveReferences(captureDir, verified.manifest);
+  const qualificationContext = record(options.qualificationContext);
+  const scenarioMarkers = Array.isArray(options.scenarioMarkers) ? options.scenarioMarkers : [];
   const reconnectThresholdMs = objectivePolicy.defaultLeaseMs;
   const activePacketIntervalsMs = [];
   const countdownDeltaResidualMs = [];
@@ -400,6 +700,9 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
   const reconnectGaps = [];
   const sequenceGaps = [];
   const transitions = [];
+  const roundPhaseTransitions = [];
+  const objectiveStates = [];
+  const defuseAttempts = [];
   const defuseKitValues = new Set();
   const defuseKitEvidence = { true: 0, false: 0, unknown: 0, conflict: 0 };
   const phaseSemantics = { checked: 0, mismatched: 0, unavailable: 0 };
@@ -413,8 +716,7 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
   let missingSpan;
   let plantedExplosionAnchor;
   let firstObjectiveState;
-  let defuseAbortPending = false;
-  let defuseRestartObserved = false;
+  let currentDefuseAttempt;
 
   for await (const frame of iterateCaptureFrames(captureDir)) {
     frameCount += 1;
@@ -425,6 +727,7 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
     const active = isActiveState(bomb.state);
     if (firstObjectiveState === undefined && bomb.state !== undefined)
       firstObjectiveState = bomb.state;
+    if (bomb.state !== undefined) objectiveStates.push({ state: bomb.state, atMs: elapsedMs });
 
     if (previousFrame !== undefined) {
       const packetIntervalMs = elapsedMs - previousFrame.elapsedMs;
@@ -455,13 +758,18 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
           previousFrame.state === 'defusing' &&
           ['planted', 'carried', 'dropped', 'unknown'].includes(bomb.state)
         ) {
-          defuseAbortPending = true;
-        } else if (bomb.state === 'defusing' && defuseAbortPending) {
-          defuseRestartObserved = true;
-          defuseAbortPending = false;
-        }
-        if (['defused', 'exploded', 'planting'].includes(bomb.state)) {
-          defuseAbortPending = false;
+          if (currentDefuseAttempt !== undefined) {
+            currentDefuseAttempt.aborted = true;
+            currentDefuseAttempt = undefined;
+          }
+        } else if (
+          previousFrame.state === 'defusing' &&
+          ['defused', 'exploded'].includes(bomb.state)
+        ) {
+          if (currentDefuseAttempt !== undefined) {
+            currentDefuseAttempt.terminal = { state: bomb.state, atMs: elapsedMs };
+            currentDefuseAttempt = undefined;
+          }
         }
 
         const kind = terminalKind(previousFrame.state, bomb.state);
@@ -499,6 +807,15 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
           if (remainingAtTerminalMs !== null)
             terminalResidualValues[kind].push(remainingAtTerminalMs);
         }
+      }
+      if (bomb.state === 'defusing') {
+        currentDefuseAttempt = {
+          startMs: elapsedMs,
+          kit: rawDefuseKitEvidence(frame.payload, bomb.playerId),
+          aborted: false,
+          terminal: null,
+        };
+        defuseAttempts.push(currentDefuseAttempt);
       }
       pendingCountTransition = active
         ? { from: previousFrame?.state ?? null, to: bomb.state, atMs: elapsedMs }
@@ -582,6 +899,14 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
 
       if (bomb.state === 'defusing') {
         const kit = rawDefuseKitEvidence(frame.payload, bomb.playerId);
+        if (currentDefuseAttempt !== undefined) {
+          if (kit === 'conflict' || currentDefuseAttempt.kit === 'conflict') {
+            currentDefuseAttempt.kit = 'conflict';
+          } else if (kit === true || kit === false) {
+            if (currentDefuseAttempt.kit === null) currentDefuseAttempt.kit = kit;
+            else if (currentDefuseAttempt.kit !== kit) currentDefuseAttempt.kit = 'conflict';
+          }
+        }
         if (kit === true || kit === false) {
           defuseKitValues.add(kit);
           defuseKitEvidence[String(kit)] += 1;
@@ -594,10 +919,21 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       missingSpan = closeMissingSpan(missingCountdownSpans, missingSpan, elapsedMs);
     }
 
+    if (previousFrame?.roundPhase !== round.phase) {
+      if (previousFrame?.roundPhase !== undefined && round.phase !== undefined) {
+        roundPhaseTransitions.push({
+          from: previousFrame.roundPhase,
+          to: round.phase,
+          atMs: elapsedMs,
+        });
+      }
+    }
+
     previousFrame = {
       elapsedMs,
       state: bomb.state,
       countdownSeconds: bomb.countdownSeconds,
+      roundPhase: round.phase,
       receivedAtMs: Date.parse(frame.receivedAt),
     };
   }
@@ -607,19 +943,23 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
   const intervalStats = stats(activePacketIntervalsMs);
   const transitionStats = stats(stateTransitionToFirstCountMs);
   const phaseStats = stats(phaseComparisonResidualMs);
-  const observerReference = matchObserverReferences(referencesEvidence.references, transitions);
+  const transitionReferences = referencesEvidence.references.filter((reference) =>
+    ['bomb-planted', 'bomb-begin-defuse', 'bomb-exploded'].includes(reference.kind),
+  );
+  const observerReference = matchObserverReferences(transitionReferences, transitions);
   const observerReferenceStats = stats(observerReference.residuals);
   const providerStats = stats(providerTimestampResidualMs);
   const receiveWallClockStats = stats(receiveWallClockDeltaResidualMs);
   const complete = verified.manifest.complete && verified.manifest.droppedFrames === 0;
   const configComparison = compareProductionGsiConfig(verified.manifest.gsiConfig, expectedConfig);
   const coverage = scenarioCoverage({
+    captureId: verified.manifest.captureId,
     transitions,
-    firstObjectiveState,
-    defuseKitValues,
-    reconnectGaps,
-    sequenceGaps,
-    defuseRestartObserved,
+    roundPhaseTransitions,
+    objectiveStates,
+    defuseAttempts,
+    references: referencesEvidence.references,
+    scenarioMarkers,
   });
   const configuredLeaseMs = objectivePolicy.defaultLeaseMs;
   const requiredMinimumLeaseMs = intervalStats.p99 === null ? null : intervalStats.p99 * 3;
@@ -628,23 +968,62 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       ? null
       : configuredLeaseMs >= requiredMinimumLeaseMs &&
         configuredLeaseMs <= objectivePolicy.maxLeaseMs;
-  const provenance = realObserverProvenance(verified.manifest);
+  const provenance = realObserverProvenance(verified.manifest, qualificationContext);
   const terminalResidualStats = {
     plant: stats(terminalResidualValues.plant),
     defuse: stats(terminalResidualValues.defuse),
     explosion: stats(terminalResidualValues.explosion),
   };
-  const terminalReferenceCounts = Object.fromEntries(
-    [...REFERENCE_KINDS].map((kind) => [
-      kind,
-      referencesEvidence.references.filter((reference) => reference.kind === kind).length,
-    ]),
+  const independentDefuseReferences = referencesEvidence.references.filter(
+    (reference) => reference.kind === 'bomb-begin-defuse' && reference.hasKit !== undefined,
   );
+  const independentKitEvidence = matchIndependentKitEvidence(
+    independentDefuseReferences,
+    defuseAttempts,
+  );
+  const terminalReferenceCounts = {
+    plant: referencesEvidence.references.filter((reference) => reference.kind === 'bomb-planted')
+      .length,
+    defuse: referencesEvidence.references.filter((reference) => reference.kind === 'bomb-defused')
+      .length,
+    explosion: referencesEvidence.references.filter(
+      (reference) => reference.kind === 'bomb-exploded',
+    ).length,
+  };
   const terminalResidualCoverage = Object.values(terminalResidualStats).every(
     (value) => value.count > 0,
   )
     ? true
     : null;
+  const terminalResidualWithin100Ms = Object.values(terminalResidualStats).every(
+    (value) => value.count > 0,
+  )
+    ? Object.values(terminalResidualStats).every(
+        (value) => value.max !== null && value.max <= OBJECTIVE_CLOCK_TERMINAL_RESIDUAL_LIMIT_MS,
+      )
+    : null;
+  const semanticGates = {
+    phaseSemanticsConsistent: phaseSemantics.checked === 0 ? null : phaseSemantics.mismatched === 0,
+    roundBombSemanticsConsistent:
+      roundBombSemantics.checked === 0 ? null : roundBombSemantics.mismatched === 0,
+    defuseKitEvidenceConsistent:
+      defuseKitEvidence.conflict > 0
+        ? false
+        : defuseKitEvidence.true + defuseKitEvidence.false === 0
+          ? null
+          : true,
+    countdownSamplesComplete: activeFrameCount === 0 ? null : missingCountdownSpans.length === 0,
+    terminalResidualWithin100Ms,
+    independentKitEvidenceConsistent:
+      independentKitEvidence.count === 0
+        ? null
+        : independentKitEvidence.mismatched > 0
+          ? false
+          : independentKitEvidence.unmatched > 0 || independentKitEvidence.unknown > 0
+            ? null
+            : true,
+    scenarioLifecycle: coverage.failed ? false : coverage.complete ? true : null,
+  };
   const measurementGates = {
     captureComplete: complete,
     activePacketP99Within200Ms:
@@ -652,15 +1031,16 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
     sourceInternalPhaseConsistencyWithin100Ms:
       phaseStats.max === null ? null : phaseStats.max <= OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
   };
-  const qualificationGates = {
+  const numericGates = {
     ...measurementGates,
     productionGsiConfig: configComparison.matches,
-    realObserverProvenance: provenance ? true : null,
-    scenarioCoverage: coverage.complete ? true : null,
+    realObserverProvenance: provenance === null ? null : provenance,
+    scenarioCoverage: coverage.failed ? false : coverage.complete ? true : null,
     independentTransitionReference:
-      referencesEvidence.references.length === 0
+      transitionReferences.length === 0
         ? null
-        : observerReference.matches.every((reference) => reference.matched),
+        : observerReference.matches.length === transitionReferences.length &&
+          observerReference.matches.every((reference) => reference.matched),
     transitionP95Within100Ms:
       observerReferenceStats.p95 === null
         ? null
@@ -672,6 +1052,13 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
     terminalResidualCoverage,
     leaseSufficient,
   };
+  const semanticResult = gateStatus(semanticGates);
+  const numericGateResult = gateStatus(numericGates);
+  const numericResult = numericGateResult;
+  const productionResult = gateStatus({
+    numericPrecision: numericResult === 'PASS' ? true : numericResult === 'FAIL' ? false : null,
+    sourceSemantics: semanticResult === 'PASS' ? true : semanticResult === 'FAIL' ? false : null,
+  });
 
   return {
     capture: {
@@ -696,6 +1083,7 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       measurement: 'raw-capture',
       objectiveReferenceFile: referencesEvidence.path,
       independentObjectiveReferences: observerReference.matches,
+      allObjectiveReferences: referencesEvidence.references,
       scenarioCoverage: coverage,
       environment: {
         platform: verified.manifest.platform,
@@ -727,6 +1115,10 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       phaseSemantics,
       roundBombSemantics,
       defuseKitEvidence,
+      independentKitEvidence,
+      firstObjectiveState: firstObjectiveState ?? null,
+      roundPhaseTransitions,
+      defuseAttempts,
       lease: {
         configuredLeaseMs,
         maximumLeaseMs: objectivePolicy.maxLeaseMs,
@@ -735,15 +1127,26 @@ export async function analyzeObjectiveTimingCapture(captureDir) {
       },
     },
     qualification: {
+      production: {
+        result: productionResult,
+        gates: {
+          numericPrecision: numericResult,
+          sourceSemantics: semanticResult,
+        },
+      },
       numeric01s: {
-        result: gateStatus(qualificationGates),
-        gates: qualificationGates,
+        result: numericResult,
+        gates: numericGates,
         measurementGates,
         thresholds: {
           activePacketP99Ms: OBJECTIVE_CLOCK_PACKET_P99_LIMIT_MS,
           transitionP95Ms: OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS,
           unexplainedOffsetMs: OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
         },
+      },
+      sourceSemantics: {
+        result: semanticResult,
+        gates: semanticGates,
       },
       numeric001s: {
         result: 'NOT_PROMISED',
@@ -804,12 +1207,16 @@ export function renderObjectiveTimingReport(result) {
     '## Scenario coverage',
     '',
     `- Required scenarios：${evidence.scenarioCoverage.required.join(', ')}`,
+    `- Declared scenarios：${evidence.scenarioCoverage.declared.length === 0 ? 'none' : evidence.scenarioCoverage.declared.join(', ')}`,
     `- Observed scenarios：${evidence.scenarioCoverage.observed.length === 0 ? 'none' : evidence.scenarioCoverage.observed.join(', ')}`,
     `- Missing scenarios：${evidence.scenarioCoverage.missing.length === 0 ? 'none' : evidence.scenarioCoverage.missing.join(', ')}`,
     `- Independent objective references：${evidence.independentObjectiveReferences.length}`,
     '',
     '## Qualification gates',
     '',
+    `- Production decision：**${resultLabel(qualification.production.result)}**`,
+    `  - numeric precision：${qualification.production.gates.numericPrecision}`,
+    `  - source semantics：${qualification.production.gates.sourceSemantics}`,
     `- Numeric 0.1 s：**${resultLabel(qualification.numeric01s.result)}**`,
   ];
   for (const [name, value] of Object.entries(qualification.numeric01s.gates)) {
@@ -818,10 +1225,15 @@ export function renderObjectiveTimingReport(result) {
     );
   }
   lines.push(
+    `- Source semantics：**${resultLabel(qualification.sourceSemantics.result)}**`,
+    ...Object.entries(qualification.sourceSemantics.gates).map(
+      ([name, value]) =>
+        `  - ${name}：${value === true ? 'PASS' : value === false ? 'FAIL' : 'INCONCLUSIVE'}`,
+    ),
     `- Numeric 0.01 s：**${resultLabel(qualification.numeric001s.result)}** — ${qualification.numeric001s.reason}`,
     '',
     '同一个 GSI payload 内的 phase/bomb 对齐只作为 source-local consistency evidence；没有独立 CSTV/demo objective reference 时，transition/absolute offset gate 保持 INCONCLUSIVE。',
-    '原始 Capture V1 仍是证据源；本报告不包含 GSI Token，也不把 synthetic fixture 当作 production qualification。',
+    '原始 Capture V1 仍是证据源；production PASS 还需要 raw recorder provenance、显式场景覆盖和可对齐的独立 reference；sanitized/synthetic fixture 只能作为回归证据。',
   );
   return `${lines.join('\n')}\n`;
 }

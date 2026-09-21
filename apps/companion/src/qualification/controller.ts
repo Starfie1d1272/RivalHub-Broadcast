@@ -11,6 +11,7 @@ import {
   QUALIFICATION_CHECK_KEYS,
   QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
+  QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS,
   QUALIFICATION_RESET_KIND,
   QUALIFICATION_RESET_REASON,
   QUALIFICATION_SCHEMA_VERSION,
@@ -30,7 +31,11 @@ export interface QualificationControllerOptions {
   readonly clock?: QualificationClock;
   readonly getDebugResponse: (nowMonotonicMs: number) => DebugRuntimeResponse;
   readonly programRuntime: ProgramRuntime;
-  readonly recorder: { getHealth(): RecorderHealth };
+  readonly recorder: {
+    readonly captureId?: string;
+    readonly captureElapsedUsAt?: (monotonicMs: number) => number | undefined;
+    getHealth(): RecorderHealth;
+  };
   readonly onAcceptedMapReset?: () => void;
   readonly onFinish?: (input: QualificationFinishInput) => void | Promise<void>;
 }
@@ -63,6 +68,10 @@ function isSafeNonNegativeInteger(value: unknown): value is number {
 
 function isMarkerKind(value: unknown): value is QualificationMarkerKind {
   return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
+}
+
+function isObjectiveScenarioMarkerKind(value: QualificationMarkerKind): boolean {
+  return QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.some((kind) => kind === value);
 }
 
 function hasMarker(
@@ -474,7 +483,31 @@ export function registerQualificationRoutes(
           message: '请先等待页面显示正在接收比赛数据，再记录这一场。',
         });
       }
-      await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug));
+      if (isObjectiveScenarioMarkerKind(kind)) {
+        const phase = isRecord(body) ? body.phase : undefined;
+        if (phase !== 'before' && phase !== 'after') {
+          return reply.code(400).send({
+            error: 'invalid_objective_scenario_phase',
+            message: 'objective scenario marker 必须声明 before 或 after phase',
+          });
+        }
+        const captureId = options.recorder.captureId;
+        const at = clock.now();
+        const captureElapsedUs = options.recorder.captureElapsedUsAt?.(at.monotonicMs);
+        if (captureId === undefined || captureElapsedUs === undefined) {
+          return reply.code(409).send({
+            error: 'objective_scenario_capture_unavailable',
+            message: '当前 recorder 没有可绑定的 Capture V1 clock identity',
+          });
+        }
+        await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug), {
+          phase,
+          captureId,
+          captureElapsedUs,
+        });
+      } else {
+        await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug));
+      }
       return { ok: true, kind, message: markerMessage(kind) };
     } catch (error: unknown) {
       return reply.code(503).send({ error: 'qualification_marker_failed', message: String(error) });

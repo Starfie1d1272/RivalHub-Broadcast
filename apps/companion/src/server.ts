@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { version as osVersion } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { buildApp } from './app.js';
@@ -44,9 +45,11 @@ const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
 const producerInstanceId = randomUUID();
 
 let cstvSourceConfig: CstvSourceManagers | undefined;
+let programCstvUrl: string | undefined;
 let cstvSourceConfigError: string | undefined;
 try {
   const programUrl = parseCstvSourceUrl(process.env.PROGRAM_CSTV_URL, 'PROGRAM_CSTV_URL');
+  programCstvUrl = programUrl;
   const lookaheadUrl = parseCstvSourceUrl(process.env.LOOKAHEAD_CSTV_URL, 'LOOKAHEAD_CSTV_URL');
   cstvSourceConfig = createCstvSourceManagers({
     ...(programUrl === undefined ? {} : { programUrl }),
@@ -97,6 +100,16 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       captureDir,
       broadcastCommit,
       gsiConfig: PRODUCTION_GSI_CONFIG,
+      ...(qualificationMode
+        ? {
+            windowsVersion: process.env.QUALIFICATION_WINDOWS_VERSION ?? osVersion(),
+            cs2Build: process.env.QUALIFICATION_CS2_VERSION ?? 'unknown',
+            ...(process.env.QUALIFICATION_ARTIFACT_SHA256 === undefined
+              ? {}
+              : { artifactSha256: process.env.QUALIFICATION_ARTIFACT_SHA256 }),
+            qualificationRunId,
+          }
+        : {}),
       onDiagnostic: logRecorderDiagnostic,
     });
   } catch (error: unknown) {
@@ -143,6 +156,14 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
           },
         }
       : {}),
+    ...(programCstvUrl === undefined
+      ? {}
+      : {
+          objectiveReferenceSource: {
+            artifactId: 'program-cstv-endpoint',
+            artifactSha256: createHash('sha256').update(programCstvUrl, 'utf8').digest('hex'),
+          },
+        }),
   });
   let shutdownPromise: Promise<void> | undefined;
 

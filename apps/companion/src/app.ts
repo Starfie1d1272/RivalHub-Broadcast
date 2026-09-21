@@ -76,6 +76,10 @@ export interface CompanionAppOptions {
   readonly qualificationScenarioPath?: string;
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
+  readonly objectiveReferenceSource?: {
+    readonly artifactId: string;
+    readonly artifactSha256: string;
+  };
   readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
   readonly webRoot?: string;
   readonly host?: string;
@@ -110,6 +114,50 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
   const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
+  const objectiveReferenceSource = options.objectiveReferenceSource;
+  const objectiveReferenceUnsubscribe =
+    objectiveReferenceSource === undefined || recorder.tryRecordObjectiveReference === undefined
+      ? undefined
+      : cstvSources.program.subscribeLiveGameEvents((observation) => {
+          if (!(
+            observation.kind === 'bomb-begin-plant' ||
+            observation.kind === 'bomb-abort-plant' ||
+            observation.kind === 'bomb-planted' ||
+            observation.kind === 'bomb-begin-defuse' ||
+            observation.kind === 'bomb-abort-defuse' ||
+            observation.kind === 'bomb-defused' ||
+            observation.kind === 'bomb-exploded'
+          ))
+            return;
+          const objective = observation;
+          const mapName = objective.cursor.mapName;
+          const ticksPerSecond = objective.cursor.ticksPerSecond;
+          if (
+            typeof mapName !== 'string' ||
+            mapName.trim().length === 0 ||
+            typeof ticksPerSecond !== 'number' ||
+            !Number.isFinite(ticksPerSecond) ||
+            ticksPerSecond <= 0
+          )
+            return;
+          const referenceId = `cstv-${objective.cursor.role}-${objective.cursor.generation}-${objective.cursor.sequence}-${objective.kind}`;
+          recorder.tryRecordObjectiveReference?.({
+            referenceId,
+            kind: objective.kind,
+            source: 'cstv',
+            occurredMonotonicMs: objective.cursor.observedMonotonicMs,
+            sourceCursor: {
+              ...objective.cursor,
+              mapName,
+              ticksPerSecond,
+            },
+            sourceArtifact: {
+              id: objectiveReferenceSource.artifactId,
+              sha256: objectiveReferenceSource.artifactSha256,
+            },
+            ...(objective.kind === 'bomb-begin-defuse' ? { hasKit: objective.hasKit } : {}),
+          });
+        });
   const projectionNowMonotonicMs =
     options.projectionNowMonotonicMs ??
     (() => {
@@ -309,6 +357,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   }
 
   app.addHook('onClose', async () => {
+    objectiveReferenceUnsubscribe?.();
     await Promise.all([
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
