@@ -31,6 +31,8 @@ const seriesProgressCheckpointPath =
   process.env.SERIES_PROGRESS_CHECKPOINT_PATH ?? join(captureDir, '..', 'series-progress.json');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
+const qualificationProfile =
+  process.env.QUALIFICATION_PROFILE === 'objective-timing' ? 'objective-timing' : 'base';
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
 const operatorControlToken = process.env.OPERATOR_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
@@ -47,7 +49,6 @@ const producerInstanceId = randomUUID();
 let cstvSourceConfig: CstvSourceManagers | undefined;
 let programCstvUrl: string | undefined;
 let cstvSourceConfigError: string | undefined;
-let receiverGeneration = 0;
 let receiverSequence = 0;
 try {
   const programUrl = parseCstvSourceUrl(process.env.PROGRAM_CSTV_URL, 'PROGRAM_CSTV_URL');
@@ -96,7 +97,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
-  const createRecorder = (generation = receiverGeneration) =>
+  const createRecorder = () =>
     createCaptureRecorder({
       captureDir,
       broadcastCommit,
@@ -108,7 +109,6 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
             ...(process.env.QUALIFICATION_ARTIFACT_SHA256 === undefined
               ? {}
               : { artifactSha256: process.env.QUALIFICATION_ARTIFACT_SHA256 }),
-            receiverGeneration: generation,
             qualificationRunId,
           }
         : {}),
@@ -137,7 +137,6 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     ...(qualificationMode
       ? {
           gsiSequenceSource: () => receiverSequence++,
-          gsiReceiverGenerationSource: () => receiverGeneration,
         }
       : {}),
     programRuntime,
@@ -153,15 +152,13 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       ? {
           qualificationRunId,
           qualificationScenarioPath,
+          qualificationProfile,
           onQualificationRecorderRotate: async (currentRecorder) => {
             if (currentRecorder !== recorder) {
               throw new Error('采集记录在切换过程中发生了意外变化。');
             }
-            const nextGeneration = receiverGeneration + 1;
-            const nextRecorder = await createRecorder(nextGeneration);
+            const nextRecorder = await createRecorder();
             const previousCaptureId = currentRecorder.captureId;
-            receiverGeneration = nextGeneration;
-            receiverSequence = 0;
             recorder = nextRecorder;
             return {
               previousCaptureId,
