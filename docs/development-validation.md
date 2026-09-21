@@ -44,27 +44,28 @@
 
 - Fastify Companion；
 - 静态网页与本地 WebSocket；
-- ``/program`` / ``/operator`` / ``/debug``；
+- `/program` / `/operator` / `/debug`；
+- `/operator/hud` 的三类配置工作区、共享 `GameplayHud` 预览与 HUD ETag conditional polling；
 - 浏览器 reconnect；
 - current baseline；
 - Origin / subprotocol / LAN policy；
 - Program 视觉回归；
 - production web smoke。
 
-Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromium + ``ubuntu-24.04``。其它本地平台运行视觉测试只用于冒烟，不更新正式基准。
+Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromium + `ubuntu-24.04`。其它本地平台运行视觉测试只用于冒烟，不更新正式基准。
 
 ### C. 真实 CS2 / CSTV
 
 覆盖：
 
 - GSI cfg 安装与发现；
-- observer payload；
-- update cadence；
 - planting / planted / defusing overloaded countdown semantics；
 - objective timing qualification report 与真实 Capture V1 cadence / residual evidence；
 - qualification measurement、provenance、scenario coverage 与独立 CSTV/demo reference gate；
 - Production Capture Recorder 的 raw provenance、capture clock origin、objective reference
   contract 与显式 8 场景 marker；sanitized fixture 不能作为 production PASS；
+- observer payload；
+- update cadence；
 - 回合与地图生命周期；
 - stale / reconnect；
 - source generation；
@@ -93,7 +94,7 @@ PR 使用 changed-surface planner，只运行与改动面匹配的证据。
 
 ### 仅文档改动
 
-只修改 ``docs/**`` 或 Markdown / MDX：
+只修改 `docs/**` 或 Markdown / MDX：
 
 ```text
 planner + ci-gate
@@ -103,11 +104,11 @@ planner + ci-gate
 
 ### 普通代码
 
-``apps/``、``packages/``、``tests/``、``scripts/`` 的已知路径至少进入 quality。Web / Program 相关路径额外运行 visual；Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
+`apps/`、`packages/`、`tests/`、`scripts/` 的已知路径至少进入 quality。Web / Program 相关路径额外运行 visual；Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
 
 ### 现场验收敏感路径
 
-``scripts/qualification/``、``apps/companion/src/qualification/`` 和 GSI cfg 模板会触发 Windows qualification artifact / portable smoke。
+`scripts/qualification/`、`apps/companion/src/qualification/` 和 GSI cfg 模板会触发 Windows qualification artifact / portable smoke。
 
 ### 默认完整验证
 
@@ -115,7 +116,7 @@ planner + ci-gate
 
 - 未知或无法分类路径；
 - rename / delete 等不安全 diff status；
-- ``.github/**``；
+- `.github/**`；
 - CI planner 自身；
 - lockfile / workspace / package manifest；
 - TypeScript / ESLint / Vitest / Playwright 等工具链配置。
@@ -124,7 +125,7 @@ planner + ci-gate
 
 CS2 asset import 是维护者本地资源工作流：CI 不安装 CS2、不下载 VPK、不运行 extraction，只验证 checked-in `@rivalhub-broadcast/cs2-assets` catalog、manifest、SVG hash、public output 与 resolver contract。首次生成或更新 asset 时，必须使用 `pnpm cs2-assets:import` 的 pinned Source2Viewer-CLI，并把 Steam build ID、source/output hash 和工具版本提交在 manifest 中。
 
-``ci-gate`` 是稳定 required context；条件 job 本身不需要全部设成 branch required check。
+`ci-gate` 是稳定 required context；条件 job 本身不需要全部设成 branch required check。
 
 ## 4. 自动化主入口
 
@@ -151,6 +152,8 @@ pnpm qualification:verify <evidence-dir-or-zip>
 ```
 
 具体 PR 由 planner 选择子集；手工排查时可直接运行需要的完整命令。
+
+HUD 控制台的视觉回归必须同时检查测试场景选择、Current Live 在没有已接收初始状态时 disabled、已选 Current Live 在 stale/重连/协议错误时保持选择但 fail-closed、新初始状态恢复后继续 live、编辑层拖动/尺寸控件、品牌色十六进制输入、三套草稿跨工作区保留，以及正式节目路由不包含编辑辅助层；还要验证 preset/appearance 只为未实现组件显示占位，layout 工作区才提供选择/拖动/resize chrome。截图断言使用仓库已有的 Darwin/Linux 平台基线。视觉测试中的 fixture 不是生产 telemetry，也不能作为当前实时来源失效时的 fallback。
 
 ## 5. Windows + CS2 现场验收包
 
