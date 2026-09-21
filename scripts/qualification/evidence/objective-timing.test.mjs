@@ -21,7 +21,7 @@ function frame(sequence, elapsedMs, payload) {
     sequence,
     elapsedUs: elapsedMs * 1_000,
     receivedAt: new Date(Date.parse(CREATED_AT) + elapsedMs).toISOString(),
-    payload,
+    payload: { map: { name: 'de_ancient' }, ...payload },
   };
 }
 
@@ -93,7 +93,7 @@ async function createCapture(frames, options = {}) {
               tick: 100,
               observedAt: CREATED_AT,
               observedMonotonicMs: value.occurredAtMs,
-              mapName: 'de_ancient',
+              mapName: value.mapName ?? 'de_ancient',
               ticksPerSecond: 64,
             },
             sourceArtifact: { id: 'test-cstv', sha256: 'b'.repeat(64) },
@@ -150,7 +150,11 @@ function analyzedRunCapture(captureId, observedScenarios = [], markerEvidence = 
           { kind: 'defuse', remainingAtTerminalMs: 0 },
           { kind: 'explosion', remainingAtTerminalMs: 0 },
         ],
-        lease: { configuredLeaseMs: 1_000, requiredMinimumLeaseMs: 300 },
+        lease: {
+          configuredLeaseMs: 1_000,
+          maximumLeaseMs: 2_000,
+          requiredMinimumLeaseMs: 300,
+        },
       },
       qualification: {
         sourceSemantics: {
@@ -462,7 +466,7 @@ describe('objective timing capture analyzer', () => {
                   phase: 'before',
                   captured: true,
                   bombState: 'planted',
-                  receiverGeneration: 0,
+                  sourceGeneration: 0,
                 },
               ],
             },
@@ -478,7 +482,7 @@ describe('objective timing capture analyzer', () => {
                   phase: 'after',
                   captured: true,
                   bombState: 'planted',
-                  receiverGeneration: 1,
+                  sourceGeneration: 1,
                 },
               ],
             },
@@ -512,7 +516,7 @@ describe('objective timing capture analyzer', () => {
           phase: 'before',
           captured: true,
           bombState: 'planted',
-          receiverGeneration: 0,
+          sourceGeneration: 0,
         },
       ],
     );
@@ -525,7 +529,7 @@ describe('objective timing capture analyzer', () => {
           phase: 'after',
           captured: true,
           bombState: 'planted',
-          receiverGeneration: 1,
+          sourceGeneration: 1,
         },
       ],
     );
@@ -554,7 +558,8 @@ describe('objective timing capture analyzer', () => {
     expect(complete.qualification.production.result).toBe('PASS');
 
     const precisionFailure = clone(captureA);
-    precisionFailure.objectiveTiming.qualification.numeric01s.measurementGates.activePacketP99Within200Ms = false;
+    precisionFailure.objectiveTiming.metrics.activePacketIntervalMs.p99 = 250;
+    precisionFailure.objectiveTiming.metrics.activePacketIntervalMs.max = 250;
     const qualifiedButCoarse = evaluateObjectiveTimingRun([precisionFailure, captureB], markers);
     expect(qualifiedButCoarse.qualification.numeric01s.result).toBe('FAIL');
     expect(qualifiedButCoarse.qualification.foundation.result).toBe('PASS');
@@ -579,6 +584,125 @@ describe('objective timing capture analyzer', () => {
     expect(delayed.metrics.observerReferenceResidualMs.max).toBe(500);
     expect(delayed.qualification.numeric01s.gates.independentObserverOffsetWithin100Ms).toBe(false);
     expect(delayed.qualification.numeric01s.result).toBe('FAIL');
+  });
+
+  it('does not let a sparse reconnect capture poison run-level semantic or lease evidence', () => {
+    const captureA = analyzedRunCapture(
+      'capture-a',
+      [
+        'freezetime-live',
+        'plant-abort',
+        'planted-explode',
+        'defuse-kit-abort-restart',
+        'defuse-no-kit-abort-restart',
+        'too-late-defuse',
+        'fast-defuse-missing-planted-sample',
+      ],
+      [
+        {
+          kind: 'objective-reconnect-restart',
+          phase: 'before',
+          captured: true,
+          bombState: 'planted',
+          sourceGeneration: 0,
+        },
+      ],
+    );
+    const captureB = analyzedRunCapture(
+      'capture-b',
+      [],
+      [
+        {
+          kind: 'objective-reconnect-restart',
+          phase: 'after',
+          captured: true,
+          bombState: 'planted',
+          sourceGeneration: 1,
+        },
+      ],
+    );
+    for (const key of [
+      'phaseSemanticsConsistent',
+      'roundBombSemanticsConsistent',
+      'defuseKitEvidenceConsistent',
+    ]) {
+      captureB.objectiveTiming.qualification.sourceSemantics.gates[key] = null;
+    }
+    captureB.objectiveTiming.qualification.numeric01s.measurementGates.activePacketP99Within200Ms =
+      null;
+    captureB.objectiveTiming.qualification.numeric01s.measurementGates.sourceInternalPhaseConsistencyWithin100Ms =
+      null;
+    captureB.objectiveTiming.qualification.numeric01s.gates.countdownSamplesComplete = null;
+    captureB.objectiveTiming.qualification.numeric01s.gates.leaseSufficient = null;
+    captureB.objectiveTiming.metrics.activePacketIntervalMs = {
+      count: 0,
+      min: null,
+      max: null,
+      mean: null,
+      p50: null,
+      p95: null,
+      p99: null,
+    };
+    captureB.objectiveTiming.metrics.lease.requiredMinimumLeaseMs = null;
+
+    const markers = [
+      ...[
+        'freezetime-live',
+        'plant-abort',
+        'planted-explode',
+        'defuse-kit-abort-restart',
+        'defuse-no-kit-abort-restart',
+        'too-late-defuse',
+        'fast-defuse-missing-planted-sample',
+      ].flatMap((scenario, index) => [
+        objectiveMarker(scenario, 'before', index * 100, 'capture-a'),
+        objectiveMarker(scenario, 'after', index * 100 + 50, 'capture-a'),
+      ]),
+      objectiveMarker('reconnect-restart', 'before', 800, 'capture-a'),
+      objectiveMarker('reconnect-restart', 'after', 900, 'capture-b'),
+    ];
+
+    const result = evaluateObjectiveTimingRun([captureA, captureB], markers);
+    expect(result.qualification.sourceSemantics.result).toBe('PASS');
+    expect(result.qualification.foundation.gates.leaseSufficient).toBe(true);
+    expect(result.qualification.foundation.result).toBe('PASS');
+    expect(result.metrics.lease).toMatchObject({
+      configuredLeaseMs: 1_000,
+      maximumLeaseMs: 2_000,
+      requiredMinimumLeaseMs: 300,
+      sufficient: true,
+    });
+  });
+
+  it('rejects independent objective references from a different map', async () => {
+    const run = await createCapture(
+      [
+        frame(0, 0, { bomb: { state: 'planted', countdown: '30' } }),
+        frame(1, 110, { bomb: { state: 'defusing', countdown: '5', player: 'defuser' } }),
+      ],
+      {
+        objectiveEvents: [
+          {
+            referenceId: 'wrong-map-defuse-start',
+            kind: 'bomb-begin-defuse',
+            source: 'cstv',
+            occurredAtMs: 100,
+            mapName: 'de_mirage',
+          },
+        ],
+      },
+    );
+
+    try {
+      const result = await analyzeObjectiveTimingCapture(run.captureDir);
+      expect(result.evidence.independentObjectiveReferences).toEqual([
+        expect.objectContaining({ matched: false, residualMs: null }),
+      ]);
+      expect(result.qualification.numeric01s.gates.independentTransitionReference).toBe(false);
+      expect(result.qualification.numeric01s.result).toBe('FAIL');
+    } finally {
+      await rm(run.root, { recursive: true, force: true });
+    }
   });
 
   it('fails numeric precision when terminal residuals exceed the 100 ms bound', async () => {
