@@ -42,6 +42,8 @@ import {
 } from './telemetry/gsi-ingress.js';
 import { registerStaticHost } from './local-web/static-host.js';
 import { registerOperatorCommandRoutes } from './operator/controller.js';
+import { registerHudConfigRoutes } from './hud-config/controller.js';
+import { HudConfigStore } from './hud-config/store.js';
 import {
   createLocalWebSocketTransport,
   registerLocalWebSocketTransport,
@@ -71,7 +73,8 @@ export interface CompanionAppOptions {
   readonly clock?: GsiClock;
   readonly qualificationMode?: boolean;
   readonly qualificationControlToken?: string;
-  readonly operatorControlToken?: string;
+  readonly hudConfigPath?: string;
+  readonly hudConfigStore?: HudConfigStore;
   readonly qualificationRunId?: string;
   readonly qualificationScenarioPath?: string;
   readonly qualificationClock?: QualificationClock;
@@ -122,6 +125,12 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     requestTimeout: GSI_REQUEST_TIMEOUT_MS,
   });
   registerStaticHost(app, options.webRoot === undefined ? {} : { webRoot: options.webRoot });
+  const hudConfigStore =
+    options.hudConfigStore ??
+    new HudConfigStore({
+      ...(options.hudConfigPath === undefined ? {} : { filePath: options.hudConfigPath }),
+      onDiagnostic: (code) => app.log.warn({ code }, 'Companion HUD 配置诊断'),
+    });
   let runtimeDegraded = false;
   const emittedRuntimeDiagnostics = new Set<string>();
   const recordRuntimeDiagnostic = (
@@ -188,6 +197,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     },
   });
   registerLocalWebSocketTransport(app, localWebTransport);
+  registerHudConfigRoutes(app, {
+    store: hudConfigStore,
+    originPolicy: localWebTransport.getOriginPolicy(),
+  });
   const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {
@@ -297,16 +310,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     registerQualificationRoutes(app, qualificationOptions);
   }
 
-  if (options.operatorControlToken !== undefined) {
-    if (options.operatorControlToken.trim().length === 0) {
-      throw new Error('设置 operatorControlToken 时必须为非空值');
-    }
-    registerOperatorCommandRoutes(app, {
-      controlToken: options.operatorControlToken,
-      originPolicy: localWebTransport.getOriginPolicy(),
-      execute: (command) => projectionCoordinator.executeOperatorCommand(command),
-    });
-  }
+  registerOperatorCommandRoutes(app, {
+    originPolicy: localWebTransport.getOriginPolicy(),
+    execute: (command) => projectionCoordinator.executeOperatorCommand(command),
+  });
 
   app.addHook('onClose', async () => {
     await Promise.all([
@@ -317,6 +324,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     await Promise.all([projectionCoordinator.close(), programCueCoordinator.close()]);
     await programRuntime.close();
     await localWebTransport.close();
+    await hudConfigStore.flush();
     await recorder.finalize();
   });
 

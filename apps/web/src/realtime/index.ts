@@ -21,6 +21,7 @@ export {
   LOCAL_PROTOCOL_SUBPROTOCOL,
 } from './channel-config';
 export type { LocalChannelConfig, LocalChannelSnapshot } from './channel-config';
+export { useLocalChannelClient } from './use-local-channel-client';
 export {
   createProgramCueClient,
   ProgramCueClient,

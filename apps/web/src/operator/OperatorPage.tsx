@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 
 import type { OperatorSnapshot } from '@rivalhub-broadcast/protocol/operator';
 
-import { createLocalChannelClient, type LocalChannelConnectionState } from '../realtime';
+import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
 
 type OperatorSeriesProgress = NonNullable<OperatorSnapshot['payload']['seriesProgress']>;
 
@@ -31,22 +31,17 @@ function seriesBindingLabel(bindingState: OperatorSeriesProgress['bindingState']
     case 'bound':
       return '已绑定';
     case 'needs_operator':
-      return '等待 Operator 确认';
+      return '等待制作确认';
     case 'unbound':
       return '未绑定';
   }
 }
 
 export function OperatorPage() {
-  const client = useMemo(() => createLocalChannelClient('operator'), []);
-  useEffect(() => {
-    client.start();
-    return () => client.dispose();
-  }, [client]);
+  const client = useLocalChannelClient('operator');
   const connection = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   const snapshot = connection.current;
   const series = snapshot?.payload.seriesProgress ?? null;
-  const [token, setToken] = useState('');
   const [mapOrder, setMapOrder] = useState('1');
   const [reason, setReason] = useState('');
   const [commandState, setCommandState] = useState<string | null>(null);
@@ -62,7 +57,6 @@ export function OperatorPage() {
         headers: {
           Accept: 'application/json',
           'Content-Type': 'application/json',
-          'x-operator-token': token,
         },
         body: JSON.stringify({
           kind: 'bind-current-map-execution-to-series-map',
@@ -70,13 +64,11 @@ export function OperatorPage() {
           reason,
         }),
       });
-      const body = (await response.json()) as { readonly code?: string; readonly error?: string };
-      if (!response.ok) {
-        throw new Error(body.error ?? body.code ?? `HTTP ${response.status}`);
-      }
-      setCommandState(`命令已确认：${body.code ?? 'operator_bind_applied'}`);
+      await response.json();
+      if (!response.ok) throw new Error('地图绑定未完成');
+      setCommandState('已确认当前地图绑定。');
     } catch (error: unknown) {
-      setCommandState(`命令未执行：${error instanceof Error ? error.message : '请求失败'}`);
+      setCommandState(`操作未完成：${error instanceof Error ? error.message : '请求失败'}`);
     } finally {
       setSubmitting(false);
     }
@@ -88,8 +80,7 @@ export function OperatorPage() {
         <p className="operator-eyebrow">RivalHub Broadcast / 制作控制</p>
         <h1>先确认，再继续。</h1>
         <p>
-          这里显示 SeriesProgress 的绑定与恢复诊断。异常地图不会自动猜测；只有明确的 Operator
-          命令才会恢复绑定。
+          这里显示系列赛地图的绑定与恢复状态。异常地图不会自动猜测；只有明确的制作确认才会恢复绑定。
         </p>
       </header>
 
@@ -98,28 +89,29 @@ export function OperatorPage() {
         <a aria-current="page" href="/operator">
           制作控制
         </a>
+        <a href="/operator/hud">HUD 控制台</a>
         <a href="/debug">运行诊断</a>
       </nav>
 
-      <section aria-label="Operator 连接状态" className="operator-status">
+      <section aria-label="制作连接状态" className="operator-status">
         <span>本地实时连接</span>
         <strong data-connection-state={connection.state}>
           {connectionStateLabel(connection.state)}
         </strong>
         <span>
           {series === null
-            ? 'SeriesProgress：未建立'
+            ? '系列赛状态：未建立'
             : `BO${series.requiredWins === 1 ? '1' : series.requiredWins === 2 ? '3' : '5'}`}
         </span>
       </section>
 
-      <section aria-label="SeriesProgress 状态" className="operator-panel">
+      <section aria-label="系列赛地图状态" className="operator-panel">
         <header>
-          <span>01 / SeriesProgress</span>
+          <span>01 / 系列赛地图</span>
           <h2>{series === null ? '等待比赛上下文' : seriesBindingLabel(series.bindingState)}</h2>
         </header>
         {series === null ? (
-          <p>当前没有已绑定的 MatchContext。</p>
+          <p>当前没有可用的比赛上下文。</p>
         ) : (
           <>
             <dl className="operator-metrics">
@@ -158,19 +150,9 @@ export function OperatorPage() {
 
       <form className="operator-panel operator-form" onSubmit={(event) => void submit(event)}>
         <header>
-          <span>02 / OperatorCommand</span>
+          <span>02 / 地图绑定</span>
           <h2>绑定当前地图执行</h2>
         </header>
-        <label>
-          Operator token
-          <input
-            autoComplete="current-password"
-            onChange={(event) => setToken(event.target.value)}
-            required
-            type="password"
-            value={token}
-          />
-        </label>
         <label>
           计划地图序号
           <input

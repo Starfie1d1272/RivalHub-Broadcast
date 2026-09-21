@@ -10,6 +10,7 @@
   "dependencies": {
     "@fontsource/inter": "catalog:",
     "@rivalhub-broadcast/cs2-assets": "workspace:*",
+    "@rivalhub-broadcast/hud-config": "workspace:*",
     "@rivalhub-broadcast/protocol": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:"
