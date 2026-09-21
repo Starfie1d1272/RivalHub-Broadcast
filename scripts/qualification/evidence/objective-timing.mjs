@@ -53,6 +53,20 @@ const REFERENCE_CURSOR_ROLES = new Set(['program', 'lookahead']);
 const REFERENCE_TIMEBASE = 'capture-elapsed-us';
 const PRODUCTION_RECORDER_PROVENANCE = 'production-recorder';
 const SANITIZED_PROVENANCE = 'sanitized-real-capture';
+const CS2_MAP_ALIASES = Object.freeze({
+  ancient: 'de_ancient',
+  anubis: 'de_anubis',
+  cache: 'de_cache',
+  dust2: 'de_dust2',
+  'dust 2': 'de_dust2',
+  'dust ii': 'de_dust2',
+  inferno: 'de_inferno',
+  mirage: 'de_mirage',
+  nuke: 'de_nuke',
+  overpass: 'de_overpass',
+  train: 'de_train',
+  vertigo: 'de_vertigo',
+});
 const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
 const REPOSITORY_ROOT = resolve(MODULE_DIR, '../../..');
 
@@ -119,6 +133,23 @@ function rawRound(payload) {
     phase: stringValue(round?.phase),
     bombState: stringValue(round?.bomb),
   };
+}
+
+function canonicalizeMapName(value) {
+  if (typeof value !== 'string') return undefined;
+  const normalized = value.trim().toLowerCase().replace(/\s+/g, ' ');
+  if (normalized.length === 0) return undefined;
+  return CS2_MAP_ALIASES[normalized] ?? normalized;
+}
+
+function rawMapName(payload) {
+  return canonicalizeMapName(record(record(payload)?.map)?.name);
+}
+
+function mapNamesEqual(left, right) {
+  const canonicalLeft = canonicalizeMapName(left);
+  const canonicalRight = canonicalizeMapName(right);
+  return canonicalLeft !== undefined && canonicalLeft === canonicalRight;
 }
 
 function rawProviderTimestamp(payload) {
@@ -436,6 +467,7 @@ function matchObserverReferences(references, transitions) {
         (candidate) =>
           !consumedTransitions.has(candidate) &&
           transitionMatchesReference(reference, candidate) &&
+          mapNamesEqual(reference.sourceCursor.mapName, candidate.mapName) &&
           Number.isFinite(candidate.atMs),
       )
       .sort(
@@ -470,6 +502,7 @@ function matchIndependentKitEvidence(references, attempts) {
     const attempt = attempts.find(
       (candidate) =>
         !consumedAttempts.has(candidate) &&
+        mapNamesEqual(reference.sourceCursor.mapName, candidate.mapName) &&
         candidate.startMs >= reference.occurredAtMs &&
         candidate.startMs - reference.occurredAtMs <= OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS,
     );
@@ -695,9 +728,9 @@ export function aggregateObjectiveScenarioCoverage(captureResults, scenarioMarke
           afterEvidence?.captured === true &&
           POST_PLANT_BOMB_STATES.has(beforeEvidence.bombState) &&
           RECOVERED_POST_PLANT_BOMB_STATES.has(afterEvidence.bombState) &&
-          Number.isSafeInteger(beforeEvidence.receiverGeneration) &&
-          Number.isSafeInteger(afterEvidence.receiverGeneration) &&
-          afterEvidence.receiverGeneration > beforeEvidence.receiverGeneration
+          Number.isSafeInteger(beforeEvidence.sourceGeneration) &&
+          Number.isSafeInteger(afterEvidence.sourceGeneration) &&
+          afterEvidence.sourceGeneration > beforeEvidence.sourceGeneration
         : captureResults.some(
             (capture) =>
               capture.objectiveTiming?.evidence?.scenarioCoverage?.scenarios?.[scenario]?.observed,
@@ -720,10 +753,10 @@ export function aggregateObjectiveScenarioCoverage(captureResults, scenarioMarke
               afterCaptured: afterEvidence?.captured === true,
               beforeBombState: beforeEvidence?.bombState ?? null,
               afterBombState: afterEvidence?.bombState ?? null,
-              receiverGenerationChanged:
-                Number.isSafeInteger(beforeEvidence?.receiverGeneration) &&
-                Number.isSafeInteger(afterEvidence?.receiverGeneration)
-                  ? afterEvidence.receiverGeneration > beforeEvidence.receiverGeneration
+              sourceGenerationChanged:
+                Number.isSafeInteger(beforeEvidence?.sourceGeneration) &&
+                Number.isSafeInteger(afterEvidence?.sourceGeneration)
+                  ? afterEvidence.sourceGeneration > beforeEvidence.sourceGeneration
                   : null,
             },
           }
@@ -751,6 +784,18 @@ function combineQualificationGates(values) {
   if (values.some((value) => value === false)) return false;
   if (values.some((value) => value === null || value === undefined)) return null;
   return true;
+}
+
+function combineObservedGates(values) {
+  const observed = values.filter((value) => value === true || value === false);
+  if (observed.length === 0) return null;
+  if (observed.some((value) => value === false)) return false;
+  return true;
+}
+
+function uniqueFiniteMetric(values) {
+  const unique = [...new Set(values)];
+  return unique.length === 1 ? unique[0] : null;
 }
 
 function finiteMetricValues(captureResults, selector) {
@@ -858,28 +903,43 @@ export function evaluateObjectiveTimingRun(
           (value) => value.max !== null && value.max <= OBJECTIVE_CLOCK_TERMINAL_RESIDUAL_LIMIT_MS,
         )
       : null;
-  const requiredMinimumLeaseMs = Math.max(
-    ...finiteMetricValues(
-      captureResults,
-      (capture) => capture.objectiveTiming?.metrics?.lease?.requiredMinimumLeaseMs,
-    ),
-    0,
+  const leaseRequirements = finiteMetricValues(
+    captureResults,
+    (capture) => capture.objectiveTiming?.metrics?.lease?.requiredMinimumLeaseMs,
   );
-  const configuredLeaseMs =
-    finiteMetricValues(
-      captureResults,
-      (capture) => capture.objectiveTiming?.metrics?.lease?.configuredLeaseMs,
-    )[0] ?? null;
-  const semanticGateNames = [
-    'phaseSemanticsConsistent',
-    'roundBombSemanticsConsistent',
-    'defuseKitEvidenceConsistent',
-    'independentKitEvidenceConsistent',
-  ];
+  const configuredLeaseValues = finiteMetricValues(
+    captureResults,
+    (capture) => capture.objectiveTiming?.metrics?.lease?.configuredLeaseMs,
+  );
+  const maximumLeaseValues = finiteMetricValues(
+    captureResults,
+    (capture) => capture.objectiveTiming?.metrics?.lease?.maximumLeaseMs,
+  );
+  const requiredMinimumLeaseMs =
+    leaseRequirements.length === 0 ? null : Math.max(...leaseRequirements);
+  const configuredLeaseMs = uniqueFiniteMetric(configuredLeaseValues);
+  const maximumLeaseMs = uniqueFiniteMetric(maximumLeaseValues);
+  const leasePolicyConsistent =
+    configuredLeaseValues.length === analyzed.length &&
+    maximumLeaseValues.length === analyzed.length &&
+    configuredLeaseMs !== null &&
+    maximumLeaseMs !== null;
+  const runLeaseSufficient =
+    requiredMinimumLeaseMs === null
+      ? null
+      : !leasePolicyConsistent
+        ? false
+        : configuredLeaseMs >= requiredMinimumLeaseMs && configuredLeaseMs <= maximumLeaseMs;
+  const semanticAggregation = {
+    phaseSemanticsConsistent: combineObservedGates,
+    roundBombSemanticsConsistent: combineObservedGates,
+    defuseKitEvidenceConsistent: combineObservedGates,
+    independentKitEvidenceConsistent: combineQualificationGates,
+  };
   const semanticGates = Object.fromEntries(
-    semanticGateNames.map((name) => [
+    Object.entries(semanticAggregation).map(([name, aggregate]) => [
       name,
-      combineQualificationGates(
+      aggregate(
         analyzed.map(
           (capture) => capture.objectiveTiming.qualification.sourceSemantics.gates[name],
         ),
@@ -892,16 +952,17 @@ export function evaluateObjectiveTimingRun(
       ? true
       : null;
 
+  const worstCaseActivePacketIntervalMs = worstCaseMetricStats(
+    captureResults,
+    'activePacketIntervalMs',
+  );
   const measurementGates = {
     captureComplete,
-    activePacketP99Within200Ms: combineQualificationGates(
-      analyzed.map(
-        (capture) =>
-          capture.objectiveTiming.qualification.numeric01s.measurementGates
-            .activePacketP99Within200Ms,
-      ),
-    ),
-    sourceInternalPhaseConsistencyWithin100Ms: combineQualificationGates(
+    activePacketP99Within200Ms:
+      worstCaseActivePacketIntervalMs.p99 === null
+        ? null
+        : worstCaseActivePacketIntervalMs.p99 <= OBJECTIVE_CLOCK_PACKET_P99_LIMIT_MS,
+    sourceInternalPhaseConsistencyWithin100Ms: combineObservedGates(
       analyzed.map(
         (capture) =>
           capture.objectiveTiming.qualification.numeric01s.measurementGates
@@ -911,7 +972,7 @@ export function evaluateObjectiveTimingRun(
   };
   const numericGates = {
     ...measurementGates,
-    countdownSamplesComplete: combineQualificationGates(
+    countdownSamplesComplete: combineObservedGates(
       analyzed.map(
         (capture) =>
           capture.objectiveTiming.qualification.numeric01s.gates.countdownSamplesComplete,
@@ -943,11 +1004,7 @@ export function evaluateObjectiveTimingRun(
         : referenceResidualStats.max <= OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
     terminalResidualCoverage,
     terminalResidualWithin100Ms,
-    leaseSufficient: combineQualificationGates(
-      analyzed.map(
-        (capture) => capture.objectiveTiming.qualification.numeric01s.gates.leaseSufficient,
-      ),
-    ),
+    leaseSufficient: runLeaseSufficient,
   };
   const numericResult = gateStatus(numericGates);
   const semanticResult = gateStatus(semanticGates);
@@ -960,10 +1017,6 @@ export function evaluateObjectiveTimingRun(
     sourceSemantics: semanticResult === 'PASS' ? true : semanticResult === 'FAIL' ? false : null,
   };
   const foundationResult = gateStatus(foundationGates);
-  const worstCaseActivePacketIntervalMs = worstCaseMetricStats(
-    captureResults,
-    'activePacketIntervalMs',
-  );
   return {
     scope: 'qualification-run',
     captureIds: runObjectiveCaptureIds(captureResults),
@@ -988,7 +1041,8 @@ export function evaluateObjectiveTimingRun(
       captureErrors: captureErrors.length,
       lease: {
         configuredLeaseMs,
-        requiredMinimumLeaseMs: configuredLeaseMs === null ? null : requiredMinimumLeaseMs,
+        maximumLeaseMs,
+        requiredMinimumLeaseMs,
         sufficient: numericGates.leaseSufficient,
       },
     },
@@ -1072,14 +1126,13 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
     const bomb = rawBomb(frame.payload);
     const phaseCountdown = rawPhaseCountdown(frame.payload);
     const round = rawRound(frame.payload);
+    const mapName = rawMapName(frame.payload);
     const active = isActiveState(bomb.state);
     frameEvidenceByObservation.set(observationKey(frame), {
       elapsedMs,
       bombState: bomb.state ?? null,
       roundPhase: round.phase ?? null,
-      receiverGeneration: Number.isSafeInteger(frame.receiverGeneration)
-        ? frame.receiverGeneration
-        : null,
+      mapName: mapName ?? null,
     });
     if (firstObjectiveState === undefined && bomb.state !== undefined)
       firstObjectiveState = bomb.state;
@@ -1108,7 +1161,12 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
       missingSpan = closeMissingSpan(missingCountdownSpans, missingSpan, elapsedMs);
       previousCountedSample = undefined;
       if (previousFrame !== undefined) {
-        const transition = { from: previousFrame.state, to: bomb.state, atMs: elapsedMs };
+        const transition = {
+          from: previousFrame.state,
+          to: bomb.state,
+          atMs: elapsedMs,
+          mapName: mapName ?? previousFrame.mapName,
+        };
         transitions.push(transition);
         if (
           previousFrame.state === 'defusing' &&
@@ -1161,6 +1219,7 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
       if (bomb.state === 'defusing') {
         currentDefuseAttempt = {
           startMs: elapsedMs,
+          mapName,
           kit: rawDefuseKitEvidence(frame.payload, bomb.playerId),
           aborted: false,
           terminal: null,
@@ -1284,6 +1343,7 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
       state: bomb.state,
       countdownSeconds: bomb.countdownSeconds,
       roundPhase: round.phase,
+      mapName,
       receivedAtMs: Date.parse(frame.receivedAt),
     };
   }
@@ -1329,7 +1389,8 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
         captured: frameEvidence !== undefined,
         bombState: frameEvidence?.bombState ?? null,
         roundPhase: frameEvidence?.roundPhase ?? null,
-        receiverGeneration: frameEvidence?.receiverGeneration ?? null,
+        mapName: frameEvidence?.mapName ?? null,
+        sourceGeneration: marker.observation.sourceGeneration,
         frameElapsedMs: frameEvidence?.elapsedMs ?? null,
       };
     });
