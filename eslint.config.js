@@ -26,6 +26,7 @@ export default tseslint.config(
             'packages/protocol/test/*.ts',
             'packages/radar/test/*.ts',
           ],
+          maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 16,
           defaultProject: 'tsconfig.node.json',
         },
         tsconfigRootDir: import.meta.dirname,
