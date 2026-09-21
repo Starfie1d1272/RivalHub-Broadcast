@@ -14,6 +14,13 @@ export interface MatchHeaderTeamPresentation {
   readonly timeoutsRemaining: number | null;
 }
 
+export interface MatchHeaderTimeoutPresentation {
+  readonly owner: MatchHeaderEntrantKey | null;
+  readonly ownerName: string | null;
+  readonly remaining: number | null;
+  readonly clockText: string | null;
+}
+
 export interface MatchHeaderSeriesMapPresentation {
   readonly mapOrder: number;
   readonly mapName: string;
@@ -50,8 +57,7 @@ export interface MatchHeaderPresentation {
   readonly phaseLabel: string;
   readonly clockText: string | null;
   readonly clockTone: 'normal' | 'timeout' | 'paused' | 'objective' | 'unknown';
-  readonly timeoutOwner: MatchHeaderEntrantKey | null;
-  readonly timeoutText: string | null;
+  readonly timeoutPanel: MatchHeaderTimeoutPresentation | null;
   readonly seriesMaps: readonly MatchHeaderSeriesMapPresentation[] | null;
   readonly roundHistory: MatchHeaderRoundHistoryPresentation | null;
 }
@@ -157,7 +163,7 @@ function selectionText(
   entrants: NonNullable<ProgramPayload['series']>['entrants'],
 ): string {
   if (selection.kind === 'decider') return '决胜图';
-  if (selection.kind === 'unknown') return '未知';
+  if (selection.kind === 'unknown') return '';
   if (selection.kind !== 'pick') return '';
   if (selection.entryId === entrants.a.entryId) return `${entrants.a.name} 选择`;
   if (selection.entryId === entrants.b.entryId) return `${entrants.b.name} 选择`;
@@ -231,10 +237,7 @@ function buildRoundHistory(
 
 function clockPresentation(
   payload: ProgramPayload,
-): Pick<
-  MatchHeaderPresentation,
-  'phaseLabel' | 'clockText' | 'clockTone' | 'timeoutOwner' | 'timeoutText'
-> {
+): Pick<MatchHeaderPresentation, 'phaseLabel' | 'clockText' | 'clockTone' | 'timeoutPanel'> {
   const phase = payload.clock?.phase ?? null;
   const clockText = formatClock(payload.clock?.endsInSeconds);
   const timeoutSide = phase === 'timeout_ct' ? 'CT' : phase === 'timeout_t' ? 'T' : null;
@@ -249,54 +252,54 @@ function clockPresentation(
           : null;
   const timeoutRemaining =
     timeoutSide === null ? null : payload.map.timeoutsRemaining[timeoutSide === 'CT' ? 'ct' : 't'];
-  const timeoutText =
-    phase === 'timeout_ct' || phase === 'timeout_t'
-      ? `${timeoutOwner === null ? '战术暂停' : `${payload.series?.entrants[timeoutOwner].name ?? '战术暂停'} 战术暂停`}${
-          timeoutRemaining === null ? '' : ` · 剩余 ${timeoutRemaining} 次`
-        }${clockText === null ? '' : ` · ${clockText}`}`
-      : null;
+  const timeoutPanel: MatchHeaderTimeoutPresentation | null =
+    timeoutSide === null
+      ? null
+      : {
+          owner: timeoutOwner,
+          ownerName:
+            timeoutOwner === null ? null : (payload.series?.entrants[timeoutOwner].name ?? null),
+          remaining: timeoutRemaining,
+          clockText,
+        };
 
   switch (phase) {
     case 'warmup':
-      return { phaseLabel: '热身', clockText, clockTone: 'normal', timeoutOwner, timeoutText };
+      return { phaseLabel: '热身', clockText, clockTone: 'normal', timeoutPanel };
     case 'freezetime':
-      return { phaseLabel: '准备中', clockText, clockTone: 'normal', timeoutOwner, timeoutText };
+      return { phaseLabel: '准备中', clockText, clockTone: 'normal', timeoutPanel };
     case 'live':
-      return { phaseLabel: '进行中', clockText, clockTone: 'normal', timeoutOwner, timeoutText };
+      return { phaseLabel: '进行中', clockText, clockTone: 'normal', timeoutPanel };
     case 'timeout_ct':
     case 'timeout_t':
-      return { phaseLabel: '战术暂停', clockText, clockTone: 'timeout', timeoutOwner, timeoutText };
+      return { phaseLabel: '战术暂停', clockText, clockTone: 'timeout', timeoutPanel };
     case 'paused':
       return {
         phaseLabel: '比赛暂停',
         clockText: null,
         clockTone: 'paused',
-        timeoutOwner,
-        timeoutText,
+        timeoutPanel,
       };
     case 'bomb':
       return {
         phaseLabel: 'C4 已安装',
         clockText: null,
         clockTone: 'objective',
-        timeoutOwner,
-        timeoutText,
+        timeoutPanel,
       };
     case 'defuse':
       return {
         phaseLabel: '正在拆弹',
         clockText: null,
         clockTone: 'objective',
-        timeoutOwner,
-        timeoutText,
+        timeoutPanel,
       };
     case 'over':
       return {
         phaseLabel: '回合结束',
         clockText: null,
         clockTone: 'normal',
-        timeoutOwner,
-        timeoutText,
+        timeoutPanel,
       };
     case 'unknown':
     case null:
@@ -304,8 +307,7 @@ function clockPresentation(
         phaseLabel: '状态未知',
         clockText: null,
         clockTone: 'unknown',
-        timeoutOwner,
-        timeoutText,
+        timeoutPanel,
       };
   }
 }

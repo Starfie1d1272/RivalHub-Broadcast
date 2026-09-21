@@ -41,14 +41,31 @@ describe('Match Header presentation selector', () => {
     expect(value.currentSideMapping).toBe('unavailable');
     expect(value.teamA).toMatchObject({ name: 'Northstar', side: null, mapScore: null });
     expect(value.teamB).toMatchObject({ name: 'Southpoint', side: null, mapScore: null });
-    expect(value.timeoutOwner).toBeNull();
-    expect(value.timeoutText).toBe('战术暂停 · 剩余 1 次 · 0:22');
+    expect(value.timeoutPanel).toMatchObject({
+      owner: null,
+      ownerName: null,
+      remaining: 1,
+      clockText: '0:22',
+    });
   });
 
   it('resolves timeout ownership only after the same entryId join', () => {
     const value = presentation('series-timeout-b');
-    expect(value.timeoutOwner).toBe('b');
-    expect(value.timeoutText).toBe('Southpoint 战术暂停 · 剩余 2 次 · 0:22');
+    expect(value.timeoutPanel).toMatchObject({
+      owner: 'b',
+      ownerName: 'Southpoint',
+      remaining: 2,
+      clockText: '0:22',
+    });
+  });
+
+  it('covers entrant A tactical timeout facts with the canonical series', () => {
+    expect(presentation('series-timeout-a').timeoutPanel).toMatchObject({
+      owner: 'a',
+      ownerName: 'Northstar',
+      remaining: 1,
+      clockText: '0:22',
+    });
   });
 
   it('keeps objective phases free of donor countdown reconstruction', () => {
@@ -77,8 +94,31 @@ describe('Match Header presentation selector', () => {
       '未开始',
     ]);
     expect(value.seriesMaps?.[0]).toMatchObject({ selectionText: 'Northstar 选择' });
-    expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '未知' });
+    expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
     expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: '决胜图' });
+  });
+
+  it('covers the frozen BO3 Map 1, not-played, and logo availability fixtures', () => {
+    expect(presentation('series-bo3-map1').seriesMaps?.[0]).toMatchObject({
+      mapName: 'Ancient',
+      status: 'current',
+      selectionText: 'Northstar 选择',
+    });
+    expect(
+      presentation('series-not-played').seriesMaps?.some((map) => map.status === 'not_played'),
+    ).toBe(true);
+    expect(presentation('series-logo-mixed').teamA.logoUrl).toBe(
+      'https://example.test/assets/northstar.svg',
+    );
+    expect(presentation('series-logo-mixed').teamB.logoUrl).toBeNull();
+  });
+
+  it('does not render a production placeholder when roundNumber is unavailable', () => {
+    expect(presentation('series-round-unavailable').roundLabel).toBeNull();
+  });
+
+  it('keeps dense overtime history bounded to the fixed widget model', () => {
+    expect(presentation('series-overtime-history').roundHistory?.rounds).toHaveLength(36);
   });
 
   it('fills partial history gaps without inventing a winner and hides unavailable history', () => {

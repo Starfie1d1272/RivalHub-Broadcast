@@ -17,6 +17,7 @@ function TeamLogo({ name, logoUrl }: { readonly name: string; readonly logoUrl: 
 
 export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
   const presentation = buildMatchHeaderPresentation(snapshot.payload);
+  const timeoutPanel = presentation.timeoutPanel;
   const competitionLine = [presentation.competitionName, presentation.stageName]
     .filter((value): value is string => value !== null && value.trim() !== '')
     .join(' · ');
@@ -49,16 +50,42 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
         className={`match-header__center match-header__center--${presentation.clockTone}`}
         data-clock-tone={presentation.clockTone}
       >
-        <div className="match-header__clock" data-clock="true">
-          <strong className="match-header__clock-value">
-            {presentation.clockText ?? presentation.phaseLabel}
-          </strong>
-          {presentation.clockText !== null ? (
-            <span className="match-header__phase">{presentation.phaseLabel}</span>
-          ) : null}
-        </div>
+        {timeoutPanel === null ? (
+          <div className="match-header__clock" data-clock="true">
+            <strong className="match-header__clock-value">
+              {presentation.clockText ?? presentation.phaseLabel}
+            </strong>
+            {presentation.clockText !== null ? (
+              <span className="match-header__phase">{presentation.phaseLabel}</span>
+            ) : null}
+          </div>
+        ) : (
+          <div
+            aria-label={`战术暂停${timeoutPanel.ownerName === null ? '' : `，${timeoutPanel.ownerName}`}`}
+            className="match-header__timeout-panel"
+            data-timeout-owner={timeoutPanel.owner ?? 'unknown'}
+            data-timeout-panel="true"
+          >
+            <div className="match-header__timeout-heading">
+              <strong className="match-header__timeout-label">战术暂停</strong>
+              {timeoutPanel.ownerName === null ? null : (
+                <span className="match-header__timeout-owner">{timeoutPanel.ownerName}</span>
+              )}
+            </div>
+            <div className="match-header__timeout-facts">
+              {timeoutPanel.remaining === null ? null : (
+                <span data-timeout-remaining>剩余 {timeoutPanel.remaining} 次</span>
+              )}
+              {timeoutPanel.clockText === null ? null : (
+                <strong data-timeout-countdown>{timeoutPanel.clockText}</strong>
+              )}
+            </div>
+          </div>
+        )}
         <div className="match-header__round-meta">
-          <span>{presentation.roundLabel ?? '回合编号不可用'}</span>
+          {presentation.roundLabel === null ? null : (
+            <span data-round-label="true">{presentation.roundLabel}</span>
+          )}
           <span>{presentation.currentMapName ?? '地图未知'}</span>
         </div>
         <div className="match-header__series-meta">
@@ -68,14 +95,6 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
         {competitionLine === '' ? null : (
           <span className="match-header__competition" title={competitionLine}>
             {competitionLine}
-          </span>
-        )}
-        {presentation.timeoutText === null ? null : (
-          <span
-            className="match-header__timeout"
-            data-timeout-owner={presentation.timeoutOwner ?? 'unknown'}
-          >
-            {presentation.timeoutText}
           </span>
         )}
       </div>

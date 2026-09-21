@@ -42,7 +42,7 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
               {map.mapName}
             </span>
             <span className="match-header__series-map-selection" title={map.selectionText}>
-              {map.selectionText || '\u00a0'}
+              {map.selectionText}
             </span>
             <strong className="match-header__series-map-status">{map.statusText}</strong>
           </div>

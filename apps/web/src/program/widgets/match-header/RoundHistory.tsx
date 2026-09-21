@@ -13,12 +13,43 @@ function markerClass(entrant: 'a' | 'b', round: MatchHeaderRoundPresentation): s
   return 'is-unknown';
 }
 
+// The fixed 560px widget leaves 368px for each track after its border, padding,
+// labels, and entrant-name column. Density is computed against that contract.
+const ROUND_HISTORY_TRACK_WIDTH = 368;
+
+function roundHistoryDensity(roundCount: number): {
+  readonly gap: number;
+  readonly marker: number;
+} {
+  const preferredGap = roundCount >= 36 ? 1 : roundCount >= 30 ? 2 : 3;
+  const marker = Math.max(
+    2,
+    Math.min(
+      10,
+      Math.floor(
+        (ROUND_HISTORY_TRACK_WIDTH - preferredGap * Math.max(roundCount - 1, 0)) / roundCount,
+      ),
+    ),
+  );
+  const gap =
+    marker * roundCount + preferredGap * Math.max(roundCount - 1, 0) <= ROUND_HISTORY_TRACK_WIDTH
+      ? preferredGap
+      : Math.max(
+          0,
+          Math.floor(
+            (ROUND_HISTORY_TRACK_WIDTH - marker * roundCount) / Math.max(roundCount - 1, 1),
+          ),
+        );
+  return { gap, marker };
+}
+
 export function RoundHistory({ snapshot }: HudWidgetRendererProps) {
   const presentation = buildMatchHeaderPresentation(snapshot.payload);
   const history = presentation.roundHistory;
   if (history === null) return null;
 
   const columns = `repeat(${Math.max(history.rounds.length, 1)}, minmax(0, 1fr))`;
+  const density = roundHistoryDensity(history.rounds.length);
   return (
     <section
       aria-label="回合历史"
@@ -40,7 +71,7 @@ export function RoundHistory({ snapshot }: HudWidgetRendererProps) {
             className="match-header__round-history-track"
             data-entrant={entrant}
             key={entrant}
-            style={{ gridTemplateColumns: columns }}
+            style={{ gridTemplateColumns: columns, gap: `${density.gap}px` }}
           >
             {history.rounds.map((round) => (
               <span
@@ -51,6 +82,7 @@ export function RoundHistory({ snapshot }: HudWidgetRendererProps) {
                 data-winner={round.winner}
                 data-winner-side={round.winnerSide}
                 key={`${entrant}-${round.roundNumber}`}
+                style={{ height: density.marker, width: density.marker }}
               />
             ))}
           </div>

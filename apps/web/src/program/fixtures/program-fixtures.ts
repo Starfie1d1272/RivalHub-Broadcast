@@ -17,14 +17,20 @@ export const PROGRAM_FIXTURE_IDS = [
   'timeout-ct',
   'stress-long-labels',
   'series-bo1',
+  'series-bo3-map1',
   'series-bo5',
+  'series-not-played',
+  'series-logo-mixed',
   'series-halftime-swap',
+  'series-timeout-a',
   'series-timeout-b',
   'series-paused',
   'series-decider',
   'series-partial-history',
   'series-history-unavailable',
   'series-mapping-unavailable',
+  'series-round-unavailable',
+  'series-overtime-history',
   'series-long-labels',
 ] as const;
 
@@ -42,14 +48,20 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'timeout-ct': 'CT 暂停',
   'stress-long-labels': '长名称压力场景',
   'series-bo1': 'BO1 系列赛',
+  'series-bo3-map1': 'BO3 · Map 1',
   'series-bo5': 'BO5 中盘',
+  'series-not-played': '系列赛未进行地图',
+  'series-logo-mixed': '队伍 Logo 有/无',
   'series-halftime-swap': '半场换边',
+  'series-timeout-a': 'A 队战术暂停',
   'series-timeout-b': 'B 队战术暂停',
   'series-paused': '比赛暂停',
   'series-decider': '决胜图',
   'series-partial-history': '回合历史不完整',
   'series-history-unavailable': '回合历史不可用',
   'series-mapping-unavailable': '队伍映射暂不可用',
+  'series-round-unavailable': '回合编号不可用',
+  'series-overtime-history': '加时回合密度',
   'series-long-labels': '系列赛长名称压力场景',
 };
 
@@ -115,12 +127,17 @@ function neutralTeam(name: 'CT' | 'T'): ProgramTeam {
   };
 }
 
-function canonicalTeam(entryId: string, name: string, seriesScore: number | null): ProgramTeam {
+function canonicalTeam(
+  entryId: string,
+  name: string,
+  seriesScore: number | null,
+  logoUrl: string | null = null,
+): ProgramTeam {
   return {
     mode: 'canonical',
     entryId,
     name,
-    logoUrl: null,
+    logoUrl,
     seriesScore,
   };
 }
@@ -316,6 +333,35 @@ const BO3_SERIES = makeSeries({
   ],
 });
 
+const BO3_MAP1_SERIES = makeSeries({
+  score: { a: 0, b: 0 },
+  currentMapOrder: 1,
+  maps: [
+    seriesMap({
+      mapId: 'fixture-map1-current',
+      mapOrder: 1,
+      mapName: 'de_ancient',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
+      status: 'current',
+    }),
+    seriesMap({
+      mapId: 'fixture-map1-next',
+      mapOrder: 2,
+      mapName: 'de_mirage',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      status: 'pending',
+    }),
+    seriesMap({
+      mapId: 'fixture-map1-decider',
+      mapOrder: 3,
+      mapName: 'de_nuke',
+      selection: { kind: 'decider' },
+      status: 'pending',
+    }),
+  ],
+});
+
 const BO1_SERIES = makeSeries({
   format: 'bo1',
   score: { a: 0, b: 0 },
@@ -377,6 +423,31 @@ const BO5_SERIES = makeSeries({
       status: 'pending',
     }),
   ],
+});
+
+const NOT_PLAYED_SERIES = makeSeries({
+  format: 'bo5',
+  score: { a: 1, b: 0 },
+  currentMapOrder: 3,
+  maps: BO5_SERIES.maps.map((map) =>
+    map.mapOrder === 4 ? { ...map, status: 'not_played' as const } : map,
+  ),
+});
+
+const MIXED_LOGO_URL = 'https://example.test/assets/northstar.svg';
+const MIXED_LOGO_ENTRANTS: ProgramSeries['entrants'] = {
+  a: { ...SERIES_ENTRANTS.a, logoUrl: MIXED_LOGO_URL },
+  b: SERIES_ENTRANTS.b,
+};
+
+const MIXED_LOGO_SERIES = makeSeries({
+  entrants: MIXED_LOGO_ENTRANTS,
+  maps: BO3_SERIES.maps,
+});
+
+const OVERTIME_HISTORY_SERIES = makeSeries({
+  maps: BO3_SERIES.maps,
+  roundHistory: completeRoundHistory(36),
 });
 
 const DECIDER_SERIES = makeSeries({
@@ -587,6 +658,11 @@ function awaitingPayload(): ProgramPayload {
 
 const canonicalTeams = {
   ct: canonicalTeam('fixture-entry-a', 'Northstar', 1),
+  t: canonicalTeam('fixture-entry-b', 'Southpoint', 0),
+};
+
+const mixedLogoTeams = {
+  ct: canonicalTeam('fixture-entry-a', 'Northstar', 1, MIXED_LOGO_URL),
   t: canonicalTeam('fixture-entry-b', 'Southpoint', 0),
 };
 
@@ -826,6 +902,20 @@ const fixtureRecord = {
       clock: { phase: 'freezetime', endsInSeconds: 12 },
     }),
   ),
+  'series-bo3-map1': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: BO3_MAP1_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_ancient',
+      roundNumber: 1,
+      score: { ct: 0, t: 0 },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
   'series-bo5': makeSnapshot(
     makeLivePayload({
       context: 'fresh',
@@ -838,6 +928,34 @@ const fixtureRecord = {
       roundNumber: 18,
       score: { ct: 9, t: 8 },
       clock: { phase: 'live', endsInSeconds: 36 },
+    }),
+  ),
+  'series-not-played': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo5' }),
+      teams: canonicalTeams,
+      series: NOT_PLAYED_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_inferno',
+      roundNumber: 18,
+      score: { ct: 9, t: 8 },
+      clock: { phase: 'live', endsInSeconds: 36 },
+    }),
+  ),
+  'series-logo-mixed': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: mixedLogoTeams,
+      series: MIXED_LOGO_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 13,
+      score: { ct: 7, t: 5 },
+      clock: { phase: 'live', endsInSeconds: 48 },
     }),
   ),
   'series-halftime-swap': makeSnapshot(
@@ -855,6 +973,20 @@ const fixtureRecord = {
       roundNumber: 13,
       score: { ct: 5, t: 7 },
       clock: { phase: 'live', endsInSeconds: 48 },
+    }),
+  ),
+  'series-timeout-a': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 14,
+      score: { ct: 8, t: 6 },
+      clock: { phase: 'timeout_ct', endsInSeconds: 22 },
     }),
   ),
   'series-timeout-b': makeSnapshot(
@@ -939,6 +1071,34 @@ const fixtureRecord = {
       roundNumber: 13,
       score: { ct: 7, t: 5 },
       clock: { phase: 'timeout_ct', endsInSeconds: 22 },
+    }),
+  ),
+  'series-round-unavailable': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: null,
+      score: { ct: 7, t: 5 },
+      clock: { phase: 'live', endsInSeconds: 48 },
+    }),
+  ),
+  'series-overtime-history': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: OVERTIME_HISTORY_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 36,
+      score: { ct: 15, t: 14 },
+      clock: { phase: 'live', endsInSeconds: 48 },
     }),
   ),
   'series-long-labels': makeSnapshot(

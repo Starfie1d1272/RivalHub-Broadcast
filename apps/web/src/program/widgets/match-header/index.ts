@@ -10,4 +10,5 @@ export type {
   MatchHeaderSeriesMapPresentation,
   MatchHeaderSide,
   MatchHeaderTeamPresentation,
+  MatchHeaderTimeoutPresentation,
 } from './presentation';

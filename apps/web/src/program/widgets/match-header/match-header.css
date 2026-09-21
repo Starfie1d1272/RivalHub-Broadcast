@@ -146,11 +146,25 @@
   color: var(--rh-hud-state-unknown);
 }
 
+.match-header__center--timeout {
+  gap: 2px;
+}
+
+.match-header__center--timeout .match-header__competition {
+  display: none;
+}
+
+.match-header__center--timeout .match-header__round-meta,
+.match-header__center--timeout .match-header__series-meta {
+  font-size: 10px;
+  gap: 4px;
+  line-height: 12px;
+}
+
 .match-header__phase,
 .match-header__round-meta,
 .match-header__series-meta,
-.match-header__competition,
-.match-header__timeout {
+.match-header__competition {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -187,12 +201,53 @@
   width: 100%;
 }
 
-.match-header__timeout {
-  color: var(--rh-hud-state-warning);
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 14px;
+.match-header__timeout-panel {
+  align-items: stretch;
+  background: color-mix(in srgb, var(--rh-hud-state-warning) 12%, var(--rh-hud-surface-primary));
+  border: 1px solid color-mix(in srgb, var(--rh-hud-state-warning) 55%, transparent);
+  border-radius: var(--rh-hud-radius-sm);
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  justify-content: center;
+  min-width: 0;
+  padding: 3px 8px;
   width: 100%;
+}
+
+.match-header__timeout-heading,
+.match-header__timeout-facts {
+  align-items: baseline;
+  display: flex;
+  gap: 6px;
+  justify-content: center;
+  min-width: 0;
+}
+
+.match-header__timeout-label {
+  color: var(--rh-hud-state-warning);
+  font-size: 12px;
+  line-height: 15px;
+}
+
+.match-header__timeout-owner,
+.match-header__timeout-facts span {
+  color: var(--rh-hud-text-primary);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 13px;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.match-header__timeout-facts strong {
+  color: var(--rh-hud-state-warning);
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 20px;
 }
 
 .match-header__series-strip {
@@ -267,6 +322,7 @@
   font-size: 10px;
   font-weight: 600;
   line-height: 14px;
+  min-height: 14px;
 }
 
 .match-header__series-map-status {
@@ -327,10 +383,13 @@
 
 .match-header__round-marker {
   align-self: center;
+  aspect-ratio: 1;
   border: 1px solid transparent;
   border-radius: 50%;
-  height: 10px;
+  box-sizing: border-box;
+  height: auto;
   justify-self: center;
+  max-width: 100%;
   width: 10px;
 }
 
@@ -349,7 +408,7 @@
 
 .match-header__round-marker.is-empty {
   background: transparent;
-  border-color: color-mix(in srgb, var(--rh-hud-text-muted) 25%, transparent);
+  border-color: transparent;
 }
 
 .match-header__round-marker.is-missing {

@@ -48,7 +48,7 @@
 | 来源                      | 固定版本与改写参考文件                                                                                                                                    | 许可证                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx` | MIT                                 |
-| Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | ISC（固定版本 `package.json` 声明） |
+| Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | 固定版本 `package.json` 声明 ISC；该 revision 无独立 `LICENSE` 文件 |
 
 Lexogrine MIT notice（固定版本 `LICENSE`）：
 
@@ -76,7 +76,7 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-Eon ISC notice（固定版本 `package.json` 声明）：
+Eon provenance note：固定 revision 的 `package.json` 明确声明 `"license": "ISC"`，但该 revision 没有独立的 `LICENSE` 文件。下面的 ISC 文本是根据该 metadata 整理的标准许可参考，**不是该 revision 的 upstream exact notice**。本仓库当前代码只是 `maps-sleek` 的 presentation adaptation/reference，不携带 Eon runtime、图片资产或原始数据处理逻辑：
 
 ```text
 Permission to use, copy, modify, and/or distribute this software for any
