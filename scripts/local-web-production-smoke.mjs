@@ -8,15 +8,16 @@ import { fileURLToPath } from 'node:url';
 const rootDir = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const webRoot = join(rootDir, 'apps', 'web', 'dist');
 const upgradeTimeoutMs = 5_000;
+const appCloseTimeoutMs = 10_000;
 
 function assert(condition, message) {
   if (!condition) throw new Error(message);
 }
 
-function withTimeout(promise, message) {
+function withTimeout(promise, message, timeoutMs = upgradeTimeoutMs) {
   let timer;
   const timeout = new Promise((_, reject) => {
-    timer = globalThis.setTimeout(() => reject(new Error(message)), upgradeTimeoutMs);
+    timer = globalThis.setTimeout(() => reject(new Error(message)), timeoutMs);
   });
   return Promise.race([promise, timeout]).finally(() => globalThis.clearTimeout(timer));
 }
@@ -50,6 +51,37 @@ function maskedCloseFrame() {
   const mask = Buffer.from([0x13, 0x32, 0x57, 0x79]);
   const maskedPayload = Buffer.from(payload.map((value, index) => value ^ mask[index]));
   return Buffer.concat([Buffer.from([0x88, 0x82]), mask, maskedPayload]);
+}
+
+function waitForSocketClose(socket) {
+  return new Promise((resolvePromise, reject) => {
+    const cleanup = () => {
+      socket.off('close', onClose);
+      socket.off('error', onError);
+    };
+    const onClose = () => {
+      cleanup();
+      resolvePromise();
+    };
+    const onError = (error) => {
+      cleanup();
+      reject(error);
+    };
+    socket.once('close', onClose);
+    socket.once('error', onError);
+  });
+}
+
+async function closeWebSocket(socket) {
+  if (socket.destroyed) return;
+  const closed = waitForSocketClose(socket);
+  socket.end(maskedCloseFrame());
+  try {
+    await withTimeout(closed, 'WebSocket cleanup timed out');
+  } catch (error) {
+    socket.destroy();
+    throw error;
+  }
 }
 
 function readUpgradeResponse(socket) {
@@ -156,7 +188,8 @@ async function assertProgramBaseline(port, subprotocol, route) {
     assert(snapshot.type === 'snapshot', 'Program WebSocket did not send a snapshot baseline');
     assert(snapshot.channel === 'program', 'Program WebSocket baseline has the wrong channel');
   } finally {
-    if (!socket.destroyed) socket.end(maskedCloseFrame());
+    console.log('[production-smoke] WS cleanup');
+    await closeWebSocket(socket);
   }
 }
 
@@ -170,18 +203,39 @@ async function assertCs2Assets(baseUrl, requestOptions) {
     manifestResponse.headers.get('content-type')?.includes('application/json') === true,
     'CS2 asset manifest MIME 不正确',
   );
-  const manifest = await manifestResponse.json();
+  const manifest = JSON.parse(await manifestResponse.text());
   assert(manifest.schemaVersion === 1, 'CS2 asset manifest schemaVersion 不正确');
   for (const [assetId, asset] of Object.entries(manifest.assets ?? {})) {
     const assetResponse = await globalThis.fetch(`${baseUrl}${asset.outputPath}`, requestOptions);
+    const body = Buffer.from(await assetResponse.arrayBuffer());
     assert(assetResponse.status === 200, `${assetId} 未返回 HTTP 200`);
     assert(
       assetResponse.headers.get('content-type')?.includes('image/svg+xml') === true,
       `${assetId} SVG MIME 不正确`,
     );
-    const body = Buffer.from(await assetResponse.arrayBuffer());
     const digest = createHash('sha256').update(body).digest('hex');
     assert(digest === asset.outputSha256, `${assetId} SVG hash 不一致`);
+  }
+}
+
+async function closeApp(app) {
+  const closePromise = app.close();
+  try {
+    await withTimeout(closePromise, 'Fastify app.close timed out', appCloseTimeoutMs);
+  } catch (error) {
+    app.server.closeAllConnections?.();
+    app.server.closeIdleConnections?.();
+    throw error;
+  }
+}
+
+async function runPhase(name, operation) {
+  console.log(`[production-smoke] ${name}`);
+  try {
+    return await operation();
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`${name}: ${message}`, { cause: error });
   }
 }
 
@@ -200,22 +254,28 @@ async function main() {
     assert(address !== null && typeof address !== 'string', 'production smoke has no server port');
     const baseUrl = `http://127.0.0.1:${address.port}`;
     const requestOptions = { headers: { connection: 'close' } };
-    const pageResponse = await globalThis.fetch(`${baseUrl}/program`, requestOptions);
-    assert(pageResponse.status === 200, `/program returned HTTP ${pageResponse.status}`);
-    assert(
-      pageResponse.headers.get('content-type')?.includes('text/html') === true,
-      '/program did not return HTML',
+    await runPhase('static html', async () => {
+      const pageResponse = await globalThis.fetch(`${baseUrl}/program`, requestOptions);
+      const pageBody = await pageResponse.text();
+      assert(pageResponse.status === 200, `/program returned HTTP ${pageResponse.status}`);
+      assert(
+        pageResponse.headers.get('content-type')?.includes('text/html') === true,
+        '/program did not return HTML',
+      );
+      assert(pageBody === builtHtml, '/program did not return the built Vite HTML');
+    });
+    await runPhase('hashed asset drained', async () => {
+      const assetResponse = await globalThis.fetch(`${baseUrl}${assetPath}`, requestOptions);
+      await assetResponse.arrayBuffer();
+      assert(assetResponse.status === 200, `${assetPath} returned HTTP ${assetResponse.status}`);
+    });
+    await runPhase('CS2 assets', () => assertCs2Assets(baseUrl, requestOptions));
+    await runPhase('WS baseline', () =>
+      assertProgramBaseline(address.port, LOCAL_WEB_SUBPROTOCOL, LOCAL_WEB_ROUTES.program),
     );
-    assert(
-      (await pageResponse.text()) === builtHtml,
-      '/program did not return the built Vite HTML',
-    );
-    const assetResponse = await globalThis.fetch(`${baseUrl}${assetPath}`, requestOptions);
-    assert(assetResponse.status === 200, `${assetPath} returned HTTP ${assetResponse.status}`);
-    await assertCs2Assets(baseUrl, requestOptions);
-    await assertProgramBaseline(address.port, LOCAL_WEB_SUBPROTOCOL, LOCAL_WEB_ROUTES.program);
   } finally {
-    await app.close();
+    console.log('[production-smoke] app.close');
+    await closeApp(app);
   }
 }
 
