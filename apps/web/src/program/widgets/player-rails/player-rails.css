@@ -1,0 +1,353 @@
+.player-rail {
+  color: var(--rh-hud-text-primary);
+  display: flex;
+  flex-direction: column;
+  font-variant-numeric: tabular-nums;
+  gap: 8px;
+  height: 640px;
+  overflow: hidden;
+  width: 300px;
+}
+
+.player-rail__summary {
+  display: flex;
+  flex: 0 0 116px;
+  flex-direction: column;
+  gap: 4px;
+  opacity: 0;
+  padding-top: 4px;
+  transform: translateY(-4px);
+  transition:
+    opacity 180ms ease-out,
+    transform 180ms ease-out;
+}
+
+.player-rail__summary.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.player-rail__economy,
+.player-rail__utility {
+  background: color-mix(in srgb, var(--rh-hud-surface-primary) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rh-hud-text-primary) 18%, transparent);
+  border-radius: var(--rh-hud-radius-md);
+}
+
+.player-rail__economy {
+  display: grid;
+  flex: 0 0 64px;
+  grid-template-columns: repeat(3, 1fr);
+  padding: 10px 12px;
+}
+
+.player-rail__economy div,
+.player-rail__utility {
+  align-items: center;
+  display: flex;
+  justify-content: space-between;
+}
+
+.player-rail__economy div {
+  flex-direction: column;
+  gap: 3px;
+  min-width: 0;
+}
+
+.player-rail__economy span,
+.player-rail__utility > span,
+.player-rail__dead-stats small,
+.player-rail__kad small {
+  color: var(--rh-hud-text-muted);
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  line-height: 1;
+}
+
+.player-rail__economy strong {
+  font-size: 14px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.player-rail__utility {
+  flex: 0 0 44px;
+  gap: 8px;
+  padding: 8px 10px;
+}
+
+.player-rail__utility > strong {
+  color: var(--rh-hud-text-muted);
+}
+
+.player-rail__utility-values {
+  display: flex;
+  flex: 1;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.player-rail__players {
+  display: grid;
+  flex: 0 0 516px;
+  gap: 4px;
+  grid-template-rows: repeat(5, 100px);
+}
+
+.player-rail__card,
+.player-rail__empty-card {
+  background: color-mix(in srgb, var(--rh-hud-surface-primary) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rh-hud-text-primary) 18%, transparent);
+  border-radius: var(--rh-hud-radius-md);
+  height: 100px;
+  overflow: hidden;
+  position: relative;
+  width: 300px;
+}
+
+.player-rail__card {
+  display: grid;
+  grid-template-rows: 32px 3px 34px 31px;
+  transition:
+    border-color 120ms ease-out,
+    box-shadow 160ms ease-out;
+}
+
+.player-rail__card.is-observed {
+  border: 2px solid rgb(255 255 255 / 92%);
+  box-shadow: 0 0 12px rgb(255 255 255 / 22%);
+}
+
+.player-rail__card--dead {
+  border-color: color-mix(in srgb, var(--rh-hud-state-danger) 40%, transparent);
+}
+
+.player-rail__identity {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+  min-width: 0;
+  padding: 0 10px;
+}
+
+.player-rail__slot {
+  color: var(--rh-hud-text-muted);
+  flex: 0 0 30px;
+  font-size: 12px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.player-rail__name {
+  flex: 1;
+  font-size: 15px;
+  font-weight: 700;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.player-rail__health-value {
+  font-size: 22px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.player-rail__round-kills {
+  background: color-mix(in srgb, var(--rh-hud-side-ct) 25%, transparent);
+  border-radius: 999px;
+  font-size: 10px;
+  padding: 3px 5px;
+}
+
+.player-rail--t .player-rail__round-kills {
+  background: color-mix(in srgb, var(--rh-hud-side-t) 25%, transparent);
+}
+
+.player-rail__dead-label {
+  color: var(--rh-hud-state-danger);
+  font-size: 11px;
+  letter-spacing: 0.08em;
+}
+
+.player-rail__health-bar {
+  background: rgb(255 255 255 / 10%);
+  overflow: hidden;
+}
+
+.player-rail__health-bar span {
+  background: var(--rh-hud-side-ct);
+  display: block;
+  height: 100%;
+  transition:
+    width 180ms ease-out,
+    background-color 120ms ease-out;
+  width: var(--player-rail-health);
+}
+
+.player-rail--t .player-rail__health-bar span {
+  background: var(--rh-hud-side-t);
+}
+
+.player-rail__card.is-low-health .player-rail__health-bar span {
+  background: var(--rh-hud-state-danger);
+}
+
+.player-rail__combat,
+.player-rail__dead-stats,
+.player-rail__bottom {
+  align-items: center;
+  display: flex;
+  min-width: 0;
+}
+
+.player-rail__combat {
+  gap: 8px;
+  padding: 0 10px;
+}
+
+.player-rail__weapons,
+.player-rail__equipment,
+.player-rail__utility-icons {
+  align-items: center;
+  display: flex;
+  gap: 5px;
+}
+
+.player-rail__weapons {
+  flex: 1;
+  min-width: 0;
+}
+
+.player-rail__equipment {
+  flex: 0 0 auto;
+}
+
+.player-rail__equipment .player-rail__icon {
+  width: 18px;
+}
+
+.player-rail__utility-icons {
+  flex: 0 0 auto;
+}
+
+.player-rail__icon {
+  background-color: var(--rh-hud-text-primary);
+  display: inline-block;
+  flex: 0 0 auto;
+  height: 18px;
+  mask-image: var(--player-rail-icon);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  width: 24px;
+  -webkit-mask-image: var(--player-rail-icon);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
+}
+
+.player-rail__icon.is-primary {
+  height: 24px;
+  width: 84px;
+}
+
+.player-rail__icon.is-secondary {
+  height: 18px;
+  width: 38px;
+}
+
+.player-rail__icon.is-zeus {
+  width: 20px;
+}
+
+.player-rail__utility-item {
+  align-items: center;
+  display: inline-flex;
+  gap: 1px;
+}
+
+.player-rail__utility-item .player-rail__icon {
+  height: 16px;
+  width: 19px;
+}
+
+.player-rail__utility-item b {
+  color: var(--rh-hud-text-muted);
+  font-size: 9px;
+}
+
+.player-rail__dead-stats {
+  gap: 13px;
+  padding: 0 10px;
+}
+
+.player-rail__dead-stats span,
+.player-rail__dead-stats .player-rail__kad {
+  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.player-rail__dead-stats span:not(.player-rail__kad) {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.player-rail__bottom {
+  gap: 10px;
+  justify-content: flex-end;
+  padding: 0 10px;
+}
+
+.player-rail__kad {
+  align-items: center;
+  display: flex;
+  gap: 8px;
+}
+
+.player-rail__kad span {
+  align-items: center;
+  display: flex;
+  font-size: 11px;
+  font-weight: 700;
+  gap: 2px;
+}
+
+.player-rail__kad.is-dead span {
+  font-size: 14px;
+}
+
+.player-rail__kad small {
+  font-size: 9px;
+}
+
+.player-rail__money,
+.player-rail__spent {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.player-rail__money.is-freeze-money {
+  font-size: 14px;
+  font-weight: 700;
+}
+
+.player-rail__spent {
+  font-weight: 700;
+}
+
+.player-rail__spent {
+  color: var(--rh-hud-text-muted);
+}
+
+.player-rail__empty-card {
+  border-style: dashed;
+  opacity: 0.35;
+}

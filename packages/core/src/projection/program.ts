@@ -21,6 +21,8 @@ import type {
 } from '../telemetry/index.js';
 import {
   getPlayerCompletedAdr,
+  getPlayerCurrentRoundDamage,
+  getPlayerCurrentRoundMoneySpent,
   getPlayerLiveAdr,
   getObjectiveClockLeaseMs,
   remainingFromObjectiveAnchor,
@@ -154,6 +156,9 @@ export interface ProgramPlayerProjection {
   readonly lifeState: PlayerLifeState;
   readonly liveAdr: number | null;
   readonly completedAdr: number | null;
+  readonly weaponsAvailable: boolean;
+  readonly currentRoundDamage: number | null;
+  readonly roundMoneySpent: number | null;
   readonly state: ProgramPlayerStateProjection | null;
   readonly matchStats: ProgramMatchStatsProjection | null;
   readonly weapons: readonly ProgramWeaponProjection[];
@@ -216,6 +221,10 @@ export interface ProgramProjection {
     readonly roundNumber: number | null;
     readonly score: { readonly ct: number | null; readonly t: number | null };
     readonly timeoutsRemaining: {
+      readonly ct: number | null;
+      readonly t: number | null;
+    };
+    readonly consecutiveRoundLosses: {
       readonly ct: number | null;
       readonly t: number | null;
     };
@@ -456,6 +465,13 @@ function projectPlayer(
     lifeState: player === null ? 'unknown' : derivePlayerLifeState(player.state?.health),
     liveAdr: getPlayerLiveAdr(playerStats, lineupPlayer.sourcePlayerId),
     completedAdr: getPlayerCompletedAdr(playerStats, lineupPlayer.sourcePlayerId),
+    weaponsAvailable: player !== null && player.weapons !== undefined,
+    currentRoundDamage: getPlayerCurrentRoundDamage(playerStats, lineupPlayer.sourcePlayerId),
+    roundMoneySpent: getPlayerCurrentRoundMoneySpent(
+      playerStats,
+      lineupPlayer.sourcePlayerId,
+      state?.money,
+    ),
     state,
     matchStats,
     weapons: [...(player?.weapons ?? [])]
@@ -634,6 +650,10 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
       timeoutsRemaining: {
         ct: nullable(map?.sides?.ct?.timeoutsRemaining),
         t: nullable(map?.sides?.t?.timeoutsRemaining),
+      },
+      consecutiveRoundLosses: {
+        ct: nullable(map?.sides?.ct?.consecutiveRoundLosses),
+        t: nullable(map?.sides?.t?.consecutiveRoundLosses),
       },
     },
     round:

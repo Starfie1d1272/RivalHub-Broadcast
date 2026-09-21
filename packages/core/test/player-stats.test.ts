@@ -3,6 +3,8 @@ import { describe, expect, it } from 'vitest';
 import {
   createInitialRuntimeState,
   getPlayerCompletedAdr,
+  getPlayerCurrentRoundDamage,
+  getPlayerCurrentRoundMoneySpent,
   getPlayerLiveAdr,
   reduceRuntime,
   type RuntimeState,
@@ -13,12 +15,12 @@ const POLICY = { staleAfterMs: 100 } as const;
 const PLAYER_A = '76561198000000001';
 const PLAYER_B = '76561198000000002';
 
-function player(sourcePlayerId: string, damage: number): ObservedPlayer {
+function player(sourcePlayerId: string, damage: number, money = 4_200): ObservedPlayer {
   return {
     sourcePlayerId,
     side: sourcePlayerId === PLAYER_A ? 'CT' : 'T',
     activity: 'playing',
-    state: { health: damage === 0 ? 0 : 100, roundTotalDamage: damage },
+    state: { health: damage === 0 ? 0 : 100, roundTotalDamage: damage, money },
   };
 }
 
@@ -28,9 +30,10 @@ function frame(
   phase: 'freezetime' | 'live' | 'over',
   roundNumber: number,
   damage = 0,
+  money = 4_200,
   allPlayersCoverage: 'present' | 'absent' | 'degraded' = 'present',
 ): TelemetryObservation {
-  const allPlayers = [player(PLAYER_A, damage), player(PLAYER_B, 0)];
+  const allPlayers = [player(PLAYER_A, damage, money), player(PLAYER_B, 0, 3_000)];
   return {
     receive: {
       sequence,
@@ -114,8 +117,29 @@ describe('map-scoped player stats accumulator', () => {
     state = accept(state, frame(2, 2, 'live', 1, 80)).state;
     state = accept(state, frame(3, 3, 'live', 1, 0)).state;
     expect(state.playerStats.currentRound?.damageBySteam64[PLAYER_A]).toBe(80);
+    expect(getPlayerCurrentRoundDamage(state.playerStats, PLAYER_A)).toBe(80);
     state = accept(state, frame(4, 4, 'over', 1, 0)).state;
     expect(state.playerStats.completedDamageBySteam64[PLAYER_A]).toBe(80);
+  });
+
+  it('freezes the first healthy freezetime money and exposes max damage until evidence is invalidated', () => {
+    let state = createInitialRuntimeState('stats-current-round-facts');
+    state = accept(state, frame(1, 1, 'freezetime', 1, 0, 4_200)).state;
+    state = accept(state, frame(2, 2, 'freezetime', 1, 0, 3_800)).state;
+    expect(state.playerStats.currentRound?.startMoneyBySteam64[PLAYER_A]).toBe(4_200);
+
+    state = accept(state, frame(3, 3, 'live', 1, 80, 3_700)).state;
+    expect(getPlayerCurrentRoundDamage(state.playerStats, PLAYER_A)).toBe(80);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_700)).toBe(500);
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 4_500)).toBe(0);
+
+    state = accept(state, frame(5, 5, 'live', 1, 0, 4_500)).state;
+    expect(getPlayerCurrentRoundDamage(state.playerStats, PLAYER_A)).toBeNull();
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 4_500)).toBeNull();
+
+    state = accept(state, frame(6, 6, 'freezetime', 2, 0, 3_500)).state;
+    state = accept(state, frame(7, 7, 'live', 2, 20, 3_400)).state;
+    expect(getPlayerCurrentRoundMoneySpent(state.playerStats, PLAYER_A, 3_400)).toBe(100);
   });
 
   it('finalizes when map.round advances at phase=over', () => {
@@ -147,7 +171,7 @@ describe('map-scoped player stats accumulator', () => {
     let state = createInitialRuntimeState('stats-evidence-gap');
     state = accept(state, frame(1, 1, 'freezetime', 1)).state;
     state = accept(state, frame(2, 2, 'live', 1, 40)).state;
-    state = accept(state, frame(3, 3, 'live', 1, 0, 'absent')).state;
+    state = accept(state, frame(3, 3, 'live', 1, 0, undefined, 'absent')).state;
     expect(state.playerStats.currentRound).toMatchObject({
       invalidated: true,
       eligible: false,

@@ -534,7 +534,11 @@ export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
       id,
       label: HUD_WIDGET_LABELS[id],
       rendererAvailability:
-        id === 'top-score-bar' || id === 'series-strip' || id === 'round-history'
+        id === 'top-score-bar' ||
+        id === 'team-ct-rail' ||
+        id === 'team-t-rail' ||
+        id === 'series-strip' ||
+        id === 'round-history'
           ? 'implemented'
           : 'unimplemented',
       supportedVariants: ['default'] as const,

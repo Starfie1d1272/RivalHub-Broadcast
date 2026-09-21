@@ -14,6 +14,7 @@ import {
 } from './hud-renderer-registry';
 import './gameplay-hud.css';
 import './widgets/match-header/match-header.css';
+import './widgets/player-rails/player-rails.css';
 
 export interface GameplayHudProps {
   readonly snapshot: ProgramSnapshot | null;
