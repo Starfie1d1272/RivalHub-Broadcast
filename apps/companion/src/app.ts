@@ -130,15 +130,17 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     currentRecorder().tryRecordObjectiveReference === undefined
       ? undefined
       : cstvSources.program.subscribeLiveGameEvents((observation) => {
-          if (!(
-            observation.kind === 'bomb-begin-plant' ||
-            observation.kind === 'bomb-abort-plant' ||
-            observation.kind === 'bomb-planted' ||
-            observation.kind === 'bomb-begin-defuse' ||
-            observation.kind === 'bomb-abort-defuse' ||
-            observation.kind === 'bomb-defused' ||
-            observation.kind === 'bomb-exploded'
-          ))
+          if (
+            !(
+              observation.kind === 'bomb-begin-plant' ||
+              observation.kind === 'bomb-abort-plant' ||
+              observation.kind === 'bomb-planted' ||
+              observation.kind === 'bomb-begin-defuse' ||
+              observation.kind === 'bomb-abort-defuse' ||
+              observation.kind === 'bomb-defused' ||
+              observation.kind === 'bomb-exploded'
+            )
+          )
             return;
           const objective = observation;
           const mapName = objective.cursor.mapName;
