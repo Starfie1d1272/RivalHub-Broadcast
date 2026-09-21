@@ -171,55 +171,52 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     finalFresh(finalRuntime);
   const checks = {
     productionChain: {
-      label: '第一场数据进入制播数据链路（production chain）',
+      label: '第一场数据进入制播数据链路',
       status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: productionChainPassed
-        ? 'Demo A 场景标记已绑定显式重置（reset）前同一地图执行（map execution）的已接受 Capture V1 数据帧（accepted frame）。'
-        : '缺少与 Demo A 场景标记对应、同一地图执行（map execution）和同一序列/时间戳（sequence/timestamp）的 Capture V1 数据帧。',
+        ? '第一场场景标记已绑定显式重置前同一地图执行中的已接收采集数据帧。'
+        : '缺少与第一场场景标记对应、属于同一地图执行且序列和时间戳一致的采集数据帧。',
     },
     realSilenceToStale: {
-      label: '停止输入后进入数据已过期状态（stale）',
+      label: '停止输入后进入数据已过期状态',
       status: stopPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: stopPassed
-        ? '本地制播服务未重启即观察到数据已过期状态（runtime-stale），并在下一场显式重置（reset）前记录了“已确认 CS2 退出”（cs2-closed）。'
-        : '等待 Demo A 后运行状态进入数据已过期状态（stale），并在下一场显式重置（reset）前确认“已确认 CS2 退出”（cs2-closed）。',
+        ? '本地制播服务未重启即观察到数据已过期，并在下一场显式重置前记录了“已确认 CS2 退出”。'
+        : '等待第一场数据后运行状态进入数据已过期，并在下一场显式重置前确认“已确认 CS2 退出”。',
     },
     explicitNextExecution: {
-      label: '下一场从显式新地图执行（map execution）开始',
+      label: '下一场从显式新地图执行开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? 'mapEpoch 已推进、producerInstanceId 保持一致，且上一场 Program telemetry 已清理。'
-        : '缺少成功的显式下一场重置（explicit next-execution reset）证据。',
+        ? '地图执行编号已推进、数据来源编号保持一致，且上一场正式节目数据已清理。'
+        : '缺少成功的显式“开始下一场”重置证据。',
     },
     demoBRecovery: {
       label: '第二场恢复且无上一场残留',
       status: demoBRecoveryPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: demoBRecoveryPassed
-        ? 'Demo B 场景标记已绑定显式重置（reset）后新地图执行（map execution）的已接受数据帧（accepted frame），并恢复为数据正常（fresh）。'
-        : '等待 CS2 重开、显式重置（reset）后新地图执行（map execution）的 Demo B 数据帧，以及最终运行状态恢复正常（fresh）。',
+        ? '第二场场景标记已绑定显式重置后新地图执行中的已接收数据帧，并恢复为数据正常。'
+        : '等待 CS2 重开、显式重置后的新地图执行数据帧，以及最终运行状态恢复正常。',
     },
     captureIntegrity: {
-      label: 'Capture V1 完整性',
+      label: '采集记录完整性',
       status: captureFailed ? 'FAIL' : captureResults.length > 0 ? 'PASS' : 'INCONCLUSIVE',
       reason: captureFailed
-        ? 'Capture V1 不完整、存在丢失数据帧（dropped frame）或完整性校验失败。'
+        ? '采集记录不完整、存在丢失数据帧或完整性校验失败。'
         : captureResults.length > 0
-          ? 'Capture V1 数据帧数量、hash 与 schema 校验通过。'
-          : '没有找到已发布的 Capture V1。',
+          ? '采集记录的数据帧数量、完整性摘要和结构校验通过。'
+          : '没有找到已完成的采集记录。',
     },
   };
   if (artifact === undefined) {
     checks.captureIntegrity.status = 'FAIL';
-    checks.captureIntegrity.reason = '缺少验收包身份信息（artifact identity）。';
+    checks.captureIntegrity.reason = '缺少验收包身份信息。';
   }
   if (
     Object.keys(checks).length !== QUALIFICATION_CHECK_KEYS.length ||
     QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
   ) {
-    throw new QualificationEvidenceError(
-      'INVALID_EVIDENCE',
-      'qualification check 实现与 evidence contract 不一致',
-    );
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收检查与证据契约不一致');
   }
   return checks;
 }

@@ -4,9 +4,9 @@
 function Get-ResultLabel {
     param([string]$Result)
     switch ($Result) {
-        'PASS' { return '通过（PASS）' }
-        'FAIL' { return '失败（FAIL）' }
-        default { return '证据不足（INCONCLUSIVE）' }
+        'PASS' { return '通过' }
+        'FAIL' { return '失败' }
+        default { return '证据不足' }
     }
 }
 
@@ -21,7 +21,7 @@ try {
     try {
         $finalRuntime = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/debug/runtime' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-runtime.json') -Value $finalRuntime
-    } catch { Write-Output '无法获取最终运行状态；报告会将受影响的检查标为证据不足（INCONCLUSIVE）。' }
+    } catch { Write-Output '无法获取最终运行状态；报告会将受影响的检查标为证据不足。' }
     try {
         $finalHealth = Invoke-RestMethod -Method GET -Uri 'http://127.0.0.1:3000/health' -TimeoutSec 3 -ErrorAction Stop
         Write-JsonFile -Path (Join-Path $runDir 'debug\final-health.json') -Value $finalHealth

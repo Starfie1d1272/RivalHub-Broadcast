@@ -1,4 +1,7 @@
-﻿. (Join-Path $PSScriptRoot 'common.ps1')
+﻿param([switch]$ObjectiveTiming)
+. (Join-Path $PSScriptRoot 'common.ps1')
+
+$qualificationProfile = if ($ObjectiveTiming) { 'objective-timing' } else { 'base' }
 
 $install = Read-InstallState
 Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$install.cfgPath)) -CanonicalCfgPath ([string]$install.cfgPath) | Out-Null
@@ -36,6 +39,7 @@ Write-JsonFile -Path (Join-Path $runDir 'environment.json') -Value ([ordered]@{
     runId = $runId
     windowsVersion = $windowsVersion
     cs2Version = $cs2Version
+    qualificationProfile = $qualificationProfile
     startedAt = (Get-Date).ToUniversalTime().ToString('o')
 })
 
@@ -59,8 +63,12 @@ $env:BROADCAST_COMMIT = [string]$artifact.gitSha
 $env:GSI_TOKEN = [string]$install.gsiToken
 $env:CAPTURE_DIR = (Join-Path $runDir 'recorder')
 $env:QUALIFICATION_MODE = 'true'
+$env:QUALIFICATION_PROFILE = $qualificationProfile
 $env:QUALIFICATION_CONTROL_TOKEN = $controlToken
 $env:QUALIFICATION_RUN_ID = $runId
+$env:QUALIFICATION_WINDOWS_VERSION = $windowsVersion
+$env:QUALIFICATION_CS2_VERSION = $cs2Version
+$env:QUALIFICATION_ARTIFACT_SHA256 = [string]$artifact.artifactSha256
 $env:QUALIFICATION_SCENARIO_PATH = (Join-Path $runDir 'scenario.jsonl')
 $env:QUALIFICATION_EVIDENCE_DIR = $runDir
 $env:QUALIFICATION_BUNDLE_ROOT = $script:BundleRoot

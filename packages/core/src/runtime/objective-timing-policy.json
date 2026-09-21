@@ -1,0 +1,4 @@
+{
+  "defaultLeaseMs": 1000,
+  "maxLeaseMs": 2000
+}

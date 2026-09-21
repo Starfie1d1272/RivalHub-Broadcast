@@ -77,8 +77,18 @@ export interface CompanionAppOptions {
   readonly hudConfigStore?: HudConfigStore;
   readonly qualificationRunId?: string;
   readonly qualificationScenarioPath?: string;
+  readonly qualificationProfile?: 'base' | 'objective-timing';
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
+  readonly objectiveReferenceSource?: {
+    readonly artifactId: string;
+    readonly artifactSha256: string;
+  };
+  readonly onQualificationRecorderRotate?: (current: CaptureRecorder) => Promise<{
+    readonly previousCaptureId: string;
+    readonly captureId: string;
+    readonly nextRecorder: CaptureRecorder;
+  }>;
   readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
   readonly webRoot?: string;
   readonly host?: string;
@@ -96,7 +106,8 @@ function projectionDiagnosticDegradesRuntime(code: string): boolean {
 }
 
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
-  const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
+  let recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
+  const currentRecorder = (): CaptureRecorder => recorder;
   const programRuntime =
     options.programRuntime ??
     createProgramRuntime(options.producerInstanceId ?? randomUUID(), {
@@ -113,6 +124,51 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const debugClock = options.debugClock ?? { nowMonotonicMs: () => performance.now() };
   const deliveryConsumers = options.deliveryConsumers ?? [];
   const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
+  const objectiveReferenceSource = options.objectiveReferenceSource;
+  const objectiveReferenceUnsubscribe =
+    objectiveReferenceSource === undefined ||
+    currentRecorder().tryRecordObjectiveReference === undefined
+      ? undefined
+      : cstvSources.program.subscribeLiveGameEvents((observation) => {
+          if (!(
+            observation.kind === 'bomb-begin-plant' ||
+            observation.kind === 'bomb-abort-plant' ||
+            observation.kind === 'bomb-planted' ||
+            observation.kind === 'bomb-begin-defuse' ||
+            observation.kind === 'bomb-abort-defuse' ||
+            observation.kind === 'bomb-defused' ||
+            observation.kind === 'bomb-exploded'
+          ))
+            return;
+          const objective = observation;
+          const mapName = objective.cursor.mapName;
+          const ticksPerSecond = objective.cursor.ticksPerSecond;
+          if (
+            typeof mapName !== 'string' ||
+            mapName.trim().length === 0 ||
+            typeof ticksPerSecond !== 'number' ||
+            !Number.isFinite(ticksPerSecond) ||
+            ticksPerSecond <= 0
+          )
+            return;
+          const referenceId = `cstv-${objective.cursor.role}-${objective.cursor.generation}-${objective.cursor.sequence}-${objective.kind}`;
+          currentRecorder().tryRecordObjectiveReference?.({
+            referenceId,
+            kind: objective.kind,
+            source: 'cstv',
+            occurredMonotonicMs: objective.cursor.observedMonotonicMs,
+            sourceCursor: {
+              ...objective.cursor,
+              mapName,
+              ticksPerSecond,
+            },
+            sourceArtifact: {
+              id: objectiveReferenceSource.artifactId,
+              sha256: objectiveReferenceSource.artifactSha256,
+            },
+            ...(objective.kind === 'bomb-begin-defuse' ? { hasKit: objective.hasKit } : {}),
+          });
+        });
   const projectionNowMonotonicMs =
     options.projectionNowMonotonicMs ??
     (() => {
@@ -204,7 +260,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {
-    const recorderHealth = recorder.getHealth();
+    const recorderHealth = currentRecorder().getHealth();
     const recorderDegraded =
       recorderHealth.state === 'degraded' || recorderHealth.state === 'failed';
     const cstvHealth = {
@@ -224,7 +280,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   app.get('/debug/runtime', () =>
     debugEvidenceStore.getResponse({
       nowMonotonicMs: debugClock.nowMonotonicMs(),
-      recorderHealth: recorder.getHealth(),
+      recorderHealth: currentRecorder().getHealth(),
       deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
       cstvSources: {
         program: cstvSources.program.getSnapshot(),
@@ -236,7 +292,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   if (options.gsiToken !== undefined) {
     registerGsiIngress(app, {
       gsiToken: options.gsiToken,
-      recorder,
+      recorder: currentRecorder,
       ...(options.gsiSequenceSource === undefined
         ? {}
         : { sequenceSource: options.gsiSequenceSource }),
@@ -266,7 +322,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   if (qualificationMode) {
     const controlToken = options.qualificationControlToken;
     if (controlToken === undefined || controlToken.trim().length === 0) {
-      throw new Error('启用 qualificationMode 时必须设置 qualificationControlToken');
+      throw new Error('启用现场验收模式时必须设置现场验收控制令牌。');
     }
     const runId = options.qualificationRunId ?? 'local-qualification';
     const evidence =
@@ -284,11 +340,12 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       controlToken,
       runId,
       evidence,
+      qualificationProfile: options.qualificationProfile ?? 'base',
       ...(options.qualificationClock === undefined ? {} : { clock: options.qualificationClock }),
       getDebugResponse: (nowMonotonicMs) =>
         debugEvidenceStore.getResponse({
           nowMonotonicMs,
-          recorderHealth: recorder.getHealth(),
+          recorderHealth: currentRecorder().getHealth(),
           deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
           cstvSources: {
             program: cstvSources.program.getSnapshot(),
@@ -296,7 +353,37 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
           },
         }),
       programRuntime,
-      recorder,
+      recorder: currentRecorder,
+      ...(options.onQualificationRecorderRotate === undefined
+        ? {}
+        : {
+            rotateRecorder: async () => {
+              const previous = currentRecorder();
+              const result = await options.onQualificationRecorderRotate?.(previous);
+              if (result === undefined) throw new Error('采集记录切换回调未配置。');
+              const at = options.qualificationClock?.now() ?? {
+                monotonicMs: performance.now(),
+                utc: new Date().toISOString(),
+              };
+              const generationAdvance = programRuntime.advanceProgramSourceGeneration(at);
+              if (
+                generationAdvance.disposition.kind !== 'accepted' ||
+                generationAdvance.disposition.reason !== 'source-generation-advanced'
+              ) {
+                await result.nextRecorder.finalize();
+                throw new Error('接收链路代际推进失败。');
+              }
+              projectionCoordinator.afterRuntimeMutation(generationAdvance);
+              programCueCoordinator.afterRuntimeMutation(generationAdvance);
+              debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
+              recorder = result.nextRecorder;
+              await previous.finalize();
+              return {
+                previousCaptureId: result.previousCaptureId,
+                captureId: result.captureId,
+              };
+            },
+          }),
       onAcceptedMapReset: () => {
         debugEvidenceStore.clearCurrentTelemetry();
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
@@ -316,6 +403,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   });
 
   app.addHook('onClose', async () => {
+    objectiveReferenceUnsubscribe?.();
     await Promise.all([
       cstvSources.program.stop(),
       cstvSources.lookahead.stop(),
@@ -325,7 +413,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     await programRuntime.close();
     await localWebTransport.close();
     await hudConfigStore.flush();
-    await recorder.finalize();
+    await currentRecorder().finalize();
   });
 
   return app;

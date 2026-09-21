@@ -70,6 +70,7 @@ async function createEvidenceRun({
   captureSecondObservation = true,
   programTelemetryCleared = true,
   observedMapChange = false,
+  qualificationProfile = 'base',
 } = {}) {
   const runDir = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-evidence-'));
   const runId = 'qualification-test-run';
@@ -88,6 +89,7 @@ async function createEvidenceRun({
       runId,
       windowsVersion: 'Windows 11 test',
       cs2Version: 'CS2 test',
+      qualificationProfile,
     })}\n`,
     'utf8',
   );
@@ -248,6 +250,33 @@ describe('qualification evidence verifier', () => {
     }
   });
 
+  it('uses the declared objective-timing profile for the machine result', async () => {
+    const run = await createEvidenceRun({ qualificationProfile: 'objective-timing' });
+    try {
+      const written = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+          qualificationProfile: 'objective-timing',
+        },
+      });
+      expect(written.qualification.profile).toBe('objective-timing');
+      expect(written.qualification.objectiveTiming.foundation.result).not.toBe('PASS');
+      expect(written.qualification.result).not.toBe('PASS');
+      const report = await readFile(join(run.runDir, 'REPORT.md'), 'utf8');
+      expect(report).toContain('- 现场验收类型：目标时钟专项验收');
+      expect(report).not.toContain('现场验收类型：`objective-timing`');
+      await expect(readQualificationEvidence(run.runDir)).resolves.toMatchObject({
+        qualification: { profile: 'objective-timing' },
+      });
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
+    }
+  });
+
   it('accepts Demo B after reset when Core observes a real map-name boundary', async () => {
     const run = await createEvidenceRun({ observedMapChange: true });
     try {
@@ -379,7 +408,7 @@ describe('qualification evidence verifier', () => {
   });
 
   it('rejects secret-bearing evidence fields', () => {
-    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('携带 secret');
+    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('不应公开的敏感值');
     expect(() => scanJsonForSecrets({ player: '76561198000000001' })).toThrow('Steam 身份');
   });
 });

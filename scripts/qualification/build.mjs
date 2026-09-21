@@ -317,6 +317,7 @@ async function main() {
       'common.ps1',
       'install-gsi.ps1',
       'start.ps1',
+      'rotate.ps1',
       'mark.ps1',
       'check.ps1',
       'stop.ps1',
@@ -331,6 +332,14 @@ async function main() {
     await cp(join(scriptDir, 'evidence'), join(stagingDir, 'scripts', 'evidence'), {
       recursive: true,
     });
+    await cp(
+      join(rootDir, 'packages', 'telemetry-gsi', 'src', 'production-config.json'),
+      join(stagingDir, 'scripts', 'evidence', 'production-gsi-config.json'),
+    );
+    await cp(
+      join(rootDir, 'packages', 'core', 'src', 'runtime', 'objective-timing-policy.json'),
+      join(stagingDir, 'scripts', 'evidence', 'objective-timing-policy.json'),
+    );
     await cp(
       join(scriptDir, 'supervisor.mjs'),
       join(stagingDir, 'scripts', 'qualification-supervisor.mjs'),

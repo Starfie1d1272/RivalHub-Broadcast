@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from 'node:crypto';
-import { mkdir } from 'node:fs/promises';
+import { appendFile, mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { performance } from 'node:perf_hooks';
 
@@ -12,6 +12,7 @@ import {
   writeFully,
   type CaptureFileHandle,
   type CaptureFrameInput,
+  type ObjectiveReferenceInput,
   type CaptureWriterFactory,
 } from './capture-storage.js';
 
@@ -21,6 +22,7 @@ export type {
   CaptureWriterFactory,
   ProductionCaptureFrameV1,
   ProductionCaptureManifestV1,
+  ObjectiveReferenceInput,
 } from './capture-storage.js';
 
 export const RECORDER_MAX_PENDING_FRAMES = 128;
@@ -62,8 +64,16 @@ export interface RecorderDiagnostic {
 export interface CaptureRecorder {
   readonly captureId: string;
   tryRecord(input: CaptureFrameInput): boolean;
+  tryRecordObjectiveReference?(input: ObjectiveReferenceInput): boolean;
+  captureElapsedUsAt?(monotonicMs: number): number | undefined;
   getHealth(): RecorderHealth;
   finalize(): Promise<void>;
+}
+
+export type CaptureRecorderSource = CaptureRecorder | (() => CaptureRecorder);
+
+export function resolveCaptureRecorder(source: CaptureRecorderSource): CaptureRecorder {
+  return typeof source === 'function' ? source() : source;
 }
 
 export interface CaptureRecorderOptions {
@@ -72,6 +82,10 @@ export interface CaptureRecorderOptions {
   readonly gsiConfig: Record<string, unknown>;
   readonly captureId?: string;
   readonly createdAt?: string;
+  readonly windowsVersion?: string;
+  readonly cs2Build?: string;
+  readonly artifactSha256?: string;
+  readonly qualificationRunId?: string;
   readonly monotonicNow?: () => number;
   readonly wallClockNow?: () => string;
   readonly writerFactory?: CaptureWriterFactory;
@@ -104,10 +118,17 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   private readonly createdAt: string;
   private readonly broadcastCommit: string;
   private readonly gsiConfig: Record<string, unknown>;
+  private readonly windowsVersion: string | undefined;
+  private readonly cs2Build: string | undefined;
+  private readonly artifactSha256: string | undefined;
+  private readonly qualificationRunId: string | undefined;
   private readonly startedMonotonicMs: number;
   private readonly writerFactory: CaptureWriterFactory;
   private readonly shutdownDrainTimeoutMs: number;
   private readonly onDiagnostic: ((diagnostic: RecorderDiagnostic) => void) | undefined;
+  private readonly objectiveReferencesPath: string;
+  private objectiveReferenceWriteChain: Promise<void> = Promise.resolve();
+  private objectiveReferenceWriteFailed = false;
   private readonly hash = createHash('sha256');
   private readonly queue: Buffer[] = [];
   private readonly emittedDiagnostics = new Set<RecorderErrorCode>();
@@ -135,7 +156,12 @@ class ProductionCaptureRecorder implements CaptureRecorder {
     this.partialDir = join(this.captureDir, `${this.captureId}.partial`);
     this.finalDir = join(this.captureDir, this.captureId);
     this.framesPath = join(this.partialDir, 'frames.jsonl');
+    this.objectiveReferencesPath = join(this.partialDir, 'objective-events.jsonl');
     this.broadcastCommit = options.broadcastCommit ?? 'unknown';
+    this.windowsVersion = options.windowsVersion;
+    this.cs2Build = options.cs2Build;
+    this.artifactSha256 = options.artifactSha256;
+    this.qualificationRunId = options.qualificationRunId;
     this.gsiConfig = { ...options.gsiConfig };
     delete this.gsiConfig.auth;
     delete this.gsiConfig.token;
@@ -204,6 +230,46 @@ class ProductionCaptureRecorder implements CaptureRecorder {
     this.pendingBytes += buffer.byteLength;
     this.ensurePump();
     return true;
+  }
+
+  tryRecordObjectiveReference(input: ObjectiveReferenceInput): boolean {
+    if (
+      this.lifecycle !== 'accepting' ||
+      this.writerState === 'failed' ||
+      this.objectiveReferenceWriteFailed
+    )
+      return false;
+    const occurredAtUs = this.captureElapsedUsAt(input.occurredMonotonicMs);
+    if (occurredAtUs === undefined) return false;
+    const reference = {
+      version: 2,
+      referenceId: input.referenceId,
+      kind: input.kind,
+      source: input.source,
+      captureId: this.captureId,
+      timebase: 'capture-elapsed-us',
+      occurredAtUs,
+      sourceCursor: input.sourceCursor,
+      sourceArtifact: input.sourceArtifact,
+      ...(input.hasKit === undefined ? {} : { hasKit: input.hasKit }),
+    };
+    const line = `${JSON.stringify(reference)}\n`;
+    this.objectiveReferenceWriteChain = this.objectiveReferenceWriteChain.then(async () => {
+      try {
+        await appendFile(this.objectiveReferencesPath, line, { encoding: 'utf8', mode: 0o600 });
+      } catch (error: unknown) {
+        this.objectiveReferenceWriteFailed = true;
+        this.markIncomplete();
+        this.recordError('recorder_writer_failed', 'write', error);
+      }
+    });
+    return true;
+  }
+
+  captureElapsedUsAt(monotonicMs: number): number | undefined {
+    const elapsedDelta = (monotonicMs - this.startedMonotonicMs) * 1000;
+    if (!Number.isFinite(elapsedDelta) || elapsedDelta < 0) return undefined;
+    return Math.min(Number.MAX_SAFE_INTEGER, Math.floor(elapsedDelta));
   }
 
   getHealth(): RecorderHealth {
@@ -400,6 +466,7 @@ class ProductionCaptureRecorder implements CaptureRecorder {
   private async finalizeInternal(): Promise<void> {
     if (this.lifecycle === 'closed') return;
     this.lifecycle = 'finalizing';
+    await this.objectiveReferenceWriteChain;
     if (this.fileHandle === undefined) {
       this.lifecycle = 'closed';
       return;
@@ -468,6 +535,15 @@ class ProductionCaptureRecorder implements CaptureRecorder {
       this.frameCount,
       this.droppedFrames,
       framesSha256,
+      {
+        ...(this.windowsVersion === undefined ? {} : { windowsVersion: this.windowsVersion }),
+        ...(this.cs2Build === undefined ? {} : { cs2Build: this.cs2Build }),
+        ...(this.artifactSha256 === undefined ? {} : { artifactSha256: this.artifactSha256 }),
+        ...(this.qualificationRunId === undefined
+          ? {}
+          : { qualificationRunId: this.qualificationRunId }),
+        monotonicOriginMs: this.startedMonotonicMs,
+      },
     );
 
     try {

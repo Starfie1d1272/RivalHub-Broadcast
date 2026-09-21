@@ -2,8 +2,9 @@
   "extends": "../../tsconfig.library.json",
   "compilerOptions": {
     "outDir": "dist",
-    "rootDir": "src"
+    "rootDir": "src",
+    "resolveJsonModule": true
   },
   "references": [{ "path": "../core" }],
-  "include": ["src"]
+  "include": ["src", "src/production-config.json"]
 }

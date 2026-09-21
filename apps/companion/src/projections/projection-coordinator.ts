@@ -16,7 +16,10 @@ import {
   type ProgramProjection,
 } from '@rivalhub-broadcast/core/projection';
 import type { OperatorCommand, SeriesSideProof } from '@rivalhub-broadcast/core/series-progress';
-import type { RuntimeReduceResult } from '@rivalhub-broadcast/core/runtime';
+import {
+  getObjectiveClockLeaseMs,
+  type RuntimeReduceResult,
+} from '@rivalhub-broadcast/core/runtime';
 import { assistSnapshotSchema, type AssistSnapshot } from '@rivalhub-broadcast/protocol/assist';
 import {
   operatorSnapshotSchema,
@@ -32,6 +35,7 @@ import {
   RADAR_SCHEMA_VERSION,
 } from '@rivalhub-broadcast/protocol/version';
 import { projectRadarFrame, type RadarFrame } from '@rivalhub-broadcast/radar';
+import { performance } from 'node:perf_hooks';
 
 import type { MatchContextBinding } from '../match-context/index.js';
 import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
@@ -79,7 +83,7 @@ export interface ProjectionScheduler {
   clearTimeout(handle: unknown): void;
 }
 
-const defaultNowMonotonicMs = (): number => globalThis.performance?.now() ?? Date.now();
+const defaultNowMonotonicMs = (): number => performance.now();
 const defaultScheduler: ProjectionScheduler = {
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
   clearTimeout: (handle) => clearTimeout(handle as NodeJS.Timeout),
@@ -289,7 +293,12 @@ export class ProjectionCoordinator {
       const assist = projectObserverAssist(runtimeView);
       this.current = { program, radar, operator, assist, identity };
       this.publish(program, radar, operator, assist);
-      this.scheduleStaleDeadline(runtimeView, nowMonotonicMs, runtimeSnapshot.continuityPolicy);
+      this.scheduleStaleDeadline(
+        runtimeView,
+        program,
+        nowMonotonicMs,
+        runtimeSnapshot.continuityPolicy,
+      );
       return this.current;
     } finally {
       this.refreshing = false;
@@ -506,6 +515,7 @@ export class ProjectionCoordinator {
 
   private scheduleStaleDeadline(
     runtimeView: ReturnType<typeof selectProgramSafeRuntimeView>,
+    program: ProgramProjection,
     nowMonotonicMs: number,
     policy: ReturnType<ProgramRuntime['getSnapshot']>['continuityPolicy'],
   ): void {
@@ -525,11 +535,24 @@ export class ProjectionCoordinator {
       sourceGeneration: runtimeView.cursor.programSourceGeneration,
       receiveSequence,
     } as const;
-    const deadline = lastAccepted.receivedMonotonicMs + policy.staleAfterMs;
-    if (sameStaleKey(this.stalePublishedKey, key) && nowMonotonicMs >= deadline) {
-      this.cancelStaleTimer();
-      return;
+    const staleDeadline = lastAccepted.receivedMonotonicMs + policy.staleAfterMs;
+    const actionRemainingSeconds = program.bomb?.action?.remainingSeconds ?? null;
+    const explosionRemainingSeconds = program.bomb?.explosion?.remainingSeconds ?? null;
+    const objectiveClockDeadline =
+      actionRemainingSeconds !== null || explosionRemainingSeconds !== null
+        ? lastAccepted.receivedMonotonicMs + getObjectiveClockLeaseMs(policy)
+        : undefined;
+    const staleAlreadyPublished = sameStaleKey(this.stalePublishedKey, key);
+    if (staleAlreadyPublished && nowMonotonicMs >= staleDeadline) {
+      if (objectiveClockDeadline === undefined || nowMonotonicMs >= objectiveClockDeadline) {
+        this.cancelStaleTimer();
+        return;
+      }
     }
+    const deadline =
+      staleAlreadyPublished && objectiveClockDeadline !== undefined
+        ? objectiveClockDeadline
+        : Math.min(staleDeadline, objectiveClockDeadline ?? staleDeadline);
     if (
       sameStaleKey(this.staleTimerKey, key) &&
       this.staleDeadline === deadline &&
@@ -574,17 +597,28 @@ export class ProjectionCoordinator {
             receiveSequence: currentReceiveSequence,
           };
     if (!sameStaleKey(currentKey, key)) {
-      this.scheduleStaleDeadline(
-        runtimeView,
-        this.nowMonotonicMs(),
-        runtimeSnapshot.continuityPolicy,
-      );
+      this.refresh();
       return;
     }
 
     const nowMonotonicMs = this.nowMonotonicMs();
     if (nowMonotonicMs <= deadline) {
       this.armStaleTimer(key, deadline, Math.max(1, deadline - nowMonotonicMs + 1));
+      return;
+    }
+
+    const lastAccepted = runtimeView.programSourceLastAccepted;
+    const actionRemainingSeconds = this.current.program.bomb?.action?.remainingSeconds ?? null;
+    const explosionRemainingSeconds =
+      this.current.program.bomb?.explosion?.remainingSeconds ?? null;
+    if (
+      lastAccepted !== null &&
+      (actionRemainingSeconds !== null || explosionRemainingSeconds !== null) &&
+      nowMonotonicMs >
+        lastAccepted.receivedMonotonicMs +
+          getObjectiveClockLeaseMs(runtimeSnapshot.continuityPolicy)
+    ) {
+      this.refresh();
       return;
     }
 

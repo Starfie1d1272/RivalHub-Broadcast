@@ -30,6 +30,12 @@ describe('RuntimeState reducer', () => {
       runtimeSeq: 0,
       programSource: { kind: 'cs2-gsi', generation: 0 },
       map: { epoch: 0 },
+      objectiveTiming: {
+        sourceGeneration: 0,
+        mapEpoch: 0,
+        lastAcceptedReceiveSequence: null,
+        explosionAnchor: null,
+      },
       playerStats: {
         mapEpoch: 0,
         countedCompletedRounds: 0,
@@ -204,6 +210,12 @@ describe('RuntimeState reducer', () => {
       runtimeSeq: 0,
       programSource: { kind: 'cs2-gsi', generation: 0 },
       map: { epoch: 0 },
+      objectiveTiming: {
+        sourceGeneration: 0,
+        mapEpoch: 0,
+        lastAcceptedReceiveSequence: null,
+        explosionAnchor: null,
+      },
       playerStats: {
         mapEpoch: 0,
         countedCompletedRounds: 0,

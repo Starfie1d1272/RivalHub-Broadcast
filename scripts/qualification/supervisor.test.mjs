@@ -29,9 +29,9 @@ function artifact() {
 
 describe('qualification supervisor finalization', () => {
   it.each([
-    ['PASS', '通过（PASS）'],
-    ['FAIL', '失败（FAIL）'],
-    ['INCONCLUSIVE', '证据不足（INCONCLUSIVE）'],
+    ['PASS', '通过'],
+    ['FAIL', '失败'],
+    ['INCONCLUSIVE', '证据不足'],
   ])('renders %s as %s on the completion page', (machineResult, visibleResult) => {
     const page = completionPage({
       result: machineResult,
@@ -83,13 +83,13 @@ describe('qualification supervisor finalization', () => {
       await expect(readQualificationEvidence(runDir)).resolves.toMatchObject({
         qualification: { result: 'INCONCLUSIVE' },
       });
+      const report = await readFile(join(runDir, 'REPORT.md'), 'utf8');
+      expect(report).toContain('# RivalHub Broadcast 现场验收报告');
+      expect(report).not.toMatch(/INCONCLUSIVE|fresh|production chain|Capture V1/);
       await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain(
-        '# RivalHub Broadcast 现场验收报告',
+        '- 运行状态：**正常**',
       );
-      await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain(
-        '- 运行状态：**正常（fresh）**',
-      );
-      await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain('INCONCLUSIVE');
+      await expect(readFile(join(runDir, 'REPORT.md'), 'utf8')).resolves.toContain('证据不足');
       await expect(readFile(join(runDir, 'hashes.txt'), 'utf8')).resolves.toContain('REPORT.md');
     } finally {
       await rm(runDir, { recursive: true, force: true });

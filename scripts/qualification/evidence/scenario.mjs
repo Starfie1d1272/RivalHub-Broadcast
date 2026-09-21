@@ -6,6 +6,7 @@ import {
   QUALIFICATION_FRESHNESS_VALUES,
   QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
+  QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS,
   QUALIFICATION_MARKER_PHASES,
   QUALIFICATION_RESET_DISPOSITIONS,
   QUALIFICATION_RESET_EVIDENCE_FIELDS,
@@ -18,7 +19,7 @@ export function validateObservation(observation, marker, lineNumber) {
   if (!isRecord(observation)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 accepted observation 无效`,
+      `场景记录第 ${lineNumber} 行的已接收观测无效`,
     );
   }
   if (
@@ -27,14 +28,11 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 observation 时间无效`,
+      `场景记录第 ${lineNumber} 行的观测时间无效`,
     );
   }
-  assertUtc(observation.receivedAt, `scenario 第 ${lineNumber} 行的 observation.receivedAt`);
-  requireString(
-    observation.producerInstanceId,
-    `scenario 第 ${lineNumber} 行的 observation.producerInstanceId`,
-  );
+  assertUtc(observation.receivedAt, `场景记录第 ${lineNumber} 行的观测接收时间`);
+  requireString(observation.producerInstanceId, `场景记录第 ${lineNumber} 行的观测来源编号`);
   if (
     !isSafeNonNegativeInteger(observation.mapEpoch) ||
     !isSafeNonNegativeInteger(observation.runtimeSeq) ||
@@ -43,7 +41,7 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 observation 计数器无效`,
+      `场景记录第 ${lineNumber} 行的观测计数器无效`,
     );
   }
   if (
@@ -56,7 +54,7 @@ export function validateObservation(observation, marker, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 observation 与 marker 不匹配`,
+      `场景记录第 ${lineNumber} 行的观测与场景标记不匹配`,
     );
   }
 }
@@ -65,23 +63,23 @@ export function validateMarker(marker, runId, lineNumber) {
   if (!isRecord(marker) || marker.schemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 schema 不受支持`,
+      `场景记录第 ${lineNumber} 行的格式版本不受支持`,
     );
   }
   if (marker.runId !== runId || !QUALIFICATION_MARKER_KINDS.has(marker.kind)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 run 或 marker 无效`,
+      `场景记录第 ${lineNumber} 行的验收轮次或场景标记无效`,
     );
   }
   if (!Number.isFinite(marker.monotonicMs)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 runtime evidence 无效`,
+      `场景记录第 ${lineNumber} 行的运行证据无效`,
     );
   }
-  requireString(marker.producerInstanceId, `scenario 第 ${lineNumber} 行的 producerInstanceId`);
-  assertUtc(marker.wallClockAt, `scenario 第 ${lineNumber} 行的 wallClockAt`);
+  requireString(marker.producerInstanceId, `场景记录第 ${lineNumber} 行的数据来源编号`);
+  assertUtc(marker.wallClockAt, `场景记录第 ${lineNumber} 行的墙上时间`);
   if (
     !isSafeNonNegativeInteger(marker.mapEpoch) ||
     !isSafeNonNegativeInteger(marker.runtimeSeq) ||
@@ -89,20 +87,33 @@ export function validateMarker(marker, runId, lineNumber) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的计数器无效`,
+      `场景记录第 ${lineNumber} 行的计数器无效`,
     );
   }
   if (!QUALIFICATION_FRESHNESS_VALUES.has(marker.freshness)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 freshness 无效`,
+      `场景记录第 ${lineNumber} 行的数据新鲜度无效`,
     );
   }
   if (marker.phase !== undefined && !QUALIFICATION_MARKER_PHASES.has(marker.phase)) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行的 phase 无效`,
+      `场景记录第 ${lineNumber} 行的阶段无效`,
     );
+  }
+  if (QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.has(marker.kind)) {
+    if (
+      (marker.phase !== 'before' && marker.phase !== 'after') ||
+      typeof marker.captureId !== 'string' ||
+      marker.captureId.length === 0 ||
+      !isSafeNonNegativeInteger(marker.captureElapsedUs)
+    ) {
+      throw new QualificationEvidenceError(
+        'INVALID_SCENARIO',
+        `场景记录第 ${lineNumber} 行的目标时钟采集窗口无效`,
+      );
+    }
   }
   if (marker.reset !== undefined) {
     if (
@@ -119,21 +130,21 @@ export function validateMarker(marker, runId, lineNumber) {
     ) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `scenario 第 ${lineNumber} 行的 reset evidence 无效`,
+        `场景记录第 ${lineNumber} 行的重置证据无效`,
       );
     }
   }
   if (!Object.prototype.hasOwnProperty.call(marker, 'observation')) {
     throw new QualificationEvidenceError(
       'INVALID_SCENARIO',
-      `scenario 第 ${lineNumber} 行缺少 accepted observation evidence`,
+      `场景记录第 ${lineNumber} 行缺少已接收观测证据`,
     );
   }
   if (marker.observation === null) {
     if (QUALIFICATION_LIVE_MARKER_KINDS.has(marker.kind)) {
       throw new QualificationEvidenceError(
         'INVALID_SCENARIO',
-        `scenario 第 ${lineNumber} 行的 live marker 缺少 accepted observation`,
+        `场景记录第 ${lineNumber} 行的实时场景标记缺少已接收观测`,
       );
     }
   } else {
@@ -180,10 +191,7 @@ export async function readScenario(runDir) {
     }
     const marker = validateMarker(raw, runId, index + 1);
     if (previousMonotonicMs !== undefined && marker.monotonicMs < previousMonotonicMs) {
-      throw new QualificationEvidenceError(
-        'INVALID_SCENARIO',
-        `${path} 的 monotonic 时间戳未按顺序排列`,
-      );
+      throw new QualificationEvidenceError('INVALID_SCENARIO', `${path} 的单调时间戳未按顺序排列`);
     }
     previousMonotonicMs = marker.monotonicMs;
     markers.push(marker);
@@ -196,6 +204,10 @@ export function liveObservationReferences(markers) {
     .filter((marker) => QUALIFICATION_LIVE_MARKER_KINDS.has(marker.kind))
     .map((marker) => marker.observation)
     .filter((observation) => observation !== null);
+}
+
+export function captureObservationReferences(markers) {
+  return markers.map((marker) => marker.observation).filter((observation) => observation !== null);
 }
 
 export function markerIndex(markers, kind, start = 0) {

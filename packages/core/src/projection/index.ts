@@ -20,6 +20,8 @@ export type {
 export type { ObserverAssistProjection } from './observer-assist.js';
 export type {
   ProgramBombProjection,
+  ProgramBombActionProjection,
+  ProgramObjectiveClockProjection,
   ProgramMatchStatsProjection,
   ProgramPlayerProjection,
   ProgramPlayerStateProjection,

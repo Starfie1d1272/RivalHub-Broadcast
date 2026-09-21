@@ -107,9 +107,17 @@ describe('Program presentation foundation', () => {
     expect(getProgramFixture('bomb-planted')?.payload.bomb).toEqual({
       state: 'planted',
       sourcePlayerId: null,
-      countdownSeconds: 28,
+      explosion: { remainingSeconds: 28, durationSeconds: null },
+      action: null,
     });
     expect(getProgramFixture('bomb-defusing')?.payload.clock?.phase).toBe('defuse');
+    expect(getProgramFixture('bomb-defusing')?.payload.bomb?.action).toEqual({
+      kind: 'defuse',
+      sourcePlayerId: 'fixture-player-ct-2',
+      remainingSeconds: 4,
+      durationSeconds: 10,
+      hasDefuseKit: false,
+    });
     expect(getProgramFixture('timeout-ct')?.payload.clock?.phase).toBe('timeout_ct');
 
     const stress = getProgramFixture('stress-long-labels');

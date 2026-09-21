@@ -2,7 +2,13 @@ import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
 import { CaptureFormatError } from './errors.js';
-import type { CaptureManifestV1, CaptureSelection, GoldCaptureProvenanceV1 } from './types.js';
+import type {
+  CaptureClockV1,
+  CaptureManifestV1,
+  CaptureSelection,
+  CaptureProvenanceV1,
+  ProductionCaptureProvenanceV1,
+} from './types.js';
 
 const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 const RFC3339_UTC_PATTERN = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,9})?Z$/;
@@ -63,12 +69,44 @@ function validateSelection(raw: unknown, path: string): CaptureSelection {
   };
 }
 
-function validateProvenance(raw: unknown): GoldCaptureProvenanceV1 {
+function validateProductionProvenance(raw: Record<string, unknown>): ProductionCaptureProvenanceV1 {
+  if (
+    raw.kind !== 'production-recorder' ||
+    raw.recorderVersion !== 1 ||
+    typeof raw.captureId !== 'string' ||
+    typeof raw.artifactGitSha !== 'string' ||
+    (raw.artifactSha256 !== null &&
+      (typeof raw.artifactSha256 !== 'string' || !SHA256_PATTERN.test(raw.artifactSha256))) ||
+    (raw.qualificationRunId !== null && typeof raw.qualificationRunId !== 'string') ||
+    typeof raw.framesSha256 !== 'string' ||
+    !SHA256_PATTERN.test(raw.framesSha256)
+  ) {
+    throw new CaptureFormatError(
+      'INVALID_PROVENANCE',
+      'production recorder provenance is invalid',
+      {
+        path: 'manifest.provenance',
+      },
+    );
+  }
+  return {
+    kind: 'production-recorder',
+    recorderVersion: 1,
+    captureId: raw.captureId,
+    artifactGitSha: raw.artifactGitSha,
+    artifactSha256: raw.artifactSha256,
+    qualificationRunId: raw.qualificationRunId,
+    framesSha256: raw.framesSha256,
+  };
+}
+
+function validateProvenance(raw: unknown): CaptureProvenanceV1 {
   if (!isRecord(raw)) {
     throw new CaptureFormatError('INVALID_PROVENANCE', 'manifest.provenance must be an object', {
       path: 'manifest.provenance',
     });
   }
+  if (raw.kind === 'production-recorder') return validateProductionProvenance(raw);
   if (raw.fixtureKind !== 'sanitized-real-capture' || raw.sanitizerVersion !== 1) {
     throw new CaptureFormatError('INVALID_PROVENANCE', 'manifest.provenance version is invalid', {
       path: 'manifest.provenance',
@@ -101,6 +139,27 @@ function validateProvenance(raw: unknown): GoldCaptureProvenanceV1 {
     ),
     sanitizerVersion: 1,
     lifecycleCoverage: raw.lifecycleCoverage,
+  };
+}
+
+function validateClock(raw: unknown): CaptureClockV1 {
+  if (
+    !isRecord(raw) ||
+    raw.kind !== 'node-performance' ||
+    raw.origin !== 'capture-start' ||
+    raw.elapsedUnit !== 'microseconds' ||
+    typeof raw.originMonotonicMs !== 'number' ||
+    !Number.isFinite(raw.originMonotonicMs)
+  ) {
+    throw new CaptureFormatError('INVALID_MANIFEST', 'clock is invalid', {
+      path: 'manifest.clock',
+    });
+  }
+  return {
+    kind: 'node-performance',
+    origin: 'capture-start',
+    elapsedUnit: 'microseconds',
+    originMonotonicMs: raw.originMonotonicMs,
   };
 }
 
@@ -176,6 +235,7 @@ function parseManifest(raw: unknown): CaptureManifestV1 {
       path: 'manifest.complete',
     });
   }
+  const clock = raw.clock === undefined ? undefined : validateClock(raw.clock);
 
   const manifest: CaptureManifestV1 = {
     formatVersion: 1,
@@ -188,6 +248,7 @@ function parseManifest(raw: unknown): CaptureManifestV1 {
     scenario: requiredString(raw, 'scenario'),
     ...(notes === undefined ? {} : { notes }),
     gsiConfig,
+    ...(clock === undefined ? {} : { clock }),
     complete: raw.complete,
     frameCount,
     droppedFrames,

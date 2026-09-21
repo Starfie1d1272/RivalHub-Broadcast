@@ -29,15 +29,16 @@ function loadQualificationContract() {
       lastError = error;
     }
   }
-  throw new Error(`缺少 qualification contract：${String(lastError)}`);
+  throw new Error(`缺少现场验收契约：${String(lastError)}`);
 }
 
 function validateQualificationContract(contract) {
   if (!isRecord(contract) || !Number.isSafeInteger(contract.schemaVersion)) {
-    throw new Error('qualification contract 的 schemaVersion 无效');
+    throw new Error('现场验收契约的版本号无效');
   }
   for (const key of [
     'markerKinds',
+    'objectiveScenarioMarkerKinds',
     'liveMarkerKinds',
     'markerPhases',
     'freshnessValues',
@@ -51,7 +52,7 @@ function validateQualificationContract(contract) {
       contract[key].length === 0 ||
       contract[key].some((value) => typeof value !== 'string' || value.length === 0)
     ) {
-      throw new Error(`qualification contract 的 ${key} 无效`);
+      throw new Error(`现场验收契约的 ${key} 无效`);
     }
   }
   if (
@@ -61,7 +62,7 @@ function validateQualificationContract(contract) {
     typeof contract.resetKind !== 'string' ||
     typeof contract.resetReason !== 'string'
   ) {
-    throw new Error('qualification contract 的标量值无效');
+    throw new Error('现场验收契约的标量值无效');
   }
   return contract;
 }
@@ -70,6 +71,9 @@ export const QUALIFICATION_CONTRACT = validateQualificationContract(loadQualific
 export const QUALIFICATION_SCHEMA_VERSION = QUALIFICATION_CONTRACT.schemaVersion;
 export const QUALIFICATION_REPOSITORY = 'Starfie1d1272/RivalHub-Broadcast';
 export const QUALIFICATION_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.markerKinds);
+export const QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS = new Set(
+  QUALIFICATION_CONTRACT.objectiveScenarioMarkerKinds,
+);
 export const QUALIFICATION_LIVE_MARKER_KINDS = new Set(QUALIFICATION_CONTRACT.liveMarkerKinds);
 export const QUALIFICATION_FRESHNESS_VALUES = new Set(QUALIFICATION_CONTRACT.freshnessValues);
 export const QUALIFICATION_RESULT_VALUES = new Set(QUALIFICATION_CONTRACT.resultValues);

@@ -44,6 +44,34 @@ function observation(): TelemetryObservation {
   };
 }
 
+function objectiveObservation(
+  sequence: number,
+  receivedMonotonicMs: number,
+  state: 'planted' | 'defusing',
+  countdownSeconds: number,
+): TelemetryObservation {
+  const base = observation();
+  return {
+    ...base,
+    receive: {
+      ...base.receive,
+      sequence,
+      receivedAt: new Date(Date.parse(base.receive.receivedAt) + receivedMonotonicMs).toISOString(),
+      receivedMonotonicMs,
+    },
+    coverage: {
+      ...base.coverage,
+      round: 'present',
+      bomb: 'present',
+    },
+    telemetry: {
+      ...base.telemetry,
+      round: { phase: 'live' },
+      bomb: { state, countdownSeconds },
+    },
+  };
+}
+
 async function readManifest(): Promise<BroadcastManifestV1> {
   return JSON.parse(
     await readFile(
@@ -315,6 +343,42 @@ describe('ProjectionCoordinator', () => {
     expect(scheduler.pendingCount()).toBe(1);
 
     await subscription.close();
+    await coordinator.close();
+    expect(scheduler.pendingCount()).toBe(0);
+  });
+
+  it('expires objective numeric clocks on the existing stale timer without marking telemetry stale', async () => {
+    let now = 0;
+    const scheduler = new ManualProjectionScheduler();
+    const runtime = createProgramRuntime('coordinator-objective-clock', {
+      continuityPolicy: { staleAfterMs: 20_000 },
+    });
+    const coordinator = createProjectionCoordinator({
+      programRuntime: runtime,
+      cstvSources: createCstvSourceManagers({}),
+      nowMonotonicMs: () => now,
+      scheduler,
+    });
+
+    coordinator.afterRuntimeMutation(
+      runtime.acceptObservation(objectiveObservation(1, 0, 'planted', 30)),
+    );
+    expect(coordinator.getCurrent().program.bomb?.explosion?.remainingSeconds).toBe(30);
+    expect(scheduler.delays).toEqual([1_000]);
+
+    now = 1_001;
+    scheduler.runNext();
+    expect(coordinator.getCurrent().program.status.telemetry).toBe('fresh');
+    expect(coordinator.getCurrent().program.bomb?.explosion?.remainingSeconds).toBeNull();
+    expect(scheduler.pendingCount()).toBe(1);
+
+    now = 1_002;
+    coordinator.afterRuntimeMutation(
+      runtime.acceptObservation(objectiveObservation(2, now, 'planted', 29)),
+    );
+    expect(coordinator.getCurrent().program.bomb?.explosion?.remainingSeconds).toBe(29);
+    expect(scheduler.delays.at(-1)).toBe(1_000);
+
     await coordinator.close();
     expect(scheduler.pendingCount()).toBe(0);
   });

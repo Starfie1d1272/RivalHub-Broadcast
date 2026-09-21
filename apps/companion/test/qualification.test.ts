@@ -18,9 +18,13 @@ const GSI_TOKEN = 'qualification-gsi-token';
 const CONTROL_TOKEN = 'qualification-control-token';
 
 class FakeRecorder implements CaptureRecorder {
-  readonly captureId = 'qualification-test-capture';
+  readonly captureId: string;
   readonly inputs: CaptureFrameInput[] = [];
   private closed = false;
+
+  constructor(captureId = 'qualification-test-capture') {
+    this.captureId = captureId;
+  }
 
   tryRecord(input: CaptureFrameInput): boolean {
     this.inputs.push(input);
@@ -46,10 +50,25 @@ class FakeRecorder implements CaptureRecorder {
   }
 }
 
+class ClockedFakeRecorder extends FakeRecorder {
+  captureElapsedUsAt(monotonicMs: number): number {
+    return monotonicMs * 1_000;
+  }
+}
+
 function payload(mapName = 'de_ancient'): Record<string, unknown> {
   return {
     map: { name: mapName, phase: 'live' },
     round: { phase: 'freezetime' },
+  };
+}
+
+function plantedPayload(mapName = 'de_ancient'): Record<string, unknown> {
+  return {
+    ...payload(mapName),
+    bomb: { state: 'planted', countdown: '30' },
+    phase_countdowns: { phase: 'bomb', phase_ends_in: '30' },
+    round: { phase: 'live', bomb: 'planted' },
   };
 }
 
@@ -111,6 +130,218 @@ describe('qualification-only Companion surface', () => {
         })
       ).statusCode,
     ).toBe(409);
+  });
+
+  it('requires explicit objective scenario phases and a recorder-bound capture clock', async () => {
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-objective-run',
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+    const missingPhase = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-plant-abort' },
+    });
+    expect(missingPhase.statusCode).toBe(400);
+    expect(missingPhase.json()).toMatchObject({ error: 'invalid_objective_scenario_phase' });
+
+    const missingClock = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-plant-abort', phase: 'before' },
+    });
+    expect(missingClock.statusCode).toBe(409);
+    expect(missingClock.json()).toMatchObject({ error: 'objective_scenario_capture_unavailable' });
+  });
+
+  it('keeps objective timing live status separate from the base Demo A/B result', async () => {
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new ClockedFakeRecorder(),
+      qualificationMode: true,
+      qualificationProfile: 'objective-timing',
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-objective-profile-run',
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    const status = await app.inject({
+      method: 'GET',
+      url: '/qualification/status',
+      headers,
+    });
+    expect(status.json()).toMatchObject({
+      profile: 'objective-timing',
+      result: 'INCONCLUSIVE',
+      objectiveScenarioProgress: { required: 8, completed: 0, complete: false },
+    });
+
+    const page = await app.inject({ method: 'GET', url: '/qualification' });
+    expect(page.body).toContain('目标时钟专项验收');
+    expect(page.body).toContain('const qualificationProfile = "objective-timing"');
+  });
+
+  it('rotates Capture V1 identity inside one qualification run for reconnect evidence', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-rotation-'));
+    const first = new ClockedFakeRecorder('capture-a');
+    const second = new ClockedFakeRecorder('capture-b');
+    let monotonicMs = 100;
+    let sequence = 0;
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: first,
+      gsiSequenceSource: () => sequence++,
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-rotation-run',
+      qualificationScenarioPath: join(temporaryDirectory, 'scenario.jsonl'),
+      onQualificationRecorderRotate: (current) => {
+        expect(current).toBe(first);
+        return Promise.resolve({
+          previousCaptureId: current.captureId,
+          captureId: second.captureId,
+          nextRecorder: second,
+        });
+      },
+      qualificationClock: {
+        now: () => ({
+          monotonicMs,
+          utc: `2026-09-21T00:00:00.${String(monotonicMs).padStart(3, '0')}Z`,
+        }),
+      },
+      clock: {
+        now: () => ({
+          receivedAt: `2026-09-21T00:00:00.${String(monotonicMs).padStart(3, '0')}Z`,
+          receivedMonotonicMs: monotonicMs,
+        }),
+      },
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    for (const now of [100, 110, 120]) {
+      monotonicMs = now;
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/gsi',
+            payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
+          })
+        ).statusCode,
+      ).toBe(204);
+    }
+
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'objective-reconnect-restart', phase: 'before' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/recorder/rotate',
+          headers,
+        })
+      ).json(),
+    ).toMatchObject({
+      ok: true,
+      previousCaptureId: 'capture-a',
+      captureId: 'capture-b',
+    });
+    expect(first.getHealth().state).toBe('closed');
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/qualification/status',
+          headers,
+        })
+      ).json(),
+    ).toMatchObject({ sourceGeneration: 1, freshness: 'awaiting' });
+    const missingRecoveryObservation = await app.inject({
+      method: 'POST',
+      url: '/qualification/marker',
+      headers,
+      payload: { kind: 'objective-reconnect-restart', phase: 'after' },
+    });
+    expect(missingRecoveryObservation.statusCode).toBe(409);
+    expect(missingRecoveryObservation.json()).toMatchObject({
+      error: 'objective_recovery_observation_required',
+    });
+    monotonicMs = 200;
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/gsi',
+          payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
+        })
+      ).statusCode,
+    ).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/debug/runtime' })).json()).toMatchObject({
+      sourceGeneration: 1,
+      freshness: 'fresh',
+      runtime: {
+        lastDisposition: { kind: 'accepted', reason: 'contiguous' },
+      },
+    });
+    expect(second.inputs.map((input) => input.sequence)).toEqual([3]);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'objective-reconnect-restart', phase: 'after' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const markers = (await readFile(join(temporaryDirectory, 'scenario.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            captureId: string;
+            phase: string;
+            sourceGeneration: number;
+            observation: { sourceGeneration: number };
+          },
+      );
+    expect(
+      markers.map(({ captureId, phase, sourceGeneration, observation }) => ({
+        captureId,
+        phase,
+        sourceGeneration,
+        observationSourceGeneration: observation.sourceGeneration,
+      })),
+    ).toEqual([
+      {
+        captureId: 'capture-a',
+        phase: 'before',
+        sourceGeneration: 0,
+        observationSourceGeneration: 0,
+      },
+      {
+        captureId: 'capture-b',
+        phase: 'after',
+        sourceGeneration: 1,
+        observationSourceGeneration: 1,
+      },
+    ]);
   });
 
   it('hands the final runtime snapshot to the qualification launcher before shutdown', async () => {
@@ -250,7 +481,7 @@ describe('qualification-only Companion surface', () => {
     expect(page).toContain('<title>现场验收 · RivalHub Broadcast</title>');
     expect(page).toContain('data-action="cs2-closed">我已退出 CS2</button>');
     expect(page).toContain(
-      "byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
+      "byId('confirm-stop').disabled = objectiveMode || !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
     );
     const script = page.match(/<script>([\s\S]*)<\/script>/)?.[1];
     expect(script).toBeDefined();

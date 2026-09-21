@@ -62,12 +62,16 @@ async function assertBundleSmoke(outputRoot) {
     'scripts/common.ps1',
     'scripts/install-gsi.ps1',
     'scripts/start.ps1',
+    'scripts/rotate.ps1',
     'scripts/mark.ps1',
     'scripts/check.ps1',
     'scripts/stop.ps1',
     'scripts/verify-evidence.mjs',
     'scripts/evidence/contract.mjs',
     'scripts/evidence/capture.mjs',
+    'scripts/evidence/objective-timing.mjs',
+    'scripts/evidence/production-gsi-config.json',
+    'scripts/evidence/objective-timing-policy.json',
     'scripts/evidence/scenario.mjs',
     'scripts/evidence/checks.mjs',
     'scripts/evidence/integrity.mjs',
@@ -138,7 +142,8 @@ async function assertBundleSmoke(outputRoot) {
     readme.includes('stopdemo') ||
     readme.includes('This bundle') ||
     !readme.includes('快速开始') ||
-    !readme.includes('quit')
+    !readme.includes('quit') ||
+    !readme.includes('rotate.ps1')
   )
     throw new Error('qualification 启动脚本不满足可移植性检查');
 }

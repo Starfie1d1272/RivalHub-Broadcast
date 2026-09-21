@@ -180,19 +180,11 @@ Companion → Program 的短生命周期 transient cue。两类消息共享 WebS
 
 ### 4.1 版本
 
-当前常量：
+当前精确版本的唯一代码来源是 `packages/protocol/src/version.ts`；本文不复制各 channel 的
+数字常量，避免 schema 演进后文档形成第二份版本真相。Local Protocol 版本与各 channel
+schema 版本独立。单个 channel payload 演进时，不要求其它 channel 或 WebSocket 子协议同步升级。
 
-```text
-localProtocolVersion = 1
-programSchemaVersion  = 5
-radarSchemaVersion    = 1
-operatorSchemaVersion = 3
-assistSchemaVersion   = 1
-programCueSchemaVersion = 1
-subprotocol = rivalhub-broadcast.local.v1
-```
-
-Local Protocol 版本与各 channel schema 版本独立。单个 channel payload 演进时，不要求其它 channel 或 WebSocket 子协议同步升级。
+当前 Local Protocol 子协议仍为 `rivalhub-broadcast.local.v1`，路由前缀见下节。
 
 ### 4.2 路由
 
@@ -309,23 +301,46 @@ CSTV source sequence 和 local `channelSeq` 分别属于 source continuity、sou
 delivery ordering，不能互换；cue 不携带 GSI `programSourceGeneration`、`runtimeSeq` 或
 `programReceiveSequence`。
 
-### 4.4 Program schema v5
+### 4.4 Program payload
 
 Program payload 只包含正式节目允许显示的信息：
 
 - telemetry / context / identity 状态；
 - 比赛、赛事和 BO 信息；
 - canonical 或 neutral team presentation；
-- 地图、比分、回合与时钟；
+- 地图、比分、回合与时钟；其中 `clock` 只表达 `phase_countdowns` 的 phase clock，不表达永久保留的爆炸倒计时；
 - Core 解析后的稳定 5+5 on-air player cohort；raw `allplayers` 中未进入 cohort 的 extra 不进入 Player Rails；
 - 选手显示身份和装备状态；
 - `identityEvidence: canonical | observed | unresolved`，表达 canonical identity 是否已核验；
 - `lineupEvidence: current | retained`，表达当前 entry 是否来自本帧或稳定 baseline；`retained` 不等于已确认掉线；
 - `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
 - `completedAdr`，只按已完成 counted rounds 的 damage / rounds 计算；在当前回合进行中保持稳定，尚无 counted round 时为 `null`；
-- `lifeState: alive | dead | unknown`；
-- C4；
+- ``lifeState: alive | dead | unknown``；
+- C4 的状态、爆炸时钟和当前 plant/defuse action；爆炸时钟只来自 Core 保留的 planted countdown anchor，defusing frame 的 overloaded countdown 不会覆盖它；
 - 数据覆盖状态。
+
+Program 的 `bomb` 结构为：
+
+```ts
+{
+  state: BombState | null,
+  sourcePlayerId: string | null,
+  explosion: { remainingSeconds: number | null, durationSeconds: null } | null,
+  action:
+    | { kind: "plant", sourcePlayerId: string | null,
+        remainingSeconds: number | null, durationSeconds: null }
+    | { kind: "defuse", sourcePlayerId: string | null,
+        remainingSeconds: number | null, durationSeconds: number | null,
+        hasDefuseKit: boolean | null }
+    | null
+}
+```
+
+`planting` 的 action duration 保持 `null`；`defusing` 只有当前 player evidence 明确提供
+`hasDefuser` 时才给出 5 秒或 10 秒 duration，不能用默认值猜测。没有已知 planted anchor
+时，defusing 不合成爆炸倒计时。numeric objective clock 只在短 lease 内由 Core 使用
+monotonic time 插值；lease 过期后保留语义状态但将 numeric remaining 置为 `null`。Renderer
+可以在收到的当前值之间做视觉插值，但不能在本地 retention、reconnect 或 stale 后继续推演。
 
 Program 不包含：
 
@@ -334,10 +349,11 @@ Program 不包含：
 - 地图几何；
 - identity issue 细节；
 - Raw GSI / Raw CSTV；
+- Raw GSI 的 `bomb.countdown`；它只保留在 telemetry observation，不能作为 Program wire 字段；
 - LKG metadata；
 - Lookahead / future 信息。
 
-`lifeState` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
+``lifeState`` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
 
 `ProgramProjection` 不从 renderer 侧推断 active player，也不累计 ADR。Active lineup 只有在 `coverage.allPlayers = present`、10 个唯一稳定 Steam64、CT 5 人 + T 5 人且无歧义时才建立或替换 baseline；稳定 baseline 遇到 transient missing/extra 或 `degraded` evidence 时可以保留并标记 `retained` / `degraded`。没有 previous baseline 时，degraded 的 clean-looking 5+5 仍不得晋升。same-map source generation 变化时，retained membership 重新挂到当前 generation；generation continuity 由 resolution cursor 表达，证据质量由 `lineupEvidence` 表达。RivalHub roster 是 connected mode 的 strongest prior，但未知 Steam64 的稳定 active player 仍可进入节目，canonical identity 保留为 `null` 并通过 Operator/diagnostics 报告 warning。
 
@@ -379,6 +395,7 @@ acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把
 接收方必须：
 
 - 拒绝 protocol / channel / schema version 不兼容；
+- 旧 Program receiver 与当前 Program schema 不是兼容 envelope；旧 receiver 必须拒绝当前 schema，当前 receiver 必须拒绝旧 schema，不能按字段猜测版本；
 - 忽略重复或倒序 `channelSeq`；
 - 拒绝同一 producer 下 `runtimeSeq` 回退；
 - 拒绝一个连接中途切换 `producerInstanceId`；

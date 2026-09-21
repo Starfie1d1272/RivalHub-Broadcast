@@ -1,4 +1,5 @@
 import {
+  DEFAULT_OBJECTIVE_CLOCK_LEASE_MS,
   createInitialRuntimeState,
   getProgramSourceFreshness,
   reduceRuntime,
@@ -32,6 +33,7 @@ import type { TelemetryObservation } from '@rivalhub-broadcast/core/telemetry';
 export const PROGRAM_RUNTIME_RECENT_TRANSITIONS_MAX = 32;
 export const PRODUCTION_RUNTIME_CONTINUITY_POLICY: RuntimeContinuityPolicy = Object.freeze({
   staleAfterMs: 20_000,
+  objectiveClockLeaseMs: DEFAULT_OBJECTIVE_CLOCK_LEASE_MS,
 });
 
 export interface ProgramRuntimeOptions {

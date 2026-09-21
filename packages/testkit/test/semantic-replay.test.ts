@@ -3,6 +3,9 @@ import { resolve } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
+import { emptyActiveLineup, unboundIdentityResolution } from '@rivalhub-broadcast/core/identity';
+import { projectProgram, selectProgramSafeRuntimeView } from '@rivalhub-broadcast/core/projection';
+import { createInitialRuntimeState, reduceRuntime } from '@rivalhub-broadcast/core/runtime';
 import { iterateCaptureFrames, verifyCapture } from '../src/capture/reader.js';
 import type { VerifiedCapture } from '../src/capture/types.js';
 import { replayCapture } from '../src/replay/runner.js';
@@ -300,6 +303,52 @@ describe('semantic real-evidence capture replay', () => {
       bomb: { state: 'defused' },
       winnerSide: 'CT',
     });
+  });
+
+  it('replays planted then defusing evidence through Core objective timing', async () => {
+    const capture = await verifyCapture(semanticCapturePath('bomb/defuse'));
+    const results = await replayResultsAt(capture, [5522, 5523]);
+    const planted = successfulObservation(resultAt(results, 5522), 5522);
+    const defusing = successfulObservation(resultAt(results, 5523), 5523);
+    const policy = { staleAfterMs: 20_000, objectiveClockLeaseMs: 1_000 } as const;
+    let state = createInitialRuntimeState('semantic-objective-clock');
+    state = reduceRuntime(
+      state,
+      { kind: 'program-telemetry', sourceGeneration: 0, observation: planted },
+      policy,
+    ).state;
+    state = reduceRuntime(
+      state,
+      { kind: 'program-telemetry', sourceGeneration: 0, observation: defusing },
+      policy,
+    ).state;
+
+    expect(state.objectiveTiming.explosionAnchor).toMatchObject({
+      remainingSecondsAtSample: 28.708,
+      source: 'bomb-planted-countdown',
+    });
+    const projection = projectProgram({
+      runtime: selectProgramSafeRuntimeView(state),
+      identity: unboundIdentityResolution(),
+      activeLineup: emptyActiveLineup(state.programSource.generation, state.map.epoch),
+      nowMonotonicMs: defusing.receive.receivedMonotonicMs,
+      continuityPolicy: policy,
+    });
+    expect(projection.bomb).toMatchObject({
+      state: 'defusing',
+      sourcePlayerId: 'fixture-player-007',
+      explosion: {
+        durationSeconds: null,
+      },
+      action: {
+        kind: 'defuse',
+        sourcePlayerId: 'fixture-player-007',
+        remainingSeconds: 5.034,
+        durationSeconds: 5,
+        hasDefuseKit: true,
+      },
+    });
+    expect(projection.bomb?.explosion?.remainingSeconds).toBeCloseTo(28.455814, 5);
   });
 
   it('observes bomb explode and round reset', async () => {

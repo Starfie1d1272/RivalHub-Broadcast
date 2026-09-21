@@ -22,6 +22,8 @@ import type {
 import {
   getPlayerCompletedAdr,
   getPlayerLiveAdr,
+  getObjectiveClockLeaseMs,
+  remainingFromObjectiveAnchor,
   type RuntimeContinuityPolicy,
 } from '../runtime/index.js';
 import {
@@ -157,10 +159,31 @@ export interface ProgramPlayerProjection {
   readonly weapons: readonly ProgramWeaponProjection[];
 }
 
+export interface ProgramObjectiveClockProjection {
+  readonly remainingSeconds: number | null;
+  readonly durationSeconds: number | null;
+}
+
+export type ProgramBombActionProjection =
+  | {
+      readonly kind: 'plant';
+      readonly sourcePlayerId: string | null;
+      readonly remainingSeconds: number | null;
+      readonly durationSeconds: number | null;
+    }
+  | {
+      readonly kind: 'defuse';
+      readonly sourcePlayerId: string | null;
+      readonly remainingSeconds: number | null;
+      readonly durationSeconds: number | null;
+      readonly hasDefuseKit: boolean | null;
+    };
+
 export interface ProgramBombProjection {
   readonly state: BombState | null;
   readonly sourcePlayerId: string | null;
-  readonly countdownSeconds: number | null;
+  readonly explosion: ProgramObjectiveClockProjection | null;
+  readonly action: ProgramBombActionProjection | null;
 }
 
 export interface ProgramProjection {
@@ -450,6 +473,114 @@ function projectPlayer(
   };
 }
 
+function finiteNonNegative(value: number | undefined): number | null {
+  return value === undefined || !Number.isFinite(value) ? null : Math.max(0, value);
+}
+
+function objectiveSampleIsCurrent(runtime: ProgramSafeRuntimeView): boolean {
+  const receiveSequence = runtime.cursor.programReceiveSequence;
+  return (
+    runtime.telemetry !== null &&
+    runtime.telemetry.coverage.bomb === 'present' &&
+    receiveSequence !== null &&
+    runtime.objectiveTiming.sourceGeneration === runtime.cursor.programSourceGeneration &&
+    runtime.objectiveTiming.mapEpoch === runtime.cursor.mapEpoch &&
+    runtime.objectiveTiming.lastAcceptedReceiveSequence === receiveSequence
+  );
+}
+
+function currentDefuseKit(
+  telemetry: ProgramSafeRuntimeView['telemetry'],
+  sourcePlayerId: string | null,
+): boolean | null {
+  if (telemetry === null || sourcePlayerId === null) return null;
+  const candidates = [
+    ...(telemetry.telemetry.allPlayers ?? []),
+    ...(telemetry.telemetry.player === undefined ? [] : [telemetry.telemetry.player]),
+  ];
+  const evidence = candidates
+    .filter((candidate) => candidate.sourcePlayerId === sourcePlayerId)
+    .map((candidate) => candidate.state?.hasDefuser)
+    .filter((value): value is boolean => value !== undefined);
+  if (evidence.length === 0) return null;
+  const values = new Set(evidence);
+  return values.size === 1 ? evidence[0]! : null;
+}
+
+function roundIsOver(runtime: ProgramSafeRuntimeView): boolean {
+  return (
+    runtime.telemetry?.coverage.round === 'present' &&
+    runtime.telemetry.telemetry.round?.phase === 'over'
+  );
+}
+
+function projectBomb(
+  runtime: ProgramSafeRuntimeView,
+  nowMonotonicMs: number,
+  continuityPolicy: RuntimeContinuityPolicy,
+): ProgramBombProjection | null {
+  const bomb = runtime.telemetry?.telemetry.bomb;
+  if (bomb === undefined) return null;
+
+  const state = nullable(bomb.state);
+  const sourcePlayerId = nullable(bomb.sourcePlayerId);
+  if (roundIsOver(runtime)) {
+    return { state, sourcePlayerId, explosion: null, action: null };
+  }
+  if (!objectiveSampleIsCurrent(runtime)) {
+    return { state, sourcePlayerId, explosion: null, action: null };
+  }
+
+  const lastAccepted = runtime.programSourceLastAccepted;
+  const objectiveClockLive =
+    lastAccepted !== null &&
+    getProgramSafeRuntimeFreshness(runtime, nowMonotonicMs, continuityPolicy) === 'fresh' &&
+    nowMonotonicMs - lastAccepted.receivedMonotonicMs <= getObjectiveClockLeaseMs(continuityPolicy);
+  const explosionAnchor = runtime.objectiveTiming.explosionAnchor;
+  const explosion =
+    explosionAnchor === null
+      ? null
+      : {
+          remainingSeconds: objectiveClockLive
+            ? remainingFromObjectiveAnchor(explosionAnchor, nowMonotonicMs)
+            : null,
+          durationSeconds: null,
+        };
+  const remainingSeconds =
+    objectiveClockLive && lastAccepted !== null && bomb.countdownSeconds !== undefined
+      ? finiteNonNegative(
+          bomb.countdownSeconds - (nowMonotonicMs - lastAccepted.receivedMonotonicMs) / 1_000,
+        )
+      : null;
+
+  let action: ProgramBombActionProjection | null = null;
+  switch (bomb.state ?? 'unknown') {
+    case 'planting':
+      action = {
+        kind: 'plant',
+        sourcePlayerId,
+        remainingSeconds,
+        durationSeconds: null,
+      };
+      break;
+    case 'defusing': {
+      const hasDefuseKit = currentDefuseKit(runtime.telemetry, sourcePlayerId);
+      action = {
+        kind: 'defuse',
+        sourcePlayerId,
+        remainingSeconds,
+        durationSeconds: hasDefuseKit === true ? 5 : hasDefuseKit === false ? 10 : null,
+        hasDefuseKit,
+      };
+      break;
+    }
+    default:
+      break;
+  }
+
+  return { state, sourcePlayerId, explosion, action };
+}
+
 export function projectProgram(input: ProgramProjectionInput): ProgramProjection {
   const telemetry = input.runtime.telemetry;
   const contextFreshness =
@@ -517,14 +648,7 @@ export function projectProgram(input: ProgramProjectionInput): ProgramProjection
     players: players.map((player) =>
       projectPlayer(player, input.identity, identityIsCurrent, input.runtime.playerStats),
     ),
-    bomb:
-      telemetry?.telemetry.bomb === undefined
-        ? null
-        : {
-            state: nullable(telemetry.telemetry.bomb.state),
-            sourcePlayerId: nullable(telemetry.telemetry.bomb.sourcePlayerId),
-            countdownSeconds: nullable(telemetry.telemetry.bomb.countdownSeconds),
-          },
+    bomb: projectBomb(input.runtime, input.nowMonotonicMs, input.continuityPolicy),
     coverage: {
       map: telemetry?.coverage.map ?? 'absent',
       round: telemetry?.coverage.round ?? 'absent',

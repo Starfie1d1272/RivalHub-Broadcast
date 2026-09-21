@@ -1,10 +1,11 @@
+import { PROGRAM_SCHEMA_VERSION } from '../../packages/protocol/src/version.js';
 import { expect, test } from '@playwright/test';
 
 const CURRENT_LIVE_BASELINE = {
   type: 'snapshot',
   protocolVersion: 1,
   channel: 'program',
-  schemaVersion: 5,
+  schemaVersion: PROGRAM_SCHEMA_VERSION,
   channelSeq: 1,
   cursor: {
     producerInstanceId: 'visual-program-producer',

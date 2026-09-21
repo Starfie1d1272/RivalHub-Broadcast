@@ -24,8 +24,10 @@
 任意开发机和 CI 都应尽量覆盖：
 
 - RuntimeState / RuntimeTransition；
+- objective clock anchor、map/source reset、defuse kit evidence 与 short-lease expiry；
 - identity / session / map epoch；
 - source continuity；
+- gap-resync / stale-recovery objective anchor invalidation；
 - Program / Assist non-leak；
 - projection 与 wire schema；
 - Radar 数学；
@@ -57,6 +59,11 @@ Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromi
 覆盖：
 
 - GSI cfg 安装与发现；
+- planting / planted / defusing overloaded countdown semantics；
+- objective timing qualification report 与真实 Capture V1 cadence / residual evidence；
+- qualification measurement、provenance、scenario coverage 与独立 CSTV/demo reference gate；
+- Production Capture Recorder 的 raw provenance、capture clock origin、objective reference
+  contract 与显式 8 场景 marker；sanitized fixture 不能作为 production PASS；
 - observer payload；
 - update cadence；
 - 回合与地图生命周期；
@@ -140,6 +147,7 @@ pnpm local-web:production-smoke
 ```text
 pnpm qualification:build
 pnpm qualification:offline
+pnpm qualification:objective-timing <capture-dir>
 pnpm qualification:verify <evidence-dir-or-zip>
 ```
 

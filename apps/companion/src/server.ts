@@ -1,5 +1,6 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import { mkdir, writeFile } from 'node:fs/promises';
+import { version as osVersion } from 'node:os';
 import { dirname, join } from 'node:path';
 
 import { buildApp } from './app.js';
@@ -32,6 +33,8 @@ const seriesProgressCheckpointPath =
   process.env.SERIES_PROGRESS_CHECKPOINT_PATH ?? join(captureDir, '..', 'series-progress.json');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
+const qualificationProfile =
+  process.env.QUALIFICATION_PROFILE === 'objective-timing' ? 'objective-timing' : 'base';
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
 const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
@@ -45,9 +48,12 @@ const COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS = 30_000;
 const producerInstanceId = randomUUID();
 
 let cstvSourceConfig: CstvSourceManagers | undefined;
+let programCstvUrl: string | undefined;
 let cstvSourceConfigError: string | undefined;
+let receiverSequence = 0;
 try {
   const programUrl = parseCstvSourceUrl(process.env.PROGRAM_CSTV_URL, 'PROGRAM_CSTV_URL');
+  programCstvUrl = programUrl;
   const lookaheadUrl = parseCstvSourceUrl(process.env.LOOKAHEAD_CSTV_URL, 'LOOKAHEAD_CSTV_URL');
   cstvSourceConfig = createCstvSourceManagers({
     ...(programUrl === undefined ? {} : { programUrl }),
@@ -64,7 +70,7 @@ function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
     ...(diagnostic.operation === undefined ? {} : { operation: diagnostic.operation }),
     ...(diagnostic.causeCode === undefined ? {} : { causeCode: diagnostic.causeCode }),
   };
-  console.warn(`Companion capture recorder 诊断：${JSON.stringify(fields)}`);
+  console.warn(`Companion 采集记录诊断：${JSON.stringify(fields)}`);
 }
 
 async function writeFinalRuntime(path: string, response: unknown): Promise<void> {
@@ -79,32 +85,44 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   console.error('Companion 启动失败：GSI_TOKEN 必须设置为非空值');
   process.exitCode = 1;
 } else if (qualificationMode && (qualificationControlToken?.trim().length ?? 0) === 0) {
-  console.error('Companion 启动失败：qualification 模式下必须设置 QUALIFICATION_CONTROL_TOKEN');
+  console.error('Companion 启动失败：现场验收模式下必须设置 QUALIFICATION_CONTROL_TOKEN');
   process.exitCode = 1;
 } else if (qualificationMode && host !== '127.0.0.1') {
-  console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
+  console.error('Companion 启动失败：现场验收模式必须监听本机回环地址 127.0.0.1');
   process.exitCode = 1;
 } else if (cstvSourceConfigError !== undefined) {
   console.error(`Companion 启动失败：${cstvSourceConfigError}`);
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
-
-  try {
-    recorder = await createCaptureRecorder({
+  const createRecorder = () =>
+    createCaptureRecorder({
       captureDir,
       broadcastCommit,
       gsiConfig: PRODUCTION_GSI_CONFIG,
+      ...(qualificationMode
+        ? {
+            windowsVersion: process.env.QUALIFICATION_WINDOWS_VERSION ?? osVersion(),
+            cs2Build: process.env.QUALIFICATION_CS2_VERSION ?? 'unknown',
+            ...(process.env.QUALIFICATION_ARTIFACT_SHA256 === undefined
+              ? {}
+              : { artifactSha256: process.env.QUALIFICATION_ARTIFACT_SHA256 }),
+            qualificationRunId,
+          }
+        : {}),
       onDiagnostic: logRecorderDiagnostic,
     });
+
+  try {
+    recorder = await createRecorder();
   } catch (error: unknown) {
     recorder = createDisabledRecorder('recorder_start_failed');
-    console.error(`Companion capture recorder 不可用：${String(error)}`);
+    console.error(`Companion 采集记录不可用：${String(error)}`);
   }
 
   const seriesProgressCheckpointStore = new JsonSeriesProgressCheckpointStore({
     filePath: seriesProgressCheckpointPath,
-    onDiagnostic: (code) => console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+    onDiagnostic: (code) => console.warn(`系列进度检查点诊断：${code}`),
   });
   const hudConfigStore = new HudConfigStore({
     filePath: hudConfigPath,
@@ -113,13 +131,17 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   await hudConfigStore.load();
   const programRuntime = createProgramRuntime(producerInstanceId, {
     seriesProgressCheckpointStore,
-    onSeriesProgressDiagnostic: ({ code }) =>
-      console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+    onSeriesProgressDiagnostic: ({ code }) => console.warn(`系列进度检查点诊断：${code}`),
   });
   const app = buildApp({
     logger: true,
     gsiToken,
     recorder,
+    ...(qualificationMode
+      ? {
+          gsiSequenceSource: () => receiverSequence++,
+        }
+      : {}),
     programRuntime,
     ...(webRoot === undefined ? {} : { webRoot }),
     host,
@@ -134,19 +156,41 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       ? {
           qualificationRunId,
           qualificationScenarioPath,
+          qualificationProfile,
+          onQualificationRecorderRotate: async (currentRecorder) => {
+            if (currentRecorder !== recorder) {
+              throw new Error('采集记录在切换过程中发生了意外变化。');
+            }
+            const nextRecorder = await createRecorder();
+            const previousCaptureId = currentRecorder.captureId;
+            recorder = nextRecorder;
+            return {
+              previousCaptureId,
+              captureId: nextRecorder.captureId,
+              nextRecorder,
+            };
+          },
           onQualificationFinish: async ({ debug }: { readonly debug: unknown }) => {
             try {
               if (qualificationFinalRuntimePath !== undefined) {
                 await writeFinalRuntime(qualificationFinalRuntimePath, debug);
               }
             } catch (error: unknown) {
-              console.error(`Qualification final runtime snapshot 获取失败：${String(error)}`);
+              console.error(`现场验收最终运行状态快照获取失败：${String(error)}`);
             } finally {
               shutdown('qualification-finish');
             }
           },
         }
       : {}),
+    ...(programCstvUrl === undefined
+      ? {}
+      : {
+          objectiveReferenceSource: {
+            artifactId: 'program-cstv-endpoint',
+            artifactSha256: createHash('sha256').update(programCstvUrl, 'utf8').digest('hex'),
+          },
+        }),
   });
   let shutdownPromise: Promise<void> | undefined;
 
@@ -156,7 +200,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       const watchdog = setTimeout(() => {
         if (appClosed && recorder.getHealth().state === 'closed') return;
         console.error(
-          `Companion shutdown watchdog 在 ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS}ms 后超时`,
+          `Companion 关闭监视器在 ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS} 毫秒后超时`,
         );
         process.exit(1);
       }, COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS);

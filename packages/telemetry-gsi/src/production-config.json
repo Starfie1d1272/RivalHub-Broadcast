@@ -1,0 +1,29 @@
+{
+  "uri": "http://127.0.0.1:3000/gsi",
+  "timeout": 1.1,
+  "buffer": 0,
+  "throttle": 0,
+  "heartbeat": 10,
+  "precision_time": 3,
+  "precision_position": 1,
+  "precision_vector": 3,
+  "components": [
+    "provider",
+    "map",
+    "map_round_wins",
+    "round",
+    "player_id",
+    "player_state",
+    "player_weapons",
+    "player_match_stats",
+    "player_position",
+    "phase_countdowns",
+    "allplayers_id",
+    "allplayers_state",
+    "allplayers_match_stats",
+    "allplayers_weapons",
+    "allplayers_position",
+    "allgrenades",
+    "bomb"
+  ]
+}
