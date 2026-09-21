@@ -19,6 +19,7 @@ import {
 } from './telemetry/cstv-source-manager.js';
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
 import { parseAllowedOrigins } from './local-web/origin-policy.js';
+import { HudConfigStore } from './hud-config/store.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
@@ -27,6 +28,7 @@ const localWebLanMode = /^(?:1|true)$/i.test(process.env.LOCAL_WEB_LAN_MODE ?? '
 const localWebAllowedOrigins = parseAllowedOrigins(process.env.LOCAL_WEB_ALLOWED_ORIGINS);
 const gsiToken = process.env.GSI_TOKEN;
 const captureDir = process.env.CAPTURE_DIR || join(process.cwd(), 'recordings', 'gsi');
+const hudConfigPath = process.env.HUD_CONFIG_PATH ?? join(captureDir, '..', 'hud-config.json');
 const seriesProgressCheckpointPath =
   process.env.SERIES_PROGRESS_CHECKPOINT_PATH ?? join(captureDir, '..', 'series-progress.json');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
@@ -34,7 +36,6 @@ const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ??
 const qualificationProfile =
   process.env.QUALIFICATION_PROFILE === 'objective-timing' ? 'objective-timing' : 'base';
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
-const operatorControlToken = process.env.OPERATOR_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
 const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
 const qualificationScenarioPath =
@@ -89,9 +90,6 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
 } else if (qualificationMode && host !== '127.0.0.1') {
   console.error('Companion 启动失败：现场验收模式必须监听本机回环地址 127.0.0.1');
   process.exitCode = 1;
-} else if (operatorControlToken !== undefined && operatorControlToken.trim().length === 0) {
-  console.error('Companion 启动失败：OPERATOR_CONTROL_TOKEN 必须设置为非空值');
-  process.exitCode = 1;
 } else if (cstvSourceConfigError !== undefined) {
   console.error(`Companion 启动失败：${cstvSourceConfigError}`);
   process.exitCode = 1;
@@ -126,6 +124,11 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     filePath: seriesProgressCheckpointPath,
     onDiagnostic: (code) => console.warn(`系列进度检查点诊断：${code}`),
   });
+  const hudConfigStore = new HudConfigStore({
+    filePath: hudConfigPath,
+    onDiagnostic: (code) => console.warn(`HUD 配置诊断：${code}`),
+  });
+  await hudConfigStore.load();
   const programRuntime = createProgramRuntime(producerInstanceId, {
     seriesProgressCheckpointStore,
     onSeriesProgressDiagnostic: ({ code }) => console.warn(`系列进度检查点诊断：${code}`),
@@ -147,7 +150,8 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     ...(cstvSourceConfig === undefined ? {} : { cstvSources: cstvSourceConfig }),
     qualificationMode,
     ...(qualificationControlToken === undefined ? {} : { qualificationControlToken }),
-    ...(operatorControlToken === undefined ? {} : { operatorControlToken }),
+    hudConfigPath,
+    hudConfigStore,
     ...(qualificationMode
       ? {
           qualificationRunId,
