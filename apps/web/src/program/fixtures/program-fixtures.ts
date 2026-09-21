@@ -21,7 +21,7 @@ export const PROGRAM_FIXTURE_IDS = [
 export type ProgramFixtureId = (typeof PROGRAM_FIXTURE_IDS)[number];
 
 export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> = {
-  'awaiting-neutral': '等待初始状态',
+  'awaiting-neutral': '等待数据',
   'live-neutral': '实时中 · 未绑定队伍',
   'live-canonical': '实时中 · 已匹配队伍',
   'context-stale': '比赛上下文过期',

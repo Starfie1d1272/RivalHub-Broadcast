@@ -68,6 +68,7 @@
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--rh-hud-brand) 24%, transparent),
     0 18px 40px rgb(0 0 0 / 0.2);
+  z-index: 2;
 }
 
 .hud-editor-overlay__placeholder .hud-editor-overlay__widget-label {
@@ -98,6 +99,7 @@
   pointer-events: auto;
   position: absolute;
   width: 20px;
+  z-index: 3;
 }
 
 .hud-editor-overlay__resize-handle:focus-visible {
