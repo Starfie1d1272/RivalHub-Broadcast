@@ -361,11 +361,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
               const previous = currentRecorder();
               const result = await options.onQualificationRecorderRotate?.(previous);
               if (result === undefined) throw new Error('采集记录切换回调未配置。');
-              const at =
-                options.qualificationClock?.now() ?? {
-                  monotonicMs: performance.now(),
-                  utc: new Date().toISOString(),
-                };
+              const at = options.qualificationClock?.now() ?? {
+                monotonicMs: performance.now(),
+                utc: new Date().toISOString(),
+              };
               const generationAdvance = programRuntime.advanceProgramSourceGeneration(at);
               if (
                 generationAdvance.disposition.kind !== 'accepted' ||
