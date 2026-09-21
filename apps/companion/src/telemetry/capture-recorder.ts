@@ -23,7 +23,6 @@ export type {
   ProductionCaptureFrameV1,
   ProductionCaptureManifestV1,
   ObjectiveReferenceInput,
-  ObjectiveReferenceKind,
 } from './capture-storage.js';
 
 export const RECORDER_MAX_PENDING_FRAMES = 128;
