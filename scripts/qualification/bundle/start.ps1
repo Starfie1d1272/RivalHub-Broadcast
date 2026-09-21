@@ -63,6 +63,7 @@ $env:BROADCAST_COMMIT = [string]$artifact.gitSha
 $env:GSI_TOKEN = [string]$install.gsiToken
 $env:CAPTURE_DIR = (Join-Path $runDir 'recorder')
 $env:QUALIFICATION_MODE = 'true'
+$env:QUALIFICATION_PROFILE = $qualificationProfile
 $env:QUALIFICATION_CONTROL_TOKEN = $controlToken
 $env:QUALIFICATION_RUN_ID = $runId
 $env:QUALIFICATION_WINDOWS_VERSION = $windowsVersion
