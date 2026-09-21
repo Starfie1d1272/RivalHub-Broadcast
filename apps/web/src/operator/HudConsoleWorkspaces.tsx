@@ -132,6 +132,22 @@ export function HudConsoleWorkspaces({
   onReset,
   onActivate,
 }: HudConsoleWorkspaceProps) {
+  const activePresetResourceId = activePresetId(configDocument);
+  const activePresetName = resourceName(
+    resourceFor(configDocument, 'preset', activePresetResourceId),
+  );
+  const previewMatchesPresetReferences =
+    selectedLayoutId === presetDraft.layoutId && selectedThemeId === presetDraft.themeId;
+  const activationLabel = hasDirtyDraft
+    ? '有未保存草稿'
+    : !previewMatchesPresetReferences
+      ? '当前预览尚未关联到预设'
+      : selectedPresetId !== activePresetResourceId
+        ? '当前预设尚未启用'
+        : activationStale
+          ? '已保存修改尚未启用'
+          : '与正式节目一致';
+
   function renderResourceActions(kind: HudWorkspace, dirty: boolean, id: string) {
     const invalid =
       (kind === 'preset' && presetNameError !== null) ||
@@ -172,19 +188,27 @@ export function HudConsoleWorkspaces({
       <section className="hud-console__workspace" aria-label="HUD 预设编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">第一步 · 选择预设</span>
-            <h2>决定哪一套配置可以上场</h2>
+            <span className="hud-console__kicker">预设 · 上屏方案</span>
+            <h2>管理保存与上屏</h2>
+          </div>
+        </div>
+        <div className="hud-console__preset-status" aria-label="HUD 预设状态">
+          <div>
+            <span>当前上屏</span>
+            <strong>{activePresetName}</strong>
+          </div>
+          <div>
+            <span>当前编辑</span>
+            <strong>{presetDraft.name.trim() || '未命名预设'}</strong>
           </div>
           <span
             className={
-              activationStale
-                ? 'hud-console__badge hud-console__badge--warning'
-                : 'hud-console__badge'
+              activationLabel === '与正式节目一致'
+                ? 'hud-console__badge'
+                : 'hud-console__badge hud-console__badge--warning'
             }
           >
-            {activationStale
-              ? '已保存，尚未启用'
-              : `当前启用：${resourceName(resourceFor(configDocument, 'preset', activePresetId(configDocument)))}`}
+            {activationLabel}
           </span>
         </div>
         <label className="hud-console__field">
@@ -246,14 +270,14 @@ export function HudConsoleWorkspaces({
         {renderResourceActions('preset', presetDirty, selectedPresetId)}
         <button
           className="hud-console__primary-action"
-          disabled={busy || !editorReady || hasDirtyDraft}
+          disabled={busy || !editorReady || hasDirtyDraft || !previewMatchesPresetReferences}
           onClick={onActivate}
           type="button"
         >
-          启用当前预设
+          启用到正式节目
         </button>
         <p className="hud-console__hint">
-          保存只更新资源；只有明确启用后，正式节目才会使用新的配置。
+          保存不会改变正式节目；启用会把当前已保存预设冻结为新的上屏配置。
         </p>
       </section>
     );
@@ -264,8 +288,8 @@ export function HudConsoleWorkspaces({
       <section className="hud-console__workspace" aria-label="HUD 布局编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">第二步 · 编辑布局</span>
-            <h2>安排节目结构</h2>
+            <span className="hud-console__kicker">布局 · 几何与显隐</span>
+            <h2>安排组件位置</h2>
           </div>
           <span className="hud-console__badge">1920 × 1080 · {HUD_GRID_SIZE}px 网格</span>
         </div>
@@ -436,8 +460,8 @@ export function HudConsoleWorkspaces({
     <section className="hud-console__workspace" aria-label="HUD 外观编辑">
       <div className="hud-console__workspace-heading">
         <div>
-          <span className="hud-console__kicker">第三步 · 调整外观</span>
-          <h2>只调整品牌外观，不改比赛信息</h2>
+          <span className="hud-console__kicker">外观 · 视觉语言</span>
+          <h2>调整品牌外观，不改比赛信息</h2>
         </div>
         <span className="hud-console__badge">比赛信息颜色由系统维护</span>
       </div>

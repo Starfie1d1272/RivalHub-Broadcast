@@ -634,11 +634,11 @@ export function HudConsolePage() {
     <main className="hud-console" data-surface="hud-console">
       <header className="hud-console__header">
         <div>
-          <p className="hud-console__eyebrow">RivalHub Broadcast / 节目 HUD</p>
-          <h1>把画面边界交给可验证的配置。</h1>
+          <p className="hud-console__eyebrow">RivalHub Broadcast / HUD 控制台</p>
+          <h1>配置与预览节目 HUD</h1>
           <p className="hud-console__intro">
-            预设、布局和外观各自保存；只有明确启用的预设
-            才能进入正式节目。编辑辅助层只服务于编辑，正式节目不会携带编辑控件。
+            在同一预览中编辑预设、布局与外观。保存只更新资源；只有明确启用后，
+            当前已保存预设才会进入正式节目。
           </p>
         </div>
         <div className="hud-console__header-meta">

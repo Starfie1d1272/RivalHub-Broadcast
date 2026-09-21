@@ -69,7 +69,7 @@ test.describe('节目 HUD 控制台', () => {
   test('显示中文编辑界面，并在当前实时来源不可用时保持安全隐藏', async ({ page }) => {
     await page.goto('/operator/hud');
 
-    await expect(page.getByRole('heading', { name: '把画面边界交给可验证的配置。' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: '配置与预览节目 HUD' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText(
       /\b(renderer|snapshot|baseline|schema|recipe|SeriesProgress|OperatorCommand|credential)\b/i,
     );
@@ -294,16 +294,59 @@ test.describe('节目 HUD 控制台', () => {
     await expect(page.getByRole('button', { name: 'HUD 布局' })).toBeVisible();
   });
 
-  test('切换工作区保留三套独立草稿', async ({ page }) => {
+  test('跨工作区持续组合未保存的布局与外观草稿', async ({ page }) => {
+    await page.goto('/operator/hud');
+    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await page.getByRole('button', { name: '选择顶部比分条' }).click();
+    await page.getByLabel('X 偏移').fill('120');
+    const topScoreBar = page.locator(
+      '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
+    );
+    await expect(topScoreBar).toHaveCSS('left', '780px');
+
+    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
+    );
+    await expect(topScoreBar).toHaveCSS('left', '780px');
+
+    await page.getByRole('button', { name: 'HUD 预设' }).click();
+    await expect(topScoreBar).toHaveCSS('left', '780px');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
+    );
+  });
+
+  test('名称无效只阻止保存，不冻结其它有效预览修改', async ({ page }) => {
     await page.goto('/operator/hud');
     await page.getByRole('button', { name: 'HUD 外观' }).click();
     await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
+    await page.getByLabel('名称').fill('');
+    await expect(page.getByRole('alert')).toContainText('名称不能为空');
+    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
+    );
+
     await page.getByRole('button', { name: 'HUD 布局' }).click();
-    await page.getByLabel('名称').fill('临时布局草稿');
+    await page.getByRole('button', { name: '选择顶部比分条' }).click();
+    await page.getByLabel('X 偏移').fill('140');
+    const topScoreBar = page.locator(
+      '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
+    );
+    await expect(topScoreBar).toHaveCSS('left', '800px');
+
     await page.getByRole('button', { name: 'HUD 外观' }).click();
-    await expect(page.getByLabel('品牌色十六进制值')).toHaveValue('#ff00aa');
-    await page.getByRole('button', { name: 'HUD 布局' }).click();
-    await expect(page.getByLabel('名称')).toHaveValue('临时布局草稿');
+    await expect(page.getByLabel('名称')).toHaveValue('');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
+    );
+    await expect(topScoreBar).toHaveCSS('left', '800px');
   });
 
   test('正式节目路由不包含编辑辅助层', async ({ page }) => {

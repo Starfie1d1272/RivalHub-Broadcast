@@ -52,18 +52,17 @@
 }
 
 .hud-console__header h1 {
-  font-size: clamp(2.1rem, 4vw, 3.6rem);
-  letter-spacing: -0.055em;
-  line-height: 0.98;
+  font-size: clamp(1.75rem, 3vw, 2.6rem);
+  letter-spacing: -0.045em;
+  line-height: 1.04;
   margin: 0;
-  max-width: 18ch;
 }
 
 .hud-console__intro {
   color: var(--hud-muted);
-  line-height: 1.6;
-  margin: 0.8rem 0 0;
-  max-width: 44rem;
+  line-height: 1.5;
+  margin: 0.6rem 0 0;
+  max-width: 48rem;
 }
 
 .hud-console__header-meta {
@@ -117,7 +116,6 @@
 
 .hud-console__nav a[aria-current='page'],
 .hud-console__tabs button.is-active,
-.hud-console__actions button:first-child,
 .hud-console__primary-action {
   background: var(--hud-signal);
   border-color: var(--hud-signal);
@@ -310,6 +308,40 @@
 .hud-console__badge--warning {
   border-color: #a77942;
   color: #f2bd4f;
+}
+
+.hud-console__preset-status {
+  background: rgb(16 24 22 / 0.72);
+  border: 1px solid var(--hud-rule);
+  border-radius: 0.65rem;
+  display: grid;
+  gap: 0.7rem 1rem;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  padding: 0.8rem;
+}
+
+.hud-console__preset-status > div {
+  display: grid;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.hud-console__preset-status > div > span {
+  color: var(--hud-muted);
+  font-size: 0.7rem;
+}
+
+.hud-console__preset-status strong {
+  font-size: 0.82rem;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.hud-console__preset-status > .hud-console__badge {
+  grid-column: 1 / -1;
+  justify-self: start;
 }
 
 .hud-console__field {
