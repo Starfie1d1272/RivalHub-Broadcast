@@ -63,27 +63,27 @@ import {
 import './hud-console.css';
 
 const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }[] = [
-  { id: 'preset', label: 'HUD 预设' },
-  { id: 'layout', label: 'HUD 布局' },
-  { id: 'theme', label: 'HUD 外观' },
+  { id: 'preset', label: '预设' },
+  { id: 'layout', label: '布局' },
+  { id: 'theme', label: '外观' },
 ];
 
 function connectionLabel(state: LocalChannelConnectionState): string {
   switch (state) {
     case 'live':
-      return '已接收初始状态';
+      return '实时数据可用';
     case 'awaiting-baseline':
-      return '等待初始状态';
+      return '等待实时数据';
     case 'connecting':
-      return '正在连接';
+      return '正在连接实时数据';
     case 'reconnecting':
       return '正在重连';
     case 'protocol-error':
-      return '协议不兼容';
+      return '数据协议不兼容';
     case 'closed':
-      return '已关闭';
+      return '连接已关闭';
     default:
-      return '未启动';
+      return '实时数据未启动';
   }
 }
 
@@ -367,7 +367,7 @@ export function HudConsolePage() {
     const dirty = kind === 'layout' ? layoutDirty : themeDirty;
     if (dirty && id !== selectedId) {
       setCommandState(
-        `当前 HUD ${kind === 'layout' ? '布局' : '外观'} 有未保存草稿；修改预设引用会覆盖它，请先保存或放弃。`,
+        `当前${kind === 'layout' ? '布局' : '外观'}有未保存更改；切换预设中的${kind === 'layout' ? '布局' : '外观'}会覆盖它，请先保存或放弃。`,
       );
       return;
     }
@@ -435,7 +435,7 @@ export function HudConsolePage() {
       if (kind === 'preset') setSelectedPresetId(nextId);
       if (kind === 'layout') setSelectedLayoutId(nextId);
       if (kind === 'theme') setSelectedThemeId(nextId);
-      setCommandState(saveAs ? `已另存为「${saved.name}」。` : 'HUD 草稿已保存。');
+      setCommandState(saveAs ? `已另存为「${saved.name}」。` : '已保存。');
     } catch (error: unknown) {
       if (error instanceof HudConfigMutationError && error.status === 409) {
         setDraftConflicts((current) => ({ ...current, [kind]: true }));
@@ -459,7 +459,7 @@ export function HudConsolePage() {
         expectedEditorRevision: hudEditor.revision,
       });
       applyResponse(response);
-      setCommandState('已启用当前 HUD 预设；正式节目会使用这份配置。');
+      setCommandState('当前预设已启用。');
     } catch (error: unknown) {
       setCommandState(
         error instanceof HudConfigMutationError && error.status === 409
@@ -482,7 +482,7 @@ export function HudConsolePage() {
     setSelectedDraft(kind, clone(saved));
     setDraftConflicts((current) => ({ ...current, [kind]: false }));
     if (hudEditor.revision !== null) draftBaseRevisionRef.current[kind] = hudEditor.revision;
-    setCommandState('已放弃当前草稿改动。');
+    setCommandState('已放弃当前更改。');
   }
 
   function reset(kind: HudWorkspace): void {
@@ -490,7 +490,7 @@ export function HudConsolePage() {
     if (kind === 'preset') setPresetDraft(resetPresetDraft(presetDraft));
     else if (kind === 'layout') setLayoutDraft(resetLayoutDraft(layoutDraft));
     else setThemeDraftValue(resetThemeDraft(themeDraft));
-    setCommandState('已恢复第一版默认值；保存前不会影响正式节目。');
+    setCommandState('已恢复默认值；保存前不会影响当前启用配置。');
   }
 
   function startMove(widgetId: HudWidgetId, event: PointerEvent<HTMLButtonElement>): void {
@@ -634,97 +634,80 @@ export function HudConsolePage() {
     <main className="hud-console" data-surface="hud-console">
       <header className="hud-console__header">
         <div>
-          <p className="hud-console__eyebrow">RivalHub Broadcast / HUD 控制台</p>
-          <h1>配置与预览节目 HUD</h1>
-          <p className="hud-console__intro">
-            在同一预览中编辑预设、布局与外观。保存只更新资源；只有明确启用后，
-            当前已保存预设才会进入正式节目。
-          </p>
+          <p className="hud-console__eyebrow">RivalHub Broadcast</p>
+          <h1>HUD 编辑器</h1>
+          <p className="hud-console__intro">调整预设、布局和外观，确认后启用。</p>
         </div>
         <div className="hud-console__header-meta">
-          <span>本地配置状态</span>
+          <span>配置服务</span>
           <strong>
             {!editorReady
-              ? '正在读取 HUD 配置'
+              ? '正在读取配置'
               : editorStatus === 'error'
-                ? '暂时使用最近有效配置'
+                ? '连接异常，使用最近保存的配置'
                 : '配置已连接'}
           </strong>
         </div>
       </header>
 
-      <nav aria-label="制播页面" className="hud-console__nav">
-        <a href="/program">正式节目</a>
+      <nav aria-label="制作页面" className="hud-console__nav">
+        <a href="/program">输出画面</a>
         <a aria-current="page" href="/operator/hud">
-          HUD 控制台
+          HUD 编辑器
         </a>
         <a href="/operator">制作控制</a>
         <a href="/debug">运行诊断</a>
       </nav>
 
-      <section className="hud-console__toolbar" aria-label="HUD 控制台工具栏">
-        <div className="hud-console__tabs">
-          {WORKSPACES.map((item) => (
-            <button
-              aria-current={workspace === item.id ? 'page' : undefined}
-              className={workspace === item.id ? 'is-active' : undefined}
-              key={item.id}
-              onClick={() => changeWorkspace(item.id)}
-              type="button"
-            >
-              {item.label}
-            </button>
-          ))}
-        </div>
-      </section>
-
-      <section className="hud-console__source-bar" aria-label="HUD 预览来源">
-        <div>
-          <span className="hud-console__kicker">预览来源</span>
-          <strong>
-            {activePreviewSource === 'fixture'
-              ? PROGRAM_FIXTURE_LABELS[fixtureId]
-              : previewSourceLive
-                ? '当前实时节目'
-                : '当前实时节目不可用'}
-          </strong>
-        </div>
-        <label>
-          选择预览来源
-          <select
-            value={activePreviewSource}
-            onChange={(event) => setPreviewSource(event.target.value as 'fixture' | 'current-live')}
-          >
-            <option value="fixture">测试场景</option>
-            <option disabled={!previewSourceLive} value="current-live">
-              当前实时节目 · {connectionLabel(program.state)}
-            </option>
-          </select>
-        </label>
-        {activePreviewSource === 'fixture' ? (
-          <label>
-            测试场景
-            <select
-              aria-label="测试场景"
-              value={fixtureId}
-              onChange={(event) => setFixtureId(event.target.value as ProgramFixtureId)}
-            >
-              {PROGRAM_FIXTURE_IDS.map((id) => (
-                <option key={id} value={id}>
-                  {PROGRAM_FIXTURE_LABELS[id]}
-                </option>
-              ))}
-            </select>
-          </label>
-        ) : null}
-        <span className="hud-console__source-status" data-connection-state={program.state}>
-          实时来源 · {connectionLabel(program.state)}
-          {!previewSourceLive && activePreviewSource === 'current-live' ? ' · 已安全隐藏' : ''}
-        </span>
-      </section>
-
       <div className="hud-console__layout">
         <div className="hud-console__preview-column">
+          <section className="hud-console__preview-toolbar" aria-label="预览设置">
+            <div>
+              <span className="hud-console__kicker">预览</span>
+              <strong>
+                {activePreviewSource === 'fixture'
+                  ? PROGRAM_FIXTURE_LABELS[fixtureId]
+                  : previewSourceLive
+                    ? '实时比赛'
+                    : '实时数据不可用'}
+              </strong>
+            </div>
+            <label>
+              来源
+              <select
+                aria-label="预览来源"
+                value={activePreviewSource}
+                onChange={(event) =>
+                  setPreviewSource(event.target.value as 'fixture' | 'current-live')
+                }
+              >
+                <option value="fixture">示例比赛</option>
+                <option disabled={!previewSourceLive} value="current-live">
+                  实时比赛
+                </option>
+              </select>
+            </label>
+            {activePreviewSource === 'fixture' ? (
+              <label>
+                场景
+                <select
+                  aria-label="示例比赛"
+                  value={fixtureId}
+                  onChange={(event) => setFixtureId(event.target.value as ProgramFixtureId)}
+                >
+                  {PROGRAM_FIXTURE_IDS.map((id) => (
+                    <option key={id} value={id}>
+                      {PROGRAM_FIXTURE_LABELS[id]}
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : null}
+            <span className="hud-console__source-status" data-connection-state={program.state}>
+              {connectionLabel(program.state)}
+            </span>
+          </section>
+
           <HudCanvasPreview
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
@@ -740,31 +723,40 @@ export function HudConsolePage() {
             showSafeArea={showSafeArea}
             snapshot={activeSnapshot}
           />
-          <p className="hud-console__preview-caption">
-            1920 × 1080 画布 · 拖动组件可吸附到 10px 网格 · 暂未提供的节目组件保持隐藏
-          </p>
+          <p className="hud-console__preview-caption">1920 × 1080 · 10px 网格</p>
         </div>
+
         <div className="hud-console__editor-column">
+          <div className="hud-console__tabs" aria-label="HUD 编辑区域">
+            {WORKSPACES.map((item) => (
+              <button
+                aria-current={workspace === item.id ? 'page' : undefined}
+                className={workspace === item.id ? 'is-active' : undefined}
+                key={item.id}
+                onClick={() => changeWorkspace(item.id)}
+                type="button"
+              >
+                {item.label}
+              </button>
+            ))}
+          </div>
           <fieldset className="hud-console__editor-fieldset" disabled={!editorReady}>
             <HudConsoleWorkspaces {...workspaceProps} />
           </fieldset>
         </div>
       </div>
 
-      <div
-        aria-live="polite"
-        className="hud-console__status"
-        role={
-          commandState?.includes('冲突') || commandState?.includes('未完成') ? 'alert' : 'status'
-        }
-      >
-        {commandState ??
-          (!editorReady
-            ? '正在读取 HUD 配置。'
-            : hasDirtyDraft
-              ? '当前有未保存草稿。'
-              : '没有未保存改动。')}
-      </div>
+      {commandState !== null || !editorReady ? (
+        <div
+          aria-live="polite"
+          className="hud-console__status"
+          role={
+            commandState?.includes('冲突') || commandState?.includes('未完成') ? 'alert' : 'status'
+          }
+        >
+          {commandState ?? '正在读取配置。'}
+        </div>
+      ) : null}
     </main>
   );
 }

@@ -65,17 +65,20 @@ const HUD_SCREENSHOT_OPTIONS = {
   threshold: 0,
 };
 
-test.describe('节目 HUD 控制台', () => {
-  test('显示中文编辑界面，并在当前实时来源不可用时保持安全隐藏', async ({ page }) => {
+test.describe('HUD 编辑器', () => {
+  test('显示中文编辑界面，并在实时来源不可用时保持安全隐藏', async ({ page }) => {
     await page.goto('/operator/hud');
 
-    await expect(page.getByRole('heading', { name: '配置与预览节目 HUD' })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'HUD 编辑器' })).toBeVisible();
     await expect(page.locator('body')).not.toContainText(
       /\b(renderer|snapshot|baseline|schema|recipe|SeriesProgress|OperatorCommand|credential)\b/i,
     );
+    await expect(page.locator('body')).not.toContainText(
+      /节目|上屏|冻结|布局引用|外观引用|测试场景|初始状态/,
+    );
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
-    const fixtureSelect = page.locator('select[aria-label="测试场景"]');
+    const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
     await expect(fixtureSelect).toHaveValue('live-canonical');
     await expect(page.locator('option[value="current-live"]')).toHaveAttribute('disabled', '');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
@@ -85,7 +88,7 @@ test.describe('节目 HUD 控制台', () => {
     );
   });
 
-  test('覆盖当前实时节目从等待、接收、重连到新初始状态的状态机', async ({ page }) => {
+  test('覆盖实时数据从等待、接收、重连到恢复可用的状态机', async ({ page }) => {
     await page.addInitScript(() => {
       class MockWebSocket {
         static readonly instances: MockWebSocket[] = [];
@@ -135,10 +138,10 @@ test.describe('节目 HUD 控制台', () => {
     });
 
     await page.goto('/operator/hud');
-    const sourceSelect = page.getByLabel('选择预览来源');
+    const sourceSelect = page.getByLabel('预览来源');
     const liveOption = page.locator('option[value="current-live"]');
     await expect(liveOption).toHaveAttribute('disabled', '');
-    await expect(page.locator('.hud-console__source-status')).toContainText('等待初始状态');
+    await expect(page.locator('.hud-console__source-status')).toContainText('等待实时数据');
 
     await page.evaluate((snapshot) => {
       const sockets = (
@@ -148,7 +151,7 @@ test.describe('节目 HUD 控制台', () => {
       ).__rhProgramSockets;
       sockets.at(-1)?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_BASELINE);
-    await expect(page.locator('.hud-console__source-status')).toContainText('已接收初始状态');
+    await expect(page.locator('.hud-console__source-status')).toContainText('实时数据可用');
     await expect(liveOption).not.toHaveAttribute('disabled');
     await sourceSelect.selectOption('current-live');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
@@ -175,7 +178,7 @@ test.describe('节目 HUD 控制台', () => {
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
-    await expect(page.getByText('当前实时节目不可用')).toBeVisible();
+    await expect(page.getByText('实时数据不可用')).toBeVisible();
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
 
     await page.waitForTimeout(350);
@@ -201,16 +204,16 @@ test.describe('节目 HUD 控制台', () => {
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
-    await expect(page.getByText('当前实时节目不可用')).toBeVisible();
+    await expect(page.getByText('实时数据不可用')).toBeVisible();
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
   });
 
   test('覆盖测试场景、拖动、尺寸调整与网格吸附开关', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await page.getByRole('button', { name: '布局', exact: true }).click();
 
-    await expect(page.getByText('请选择一个组件')).toBeVisible();
-    const fixtureSelect = page.locator('select[aria-label="测试场景"]');
+    await expect(page.getByText('选择组件', { exact: true })).toBeVisible();
+    const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
     await fixtureSelect.selectOption('stress-long-labels');
     await expect(fixtureSelect).toHaveValue('stress-long-labels');
     await page.getByRole('button', { name: '选择雷达' }).click();
@@ -224,7 +227,7 @@ test.describe('节目 HUD 控制台', () => {
     await page.mouse.down();
     await page.mouse.move(box.x + 24, box.y + 24);
     await page.mouse.up();
-    await expect(page.getByText('只有雷达支持保持正方形的尺寸调整。')).toBeVisible();
+    await expect(page.getByText('拖动雷达右下角可调整尺寸。')).toBeVisible();
 
     const moveTarget = page.getByRole('button', { name: '顶部比分条，可拖动' });
     const moveBox = await moveTarget.boundingBox();
@@ -236,9 +239,9 @@ test.describe('节目 HUD 控制台', () => {
     await expect(page.getByLabel('X 偏移')).not.toHaveValue('0');
 
     await page.getByRole('button', { name: '选择雷达' }).click();
-    await page.getByRole('checkbox', { name: '在节目中显示' }).uncheck();
+    await page.getByRole('checkbox', { name: '显示组件' }).uncheck();
     await expect(page.getByRole('button', { name: '调整雷达大小' })).toHaveCount(0);
-    await page.getByRole('checkbox', { name: '在节目中显示' }).check();
+    await page.getByRole('checkbox', { name: '显示组件' }).check();
     await page.getByRole('checkbox', { name: '安全区' }).check();
     await expect(page.locator('.hud-console__guide--safe')).toBeVisible();
 
@@ -250,7 +253,7 @@ test.describe('节目 HUD 控制台', () => {
 
   test('覆盖品牌色十六进制输入、面板和圆角选项', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByRole('button', { name: '外观', exact: true }).click();
 
     await expect(page.getByLabel('品牌色十六进制值')).toHaveValue('#c8ef78');
     await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
@@ -265,7 +268,7 @@ test.describe('节目 HUD 控制台', () => {
 
   test('非法品牌色在本地标记并保留上一次有效预览', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByRole('button', { name: '外观', exact: true }).click();
 
     const colorInput = page.getByLabel('品牌色十六进制值');
     await colorInput.fill('#ff00aa');
@@ -286,17 +289,17 @@ test.describe('节目 HUD 控制台', () => {
 
   test('所有资源名称都使用本地校验并阻止保存', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 预设' }).click();
+    await page.getByRole('button', { name: '预设', exact: true }).click();
     const name = page.getByLabel('名称');
     await name.fill('');
     await expect(page.getByRole('alert')).toContainText('名称不能为空');
     await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
-    await expect(page.getByRole('button', { name: 'HUD 布局' })).toBeVisible();
+    await expect(page.getByRole('button', { name: '布局', exact: true })).toBeVisible();
   });
 
   test('跨工作区持续组合未保存的布局与外观草稿', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await page.getByRole('button', { name: '布局', exact: true }).click();
     await page.getByRole('button', { name: '选择顶部比分条' }).click();
     await page.getByLabel('X 偏移').fill('120');
     const topScoreBar = page.locator(
@@ -304,7 +307,7 @@ test.describe('节目 HUD 控制台', () => {
     );
     await expect(topScoreBar).toHaveCSS('left', '780px');
 
-    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByRole('button', { name: '外观', exact: true }).click();
     await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
       'style',
@@ -312,7 +315,7 @@ test.describe('节目 HUD 控制台', () => {
     );
     await expect(topScoreBar).toHaveCSS('left', '780px');
 
-    await page.getByRole('button', { name: 'HUD 预设' }).click();
+    await page.getByRole('button', { name: '预设', exact: true }).click();
     await expect(topScoreBar).toHaveCSS('left', '780px');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
       'style',
@@ -322,7 +325,7 @@ test.describe('节目 HUD 控制台', () => {
 
   test('名称无效只阻止保存，不冻结其它有效预览修改', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByRole('button', { name: '外观', exact: true }).click();
     await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
     await page.getByLabel('名称').fill('');
     await expect(page.getByRole('alert')).toContainText('名称不能为空');
@@ -332,7 +335,7 @@ test.describe('节目 HUD 控制台', () => {
       /--rh-hud-brand: #ff00aa/,
     );
 
-    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await page.getByRole('button', { name: '布局', exact: true }).click();
     await page.getByRole('button', { name: '选择顶部比分条' }).click();
     await page.getByLabel('X 偏移').fill('140');
     const topScoreBar = page.locator(
@@ -340,7 +343,7 @@ test.describe('节目 HUD 控制台', () => {
     );
     await expect(topScoreBar).toHaveCSS('left', '800px');
 
-    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByRole('button', { name: '外观', exact: true }).click();
     await expect(page.getByLabel('名称')).toHaveValue('');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
       'style',
@@ -349,7 +352,7 @@ test.describe('节目 HUD 控制台', () => {
     await expect(topScoreBar).toHaveCSS('left', '800px');
   });
 
-  test('正式节目路由不包含编辑辅助层', async ({ page }) => {
+  test('输出画面路由不包含编辑辅助层', async ({ page }) => {
     await page.goto('/__visual/program/live-canonical');
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(0);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);

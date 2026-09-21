@@ -139,14 +139,14 @@ export function HudConsoleWorkspaces({
   const previewMatchesPresetReferences =
     selectedLayoutId === presetDraft.layoutId && selectedThemeId === presetDraft.themeId;
   const activationLabel = hasDirtyDraft
-    ? '有未保存草稿'
+    ? '有未保存更改'
     : !previewMatchesPresetReferences
-      ? '当前预览尚未关联到预设'
+      ? '预览内容与此预设不一致'
       : selectedPresetId !== activePresetResourceId
-        ? '当前预设尚未启用'
+        ? '尚未启用'
         : activationStale
-          ? '已保存修改尚未启用'
-          : '与正式节目一致';
+          ? '有已保存但未启用的更改'
+          : '已启用';
 
   function renderResourceActions(kind: HudWorkspace, dirty: boolean, id: string) {
     const invalid =
@@ -188,13 +188,13 @@ export function HudConsoleWorkspaces({
       <section className="hud-console__workspace" aria-label="HUD 预设编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">预设 · 上屏方案</span>
-            <h2>管理保存与上屏</h2>
+            <span className="hud-console__kicker">预设</span>
+            <h2>组合布局与外观</h2>
           </div>
         </div>
         <div className="hud-console__preset-status" aria-label="HUD 预设状态">
           <div>
-            <span>当前上屏</span>
+            <span>当前启用</span>
             <strong>{activePresetName}</strong>
           </div>
           <div>
@@ -203,7 +203,7 @@ export function HudConsoleWorkspaces({
           </div>
           <span
             className={
-              activationLabel === '与正式节目一致'
+              activationLabel === '已启用'
                 ? 'hud-console__badge'
                 : 'hud-console__badge hud-console__badge--warning'
             }
@@ -241,7 +241,7 @@ export function HudConsoleWorkspaces({
         ) : null}
         <div className="hud-console__field-grid">
           <label className="hud-console__field">
-            布局引用
+            布局
             <select
               value={presetDraft.layoutId}
               onChange={(event) => onUpdatePresetReference('layout', event.target.value)}
@@ -254,7 +254,7 @@ export function HudConsoleWorkspaces({
             </select>
           </label>
           <label className="hud-console__field">
-            外观引用
+            外观
             <select
               value={presetDraft.themeId}
               onChange={(event) => onUpdatePresetReference('theme', event.target.value)}
@@ -274,11 +274,9 @@ export function HudConsoleWorkspaces({
           onClick={onActivate}
           type="button"
         >
-          启用到正式节目
+          启用当前预设
         </button>
-        <p className="hud-console__hint">
-          保存不会改变正式节目；启用会把当前已保存预设冻结为新的上屏配置。
-        </p>
+        <p className="hud-console__hint">保存不会改变当前启用项；启用后才会生效。</p>
       </section>
     );
   }
@@ -288,10 +286,12 @@ export function HudConsoleWorkspaces({
       <section className="hud-console__workspace" aria-label="HUD 布局编辑">
         <div className="hud-console__workspace-heading">
           <div>
-            <span className="hud-console__kicker">布局 · 几何与显隐</span>
-            <h2>安排组件位置</h2>
+            <span className="hud-console__kicker">布局</span>
+            <h2>调整组件</h2>
           </div>
-          <span className="hud-console__badge">1920 × 1080 · {HUD_GRID_SIZE}px 网格</span>
+          <span className="hud-console__workspace-state">
+            {layoutDirty ? '有未保存更改' : `1920 × 1080 · ${HUD_GRID_SIZE}px 网格`}
+          </span>
         </div>
         <label className="hud-console__field">
           布局
@@ -337,8 +337,8 @@ export function HudConsoleWorkspaces({
         </div>
         {selectedWidgetId === null || selectedPlacement === null || selectedBox === null ? (
           <div className="hud-console__inspector hud-console__inspector--empty">
-            <strong>请选择一个组件</strong>
-            <p className="hud-console__hint">选择画布中的标记或右侧组件列表后编辑位置。</p>
+            <strong>选择组件</strong>
+            <p className="hud-console__hint">点击画布中的组件，或从列表中选择。</p>
           </div>
         ) : (
           <div className="hud-console__inspector">
@@ -357,7 +357,7 @@ export function HudConsoleWorkspaces({
                 }
                 type="checkbox"
               />
-              在节目中显示
+              显示组件
             </label>
             <label className="hud-console__field">
               锚点
@@ -410,11 +410,23 @@ export function HudConsoleWorkspaces({
                 />
               </label>
             </div>
-            <p className="hud-console__hint">
-              当前尺寸：{Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}，位置{' '}
-              {Math.round(selectedBox.left)}, {Math.round(selectedBox.top)}
-              。只有雷达支持保持正方形的尺寸调整。
-            </p>
+            <dl className="hud-console__geometry-meta">
+              <div>
+                <dt>位置</dt>
+                <dd>
+                  {Math.round(selectedBox.left)}, {Math.round(selectedBox.top)}
+                </dd>
+              </div>
+              <div>
+                <dt>尺寸</dt>
+                <dd>
+                  {Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}
+                </dd>
+              </div>
+            </dl>
+            {selectedWidgetId === 'radar' ? (
+              <p className="hud-console__hint">拖动雷达右下角可调整尺寸。</p>
+            ) : null}
           </div>
         )}
         <div className="hud-console__guide-controls">
@@ -460,10 +472,12 @@ export function HudConsoleWorkspaces({
     <section className="hud-console__workspace" aria-label="HUD 外观编辑">
       <div className="hud-console__workspace-heading">
         <div>
-          <span className="hud-console__kicker">外观 · 视觉语言</span>
-          <h2>调整品牌外观，不改比赛信息</h2>
+          <span className="hud-console__kicker">外观</span>
+          <h2>品牌与面板</h2>
         </div>
-        <span className="hud-console__badge">比赛信息颜色由系统维护</span>
+        <span className="hud-console__workspace-state">
+          {themeDirty ? '有未保存更改' : '状态色由系统管理'}
+        </span>
       </div>
       <label className="hud-console__field">
         外观
@@ -560,9 +574,7 @@ export function HudConsoleWorkspaces({
         ))}
       </fieldset>
       {renderResourceActions('theme', themeDirty, selectedThemeId)}
-      <p className="hud-console__hint">
-        CT、T、危险、提醒、成功和目标状态等比赛信息颜色由系统维护，不在此处编辑。
-      </p>
+      <p className="hud-console__hint">队伍色和比赛状态色由系统统一管理。</p>
     </section>
   );
 }
