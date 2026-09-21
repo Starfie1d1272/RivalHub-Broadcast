@@ -296,15 +296,19 @@
   padding: 0 10px;
 }
 
-.player-rail__dead-stats span,
-.player-rail__dead-stats .player-rail__kad {
+.player-rail__dead-stats > span,
+.player-rail__dead-stats > .player-rail__kad {
   align-items: center;
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
 
-.player-rail__dead-stats span:not(.player-rail__kad) {
+.player-rail__dead-stats > .player-rail__kad {
+  flex-direction: row;
+}
+
+.player-rail__dead-stats > span {
   font-size: 14px;
   font-weight: 700;
 }
@@ -330,7 +334,9 @@
 }
 
 .player-rail__kad.is-dead span {
+  flex-direction: column;
   font-size: 14px;
+  gap: 2px;
 }
 
 .player-rail__kad small {

@@ -87,15 +87,41 @@ describe('Match Header presentation selector', () => {
     expect(value.bestOfLabel).toBe('BO5');
     expect(value.seriesMaps).toHaveLength(5);
     expect(value.seriesMaps?.map((map) => map.statusText)).toEqual([
-      '13 : 11',
-      '8 : 13',
+      '13–11',
+      '8–13',
       '当前',
       '未开始',
       '未开始',
     ]);
-    expect(value.seriesMaps?.[0]).toMatchObject({ selectionText: 'Northstar 选择' });
+    expect(value.seriesMaps?.[0]).toMatchObject({
+      selectionText: 'Northstar 选择',
+      winner: 'a',
+      winnerName: 'Northstar',
+    });
+    expect(value.seriesMaps?.[1]).toMatchObject({ winner: 'b', winnerName: 'Southpoint' });
     expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
     expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: '决胜图' });
+  });
+
+  it('fails closed when a completed map has no known winner', () => {
+    const snapshot = getProgramFixture('series-bo5');
+    if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');
+    const series = snapshot.payload.series;
+    const value = buildMatchHeaderPresentation({
+      ...snapshot.payload,
+      series: {
+        ...series,
+        maps: series.maps.map((map, index) =>
+          index === 0 ? { ...map, winnerEntryId: null } : map,
+        ),
+      },
+    });
+
+    expect(value.seriesMaps?.[0]).toMatchObject({
+      statusText: '13–11',
+      winner: null,
+      winnerName: null,
+    });
   });
 
   it('covers the frozen BO3 Map 1, not-played, and logo availability fixtures', () => {

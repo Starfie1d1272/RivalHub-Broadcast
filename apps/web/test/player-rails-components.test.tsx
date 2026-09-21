@@ -183,4 +183,44 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('.player-rail__dead-stats')).not.toBeNull();
     expect(container.querySelector('[data-player-equipment="true"]')).toBeNull();
   });
+
+  it('renders unavailable dead ADR as a dash independently of the positive visual fixture', () => {
+    const snapshot = getProgramFixture('stress-long-labels');
+    if (snapshot === null) throw new Error('fixture missing');
+    const dead = buildPlayerRailsPresentation(snapshot.payload).ct.players.find(
+      (candidate) => candidate.mode === 'dead',
+    );
+    if (dead === undefined) throw new Error('dead player missing');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={{ ...dead, liveAdr: null }} />);
+    });
+
+    expect(container.querySelector('.player-rail__dead-stats')?.textContent).toContain('ADR—');
+  });
+
+  it('uses the official fixed team utility asset set for both side mappings', () => {
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<TeamSummary phase="freezetime" side="CT" summary={summary(4_200)} />);
+    });
+
+    expect(
+      [...container.querySelectorAll('[data-utility] [data-asset-id]')].map((element) => [
+        element.parentElement?.getAttribute('data-utility'),
+        element.getAttribute('data-asset-id'),
+      ]),
+    ).toEqual([
+      ['smoke', 'utility.smokegrenade'],
+      ['fire', 'utility.incgrenade'],
+      ['flash', 'utility.flashbang'],
+      ['he', 'utility.hegrenade'],
+      ['decoy', 'utility.decoy'],
+    ]);
+  });
 });

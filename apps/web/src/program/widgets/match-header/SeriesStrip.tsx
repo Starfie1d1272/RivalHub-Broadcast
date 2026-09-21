@@ -29,7 +29,7 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
       <div className="match-header__series-maps" role="list">
         {presentation.seriesMaps.map((map) => (
           <div
-            aria-label={`${map.mapName}，${map.statusText}`}
+            aria-label={`${map.mapName}，${map.winnerName === null ? map.statusText : `${map.winnerName} ${map.statusText} ✓`}`}
             className={`match-header__series-map match-header__series-map--${map.status}${
               map.winner === null ? '' : ` match-header__series-map--winner-${map.winner}`
             }`}
@@ -44,7 +44,25 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
             <span className="match-header__series-map-selection" title={map.selectionText}>
               {map.selectionText}
             </span>
-            <strong className="match-header__series-map-status">{map.statusText}</strong>
+            <strong
+              className={`match-header__series-map-status${
+                map.winnerName === null ? '' : ' match-header__series-map-status--winner'
+              }`}
+            >
+              {map.winnerName === null ? (
+                map.statusText
+              ) : (
+                <>
+                  <span className="match-header__series-map-winner-name" title={map.winnerName}>
+                    {map.winnerName}
+                  </span>
+                  <span className="match-header__series-map-winner-score">{map.statusText}</span>
+                  <span aria-label="获胜" className="match-header__series-map-winner-mark">
+                    ✓
+                  </span>
+                </>
+              )}
+            </strong>
           </div>
         ))}
       </div>
