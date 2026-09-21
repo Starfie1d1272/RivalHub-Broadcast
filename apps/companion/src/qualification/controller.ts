@@ -32,6 +32,7 @@ export interface QualificationControllerOptions {
   readonly controlToken: string;
   readonly runId: string;
   readonly evidence: QualificationEvidenceStore;
+  readonly qualificationProfile?: 'base' | 'objective-timing';
   readonly clock?: QualificationClock;
   readonly getDebugResponse: (nowMonotonicMs: number) => DebugRuntimeResponse;
   readonly programRuntime: ProgramRuntime;
@@ -83,6 +84,25 @@ function hasMarker(
   kind: QualificationMarkerKind,
 ): boolean {
   return markers.some((marker) => marker.kind === kind);
+}
+
+function objectiveScenarioProgress(markers: readonly QualificationMarker[]): {
+  readonly required: number;
+  readonly completed: number;
+  readonly complete: boolean;
+  readonly missing: readonly QualificationMarkerKind[];
+} {
+  const missing = QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.filter((kind) => {
+    const before = markers.some((marker) => marker.kind === kind && marker.phase === 'before');
+    const after = markers.some((marker) => marker.kind === kind && marker.phase === 'after');
+    return !before || !after;
+  });
+  return {
+    required: QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.length,
+    completed: QUALIFICATION_OBJECTIVE_SCENARIO_MARKER_KINDS.length - missing.length,
+    complete: missing.length === 0,
+    missing,
+  };
 }
 
 function realSilenceToStalePassed(
@@ -361,9 +381,14 @@ function boundedStatus(
   snapshot: ReturnType<QualificationEvidenceStore['getSnapshot']>,
   recorderHealth: RecorderHealth,
   nowMonotonicMs: number,
+  qualificationProfile: 'base' | 'objective-timing',
 ): Record<string, unknown> {
   const checks = evaluateChecks(response, snapshot, recorderHealth);
-  const state = stateFrom(response, snapshot.markers);
+  const objectiveProgress = objectiveScenarioProgress(snapshot.markers);
+  const state =
+    qualificationProfile === 'objective-timing' && objectiveProgress.complete
+      ? 'ready'
+      : stateFrom(response, snapshot.markers);
   const gsi =
     response.raw.current === null
       ? 'never-seen'
@@ -373,11 +398,18 @@ function boundedStatus(
   return {
     schemaVersion: QUALIFICATION_SCHEMA_VERSION,
     runId,
+    profile: qualificationProfile,
     state,
     gsi,
     freshness: response.freshness,
-    result: resultFor(checks),
+    result:
+      qualificationProfile === 'objective-timing'
+        ? checks.captureIntegrity.status === 'FAIL'
+          ? 'FAIL'
+          : 'INCONCLUSIVE'
+        : resultFor(checks),
     checks,
+    objectiveScenarioProgress: objectiveProgress,
     markers: snapshot.markers.map((marker) => marker.kind),
     lastMarker: snapshot.lastMarker?.kind ?? null,
     producerInstanceId: response.producerInstanceId,
@@ -434,14 +466,19 @@ export function registerQualificationRoutes(
       options.evidence.getSnapshot(),
       resolveCaptureRecorder(options.recorder).getHealth(),
       nowMonotonicMs,
+      options.qualificationProfile ?? 'base',
     );
   };
 
   app.get('/qualification', (_request, reply) => {
-    void reply.type('text/html; charset=utf-8').send(qualificationPageHtml(options.controlToken));
+    void reply
+      .type('text/html; charset=utf-8')
+      .send(qualificationPageHtml(options.controlToken, options.qualificationProfile ?? 'base'));
   });
   app.get('/qualification/', (_request, reply) => {
-    void reply.type('text/html; charset=utf-8').send(qualificationPageHtml(options.controlToken));
+    void reply
+      .type('text/html; charset=utf-8')
+      .send(qualificationPageHtml(options.controlToken, options.qualificationProfile ?? 'base'));
   });
 
   app.get('/qualification/status', async (request, reply) => {
