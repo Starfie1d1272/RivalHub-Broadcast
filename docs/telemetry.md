@@ -396,9 +396,10 @@ plant、defuse、explosion 三类 terminal residual 必须各自有统计样本�
 marker；raw frames 验证实际 consequence。fast-defuse 只看窗口内的第一帧，不能看整段 capture
 的第一帧。reconnect 不由 heartbeat 间隙或 sequence gap 推断，只能由显式 marker 绑定不同
 采集记录身份的整轮汇总验证；同时必须有开始侧已下包/拆弹状态、结束侧
-新采集记录中的正常观测，以及采集帧中递增的接收端世代。现场验收通过 `rotate.ps1` 在同一
-现场验收轮次内切换采集记录身份并推进接收端世代；结束标记在新采集记录尚未
-收到正常 GSI 观测时会被拒绝。Windows 备用入口为：`mark.ps1 objective-plant-abort -Phase before`
+新采集记录中的正常观测，以及 Runtime 中递增的 Program source generation。现场验收通过
+`rotate.ps1` 在同一现场验收轮次内切换采集记录身份并推进既有 Program source generation；
+GSI ingress sequence 保持单调，不另造 qualification-only generation truth。结束标记在新
+generation 尚未接受到正常 GSI 观测时会被拒绝。Windows 备用入口为：`mark.ps1 objective-plant-abort -Phase before`
 / `-Phase after`，重连场景还需在实际重连或接收端重启后执行 `rotate.ps1`，等待新的已下包链路
 观测，再记录 `objective-reconnect-restart -Phase after`。
 
