@@ -94,6 +94,7 @@ jobs:
         run: pnpm build
 
       - name: Production Web host smoke
+        timeout-minutes: 2
         run: pnpm local-web:production-smoke
 
   visual:
@@ -175,6 +176,7 @@ jobs:
         run: pnpm build
 
       - name: Production Web host smoke
+        timeout-minutes: 2
         run: pnpm local-web:production-smoke
 
   qualification_windows:

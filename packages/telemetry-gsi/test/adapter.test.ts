@@ -174,6 +174,10 @@ describe('adaptGsiPayload', () => {
       name: 'de_mirage',
       phase: 'live',
       roundNumber: 0,
+      sides: {
+        ct: { consecutiveRoundLosses: 1 },
+        t: { consecutiveRoundLosses: 1 },
+      },
     });
     expect(result.observation.telemetry.player).toMatchObject({
       sourcePlayerId: 'fixture-player-ct-1',
@@ -186,6 +190,26 @@ describe('adaptGsiPayload', () => {
       ],
     });
     expect(result.observation.telemetry).not.toHaveProperty('previously');
+  });
+
+  it('accepts non-negative safe consecutive round losses and degrades invalid values', () => {
+    const result = adaptGsiPayload(
+      {
+        map: {
+          team_ct: { consecutive_round_losses: 4 },
+          team_t: { consecutive_round_losses: Number.MAX_SAFE_INTEGER + 1 },
+        },
+      },
+      receiveContext,
+    );
+
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.observation.telemetry.map?.sides).toEqual({
+      ct: { consecutiveRoundLosses: 4 },
+      t: {},
+    });
+    expect(diagnosticCodes(result)).toContain('INVALID_FIELD');
   });
 
   it('distinguishes absent blocks from explicitly empty collections', () => {

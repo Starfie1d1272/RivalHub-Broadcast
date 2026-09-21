@@ -129,6 +129,9 @@ const playerSchema = z.object({
   lifeState: z.enum(['alive', 'dead', 'unknown']),
   liveAdr: nullableNumber,
   completedAdr: nullableNumber,
+  weaponsAvailable: z.boolean(),
+  currentRoundDamage: nullableNumber,
+  roundMoneySpent: nullableNumber,
   state: playerStateSchema.nullable(),
   matchStats: matchStatsSchema.nullable(),
   weapons: z.array(weaponSchema),
@@ -201,6 +204,7 @@ export const programPayloadSchema = z.object({
     roundNumber: nullableNumber,
     score: z.object({ ct: nullableNumber, t: nullableNumber }),
     timeoutsRemaining: z.object({ ct: nullableNumber, t: nullableNumber }),
+    consecutiveRoundLosses: z.object({ ct: nullableNumber, t: nullableNumber }),
   }),
   round: z
     .object({

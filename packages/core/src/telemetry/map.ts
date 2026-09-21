@@ -14,6 +14,7 @@ export interface ObservedMapSide {
   readonly name?: string;
   readonly score?: number;
   readonly timeoutsRemaining?: number;
+  readonly consecutiveRoundLosses?: number;
 }
 
 export interface ObservedMap {

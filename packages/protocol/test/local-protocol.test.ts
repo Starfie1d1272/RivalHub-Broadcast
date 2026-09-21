@@ -53,6 +53,7 @@ function payload() {
       roundNumber: 1,
       score: { ct: 0, t: 0 },
       timeoutsRemaining: { ct: null, t: null },
+      consecutiveRoundLosses: { ct: null, t: null },
     },
     round: null,
     clock: null,
@@ -93,13 +94,13 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
 
     expect(LOCAL_PROTOCOL_SUBPROTOCOL).toBe('rivalhub-broadcast.local.v1');
     expect(LOCAL_PROTOCOL_VERSION).toBe(1);
-    expect(PROGRAM_SCHEMA_VERSION).toBe(6);
+    expect(PROGRAM_SCHEMA_VERSION).toBe(7);
     expect(parsed.channel).toBe('program');
     expect(parsed).not.toHaveProperty('lookahead');
     expect(parsed.payload).not.toHaveProperty('futureCue');
   });
 
-  it('requires the Program v6 series, player evidence, ADR views, and life state fields', () => {
+  it('requires the Program v7 series, player evidence, ADR views, and life state fields', () => {
     const player = {
       sourcePlayerId: 'player-1',
       canonicalPlayerId: null,
@@ -114,6 +115,9 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
       lifeState: 'alive' as const,
       liveAdr: null,
       completedAdr: null,
+      weaponsAvailable: true,
+      currentRoundDamage: null,
+      roundMoneySpent: null,
       state: null,
       matchStats: null,
       weapons: [],
@@ -137,7 +141,13 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
       }),
     ).toThrow();
 
-    for (const field of ['liveAdr', 'completedAdr'] as const) {
+    for (const field of [
+      'liveAdr',
+      'completedAdr',
+      'weaponsAvailable',
+      'currentRoundDamage',
+      'roundMoneySpent',
+    ] as const) {
       const missingAdrView: Record<string, unknown> = { ...player };
       delete missingAdrView[field];
       expect(() =>
@@ -149,11 +159,11 @@ describe('Local Protocol V1 and channel schema acceptance', () => {
     }
   });
 
-  it('fails closed on the retired Program v5 envelope', () => {
+  it('fails closed on the retired Program v6 envelope', () => {
     expect(() =>
       programSnapshotSchema.parse({
         ...snapshot(1),
-        schemaVersion: 5,
+        schemaVersion: 6,
       }),
     ).toThrow();
   });

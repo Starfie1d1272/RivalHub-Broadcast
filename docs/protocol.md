@@ -311,6 +311,7 @@ Program payload 只包含正式节目允许显示的信息：
 - 地图、比分、回合与时钟；其中 `clock` 只表达 `phase_countdowns` 的 phase clock，不表达永久保留的爆炸倒计时；
 - Core 解析后的稳定 5+5 on-air player cohort；raw `allplayers` 中未进入 cohort 的 extra 不进入 Player Rails；
 - 选手显示身份和装备状态；
+- `weaponsAvailable` 表达当前 player weapons block 是否有证据；`currentRoundDamage` 只表达当前完整、连续回合中按 Steam64 累积的最大 `roundTotalDamage`；`roundMoneySpent` 只表达由 Core 冻结的 freezetime round-start money baseline 与当前 money 的非负差值；证据不足时均为 `null`（`weaponsAvailable` 为 `false`）；
 - `identityEvidence: canonical | observed | unresolved`，表达 canonical identity 是否已核验；
 - `lineupEvidence: current | retained`，表达当前 entry 是否来自本帧或稳定 baseline；`retained` 不等于已确认掉线；
 - `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
@@ -318,6 +319,9 @@ Program payload 只包含正式节目允许显示的信息：
 - ``lifeState: alive | dead | unknown``；
 - C4 的状态、爆炸时钟和当前 plant/defuse action；爆炸时钟只来自 Core 保留的 planted countdown anchor，defusing frame 的 overloaded countdown 不会覆盖它；
 - 数据覆盖状态。
+
+地图 Program projection 还保留当前 side 的 `consecutiveRoundLosses`（CT/T 各自为
+`number | null`）；它来自 GSI `map.team_*.consecutive_round_losses`，非法或缺失值不补猜。
 
 Program 的 `bomb` 结构为：
 

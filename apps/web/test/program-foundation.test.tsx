@@ -83,7 +83,6 @@ describe('Program presentation foundation', () => {
       'identity-degraded',
       'identity-mismatch',
       'timeout-ct',
-      'stress-long-labels',
     ] as const;
 
     for (const fixtureId of noBombFixtureIds) {

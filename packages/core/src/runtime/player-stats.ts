@@ -15,6 +15,8 @@ export interface MapPlayerStatsCurrentRound {
   readonly invalidated: boolean;
   readonly hasCompleteEvidence: boolean;
   readonly damageBySteam64: DamageBySteam64;
+  /** First healthy freezetime money observation for this round. */
+  readonly startMoneyBySteam64: Readonly<Record<string, number>>;
 }
 
 export interface MapPlayerStatsAccumulator {
@@ -74,6 +76,7 @@ function createCurrentRound(
     invalidated,
     hasCompleteEvidence: !invalidated && hasCompleteAllPlayersEvidence(observation),
     damageBySteam64: emptyDamage(),
+    startMoneyBySteam64: {},
   };
 }
 
@@ -103,6 +106,28 @@ function copyPlayerDamage(
       continue;
     }
     next[sourcePlayerId] = Math.max(next[sourcePlayerId] ?? 0, roundTotalDamage);
+  }
+  return sortedDamage(next);
+}
+
+function copyStartMoney(
+  current: Readonly<Record<string, number>>,
+  players: readonly ObservedPlayer[],
+): Readonly<Record<string, number>> {
+  const next = { ...current };
+  for (const player of [...players].sort((left, right) =>
+    left.sourcePlayerId < right.sourcePlayerId
+      ? -1
+      : left.sourcePlayerId > right.sourcePlayerId
+        ? 1
+        : 0,
+  )) {
+    const sourcePlayerId = player.sourcePlayerId;
+    if (!isValidSteam64(sourcePlayerId) || next[sourcePlayerId] !== undefined) continue;
+    const money = player.state?.money;
+    if (money === undefined || !Number.isFinite(money) || money < 0) continue;
+    if (Object.keys(next).length >= MAX_TRACKED_MAP_PLAYERS) continue;
+    next[sourcePlayerId] = money;
   }
   return sortedDamage(next);
 }
@@ -138,6 +163,7 @@ function invalidateCurrentRound(
     invalidated: true,
     hasCompleteEvidence: false,
     damageBySteam64: emptyDamage(),
+    startMoneyBySteam64: {},
   };
 }
 
@@ -248,6 +274,16 @@ export function reduceMapPlayerStats(
   const damageBySteam64 = invalidated
     ? emptyDamage()
     : copyPlayerDamage(currentRound.damageBySteam64, input.observation.telemetry.allPlayers ?? []);
+  const startMoneyBySteam64 =
+    !invalidated &&
+    phase === 'freezetime' &&
+    currentRound.phase === 'freezetime' &&
+    completeEvidence
+      ? copyStartMoney(
+          currentRound.startMoneyBySteam64,
+          input.observation.telemetry.allPlayers ?? [],
+        )
+      : currentRound.startMoneyBySteam64;
   currentRound = {
     ...currentRound,
     phase: phaseForState,
@@ -255,6 +291,7 @@ export function reduceMapPlayerStats(
     invalidated,
     hasCompleteEvidence,
     damageBySteam64,
+    startMoneyBySteam64,
   };
 
   if (phase === 'over') {
@@ -299,4 +336,47 @@ export function getPlayerLiveAdr(
   return (
     ((accumulator.completedDamageBySteam64[sourcePlayerId] ?? 0) + currentDamage) / denominator
   );
+}
+
+/**
+ * Return only damage observed in the current round. A continuity or evidence
+ * gap makes the in-flight value unavailable instead of exposing a partial fact.
+ */
+export function getPlayerCurrentRoundDamage(
+  accumulator: MapPlayerStatsAccumulator,
+  sourcePlayerId: string,
+): number | null {
+  if (!isValidSteam64(sourcePlayerId)) return null;
+  const currentRound = accumulator.currentRound;
+  if (currentRound === null || currentRound.invalidated || !currentRound.hasCompleteEvidence) {
+    return null;
+  }
+  return currentRound.damageBySteam64[sourcePlayerId] ?? null;
+}
+
+/**
+ * Freezetime presentation fact: max(0, first healthy freezetime money - now).
+ * The baseline belongs to the map-scoped accumulator, never to React state.
+ */
+export function getPlayerCurrentRoundMoneySpent(
+  accumulator: MapPlayerStatsAccumulator,
+  sourcePlayerId: string,
+  currentMoney: number | null | undefined,
+): number | null {
+  if (!isValidSteam64(sourcePlayerId) || currentMoney === null || currentMoney === undefined) {
+    return null;
+  }
+  if (!Number.isFinite(currentMoney) || currentMoney < 0) return null;
+  const currentRound = accumulator.currentRound;
+  if (
+    currentRound === null ||
+    currentRound.phase !== 'freezetime' ||
+    currentRound.invalidated ||
+    !currentRound.hasCompleteEvidence
+  ) {
+    return null;
+  }
+  const startMoney = currentRound.startMoneyBySteam64[sourcePlayerId];
+  if (startMoney === undefined) return null;
+  return Math.max(0, startMoney - currentMoney);
 }

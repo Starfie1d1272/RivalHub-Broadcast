@@ -46,6 +46,7 @@ function snapshot(
         roundNumber: 1,
         score: { ct: 0, t: 0 },
         timeoutsRemaining: { ct: null, t: null },
+        consecutiveRoundLosses: { ct: null, t: null },
       },
       round: null,
       clock: null,

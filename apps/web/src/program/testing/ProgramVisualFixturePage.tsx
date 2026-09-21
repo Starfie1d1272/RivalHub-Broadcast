@@ -1,3 +1,7 @@
+import { useEffect, useState } from 'react';
+
+import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+
 import { ProgramCanvas } from '../ProgramCanvas';
 import { GameplayHud } from '../GameplayHud';
 import { getProgramFixture } from '../fixtures';
@@ -6,16 +10,40 @@ import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: string }) {
   const snapshot = getProgramFixture(fixtureId);
-
   if (snapshot === null) {
     return <ProgramVisualFixtureNotFound fixtureId={fixtureId} />;
   }
 
   return (
     <ProgramCanvas>
-      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
-      <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+      {fixtureId === 'player-rails-carryover' ? (
+        <CarryoverVisualFixture snapshot={snapshot} />
+      ) : (
+        <>
+          <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={snapshot} />
+          <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+        </>
+      )}
     </ProgramCanvas>
+  );
+}
+
+function CarryoverVisualFixture({ snapshot }: { readonly snapshot: ProgramSnapshot }) {
+  const carryoverSource = getProgramFixture('series-bo1');
+  const [displayedSnapshot, setDisplayedSnapshot] = useState<ProgramSnapshot>(
+    carryoverSource ?? snapshot,
+  );
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDisplayedSnapshot(snapshot), 50);
+    return () => window.clearTimeout(timer);
+  }, [snapshot]);
+
+  return (
+    <>
+      <GameplayHud resolvedPreset={getBuiltinResolvedPreset()} snapshot={displayedSnapshot} />
+      <ProgramFoundationProbe fixtureId="player-rails-carryover" snapshot={displayedSnapshot} />
+    </>
   );
 }
 

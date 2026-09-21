@@ -6,6 +6,8 @@ export { createInitialRuntimeState } from './types.js';
 export {
   createMapPlayerStatsAccumulator,
   getPlayerCompletedAdr,
+  getPlayerCurrentRoundDamage,
+  getPlayerCurrentRoundMoneySpent,
   getPlayerLiveAdr,
   invalidateMapPlayerStats,
   reduceMapPlayerStats,

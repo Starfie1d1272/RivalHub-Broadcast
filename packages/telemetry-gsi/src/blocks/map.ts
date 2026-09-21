@@ -9,7 +9,7 @@ import type {
 import type { DiagnosticCollector } from '../diagnostics/collector.js';
 import { optionalEnum } from '../parse/enum.js';
 import { asSourceRecord } from '../parse/record.js';
-import { optionalInteger, optionalString } from '../parse/scalar.js';
+import { optionalInteger, optionalNumber, optionalString } from '../parse/scalar.js';
 import { finishBlock, type ParsedBlock } from './types.js';
 
 function normalizeMapPhase(value: string): MapPhase | undefined {
@@ -46,12 +46,33 @@ function parseMapSide(
     diagnostics,
     `${path}.timeouts_remaining`,
   );
+  const consecutiveRoundLosses = parseConsecutiveRoundLosses(record, diagnostics, path);
 
   return {
     ...(name === undefined ? {} : { name }),
     ...(score === undefined ? {} : { score }),
     ...(timeoutsRemaining === undefined ? {} : { timeoutsRemaining }),
+    ...(consecutiveRoundLosses === undefined ? {} : { consecutiveRoundLosses }),
   };
+}
+
+function parseConsecutiveRoundLosses(
+  record: Record<string, unknown>,
+  diagnostics: DiagnosticCollector,
+  path: string,
+): number | undefined {
+  const value = optionalNumber(
+    record,
+    'consecutive_round_losses',
+    diagnostics,
+    `${path}.consecutive_round_losses`,
+  );
+  if (value === undefined) return undefined;
+  if (!Number.isSafeInteger(value) || value < 0) {
+    diagnostics.add('INVALID_FIELD', 'error', `${path}.consecutive_round_losses`, String(value));
+    return undefined;
+  }
+  return value;
 }
 
 function normalizeRoundWin(value: string): {

@@ -16,6 +16,10 @@ export const PROGRAM_FIXTURE_IDS = [
   'bomb-defusing',
   'timeout-ct',
   'stress-long-labels',
+  'player-rails-eco',
+  'player-rails-dead-observed',
+  'player-rails-missing-summary',
+  'player-rails-carryover',
   'series-bo1',
   'series-bo3-map1',
   'series-bo5',
@@ -47,6 +51,10 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'bomb-defusing': '正在拆弹',
   'timeout-ct': 'CT 暂停',
   'stress-long-labels': '长名称压力场景',
+  'player-rails-eco': '选手栏 · 经济局',
+  'player-rails-dead-observed': '选手栏 · 已阵亡且被观察',
+  'player-rails-missing-summary': '选手栏 · 汇总证据缺失',
+  'player-rails-carryover': '选手栏 · 回合切换延续',
   'series-bo1': 'BO1 系列赛',
   'series-bo3-map1': 'BO3 · Map 1',
   'series-bo5': 'BO5 中盘',
@@ -159,6 +167,23 @@ function makeWeapon(
   };
 }
 
+function makeUtilityWeapon(
+  sourceWeaponId: string,
+  name: string,
+  ammoReserve: number | null,
+): ProgramWeapon {
+  return {
+    sourceWeaponId,
+    name,
+    paintKit: null,
+    type: 'grenade',
+    ammoClip: null,
+    ammoClipMax: null,
+    ammoReserve,
+    state: 'holstered',
+  };
+}
+
 function makePlayer(
   sourcePlayerId: string,
   side: 'CT' | 'T',
@@ -179,6 +204,9 @@ function makePlayer(
     lifeState: 'alive',
     liveAdr: null,
     completedAdr: null,
+    weaponsAvailable: true,
+    currentRoundDamage: null,
+    roundMoneySpent: 0,
     state: { ...DEFAULT_PLAYER_STATE },
     matchStats: { ...DEFAULT_MATCH_STATS },
     weapons: [],
@@ -212,6 +240,13 @@ function canonicalPlayers(): ProgramPlayer[] {
       weapons: player.weapons,
     });
   });
+}
+
+function halftimePlayers(): ProgramPlayer[] {
+  return canonicalPlayers().map((player, index) => ({
+    ...player,
+    side: index < 5 ? 'T' : 'CT',
+  }));
 }
 
 function fixtureMatch(overrides: Partial<ProgramMatch> = {}): ProgramMatch {
@@ -605,6 +640,7 @@ function makeLivePayload({
       roundNumber,
       score,
       timeoutsRemaining: { ct: 1, t: 2 },
+      consecutiveRoundLosses: { ct: 2, t: 3 },
     },
     round,
     clock,
@@ -640,6 +676,7 @@ function awaitingPayload(): ProgramPayload {
       roundNumber: null,
       score: { ct: null, t: null },
       timeoutsRemaining: { ct: null, t: null },
+      consecutiveRoundLosses: { ct: null, t: null },
     },
     round: null,
     clock: null,
@@ -714,12 +751,12 @@ const stressPlayers = [
   'JuniperLongNameJuliett',
 ].map((displayName, index) => {
   const side = index < 5 ? 'CT' : 'T';
-  const health = [100, 48, 0, null, 76][index % 5] ?? null;
+  const health = [100, 24, 0, null, 76][index % 5] ?? null;
   const state: PlayerState = {
     ...DEFAULT_PLAYER_STATE,
     health,
     armor: [100, 62, 0, null, 18][index % 5] ?? null,
-    hasHelmet: index % 4 !== 3,
+    hasHelmet: [true, false, false, false, true][index % 5] ?? false,
     hasDefuser: side === 'CT' && index % 2 === 0,
     flashed: index === 1 ? 1.2 : 0,
     smoked: index === 7 ? 4.5 : 0,
@@ -745,20 +782,129 @@ const stressPlayers = [
       score: [24, 15, 5, null, 31][index % 5] ?? null,
     },
     weapons:
-      index % 2 === 0
-        ? [makeWeapon(`stress-weapon-${index + 1}`, 'AK-47', 'active')]
-        : [
-            makeWeapon(`stress-weapon-${index + 1}`, 'M4A1-S', 'active'),
-            {
-              ...makeWeapon(`stress-pistol-${index + 1}`, 'USP-S', 'holstered'),
-              type: 'pistol',
-              ammoClip: 12,
-              ammoClipMax: 12,
-              ammoReserve: 24,
-            },
-          ],
+      index === 0
+        ? [
+            makeWeapon(`stress-weapon-${index + 1}`, 'weapon_ak47', 'active'),
+            makeUtilityWeapon(`stress-smoke-${index + 1}`, 'weapon_smokegrenade', 1),
+            makeUtilityWeapon(`stress-fire-${index + 1}`, 'weapon_molotov', 1),
+            makeUtilityWeapon(`stress-flash-${index + 1}`, 'weapon_flashbang', 2),
+            makeUtilityWeapon(`stress-he-${index + 1}`, 'weapon_hegrenade', 1),
+            makeUtilityWeapon(`stress-zeus-${index + 1}`, 'weapon_taser', null),
+          ]
+        : index === 1
+          ? [
+              makeWeapon(`stress-weapon-${index + 1}`, 'weapon_m4a1_silencer', 'active'),
+              {
+                ...makeWeapon(`stress-pistol-${index + 1}`, 'weapon_usp_silencer', 'holstered'),
+                type: 'pistol',
+                ammoClip: 12,
+                ammoClipMax: 12,
+                ammoReserve: 24,
+              },
+              makeUtilityWeapon(`stress-flash-${index + 1}`, 'weapon_flashbang', 2),
+            ]
+          : index === 4
+            ? [
+                {
+                  ...makeWeapon(`stress-pistol-${index + 1}`, 'weapon_usp_silencer', 'holstered'),
+                  type: 'pistol',
+                  ammoClip: 12,
+                  ammoClipMax: 12,
+                  ammoReserve: 24,
+                },
+              ]
+            : index === 3
+              ? []
+              : [makeWeapon(`stress-weapon-${index + 1}`, 'weapon_ak47', 'active')],
+    weaponsAvailable: index !== 3,
+    currentRoundDamage: [128, 64, 96, null, 91][index % 5] ?? null,
+    roundMoneySpent: [0, 1_800, 2_400, null, 950][index % 5] ?? null,
   });
 });
+
+const freezetimePlayers = stressPlayers.map((player, index) =>
+  makePlayer(
+    player.sourcePlayerId,
+    player.side === 'T' ? 'T' : 'CT',
+    player.observerSlot ?? index + 1,
+    {
+      ...player,
+      lifeState: 'alive',
+      weaponsAvailable: true,
+      state: {
+        ...DEFAULT_PLAYER_STATE,
+        health: 100,
+        armor: index === 1 ? 50 : 100,
+        hasHelmet: index !== 1,
+        hasDefuser: player.side === 'CT' && index === 0,
+        money: [16_000, 2_400, 4_200, 4_200, 8_750][index] ?? 4_200,
+        equipValue: [5_400, 2_200, 3_900, 3_900, 4_800][index] ?? 3_900,
+      },
+      weapons: [
+        makeWeapon(
+          `freeze-primary-${index + 1}`,
+          index % 2 === 0 ? 'weapon_ak47' : 'weapon_m4a1_silencer',
+          'active',
+        ),
+        {
+          ...makeWeapon(`freeze-secondary-${index + 1}`, 'weapon_usp_silencer', 'holstered'),
+          type: 'pistol',
+          ammoClip: 12,
+          ammoClipMax: 12,
+          ammoReserve: 24,
+        },
+        makeUtilityWeapon(`freeze-smoke-${index + 1}`, 'weapon_smokegrenade', index === 2 ? 0 : 1),
+        makeUtilityWeapon(`freeze-flash-${index + 1}`, 'weapon_flashbang', index === 3 ? null : 2),
+      ],
+    },
+  ),
+);
+
+const ecoPlayers = freezetimePlayers.map((player, index) => ({
+  ...player,
+  state:
+    player.state === null
+      ? null
+      : {
+          ...player.state,
+          armor: 0,
+          hasHelmet: false,
+          hasDefuser: false,
+          money: 1_400,
+          equipValue: 0,
+        },
+  weapons:
+    index % 2 === 0
+      ? [
+          {
+            ...makeWeapon(`eco-pistol-${index + 1}`, 'weapon_glock', 'active'),
+            type: 'pistol' as const,
+            ammoClip: 20,
+            ammoClipMax: 20,
+            ammoReserve: 120,
+          },
+        ]
+      : [],
+  roundMoneySpent: 0,
+}));
+
+const missingSummaryPlayers = freezetimePlayers.map((player, index) =>
+  index === 0
+    ? {
+        ...player,
+        state: player.state === null ? null : { ...player.state, money: null, equipValue: null },
+        weapons: [],
+        weaponsAvailable: false,
+        roundMoneySpent: null,
+      }
+    : player,
+);
+
+const carryoverLivePlayers = freezetimePlayers.map((player) => ({
+  ...player,
+  state: player.state === null ? null : { ...player.state, money: 1_000, equipValue: 500 },
+  roundMoneySpent: null,
+}));
 
 const stressMatch = fixtureMatch({
   format: 'bo5',
@@ -887,6 +1033,79 @@ const fixtureRecord = {
       roundNumber: 19,
       score: { ct: 10, t: 8 },
       clock: { phase: 'live', endsInSeconds: 17 },
+      bomb: {
+        state: 'carried',
+        sourcePlayerId: 'stress-player-1',
+        explosion: null,
+        action: null,
+      },
+      coverage: BOMB_COVERAGE,
+    }),
+  ),
+  'player-rails-eco': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: ecoPlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'freezetime', winnerSide: 'unknown' },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
+  'player-rails-dead-observed': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: stressMatch,
+      teams: canonicalTeams,
+      series: LONG_SERIES,
+      players: stressPlayers,
+      roundNumber: 19,
+      score: { ct: 10, t: 8 },
+      clock: { phase: 'live', endsInSeconds: 17 },
+      observedPlayerSourceId: 'stress-player-3',
+      bomb: {
+        state: 'carried',
+        sourcePlayerId: 'stress-player-1',
+        explosion: null,
+        action: null,
+      },
+      coverage: BOMB_COVERAGE,
+    }),
+  ),
+  'player-rails-missing-summary': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: missingSummaryPlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'freezetime', winnerSide: 'unknown' },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
+  'player-rails-carryover': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: carryoverLivePlayers,
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      round: { phase: 'live', winnerSide: 'unknown' },
+      clock: { phase: 'live', endsInSeconds: 74 },
     }),
   ),
   'series-bo1': makeSnapshot(
@@ -896,7 +1115,7 @@ const fixtureRecord = {
       match: fixtureMatch({ format: 'bo1' }),
       teams: canonicalTeams,
       series: BO1_SERIES,
-      players: canonicalPlayers(),
+      players: freezetimePlayers,
       mapName: 'de_vertigo',
       roundNumber: 8,
       score: { ct: 4, t: 4 },
@@ -969,7 +1188,7 @@ const fixtureRecord = {
         t: canonicalTeam('fixture-entry-a', 'Northstar', 1),
       },
       series: BO3_SERIES,
-      players: canonicalPlayers(),
+      players: halftimePlayers(),
       mapName: 'de_mirage',
       roundNumber: 13,
       score: { ct: 5, t: 7 },

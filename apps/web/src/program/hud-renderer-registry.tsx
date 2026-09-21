@@ -12,6 +12,7 @@ import {
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
 import { RoundHistory, SeriesStrip, TopScoreBar } from './widgets/match-header';
+import { PlayerRail } from './widgets/player-rails';
 
 export interface HudWidgetRendererProps {
   readonly snapshot: ProgramSnapshot;
@@ -38,6 +39,8 @@ const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
 
 const IMPLEMENTED_RENDERERS: Partial<Record<HudWidgetId, HudWidgetRenderer>> = {
   'top-score-bar': TopScoreBar,
+  'team-ct-rail': PlayerRail,
+  'team-t-rail': PlayerRail,
   'series-strip': SeriesStrip,
   'round-history': RoundHistory,
 };

@@ -43,11 +43,11 @@
 
 ## Adapted presentation sources
 
-本 Issue 的比赛头部展示只借鉴并改写下列已固定版本的 presentation source。它们不是安装依赖；本仓库不携带其 runtime、图片资产或原始数据处理逻辑。改写后的文件只消费 Broadcast `ProgramPayload` presentation model，并保留本节 provenance。
+本 Issue 的 HUD presentation adaptation 只借鉴并改写下列已固定版本的 presentation source。它们不是安装依赖；本仓库不携带其 runtime、图片资产或原始数据处理逻辑。改写后的文件只消费 Broadcast `ProgramPayload` presentation model，并保留本节 provenance。
 
 | 来源                      | 固定版本与改写参考文件                                                                                                                                    | 许可证                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx` | MIT                                 |
+| Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx`、`Player.tsx`、`TeamBox.tsx`、`players.scss` | MIT                                 |
 | Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | 固定版本 `package.json` 声明 ISC；该 revision 无独立 `LICENSE` 文件 |
 
 Lexogrine MIT notice（固定版本 `LICENSE`）：
