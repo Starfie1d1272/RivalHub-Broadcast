@@ -177,16 +177,28 @@ describe('hud-config schema and framework contract', () => {
       defaultVariant: 'compact',
       resizePolicy: 'square',
       defaultPlacement: getBuiltinLayout().widgets.radar,
-      settingsSchema: (value: unknown) =>
-        z
-          .object({ density: z.literal('tight') })
-          .strict()
-          .parse(value),
+      settingsSchemaByVariant: {
+        default: (value: unknown) => z.object({ showLabel: z.boolean() }).strict().parse(value),
+        compact: (value: unknown) =>
+          z
+            .object({ density: z.literal('tight') })
+            .strict()
+            .parse(value),
+      },
     });
 
     expect(
       futureDescriptor.validateSettings({ variant: 'compact', settings: { density: 'tight' } }),
     ).toEqual({ variant: 'compact', settings: { density: 'tight' } });
+    expect(
+      futureDescriptor.validateSettings({ variant: 'default', settings: { showLabel: true } }),
+    ).toEqual({ variant: 'default', settings: { showLabel: true } });
+    expect(() =>
+      futureDescriptor.validateSettings({ variant: 'compact', settings: { showLabel: true } }),
+    ).toThrow();
+    expect(() =>
+      futureDescriptor.validateSettings({ variant: 'default', settings: { density: 'tight' } }),
+    ).toThrow();
     expect(() =>
       getHudWidgetDescriptor('radar').validateSettings({ variant: 'compact', settings: {} }),
     ).toThrow();
@@ -201,9 +213,21 @@ describe('hud-config schema and framework contract', () => {
     ).toThrow();
     expect(() =>
       defineHudWidgetDescriptor({
-        ...futureDescriptor,
+        id: futureDescriptor.id,
+        label: futureDescriptor.label,
+        rendererAvailability: futureDescriptor.rendererAvailability,
+        supportedVariants: futureDescriptor.supportedVariants,
         defaultVariant: 'missing',
-        settingsSchema: () => ({}),
+        resizePolicy: futureDescriptor.resizePolicy,
+        defaultPlacement: futureDescriptor.defaultPlacement,
+        settingsSchemaByVariant: {
+          default: (value: unknown) => z.object({ showLabel: z.boolean() }).strict().parse(value),
+          compact: (value: unknown) =>
+            z
+              .object({ density: z.literal('tight') })
+              .strict()
+              .parse(value),
+        },
       }),
     ).toThrow();
   });

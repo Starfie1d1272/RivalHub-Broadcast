@@ -430,6 +430,16 @@
   width: 11rem;
 }
 
+.hud-console__color-row input[type='text'].is-invalid {
+  border-color: #f2bd4f;
+}
+
+.hud-console__field-error {
+  color: #f2bd4f;
+  font-size: 0.75rem;
+  margin: 0.45rem 0 0;
+}
+
 .hud-console button:focus-visible,
 .hud-console a:focus-visible,
 .hud-console input:focus-visible,

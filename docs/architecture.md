@@ -336,13 +336,13 @@ Lookahead source 或通用 event bus。protocol version 与 channel schema versi
 
 HUD 配置属于独立的 presentation control-plane，不是 Local Protocol channel，也不修改
 `ProgramSnapshot` schema。`packages/hud-config` 定义并解析 `HudPreset`、`HudLayout`、`HudTheme` 和
-组件 registry；Companion 的 `GET /local/v1/hud-config` 返回当前已启用的 resolved preset，Web
+组件 registry；Companion 将 `/local/v1/hud-config` 作为只读的 Program/on-air read model，将
+`/operator/hud-config` 作为保存文档的 editor read model。两者各自拥有覆盖完整 HTTP representation 的
+ETag/revision；保存资源不会改变正式节目的 ETag，只有启用 preset 才会冻结新的 resolved snapshot。Web
 编辑器通过仅限 loopback 且要求 valid local Origin 的本地 HTTP mutation 保存资源或启用 preset；LAN
-mode 下该 endpoint 只读，任何 mutation 都会拒绝。保存资源不会改变正式节目的 ETag；只有启用 preset
-才会冻结新的 resolved snapshot；custom snapshot 在重启和 recipe 升级后仍保持最后一次上屏内容，直到
-重新启用，built-in reference 则解析当前代码版本。该 endpoint 使用 500ms conditional
-polling 与 ETag，配置读取/解析失败保留 last-known-valid runtime，不让 HUD 配置故障伪造或中断
-Gameplay telemetry。
+mode 下该 endpoint 只读，任何 mutation 都会拒绝。custom snapshot 在重启和 recipe 升级后仍保持最后
+一次上屏内容，直到重新启用，built-in reference 则解析当前代码版本。配置读取/解析失败保留
+last-known-valid runtime，不让 HUD 配置故障伪造或中断 Gameplay telemetry。
 
 连接建立后立即发送当前 baseline；断线重连重新取得 current baseline，不补发历史 snapshot。
 

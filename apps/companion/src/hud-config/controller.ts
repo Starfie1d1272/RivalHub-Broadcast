@@ -1,7 +1,12 @@
 import type { FastifyInstance, FastifyReply } from 'fastify';
 
 import { checkLocalWebOrigin, type LocalWebOriginPolicy } from '../local-web/origin-policy.js';
-import { HudConfigStore, type HudResourceKind } from './store.js';
+import {
+  HudConfigStore,
+  type HudConfigMutationState,
+  type HudConfigState,
+  type HudResourceKind,
+} from './store.js';
 
 export interface HudConfigControllerOptions {
   readonly store: HudConfigStore;
@@ -24,8 +29,29 @@ function resourceKind(value: unknown): HudResourceKind | undefined {
   return value === 'preset' || value === 'layout' || value === 'theme' ? value : undefined;
 }
 
-function responseBody(store: HudConfigStore) {
-  return store.getState();
+function onAirResponse(state: HudConfigState) {
+  return {
+    resolved: state.resolved,
+    etag: state.etag,
+    activeRevision: state.activeRevision,
+  };
+}
+
+function editorResponse(state: HudConfigState) {
+  return {
+    document: state.document,
+    activationStale: state.activationStale,
+    etag: state.editorEtag,
+    revision: state.editorRevision,
+  };
+}
+
+function mutationResponse(state: HudConfigMutationState) {
+  return {
+    command: state.command,
+    onAir: onAirResponse(state),
+    editor: editorResponse(state),
+  };
 }
 
 export function registerHudConfigRoutes(
@@ -38,7 +64,17 @@ export function registerHudConfigRoutes(
     reply.header('etag', state.etag);
     const requested = request.headers['if-none-match'];
     if (typeof requested === 'string' && requested === state.etag) return reply.code(304).send();
-    return reply.code(200).send(responseBody(options.store));
+    return reply.code(200).send(onAirResponse(state));
+  });
+
+  app.get('/operator/hud-config', (request, reply) => {
+    const state = options.store.getState();
+    reply.header('cache-control', 'no-store');
+    reply.header('etag', state.editorEtag);
+    const requested = request.headers['if-none-match'];
+    if (typeof requested === 'string' && requested === state.editorEtag)
+      return reply.code(304).send();
+    return reply.code(200).send(editorResponse(state));
   });
 
   app.post('/operator/hud-config', async (request, reply) => {
@@ -65,11 +101,11 @@ export function registerHudConfigRoutes(
           body.kind === 'save-resource'
             ? await options.store.saveResource(resource, body.value)
             : await options.store.saveAs(resource, body.value);
-        return reply.code(200).send(state);
+        return reply.code(200).send(mutationResponse(state));
       }
       if (body.kind === 'activate-preset' && typeof body.sourceId === 'string') {
         const state = await options.store.activatePreset(body.sourceId);
-        return reply.code(200).send(state);
+        return reply.code(200).send(mutationResponse(state));
       }
       return reply.code(400).send({ error: 'invalid_hud_config_command' });
     } catch (error: unknown) {

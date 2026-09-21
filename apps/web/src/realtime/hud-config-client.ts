@@ -12,41 +12,114 @@ import {
 export const HUD_CONFIG_POLL_INTERVAL_MS = 500;
 
 export interface HudConfigResponse {
-  readonly document: HudConfigDocument;
   readonly resolved: HudResolvedPreset;
   readonly etag: string;
+  readonly activeRevision: string;
+}
+
+export interface HudConfigEditorResponse {
+  readonly document: HudConfigDocument;
   readonly activationStale: boolean;
+  readonly etag: string;
+  readonly revision: string;
+}
+
+export interface HudConfigCommandResult {
+  readonly kind: 'save-resource' | 'save-as' | 'activate-preset';
+  readonly resource?: 'preset' | 'layout' | 'theme';
+  readonly resourceId?: string;
+  readonly sourceId?: string;
+}
+
+export interface HudConfigMutationResponse {
+  readonly command: HudConfigCommandResult;
+  readonly onAir: HudConfigResponse;
+  readonly editor: HudConfigEditorResponse;
 }
 
 export interface HudConfigClientSnapshot {
   readonly status: 'loading' | 'ready' | 'error';
   readonly current: HudResolvedPreset;
+  readonly etag: string | null;
+  readonly activeRevision: string | null;
+  readonly error: string | null;
+}
+
+export interface HudConfigEditorClientSnapshot {
+  readonly status: 'loading' | 'ready' | 'error';
   readonly document: HudConfigDocument | null;
   readonly etag: string | null;
+  readonly revision: string | null;
   readonly activationStale: boolean;
   readonly error: string | null;
 }
 
 export type HudConfigClientListener = () => void;
 
-function parseResponse(value: unknown): HudConfigResponse {
-  if (typeof value !== 'object' || value === null) throw new Error('HUD 配置响应结构无法识别');
-  const record = value as Record<string, unknown>;
-  if (typeof record.etag !== 'string' || typeof record.activationStale !== 'boolean') {
-    throw new Error('HUD 配置响应缺少版本信息');
+function asRecord(value: unknown): Record<string, unknown> {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) {
+    throw new Error('HUD 配置响应结构无法识别');
   }
-  const document = parseHudConfigDocument(record.document);
+  return value as Record<string, unknown>;
+}
+
+function parseOnAirResponse(value: unknown): HudConfigResponse {
+  const record = asRecord(value);
+  if (typeof record.etag !== 'string' || typeof record.activeRevision !== 'string') {
+    throw new Error('正式节目配置响应缺少版本信息');
+  }
   let resolved: HudResolvedPreset;
   try {
     resolved = parseHudResolvedPreset(record.resolved);
   } catch {
-    throw new Error('HUD 配置响应的启用预设无效');
+    throw new Error('正式节目配置响应无效');
+  }
+  return { resolved, etag: record.etag, activeRevision: record.activeRevision };
+}
+
+function parseEditorResponse(value: unknown): HudConfigEditorResponse {
+  const record = asRecord(value);
+  if (
+    typeof record.etag !== 'string' ||
+    typeof record.revision !== 'string' ||
+    typeof record.activationStale !== 'boolean'
+  ) {
+    throw new Error('HUD 编辑配置响应缺少版本信息');
   }
   return {
-    document,
-    resolved,
-    etag: record.etag,
+    document: parseHudConfigDocument(record.document),
     activationStale: record.activationStale,
+    etag: record.etag,
+    revision: record.revision,
+  };
+}
+
+function parseMutationResponse(value: unknown): HudConfigMutationResponse {
+  const record = asRecord(value);
+  const command = asRecord(record.command);
+  if (
+    (command.kind !== 'save-resource' &&
+      command.kind !== 'save-as' &&
+      command.kind !== 'activate-preset') ||
+    (command.resource !== undefined &&
+      command.resource !== 'preset' &&
+      command.resource !== 'layout' &&
+      command.resource !== 'theme') ||
+    (command.resourceId !== undefined && typeof command.resourceId !== 'string') ||
+    (command.sourceId !== undefined && typeof command.sourceId !== 'string')
+  ) {
+    throw new Error('HUD 操作结果缺少资源身份');
+  }
+  const parsedCommand: HudConfigCommandResult = {
+    kind: command.kind,
+    ...(typeof command.resource === 'string' ? { resource: command.resource } : {}),
+    ...(typeof command.resourceId === 'string' ? { resourceId: command.resourceId } : {}),
+    ...(typeof command.sourceId === 'string' ? { sourceId: command.sourceId } : {}),
+  };
+  return {
+    command: parsedCommand,
+    onAir: parseOnAirResponse(record.onAir),
+    editor: parseEditorResponse(record.editor),
   };
 }
 
@@ -54,9 +127,8 @@ export class HudConfigClient {
   private snapshot: HudConfigClientSnapshot = {
     status: 'loading',
     current: getBuiltinResolvedPreset(),
-    document: createDefaultHudConfigDocument(),
     etag: null,
-    activationStale: false,
+    activeRevision: null,
     error: null,
   };
   private readonly listeners = new Set<HudConfigClientListener>();
@@ -94,9 +166,8 @@ export class HudConfigClient {
     this.update({
       status: 'ready',
       current: response.resolved,
-      document: response.document,
       etag: response.etag,
-      activationStale: response.activationStale,
+      activeRevision: response.activeRevision,
       error: null,
     });
   };
@@ -120,8 +191,92 @@ export class HudConfigClient {
         this.update({ status: 'ready', error: null });
       } else {
         if (!response.ok) throw new Error(`本地制播服务返回 HTTP ${response.status}`);
-        const parsed = parseResponse(await response.json());
-        this.applyResponse(parsed);
+        this.applyResponse(parseOnAirResponse(await response.json()));
+      }
+    } catch (error: unknown) {
+      this.update({
+        status: 'error',
+        error:
+          error instanceof Error ? error.message : '正式节目配置暂不可用，继续使用最近有效版本',
+      });
+    } finally {
+      this.requestInFlight = false;
+      this.schedule();
+    }
+  }
+}
+
+export class HudConfigEditorClient {
+  private snapshot: HudConfigEditorClientSnapshot = {
+    status: 'loading',
+    document: createDefaultHudConfigDocument(),
+    etag: null,
+    revision: null,
+    activationStale: false,
+    error: null,
+  };
+  private readonly listeners = new Set<HudConfigClientListener>();
+  private timer: number | undefined;
+  private running = false;
+  private requestInFlight = false;
+
+  getSnapshot = (): HudConfigEditorClientSnapshot => this.snapshot;
+
+  subscribe = (listener: HudConfigClientListener): (() => void) => {
+    this.listeners.add(listener);
+    return () => this.listeners.delete(listener);
+  };
+
+  start(): void {
+    if (this.running) return;
+    this.running = true;
+    void this.poll();
+  }
+
+  stop(): void {
+    this.running = false;
+    if (this.timer !== undefined) {
+      window.clearTimeout(this.timer);
+      this.timer = undefined;
+    }
+  }
+
+  private update(patch: Partial<HudConfigEditorClientSnapshot>): void {
+    this.snapshot = { ...this.snapshot, ...patch };
+    for (const listener of this.listeners) listener();
+  }
+
+  applyResponse = (response: HudConfigEditorResponse): void => {
+    this.update({
+      status: 'ready',
+      document: response.document,
+      etag: response.etag,
+      revision: response.revision,
+      activationStale: response.activationStale,
+      error: null,
+    });
+  };
+
+  private schedule(): void {
+    if (!this.running || this.timer !== undefined) return;
+    this.timer = window.setTimeout(() => {
+      this.timer = undefined;
+      void this.poll();
+    }, HUD_CONFIG_POLL_INTERVAL_MS);
+  }
+
+  private async poll(): Promise<void> {
+    if (!this.running || this.requestInFlight) return;
+    this.requestInFlight = true;
+    try {
+      const headers: Record<string, string> = { Accept: 'application/json' };
+      if (this.snapshot.etag !== null) headers['If-None-Match'] = this.snapshot.etag;
+      const response = await fetch('/operator/hud-config', { headers, cache: 'no-store' });
+      if (response.status === 304) {
+        this.update({ status: 'ready', error: null });
+      } else {
+        if (!response.ok) throw new Error(`本地制播服务返回 HTTP ${response.status}`);
+        this.applyResponse(parseEditorResponse(await response.json()));
       }
     } catch (error: unknown) {
       this.update({
@@ -139,8 +294,23 @@ export type HudConfigClientView = HudConfigClientSnapshot & {
   readonly applyResponse: (response: HudConfigResponse) => void;
 };
 
+export type HudConfigEditorClientView = HudConfigEditorClientSnapshot & {
+  readonly applyResponse: (response: HudConfigEditorResponse) => void;
+};
+
 export function useHudConfigClient(enabled = true): HudConfigClientView {
   const client = useMemo(() => new HudConfigClient(), []);
+  useEffect(() => {
+    if (!enabled) return;
+    client.start();
+    return () => client.stop();
+  }, [client, enabled]);
+  const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
+  return useMemo(() => ({ ...snapshot, applyResponse: client.applyResponse }), [client, snapshot]);
+}
+
+export function useHudConfigEditorClient(enabled = true): HudConfigEditorClientView {
+  const client = useMemo(() => new HudConfigEditorClient(), []);
   useEffect(() => {
     if (!enabled) return;
     client.start();
@@ -157,7 +327,9 @@ export interface HudConfigMutation {
   readonly sourceId?: string;
 }
 
-export async function mutateHudConfig(command: HudConfigMutation): Promise<HudConfigResponse> {
+export async function mutateHudConfig(
+  command: HudConfigMutation,
+): Promise<HudConfigMutationResponse> {
   const response = await fetch('/operator/hud-config', {
     method: 'POST',
     headers: {
@@ -174,8 +346,8 @@ export async function mutateHudConfig(command: HudConfigMutation): Promise<HudCo
       'message' in body &&
       typeof body.message === 'string'
         ? body.message
-        : 'HUD 配置命令未执行';
+        : 'HUD 操作未完成';
     throw new Error(message);
   }
-  return parseResponse(body);
+  return parseMutationResponse(body);
 }

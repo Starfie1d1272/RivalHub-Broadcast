@@ -70,6 +70,9 @@ test.describe('节目 HUD 控制台', () => {
     await page.goto('/operator/hud');
 
     await expect(page.getByRole('heading', { name: '把画面边界交给可验证的配置。' })).toBeVisible();
+    await expect(page.locator('body')).not.toContainText(
+      /\b(renderer|snapshot|baseline|schema|recipe|SeriesProgress|OperatorCommand|credential)\b/i,
+    );
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     const fixtureSelect = page.locator('select[aria-label="测试场景"]');
@@ -241,6 +244,27 @@ test.describe('节目 HUD 控制台', () => {
     await expect(page.locator('.hud-console')).toHaveScreenshot(
       'hud-console-theme.png',
       HUD_SCREENSHOT_OPTIONS,
+    );
+  });
+
+  test('非法品牌色在本地标记并保留上一次有效预览', async ({ page }) => {
+    await page.goto('/operator/hud');
+    await page.getByRole('button', { name: 'HUD 外观' }).click();
+
+    const colorInput = page.getByLabel('品牌色十六进制值');
+    await colorInput.fill('#ff00aa');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
+    );
+
+    await colorInput.fill('not-a-color');
+    await expect(colorInput).toHaveAttribute('aria-invalid', 'true');
+    await expect(page.getByRole('alert')).toContainText('请输入 6 位十六进制颜色');
+    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
+      'style',
+      /--rh-hud-brand: #ff00aa/,
     );
   });
 

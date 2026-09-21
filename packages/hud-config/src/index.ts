@@ -302,8 +302,10 @@ export interface HudWidgetDescriptorDefinition extends Omit<
   HudWidgetDescriptor,
   'validateSettings'
 > {
-  /** Strict settings parser owned by the individual widget descriptor. */
-  readonly settingsSchema: (value: unknown) => Record<string, unknown>;
+  /** Strict settings parser owned by each individual widget variant. */
+  readonly settingsSchemaByVariant: Readonly<
+    Record<string, (value: unknown) => Record<string, unknown>>
+  >;
 }
 
 /**
@@ -314,8 +316,19 @@ export interface HudWidgetDescriptorDefinition extends Omit<
 export function defineHudWidgetDescriptor(
   definition: HudWidgetDescriptorDefinition,
 ): HudWidgetDescriptor {
+  const supportedVariants = new Set(definition.supportedVariants);
+  if (supportedVariants.size !== definition.supportedVariants.length) {
+    throw new Error(`组件 ${definition.id} 的 supportedVariants 不得重复`);
+  }
   if (!definition.supportedVariants.includes(definition.defaultVariant)) {
     throw new Error(`组件 ${definition.id} 的 defaultVariant 必须属于 supportedVariants`);
+  }
+  const parserVariants = Object.keys(definition.settingsSchemaByVariant);
+  if (
+    parserVariants.length !== supportedVariants.size ||
+    parserVariants.some((variant) => !supportedVariants.has(variant))
+  ) {
+    throw new Error(`组件 ${definition.id} 必须为每个 supported variant 提供独立 settings schema`);
   }
   return {
     ...definition,
@@ -324,9 +337,13 @@ export function defineHudWidgetDescriptor(
       if (!definition.supportedVariants.includes(parsed.variant)) {
         throw new Error(`组件 ${definition.id} 不支持 variant：${parsed.variant}`);
       }
+      const settingsSchema = definition.settingsSchemaByVariant[parsed.variant];
+      if (settingsSchema === undefined) {
+        throw new Error(`组件 ${definition.id} 缺少 variant settings schema：${parsed.variant}`);
+      }
       return {
         variant: parsed.variant,
-        settings: definition.settingsSchema(parsed.settings),
+        settings: settingsSchema(parsed.settings),
       };
     },
   };
@@ -533,7 +550,9 @@ export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
       defaultVariant: 'default' as const,
       resizePolicy: id === 'radar' ? ('square' as const) : ('none' as const),
       defaultPlacement: cloneJson(DEFAULT_PLACEMENTS[id]),
-      settingsSchema: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
+      settingsSchemaByVariant: {
+        default: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
+      },
     }),
   })),
 );

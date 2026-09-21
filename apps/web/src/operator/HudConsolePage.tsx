@@ -28,6 +28,7 @@ import {
   type HudConfigDocument,
   type HudLayout,
   type HudPreset,
+  type HudResolvedPreset,
   type HudTheme,
   type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
@@ -50,8 +51,10 @@ import {
 import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
 import {
   mutateHudConfig,
+  useHudConfigEditorClient,
   useHudConfigClient,
   type HudConfigMutation,
+  type HudConfigMutationResponse,
 } from '../realtime/hud-config-client';
 
 import './hud-console.css';
@@ -147,9 +150,10 @@ function useProgramConnection(): {
 
 export function HudConsolePage() {
   const hudConfig = useHudConfigClient(import.meta.env.VITE_VISUAL_FIXTURES !== '1');
+  const hudEditor = useHudConfigEditorClient(import.meta.env.VITE_VISUAL_FIXTURES !== '1');
   const program = useProgramConnection();
-  const initialDocument = hudConfig.document ?? createDefaultHudConfigDocument();
-  const configDocument = hudConfig.document ?? initialDocument;
+  const initialDocument = hudEditor.document ?? createDefaultHudConfigDocument();
+  const configDocument = hudEditor.document ?? initialDocument;
   const [workspace, setWorkspace] = useState<HudWorkspace>('preset');
   const [selectedPresetId, setSelectedPresetId] = useState(() => activePresetId(initialDocument));
   const [selectedLayoutId, setSelectedLayoutId] = useState(() => {
@@ -179,6 +183,9 @@ export function HudConsolePage() {
   const [commandState, setCommandState] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const skipNextExternalSync = useRef(false);
+  const [lastValidPreview, setLastValidPreview] = useState<HudResolvedPreset>(() =>
+    getBuiltinResolvedPreset(),
+  );
   const [drag, setDrag] = useState<{
     readonly kind: 'move' | 'resize';
     readonly widgetId: HudWidgetId;
@@ -199,21 +206,22 @@ export function HudConsolePage() {
   const presetDirty = savedPreset === undefined || !isSame(savedPreset, presetDraft);
   const layoutDirty = savedLayout === undefined || !isSame(savedLayout, layoutDraft);
   const themeDirty = savedTheme === undefined || !isSame(savedTheme, themeDraft);
+  const themeDraftInvalid = !/^#[0-9a-fA-F]{6}$/.test(themeDraft.brandColor);
   const dirtyDrafts: HudDraftDirtyState = {
     preset: presetDirty,
     layout: layoutDirty,
     theme: themeDirty,
   };
   const hasDirtyDraft = presetDirty || layoutDirty || themeDirty;
-  const activationStale = hudConfig.activationStale;
+  const activationStale = hudEditor.activationStale;
 
   useEffect(() => {
     if (skipNextExternalSync.current) {
       skipNextExternalSync.current = false;
       return;
     }
-    if (hudConfig.document === null || hasDirtyDraft) return;
-    const nextDocument = hudConfig.document;
+    if (hudEditor.document === null || hasDirtyDraft) return;
+    const nextDocument = hudEditor.document;
     const nextPresetId = activePresetId(nextDocument);
     const nextPreset = resourceFor(nextDocument, 'preset', nextPresetId) as HudPreset;
     const nextLayoutId = nextPreset.layoutId;
@@ -226,7 +234,7 @@ export function HudConsolePage() {
     setPresetDraft(clone(nextPreset));
     setLayoutDraft(clone(resourceFor(nextDocument, 'layout', nextLayoutId) as HudLayout));
     setThemeDraft(clone(resourceFor(nextDocument, 'theme', nextThemeId) as HudTheme));
-  }, [hasDirtyDraft, hudConfig.document, hudConfig.etag]);
+  }, [hasDirtyDraft, hudEditor.document, hudEditor.revision]);
 
   useEffect(() => {
     const beforeUnload = (event: BeforeUnloadEvent) => {
@@ -363,13 +371,18 @@ export function HudConsolePage() {
     }
   }
 
-  function applyResponse(response: Parameters<typeof hudConfig.applyResponse>[0]): void {
+  function applyResponse(response: HudConfigMutationResponse): void {
     skipNextExternalSync.current = true;
-    hudConfig.applyResponse(response);
+    hudConfig.applyResponse(response.onAir);
+    hudEditor.applyResponse(response.editor);
   }
 
   async function submitMutation(kind: HudWorkspace, saveAs: boolean): Promise<void> {
     if (busy) return;
+    if (kind === 'theme' && themeDraftInvalid) {
+      setCommandState('请先修正品牌色格式，再保存 HUD 外观。');
+      return;
+    }
     const draft = selectedDraft(kind);
     const command: HudConfigMutation = {
       kind: saveAs ? 'save-as' : 'save-resource',
@@ -379,17 +392,13 @@ export function HudConsolePage() {
     setBusy(true);
     setCommandState(null);
     try {
-      const beforeIds = new Set(resourceList(configDocument, kind).map((resource) => resource.id));
       const response = await mutateHudConfig(command);
       applyResponse(response);
-      let nextId = draft.id;
-      if (saveAs) {
-        const created = resourceList(response.document, kind).find(
-          (resource) => !beforeIds.has(resource.id),
-        );
-        if (created !== undefined) nextId = created.id;
+      if (response.command.resource !== kind || response.command.resourceId === undefined) {
+        throw new Error('服务器未返回本次操作对应的 HUD 资源身份');
       }
-      const saved = resourceFor(response.document, kind, nextId);
+      const nextId = response.command.resourceId;
+      const saved = resourceFor(response.editor.document, kind, nextId);
       if (saved === undefined) throw new Error('服务器未返回已保存的 HUD 资源');
       setSelectedDraft(kind, clone(saved));
       if (kind === 'preset') setSelectedPresetId(nextId);
@@ -397,7 +406,7 @@ export function HudConsolePage() {
       if (kind === 'theme') setSelectedThemeId(nextId);
       setCommandState(saveAs ? `已另存为「${saved.name}」。` : 'HUD 草稿已保存。');
     } catch (error: unknown) {
-      setCommandState(`HUD 命令未执行：${error instanceof Error ? error.message : '请求失败'}`);
+      setCommandState(`HUD 操作未完成：${error instanceof Error ? error.message : '请求失败'}`);
     } finally {
       setBusy(false);
     }
@@ -413,7 +422,7 @@ export function HudConsolePage() {
         sourceId: selectedPresetId,
       });
       applyResponse(response);
-      setCommandState('已启用当前 HUD 预设；正式节目将在下一次轮询中获取同一份已验证配置快照。');
+      setCommandState('已启用当前 HUD 预设；正式节目会使用这份配置。');
     } catch (error: unknown) {
       setCommandState(`HUD 预设未启用：${error instanceof Error ? error.message : '请求失败'}`);
     } finally {
@@ -480,34 +489,34 @@ export function HudConsolePage() {
     });
   }
 
-  let previewPreset = presetDraft;
-  let previewLayout = resourceFor(configDocument, 'layout', presetDraft.layoutId) as
-    HudLayout | undefined;
-  let previewTheme = resourceFor(configDocument, 'theme', presetDraft.themeId) as
-    HudTheme | undefined;
-  if (workspace === 'layout') {
-    previewPreset = { ...presetDraft, layoutId: selectedLayoutId };
-    previewLayout =
-      selectedLayoutId === layoutDraft.id
-        ? layoutDraft
-        : (resourceFor(configDocument, 'layout', selectedLayoutId) as HudLayout);
-  }
-  if (workspace === 'theme') {
-    previewPreset = { ...presetDraft, themeId: selectedThemeId };
-    previewTheme =
-      selectedThemeId === themeDraft.id
-        ? themeDraft
-        : (resourceFor(configDocument, 'theme', selectedThemeId) as HudTheme);
-  }
-  const previewResolved = useMemo(() => {
+  const previewPreset = useMemo(() => {
+    if (workspace === 'layout') return { ...presetDraft, layoutId: selectedLayoutId };
+    if (workspace === 'theme') return { ...presetDraft, themeId: selectedThemeId };
+    return presetDraft;
+  }, [presetDraft, selectedLayoutId, selectedThemeId, workspace]);
+  const previewLayout = useMemo(() => {
+    if (workspace === 'layout' && selectedLayoutId === layoutDraft.id) return layoutDraft;
+    return resourceFor(configDocument, 'layout', previewPreset.layoutId) as HudLayout | undefined;
+  }, [configDocument, layoutDraft, previewPreset.layoutId, selectedLayoutId, workspace]);
+  const previewTheme = useMemo(() => {
+    if (workspace === 'theme' && selectedThemeId === themeDraft.id) return themeDraft;
+    return resourceFor(configDocument, 'theme', previewPreset.themeId) as HudTheme | undefined;
+  }, [configDocument, previewPreset.themeId, selectedThemeId, themeDraft, workspace]);
+  const previewCandidate = useMemo(() => {
     try {
-      if (previewLayout === undefined || previewTheme === undefined)
-        return getBuiltinResolvedPreset();
+      if (previewLayout === undefined || previewTheme === undefined) return null;
       return resolveHudPreset(previewPreset, previewLayout, previewTheme);
     } catch {
-      return getBuiltinResolvedPreset();
+      return null;
     }
   }, [previewLayout, previewPreset, previewTheme]);
+  useEffect(() => {
+    if (previewCandidate === null) return;
+    // Keep the last valid visual model when a draft field is temporarily invalid.
+    // eslint-disable-next-line react-hooks/set-state-in-effect
+    setLastValidPreview(previewCandidate);
+  }, [previewCandidate]);
+  const previewResolved = previewCandidate ?? lastValidPreview;
 
   const selectedPlacement =
     selectedWidgetId === null ? null : layoutDraft.widgets[selectedWidgetId];
@@ -533,16 +542,21 @@ export function HudConsolePage() {
   }
 
   function renderResourceActions(kind: HudWorkspace, dirty: boolean, id: string) {
+    const invalid = kind === 'theme' && themeDraftInvalid;
     return (
       <div className="hud-console__actions">
         <button
-          disabled={busy || isBuiltin(id)}
+          disabled={busy || isBuiltin(id) || invalid}
           onClick={() => void submitMutation(kind, false)}
           type="button"
         >
           保存
         </button>
-        <button disabled={busy} onClick={() => void submitMutation(kind, true)} type="button">
+        <button
+          disabled={busy || invalid}
+          onClick={() => void submitMutation(kind, true)}
+          type="button"
+        >
           另存为
         </button>
         <button disabled={busy || !dirty} onClick={() => discard(kind)} type="button">
@@ -634,7 +648,7 @@ export function HudConsolePage() {
           启用当前预设
         </button>
         <p className="hud-console__hint">
-          保存只更新资源；只有明确启用后，正式节目才会获得新的已验证配置快照。
+          保存只更新资源；只有明确启用后，正式节目才会使用新的配置。
         </p>
       </section>
     );
@@ -646,7 +660,7 @@ export function HudConsolePage() {
         <div className="hud-console__workspace-heading">
           <div>
             <span className="hud-console__kicker">第二步 · 编辑布局</span>
-            <h2>用逻辑坐标安排节目结构</h2>
+            <h2>安排节目结构</h2>
           </div>
           <span className="hud-console__badge">1920 × 1080 · {HUD_GRID_SIZE}px 网格</span>
         </div>
@@ -693,7 +707,7 @@ export function HudConsolePage() {
         ) : (
           <div className="hud-console__inspector">
             <div className="hud-console__inspector-heading">
-              <span>组件检查器</span>
+              <span>组件设置</span>
               <strong>{widgetLabel(selectedWidgetId)}</strong>
             </div>
             <label className="hud-console__check">
@@ -758,7 +772,7 @@ export function HudConsolePage() {
               </label>
             </div>
             <p className="hud-console__hint">
-              当前盒子：{Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}，左上角{' '}
+              当前尺寸：{Math.round(selectedBox.width)} × {Math.round(selectedBox.height)}，位置{' '}
               {Math.round(selectedBox.left)}, {Math.round(selectedBox.top)}
               。只有雷达支持保持正方形的尺寸调整。
             </p>
@@ -809,9 +823,9 @@ export function HudConsolePage() {
         <div className="hud-console__workspace-heading">
           <div>
             <span className="hud-console__kicker">第三步 · 调整外观</span>
-            <h2>只调整品牌外观，不改语义状态</h2>
+            <h2>只调整品牌外观，不改比赛信息</h2>
           </div>
-          <span className="hud-console__badge">Inter · 固定语义颜色</span>
+          <span className="hud-console__badge">比赛信息颜色由系统维护</span>
         </div>
         <label className="hud-console__field">
           外观
@@ -847,6 +861,8 @@ export function HudConsolePage() {
             />
             <input
               aria-label="品牌色十六进制值"
+              aria-invalid={themeDraftInvalid}
+              className={themeDraftInvalid ? 'is-invalid' : undefined}
               onChange={(event) => setThemeDraft({ ...themeDraft, brandColor: event.target.value })}
               placeholder="#RRGGBB"
               spellCheck={false}
@@ -854,6 +870,11 @@ export function HudConsolePage() {
               value={themeDraft.brandColor}
             />
           </div>
+          {themeDraftInvalid ? (
+            <p className="hud-console__field-error" role="alert">
+              请输入 6 位十六进制颜色，例如 #C8EF78。
+            </p>
+          ) : null}
         </div>
         <fieldset className="hud-console__choice-group">
           <legend>面板样式</legend>
@@ -891,7 +912,7 @@ export function HudConsolePage() {
         </fieldset>
         {renderResourceActions('theme', themeDirty, selectedThemeId)}
         <p className="hud-console__hint">
-          CT、T、危险、提醒、成功和目标状态等语义颜色由系统固定，不在此处编辑。
+          CT、T、危险、提醒、成功和目标状态等比赛信息颜色由系统维护，不在此处编辑。
         </p>
       </section>
     );
@@ -909,8 +930,8 @@ export function HudConsolePage() {
           </p>
         </div>
         <div className="hud-console__header-meta">
-          <span>本地配置轮询 · 500ms</span>
-          <strong>{hudConfig.status === 'error' ? '沿用最近有效版本' : '配置服务在线'}</strong>
+          <span>本地配置状态</span>
+          <strong>{hudEditor.status === 'error' ? '暂时使用最近有效配置' : '配置已连接'}</strong>
         </div>
       </header>
 
@@ -1000,7 +1021,7 @@ export function HudConsolePage() {
             snapshot={activeSnapshot}
           />
           <p className="hud-console__preview-caption">
-            逻辑画布 1920 × 1080 · 拖动组件可吸附到 10px 网格 · 当前未实现的正式节目组件保持安全隐藏
+            1920 × 1080 画布 · 拖动组件可吸附到 10px 网格 · 暂未提供的节目组件保持隐藏
           </p>
         </div>
         <div className="hud-console__editor-column">

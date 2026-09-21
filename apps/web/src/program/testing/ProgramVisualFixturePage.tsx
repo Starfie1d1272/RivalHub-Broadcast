@@ -27,7 +27,7 @@ export function ProgramVisualFixtureNotFound({ fixtureId }: { readonly fixtureId
         <p>
           {fixtureId === null
             ? '视觉测试路由需要指定场景 ID，且必须启用开发环境测试开关。'
-            : `未注册 ID 为“${fixtureId}”的 ProgramSnapshot 测试场景。`}
+            : `未注册 ID 为“${fixtureId}”的节目状态测试场景。`}
         </p>
       </section>
     </main>

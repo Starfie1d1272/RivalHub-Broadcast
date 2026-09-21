@@ -37,8 +37,22 @@ export interface HudConfigState {
   readonly document: HudConfigDocument;
   readonly resolved: HudResolvedPreset;
   readonly etag: string;
+  readonly activeRevision: string;
+  readonly editorEtag: string;
+  readonly editorRevision: string;
   readonly activationStale: boolean;
   readonly persistenceError: string | null;
+}
+
+export interface HudConfigCommandResult {
+  readonly kind: 'save-resource' | 'save-as' | 'activate-preset';
+  readonly resource?: HudResourceKind;
+  readonly resourceId?: string;
+  readonly sourceId?: string;
+}
+
+export interface HudConfigMutationState extends HudConfigState {
+  readonly command: HudConfigCommandResult;
 }
 
 function clone<T>(value: T): T {
@@ -49,8 +63,12 @@ function isMissingFile(error: unknown): boolean {
   return error instanceof Error && 'code' in error && error.code === 'ENOENT';
 }
 
-function hashResolvedPreset(value: HudResolvedPreset): string {
-  return `"${createHash('sha256').update(canonicalJson(value)).digest('hex')}"`;
+function hashCanonical(value: unknown): string {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
+
+function etagFor(value: unknown): string {
+  return `"${hashCanonical(value)}"`;
 }
 
 function resourceList(document: HudConfigDocument, kind: HudResourceKind): HudResource[] {
@@ -98,11 +116,17 @@ function savedResolvedPreset(document: HudConfigDocument): HudResolvedPreset {
 function createState(document: HudConfigDocument, persistenceError: string | null): HudConfigState {
   const resolved = resolveActiveHudPreset(document);
   const saved = savedResolvedPreset(document);
+  const activationStale = canonicalJson(saved) !== canonicalJson(resolved);
+  const activeRevision = hashCanonical(resolved);
+  const editorRevision = hashCanonical({ document, activationStale });
   return {
     document: clone(document),
     resolved: clone(resolved),
-    etag: hashResolvedPreset(resolved),
-    activationStale: canonicalJson(saved) !== canonicalJson(resolved),
+    etag: etagFor(resolved),
+    activeRevision,
+    editorEtag: etagFor({ document, activationStale }),
+    editorRevision,
+    activationStale,
     persistenceError,
   };
 }
@@ -143,60 +167,68 @@ export class HudConfigStore {
     return createState(this.document, this.persistenceError);
   }
 
-  async saveResource(kind: HudResourceKind, value: unknown): Promise<HudConfigState> {
+  async saveResource(kind: HudResourceKind, value: unknown): Promise<HudConfigMutationState> {
     const parsed = parseResource(kind, value);
     if (parsed.id.startsWith('builtin:')) throw new Error('内置 HUD 资源只读，请使用另存为');
-    return this.commit(() => {
-      const resources = resourceList(this.document, kind);
-      if (!resources.some((item) => item.id === parsed.id)) {
-        throw new Error('只能保存已经存在的自定义 HUD 资源');
-      }
-      return withResourceList(
-        this.document,
-        kind,
-        resources.map((item) => (item.id === parsed.id ? parsed : item)),
-      );
-    });
-  }
-
-  async saveAs(kind: HudResourceKind, value: unknown): Promise<HudConfigState> {
-    const parsed = parseResource(kind, value);
-    const resource = { ...parsed, id: randomUUID(), name: parsed.name.trim() } as HudResource;
-    return this.commit(() =>
-      withResourceList(this.document, kind, [...resourceList(this.document, kind), resource]),
+    return this.commit(
+      () => {
+        const resources = resourceList(this.document, kind);
+        if (!resources.some((item) => item.id === parsed.id)) {
+          throw new Error('只能保存已经存在的自定义 HUD 资源');
+        }
+        return withResourceList(
+          this.document,
+          kind,
+          resources.map((item) => (item.id === parsed.id ? parsed : item)),
+        );
+      },
+      { kind: 'save-resource', resource: kind, resourceId: parsed.id },
     );
   }
 
-  async activatePreset(sourceId: string): Promise<HudConfigState> {
-    return this.commit(() => {
-      if (sourceId === BUILTIN_PRESET_ID) {
+  async saveAs(kind: HudResourceKind, value: unknown): Promise<HudConfigMutationState> {
+    const parsed = parseResource(kind, value);
+    const resource = { ...parsed, id: randomUUID(), name: parsed.name.trim() } as HudResource;
+    return this.commit(
+      () => withResourceList(this.document, kind, [...resourceList(this.document, kind), resource]),
+      { kind: 'save-as', resource: kind, resourceId: resource.id },
+    );
+  }
+
+  async activatePreset(sourceId: string): Promise<HudConfigMutationState> {
+    return this.commit(
+      () => {
+        if (sourceId === BUILTIN_PRESET_ID) {
+          return {
+            ...this.document,
+            activePreset: { kind: 'builtin', sourceId: BUILTIN_PRESET_ID },
+          };
+        }
+        const preset = this.document.customPresets.find((item) => item.id === sourceId);
+        if (preset === undefined) throw new Error(`找不到要启用的 HUD 预设：${sourceId}`);
+        const layout =
+          preset.layoutId === BUILTIN_LAYOUT_ID
+            ? getBuiltinLayout()
+            : this.document.customLayouts.find((item) => item.id === preset.layoutId);
+        const theme =
+          preset.themeId === BUILTIN_THEME_ID
+            ? getBuiltinTheme()
+            : this.document.customThemes.find((item) => item.id === preset.themeId);
+        if (layout === undefined || theme === undefined) throw new Error('预设引用的资源不存在');
+        const snapshot = resolveHudPreset(preset, layout, theme);
         return {
           ...this.document,
-          activePreset: { kind: 'builtin', sourceId: BUILTIN_PRESET_ID },
+          activePreset: { kind: 'custom', sourceId: preset.id, snapshot },
         };
-      }
-      const preset = this.document.customPresets.find((item) => item.id === sourceId);
-      if (preset === undefined) throw new Error(`找不到要启用的 HUD 预设：${sourceId}`);
-      const layout =
-        preset.layoutId === BUILTIN_LAYOUT_ID
-          ? getBuiltinLayout()
-          : this.document.customLayouts.find((item) => item.id === preset.layoutId);
-      const theme =
-        preset.themeId === BUILTIN_THEME_ID
-          ? getBuiltinTheme()
-          : this.document.customThemes.find((item) => item.id === preset.themeId);
-      if (layout === undefined || theme === undefined) throw new Error('预设引用的资源不存在');
-      const snapshot = resolveHudPreset(preset, layout, theme);
-      return {
-        ...this.document,
-        activePreset: { kind: 'custom', sourceId: preset.id, snapshot },
-      };
-    });
+      },
+      { kind: 'activate-preset', sourceId },
+    );
   }
 
   private async commit(
     next: HudConfigDocument | (() => HudConfigDocument),
-  ): Promise<HudConfigState> {
+    command: HudConfigCommandResult,
+  ): Promise<HudConfigMutationState> {
     return this.commits.run(async () => {
       const candidate = parseHudConfigDocument(typeof next === 'function' ? next() : next);
       try {
@@ -211,7 +243,7 @@ export class HudConfigStore {
         this.onDiagnostic('hud_config_persist_failed');
         throw error;
       }
-      return this.getState();
+      return { ...this.getState(), command };
     });
   }
 

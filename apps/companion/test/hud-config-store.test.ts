@@ -98,7 +98,7 @@ describe('HudConfigStore', () => {
   it('serializes concurrent save-as operations from the latest document', async () => {
     const store = new HudConfigStore();
 
-    await Promise.all([
+    const [first, second] = await Promise.all([
       store.saveAs('theme', {
         ...getBuiltinTheme(),
         id: 'draft-theme-a',
@@ -111,6 +111,9 @@ describe('HudConfigStore', () => {
       }),
     ]);
 
+    expect(first.command.resourceId).toEqual(expect.any(String));
+    expect(second.command.resourceId).toEqual(expect.any(String));
+    expect(first.command.resourceId).not.toBe(second.command.resourceId);
     expect(store.getState().document.customThemes.map((theme) => theme.name)).toEqual([
       '外观 A',
       '外观 B',

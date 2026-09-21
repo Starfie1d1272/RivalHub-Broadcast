@@ -214,21 +214,28 @@ HUD 配置不进入上述 WebSocket channel，也不扩展 `ProgramSnapshot`。C
 
 ```text
 GET  /local/v1/hud-config
+GET  /operator/hud-config
 POST /operator/hud-config
 ```
 
-`GET` 返回严格 v1 `HudConfigDocument`、当前已启用的 `HudResolvedPreset`、`activationStale` 与
-基于 resolved canonical JSON 的 SHA-256 ETag。浏览器每 500ms 使用 `If-None-Match` 条件请求；
-保存布局/外观/预设资源不会改变 ETag，重复启用同一 resolved preset 也必须保持 ETag 不变，只有
-启用新的 resolved preset 才改变 ETag。读取、解析或持久化失败时，Companion 保留
-last-known-valid 配置，不能清除或猜测 gameplay snapshot。
+`GET /local/v1/hud-config` 是 Program/on-air read model，只返回当前已启用的
+`HudResolvedPreset`、`activeRevision` 和基于 resolved canonical JSON 的 SHA-256 ETag。浏览器每 500ms
+使用 `If-None-Match` 条件请求；保存布局/外观/预设资源不会改变该 ETag，重复启用同一 resolved preset
+也必须保持 ETag 不变，只有启用新的 resolved preset 才改变它。它的 HTTP representation 在 active
+revision 不变时不得改变。
 
-`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令。写操作不提供普通
-Operator credential：只允许 Companion 以 loopback bind 接收，且请求必须通过 valid local
-Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也
+`GET /operator/hud-config` 是编辑器 read model，返回完整的 `HudConfigDocument`、`activationStale`、
+编辑器 `revision` 和针对这整个 representation 计算的 ETag。保存资源会更新编辑器 revision，但不
+改变 on-air ETag；启用预设会同时更新编辑器 read model，并在 resolved 内容变化时更新 on-air revision。
+读取、解析或持久化失败时，Companion 保留 last-known-valid 配置，不能清除或猜测 gameplay snapshot。
+
+`POST` 只接受 `save-resource`、`save-as` 和 `activate-preset` 三类明确命令。正常 Operator ingress
+不接受 Operator token、Bearer credential 或其他普通凭据；写操作只允许 Companion 以 loopback bind
+接收，且请求必须通过 valid local Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也
 必须拒绝 mutation。GSI ingress 继续使用独立的 `GSI_TOKEN`，qualification-only control plane
-继续使用独立的 `QUALIFICATION_CONTROL_TOKEN`。内置 `builtin:*` 资源只读；配置文件由 Companion
-以同目录临时文件加原子 rename 保存。`HudResolvedPreset` activation snapshot 有独立的 v1
+继续使用独立的 `QUALIFICATION_CONTROL_TOKEN`。mutation response 必须返回本次 command 的明确
+`resourceId` / `sourceId`，客户端不得从前后资源 ID 集合差推断本次创建的资源。内置 `builtin:*` 资源只读；
+配置文件由 Companion 以同目录临时文件加原子 rename 保存。`HudResolvedPreset` activation snapshot 有独立的 v1
 compatibility boundary：严格校验 schema version、exact widget keys、嵌入布局、preset/layout/theme
 引用一致性、descriptor-owned settings，以及颜色、透明度、圆角和字体等 semantic value 的安全域；
 加载时不得通过当前 Theme recipe 重算并要求 canonical bytes 相同。recipe 变化不会改写旧 custom
