@@ -481,7 +481,7 @@ describe('qualification-only Companion surface', () => {
     expect(page).toContain('<title>现场验收 · RivalHub Broadcast</title>');
     expect(page).toContain('data-action="cs2-closed">我已退出 CS2</button>');
     expect(page).toContain(
-      "byId('confirm-stop').disabled = !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
+      "byId('confirm-stop').disabled = objectiveMode || !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
     );
     const script = page.match(/<script>([\s\S]*)<\/script>/)?.[1];
     expect(script).toBeDefined();
