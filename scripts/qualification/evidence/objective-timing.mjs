@@ -21,6 +21,21 @@ export const REQUIRED_OBJECTIVE_SCENARIOS = Object.freeze([
   'reconnect-restart',
 ]);
 
+export const OBJECTIVE_SCENARIO_LABELS = Object.freeze({
+  'freezetime-live': '冻结时间进入比赛',
+  'plant-abort': '开始下包后取消',
+  'planted-explode': '已下包后爆炸',
+  'defuse-kit-abort-restart': '有拆弹器中断后重试',
+  'defuse-no-kit-abort-restart': '无拆弹器中断后重试',
+  'too-late-defuse': '拆弹过晚导致爆炸',
+  'fast-defuse-missing-planted-sample': '快速拆弹且缺少已下包样本',
+  'reconnect-restart': '重连或接收端重启',
+});
+
+export function objectiveScenarioLabel(value) {
+  return OBJECTIVE_SCENARIO_LABELS[value] ?? value;
+}
+
 const ACTIVE_BOMB_STATES = new Set(['planting', 'planted', 'defusing']);
 const REFERENCE_KINDS = new Set([
   'bomb-begin-plant',
@@ -187,7 +202,7 @@ async function readFirstJson(candidates, label) {
       lastError = error;
     }
   }
-  throw new Error(`无法读取 canonical ${label}：${String(lastError)}`);
+  throw new Error(`无法读取规范${label}：${String(lastError)}`);
 }
 
 function canonicalProductionGsiConfig() {
@@ -314,7 +329,7 @@ async function readObjectiveReferences(captureDir, manifest) {
       !/^[a-f0-9]{64}$/.test(sourceArtifact.sha256) ||
       (value.hasKit !== undefined && typeof value.hasKit !== 'boolean')
     ) {
-      throw new Error(`${path} 第 ${index + 1} 行的 observer objective reference 无效`);
+      throw new Error(`${path} 第 ${index + 1} 行的独立目标事件记录无效`);
     }
     if (
       !manifest.clock ||
@@ -323,12 +338,12 @@ async function readObjectiveReferences(captureDir, manifest) {
       manifest.clock.elapsedUnit !== 'microseconds' ||
       !Number.isFinite(manifest.clock.originMonotonicMs)
     ) {
-      throw new Error(`${path} 缺少可验证的 capture monotonic clock origin`);
+      throw new Error(`${path} 缺少可验证的采集记录单调时钟起点`);
     }
     const alignedOccurredAtUs =
       (cursor.observedMonotonicMs - manifest.clock.originMonotonicMs) * 1_000;
     if (Math.abs(alignedOccurredAtUs - value.occurredAtUs) > 2_000) {
-      throw new Error(`${path} 第 ${index + 1} 行无法与 capture monotonic clock 对齐`);
+      throw new Error(`${path} 第 ${index + 1} 行无法与采集记录单调时钟对齐`);
     }
     references.push({
       version: 2,
@@ -678,6 +693,267 @@ export function aggregateObjectiveScenarioCoverage(captureResults, scenarioMarke
   };
 }
 
+function combineQualificationGates(values) {
+  if (values.length === 0) return null;
+  if (values.some((value) => value === false)) return false;
+  if (values.some((value) => value === null || value === undefined)) return null;
+  return true;
+}
+
+function finiteMetricValues(captureResults, selector) {
+  return captureResults
+    .map(selector)
+    .filter((value) => typeof value === 'number' && Number.isFinite(value));
+}
+
+function pooledMetricStats(values) {
+  return stats(values);
+}
+
+function worstCaseMetricStats(captureResults, key) {
+  const values = captureResults
+    .map((capture) => capture.objectiveTiming?.metrics?.[key])
+    .filter((value) => record(value) !== undefined);
+  if (values.length === 0) return stats([]);
+  const numeric = (name, reducer, fallback = null) => {
+    const candidates = values
+      .map((value) => finiteNumber(value[name]))
+      .filter((value) => value !== undefined);
+    return candidates.length === 0 ? fallback : reducer(candidates);
+  };
+  const counts = values
+    .map((value) => finiteNumber(value.count))
+    .filter((value) => value !== undefined);
+  return {
+    count: counts.length === 0 ? 0 : counts.reduce((total, value) => total + value, 0),
+    min: numeric('min', Math.min),
+    max: numeric('max', Math.max),
+    mean: null,
+    p50: numeric('p50', Math.max),
+    p95: numeric('p95', Math.max),
+    p99: numeric('p99', Math.max),
+  };
+}
+
+function aggregateTerminalResidualStats(captureResults) {
+  const values = { plant: [], defuse: [], explosion: [] };
+  for (const capture of captureResults) {
+    const terminalEvents = capture.objectiveTiming?.metrics?.terminalEvents;
+    if (!Array.isArray(terminalEvents)) continue;
+    for (const event of terminalEvents) {
+      if (
+        record(event) !== undefined &&
+        (event.kind === 'plant' || event.kind === 'defuse' || event.kind === 'explosion') &&
+        typeof event.remainingAtTerminalMs === 'number' &&
+        Number.isFinite(event.remainingAtTerminalMs)
+      ) {
+        values[event.kind].push(event.remainingAtTerminalMs);
+      }
+    }
+  }
+  return Object.fromEntries(
+    Object.entries(values).map(([kind, residuals]) => [kind, pooledMetricStats(residuals)]),
+  );
+}
+
+function flattenIndependentReferences(captureResults) {
+  return captureResults.flatMap((capture) => {
+    const references = capture.objectiveTiming?.evidence?.independentObjectiveReferences;
+    return Array.isArray(references) ? references : [];
+  });
+}
+
+function runObjectiveCaptureIds(captureResults) {
+  return captureResults
+    .map((capture) => capture.manifest?.captureId ?? capture.objectiveTiming?.capture?.captureId)
+    .filter((captureId) => typeof captureId === 'string')
+    .sort();
+}
+
+export function evaluateObjectiveTimingRun(
+  captureResults,
+  scenarioMarkers,
+  { captureErrors = [] } = {},
+) {
+  const analyzed = captureResults.filter((capture) => capture.objectiveTiming !== undefined);
+  const scenarioCoverage = aggregateObjectiveScenarioCoverage(captureResults, scenarioMarkers);
+  const captureComplete =
+    captureErrors.length === 0 &&
+    captureResults.length > 0 &&
+    captureResults.every(
+      (capture) => capture.manifest?.complete === true && capture.manifest?.droppedFrames === 0,
+    );
+  const independentReferences = flattenIndependentReferences(captureResults);
+  const matchedReferences = independentReferences.filter(
+    (reference) => reference.matched && typeof reference.residualMs === 'number',
+  );
+  const referenceResidualStats = pooledMetricStats(
+    matchedReferences.map((reference) => reference.residualMs),
+  );
+  const terminalResidualMs = aggregateTerminalResidualStats(captureResults);
+  const terminalResidualCoverage = Object.values(terminalResidualMs).every(
+    (value) => value.count > 0,
+  )
+    ? true
+    : null;
+  const terminalResidualWithin100Ms =
+    terminalResidualCoverage === true
+      ? Object.values(terminalResidualMs).every(
+          (value) => value.max !== null && value.max <= OBJECTIVE_CLOCK_TERMINAL_RESIDUAL_LIMIT_MS,
+        )
+      : null;
+  const requiredMinimumLeaseMs = Math.max(
+    ...finiteMetricValues(
+      captureResults,
+      (capture) => capture.objectiveTiming?.metrics?.lease?.requiredMinimumLeaseMs,
+    ),
+    0,
+  );
+  const configuredLeaseMs =
+    finiteMetricValues(
+      captureResults,
+      (capture) => capture.objectiveTiming?.metrics?.lease?.configuredLeaseMs,
+    )[0] ?? null;
+  const semanticGateNames = [
+    'phaseSemanticsConsistent',
+    'roundBombSemanticsConsistent',
+    'defuseKitEvidenceConsistent',
+    'independentKitEvidenceConsistent',
+  ];
+  const semanticGates = Object.fromEntries(
+    semanticGateNames.map((name) => [
+      name,
+      combineQualificationGates(
+        analyzed.map(
+          (capture) => capture.objectiveTiming.qualification.sourceSemantics.gates[name],
+        ),
+      ),
+    ]),
+  );
+  semanticGates.scenarioLifecycle = scenarioCoverage.failed
+    ? false
+    : scenarioCoverage.complete
+      ? true
+      : null;
+
+  const measurementGates = {
+    captureComplete,
+    activePacketP99Within200Ms: combineQualificationGates(
+      analyzed.map(
+        (capture) =>
+          capture.objectiveTiming.qualification.numeric01s.measurementGates
+            .activePacketP99Within200Ms,
+      ),
+    ),
+    sourceInternalPhaseConsistencyWithin100Ms: combineQualificationGates(
+      analyzed.map(
+        (capture) =>
+          capture.objectiveTiming.qualification.numeric01s.measurementGates
+            .sourceInternalPhaseConsistencyWithin100Ms,
+      ),
+    ),
+  };
+  const numericGates = {
+    ...measurementGates,
+    countdownSamplesComplete: combineQualificationGates(
+      analyzed.map(
+        (capture) =>
+          capture.objectiveTiming.qualification.numeric01s.gates.countdownSamplesComplete,
+      ),
+    ),
+    productionGsiConfig: combineQualificationGates(
+      analyzed.map(
+        (capture) => capture.objectiveTiming.qualification.numeric01s.gates.productionGsiConfig,
+      ),
+    ),
+    realObserverProvenance: combineQualificationGates(
+      analyzed.map(
+        (capture) => capture.objectiveTiming.qualification.numeric01s.gates.realObserverProvenance,
+      ),
+    ),
+    scenarioCoverage: scenarioCoverage.failed ? false : scenarioCoverage.complete ? true : null,
+    independentTransitionReference:
+      independentReferences.length === 0
+        ? null
+        : independentReferences.length === matchedReferences.length &&
+          independentReferences.every((reference) => reference.matched),
+    transitionP95Within100Ms:
+      referenceResidualStats.p95 === null
+        ? null
+        : referenceResidualStats.p95 <= OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS,
+    independentObserverOffsetWithin100Ms:
+      referenceResidualStats.max === null
+        ? null
+        : referenceResidualStats.max <= OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
+    terminalResidualCoverage,
+    terminalResidualWithin100Ms,
+    leaseSufficient: combineQualificationGates(
+      analyzed.map(
+        (capture) => capture.objectiveTiming.qualification.numeric01s.gates.leaseSufficient,
+      ),
+    ),
+  };
+  const numericResult = gateStatus(numericGates);
+  const semanticResult = gateStatus(semanticGates);
+  const productionResult = gateStatus({
+    numericPrecision: numericResult === 'PASS' ? true : numericResult === 'FAIL' ? false : null,
+    sourceSemantics: semanticResult === 'PASS' ? true : semanticResult === 'FAIL' ? false : null,
+  });
+  const worstCaseActivePacketIntervalMs = worstCaseMetricStats(
+    captureResults,
+    'activePacketIntervalMs',
+  );
+  return {
+    scope: 'qualification-run',
+    captureIds: runObjectiveCaptureIds(captureResults),
+    evidence: {
+      scenarioCoverage,
+      independentObjectiveReferences: independentReferences,
+      aggregation: {
+        activePacketInterval: '按采集记录取最差 p50/p95/p99/最大值',
+        observerReferenceResidual: '汇总所有已匹配独立事件记录的误差',
+        terminalResidual: '汇总所有采集记录的终止时刻样本',
+      },
+    },
+    metrics: {
+      activePacketIntervalMs: worstCaseActivePacketIntervalMs,
+      observerReferenceResidualMs: referenceResidualStats,
+      terminalResidualMs,
+      terminalResidualCoverage,
+      terminalResidualWithin100Ms,
+      captureCount: captureResults.length,
+      analyzedCaptureCount: analyzed.length,
+      captureErrors: captureErrors.length,
+      lease: {
+        configuredLeaseMs,
+        requiredMinimumLeaseMs: configuredLeaseMs === null ? null : requiredMinimumLeaseMs,
+        sufficient: numericGates.leaseSufficient,
+      },
+    },
+    qualification: {
+      production: {
+        result: productionResult,
+        gates: { numericPrecision: numericResult, sourceSemantics: semanticResult },
+      },
+      numeric01s: {
+        result: numericResult,
+        gates: numericGates,
+        measurementGates,
+        thresholds: {
+          activePacketP99Ms: OBJECTIVE_CLOCK_PACKET_P99_LIMIT_MS,
+          transitionP95Ms: OBJECTIVE_CLOCK_TRANSITION_P95_LIMIT_MS,
+          unexplainedOffsetMs: OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
+        },
+      },
+      sourceSemantics: { result: semanticResult, gates: semanticGates },
+      numeric001s: {
+        result: 'NOT_PROMISED',
+        reason: 'GSI precision_time=3 不等于 1 毫秒精度，当前不承诺 0.01 秒数值精度。',
+      },
+    },
+  };
+}
+
 export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
   const [verified, expectedConfig, objectivePolicy] = await Promise.all([
     verifyCaptureDirectory(captureDir),
@@ -1012,8 +1288,6 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
         : defuseKitEvidence.true + defuseKitEvidence.false === 0
           ? null
           : true,
-    countdownSamplesComplete: activeFrameCount === 0 ? null : missingCountdownSpans.length === 0,
-    terminalResidualWithin100Ms,
     independentKitEvidenceConsistent:
       independentKitEvidence.count === 0
         ? null
@@ -1033,6 +1307,7 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
   };
   const numericGates = {
     ...measurementGates,
+    countdownSamplesComplete: activeFrameCount === 0 ? null : missingCountdownSpans.length === 0,
     productionGsiConfig: configComparison.matches,
     realObserverProvenance: provenance === null ? null : provenance,
     scenarioCoverage: coverage.failed ? false : coverage.complete ? true : null,
@@ -1050,6 +1325,7 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
         ? null
         : observerReferenceStats.max <= OBJECTIVE_CLOCK_OFFSET_LIMIT_MS,
     terminalResidualCoverage,
+    terminalResidualWithin100Ms,
     leaseSufficient,
   };
   const semanticResult = gateStatus(semanticGates);
@@ -1150,90 +1426,122 @@ export async function analyzeObjectiveTimingCapture(captureDir, options = {}) {
       },
       numeric001s: {
         result: 'NOT_PROMISED',
-        reason: 'GSI precision_time=3 不等于 1 ms 精度，当前不承诺 0.01 s 数值精度。',
+        reason: 'GSI precision_time=3 不等于 1 毫秒精度，当前不承诺 0.01 秒数值精度。',
       },
     },
   };
 }
 
 function formatMetric(value) {
-  return value === null ? 'n/a' : `${value.toFixed(1)} ms`;
+  return value === null ? '未知' : `${value.toFixed(1)} 毫秒`;
 }
 
 function resultLabel(result) {
-  if (result === 'PASS') return '通过（PASS）';
-  if (result === 'FAIL') return '失败（FAIL）';
-  if (result === 'NOT_PROMISED') return '不承诺（NOT_PROMISED）';
-  return '证据不足（INCONCLUSIVE）';
+  if (result === 'PASS') return '通过';
+  if (result === 'FAIL') return '失败';
+  if (result === 'NOT_PROMISED') return '不承诺';
+  return '证据不足';
+}
+
+function truthLabel(value) {
+  if (value === true) return '是';
+  if (value === false) return '否';
+  return '证据不足';
+}
+
+const OBJECTIVE_GATE_LABELS = Object.freeze({
+  captureComplete: '采集记录完整',
+  activePacketP99Within200Ms: '活动数据间隔 p99 不超过 200 毫秒',
+  sourceInternalPhaseConsistencyWithin100Ms: '来源内部阶段一致性不超过 100 毫秒',
+  countdownSamplesComplete: '活动倒计时样本完整',
+  productionGsiConfig: '正式 GSI 配置一致',
+  realObserverProvenance: '真实观测来源可追溯',
+  scenarioCoverage: '场景覆盖完整',
+  independentTransitionReference: '具备独立状态变化记录',
+  transitionP95Within100Ms: '状态变化误差 p95 不超过 100 毫秒',
+  independentObserverOffsetWithin100Ms: '独立来源绝对偏差不超过 100 毫秒',
+  terminalResidualCoverage: '三类终止时刻均有误差样本',
+  terminalResidualWithin100Ms: '终止时刻误差不超过 100 毫秒',
+  leaseSufficient: '短时有效窗口足够',
+  phaseSemanticsConsistent: '阶段语义一致',
+  roundBombSemanticsConsistent: '回合炸弹语义一致',
+  defuseKitEvidenceConsistent: '拆弹器证据一致',
+  independentKitEvidenceConsistent: '独立拆弹器记录一致',
+  scenarioLifecycle: '场景开始与结束状态完整',
+});
+
+function gateLabel(name) {
+  return OBJECTIVE_GATE_LABELS[name] ?? name;
+}
+
+function scenarioList(values) {
+  return values.length === 0 ? '无' : values.map(objectiveScenarioLabel).join('、');
 }
 
 export function renderObjectiveTimingReport(result) {
   const { capture, evidence, metrics, qualification } = result;
   const config = capture.gsiConfig;
   const lines = [
-    '# Objective Clock Capture Qualification Report',
+    '# 目标时钟采集记录现场验收报告',
     '',
-    `- Capture：\`${capture.captureId}\``,
-    `- Git SHA：\`${capture.broadcastCommit}\``,
-    `- Platform：\`${capture.platform}\``,
-    `- Windows：\`${capture.windowsVersion ?? 'unknown'}\``,
-    `- Frames：${capture.frameCount}（active ${metrics.activeFrameCount}）`,
-    `- Complete：${capture.complete ? 'yes' : 'no'}；dropped：${capture.droppedFrames}`,
-    `- Real observer provenance：${capture.provenance.realObserverCapture ? 'yes' : 'no'}`,
-    `- frames SHA-256：\`${capture.framesSha256}\``,
+    `- 采集记录编号：\`${capture.captureId}\``,
+    `- 提交 SHA：\`${capture.broadcastCommit}\``,
+    `- 运行平台：\`${capture.platform}\``,
+    `- Windows 版本：\`${capture.windowsVersion ?? '未知'}\``,
+    `- 数据帧：${capture.frameCount}（有效状态 ${metrics.activeFrameCount}）`,
+    `- 记录完整：${truthLabel(capture.complete)}；丢失数据帧：${capture.droppedFrames}`,
+    `- 真实观测来源可追溯：${truthLabel(capture.provenance.realObserverCapture)}`,
+    `- 数据帧 SHA-256：\`${capture.framesSha256}\``,
     '',
-    '## GSI configuration',
+    '## GSI 配置',
     '',
-    `- precision_time：\`${String(config.precision_time ?? 'unknown')}\``,
-    `- timeout：\`${String(config.timeout ?? 'unknown')}\``,
-    `- buffer / throttle / heartbeat：\`${String(config.buffer ?? 'unknown')} / ${String(config.throttle ?? 'unknown')} / ${String(config.heartbeat ?? 'unknown')}\``,
-    `- production config match：${capture.productionConfig.matches ? 'yes' : 'no'}${capture.productionConfig.mismatches.length === 0 ? '' : `（${capture.productionConfig.mismatches.join(', ')}）`}`,
-    '- `precision_time=3` 是 source 配置精度声明，不是 1 ms 数值准确度保证。',
+    `- precision_time：\`${String(config.precision_time ?? '未知')}\``,
+    `- timeout：\`${String(config.timeout ?? '未知')}\``,
+    `- buffer / throttle / heartbeat：\`${String(config.buffer ?? '未知')} / ${String(config.throttle ?? '未知')} / ${String(config.heartbeat ?? '未知')}\``,
+    `- 正式配置一致：${truthLabel(capture.productionConfig.matches)}${capture.productionConfig.mismatches.length === 0 ? '' : `（差异：${capture.productionConfig.mismatches.join('、')}）`}`,
+    '- `precision_time=3` 表示来源配置精度，不保证数值精度为 1 毫秒。',
     '',
-    '## Metrics',
+    '## 测量结果',
     '',
-    `- Active packet interval：p50 ${formatMetric(metrics.activePacketIntervalMs.p50)}；p95 ${formatMetric(metrics.activePacketIntervalMs.p95)}；p99 ${formatMetric(metrics.activePacketIntervalMs.p99)}；max ${formatMetric(metrics.activePacketIntervalMs.max)}`,
-    `- Countdown delta vs monotonic residual：p95 ${formatMetric(metrics.countdownDeltaResidualMs.p95)}；max ${formatMetric(metrics.countdownDeltaResidualMs.max)}`,
-    `- State transition → first matching countdown（source-local）：p95 ${formatMetric(metrics.stateTransitionToFirstCountMs.p95)}；max ${formatMetric(metrics.stateTransitionToFirstCountMs.max)}`,
-    `- Independent observer transition residual：p50 ${formatMetric(metrics.observerReferenceResidualMs.p50)}；p95 ${formatMetric(metrics.observerReferenceResidualMs.p95)}；max ${formatMetric(metrics.observerReferenceResidualMs.max)}`,
-    `- Same-semantic bomb vs phase residual（source-local）：p95 ${formatMetric(metrics.phaseComparisonResidualMs.p95)}；max ${formatMetric(metrics.phaseComparisonResidualMs.max)}`,
-    `- Terminal residual：plant p95 ${formatMetric(metrics.terminalResidualMs.plant.p95)}；defuse p95 ${formatMetric(metrics.terminalResidualMs.defuse.p95)}；explosion p95 ${formatMetric(metrics.terminalResidualMs.explosion.p95)}`,
-    `- Terminal independent references：plant ${metrics.terminalReferenceCounts.plant}；defuse ${metrics.terminalReferenceCounts.defuse}；explosion ${metrics.terminalReferenceCounts.explosion}`,
-    `- Reconnect gaps > ${metrics.reconnectGaps.thresholdMs.toFixed(1)} ms：${metrics.reconnectGaps.count}；max ${formatMetric(metrics.reconnectGaps.maxMs)}`,
-    `- Missing countdown spans：${metrics.missingCountdownSpans.length}`,
-    `- Defuse kit evidence：true ${metrics.defuseKitEvidence.true}；false ${metrics.defuseKitEvidence.false}；unknown ${metrics.defuseKitEvidence.unknown}；conflict ${metrics.defuseKitEvidence.conflict}`,
-    `- Lease：configured ${metrics.lease.configuredLeaseMs.toFixed(1)} ms；required minimum ${metrics.lease.requiredMinimumLeaseMs === null ? 'n/a' : `${metrics.lease.requiredMinimumLeaseMs.toFixed(1)} ms`}；sufficient ${metrics.lease.sufficient === null ? 'inconclusive' : metrics.lease.sufficient ? 'yes' : 'no'}`,
+    `- 活动数据间隔：p50 ${formatMetric(metrics.activePacketIntervalMs.p50)}；p95 ${formatMetric(metrics.activePacketIntervalMs.p95)}；p99 ${formatMetric(metrics.activePacketIntervalMs.p99)}；最大值 ${formatMetric(metrics.activePacketIntervalMs.max)}`,
+    `- 倒计时变化与单调时间的误差：p95 ${formatMetric(metrics.countdownDeltaResidualMs.p95)}；最大值 ${formatMetric(metrics.countdownDeltaResidualMs.max)}`,
+    `- 状态变化到首次匹配倒计时的延迟（同一来源内部）：p95 ${formatMetric(metrics.stateTransitionToFirstCountMs.p95)}；最大值 ${formatMetric(metrics.stateTransitionToFirstCountMs.max)}`,
+    `- 独立事件记录的状态变化误差：p50 ${formatMetric(metrics.observerReferenceResidualMs.p50)}；p95 ${formatMetric(metrics.observerReferenceResidualMs.p95)}；最大值 ${formatMetric(metrics.observerReferenceResidualMs.max)}`,
+    `- 炸弹倒计时与阶段倒计时的一致性误差（同一来源内部）：p95 ${formatMetric(metrics.phaseComparisonResidualMs.p95)}；最大值 ${formatMetric(metrics.phaseComparisonResidualMs.max)}`,
+    `- 终止时刻剩余时间误差：开始下包 p95 ${formatMetric(metrics.terminalResidualMs.plant.p95)}；拆弹 p95 ${formatMetric(metrics.terminalResidualMs.defuse.p95)}；爆炸 p95 ${formatMetric(metrics.terminalResidualMs.explosion.p95)}`,
+    `- 终止时刻独立事件记录：开始下包 ${metrics.terminalReferenceCounts.plant}；拆弹 ${metrics.terminalReferenceCounts.defuse}；爆炸 ${metrics.terminalReferenceCounts.explosion}`,
+    `- 重连数据间隔 > ${metrics.reconnectGaps.thresholdMs.toFixed(1)} 毫秒：${metrics.reconnectGaps.count}；最大值 ${formatMetric(metrics.reconnectGaps.maxMs)}`,
+    `- 倒计时缺失区段：${metrics.missingCountdownSpans.length}`,
+    `- 拆弹器证据：有 ${metrics.defuseKitEvidence.true}；无 ${metrics.defuseKitEvidence.false}；未知 ${metrics.defuseKitEvidence.unknown}；冲突 ${metrics.defuseKitEvidence.conflict}`,
+    `- 短时有效窗口：配置 ${metrics.lease.configuredLeaseMs.toFixed(1)} 毫秒；最低要求 ${metrics.lease.requiredMinimumLeaseMs === null ? '未知' : `${metrics.lease.requiredMinimumLeaseMs.toFixed(1)} 毫秒`}；是否足够 ${truthLabel(metrics.lease.sufficient)}`,
     '',
-    '## Scenario coverage',
+    '## 场景覆盖',
     '',
-    `- Required scenarios：${evidence.scenarioCoverage.required.join(', ')}`,
-    `- Declared scenarios：${evidence.scenarioCoverage.declared.length === 0 ? 'none' : evidence.scenarioCoverage.declared.join(', ')}`,
-    `- Observed scenarios：${evidence.scenarioCoverage.observed.length === 0 ? 'none' : evidence.scenarioCoverage.observed.join(', ')}`,
-    `- Missing scenarios：${evidence.scenarioCoverage.missing.length === 0 ? 'none' : evidence.scenarioCoverage.missing.join(', ')}`,
-    `- Independent objective references：${evidence.independentObjectiveReferences.length}`,
+    `- 要求场景：${scenarioList(evidence.scenarioCoverage.required)}`,
+    `- 已声明场景：${scenarioList(evidence.scenarioCoverage.declared)}`,
+    `- 已验证场景：${scenarioList(evidence.scenarioCoverage.observed)}`,
+    `- 缺少场景：${scenarioList(evidence.scenarioCoverage.missing)}`,
+    `- 独立目标事件记录：${evidence.independentObjectiveReferences.length}`,
     '',
-    '## Qualification gates',
+    '## 验收判定',
     '',
-    `- Production decision：**${resultLabel(qualification.production.result)}**`,
-    `  - numeric precision：${qualification.production.gates.numericPrecision}`,
-    `  - source semantics：${qualification.production.gates.sourceSemantics}`,
-    `- Numeric 0.1 s：**${resultLabel(qualification.numeric01s.result)}**`,
+    `- 正式环境判定：**${resultLabel(qualification.production.result)}**`,
+    `  - 数值精度：${resultLabel(qualification.production.gates.numericPrecision)}`,
+    `  - 来源语义一致性：${resultLabel(qualification.production.gates.sourceSemantics)}`,
+    `- 数值精度 0.1 秒：**${resultLabel(qualification.numeric01s.result)}**`,
   ];
   for (const [name, value] of Object.entries(qualification.numeric01s.gates)) {
-    lines.push(
-      `  - ${name}：${value === true ? 'PASS' : value === false ? 'FAIL' : 'INCONCLUSIVE'}`,
-    );
+    lines.push(`  - ${gateLabel(name)}：${truthLabel(value)}`);
   }
   lines.push(
-    `- Source semantics：**${resultLabel(qualification.sourceSemantics.result)}**`,
+    `- 来源语义与生命周期：**${resultLabel(qualification.sourceSemantics.result)}**`,
     ...Object.entries(qualification.sourceSemantics.gates).map(
-      ([name, value]) =>
-        `  - ${name}：${value === true ? 'PASS' : value === false ? 'FAIL' : 'INCONCLUSIVE'}`,
+      ([name, value]) => `  - ${gateLabel(name)}：${truthLabel(value)}`,
     ),
-    `- Numeric 0.01 s：**${resultLabel(qualification.numeric001s.result)}** — ${qualification.numeric001s.reason}`,
+    `- 数值精度 0.01 秒：**${resultLabel(qualification.numeric001s.result)}** — ${qualification.numeric001s.reason}`,
     '',
-    '同一个 GSI payload 内的 phase/bomb 对齐只作为 source-local consistency evidence；没有独立 CSTV/demo objective reference 时，transition/absolute offset gate 保持 INCONCLUSIVE。',
-    '原始 Capture V1 仍是证据源；production PASS 还需要 raw recorder provenance、显式场景覆盖和可对齐的独立 reference；sanitized/synthetic fixture 只能作为回归证据。',
+    '同一份 GSI 数据中的阶段倒计时与炸弹状态对齐，只能作为同一来源内部一致性证据；没有独立比赛事件记录时，状态变化误差和绝对偏差判定保持“证据不足”。',
+    '原始采集记录仍是证据源；正式环境通过还需要真实记录来源、明确场景覆盖和可对齐的独立事件记录；脱敏或合成样本只能用于回归验证。来源语义与数值/可用性是独立结论。',
   );
   return `${lines.join('\n')}\n`;
 }

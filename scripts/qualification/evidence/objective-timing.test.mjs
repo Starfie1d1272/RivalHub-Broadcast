@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   aggregateObjectiveScenarioCoverage,
   analyzeObjectiveTimingCapture,
+  evaluateObjectiveTimingRun,
   renderObjectiveTimingReport,
 } from './objective-timing.mjs';
 
@@ -116,6 +117,62 @@ function objectiveMarker(scenario, phase, captureElapsedUs, captureId = 'capture
   };
 }
 
+function analyzedRunCapture(captureId, observedScenarios = []) {
+  const scenarioEntries = Object.fromEntries(
+    [
+      'freezetime-live',
+      'plant-abort',
+      'planted-explode',
+      'defuse-kit-abort-restart',
+      'defuse-no-kit-abort-restart',
+      'too-late-defuse',
+      'fast-defuse-missing-planted-sample',
+      'reconnect-restart',
+    ].map((scenario) => [scenario, { observed: observedScenarios.includes(scenario) }]),
+  );
+  const stats = { count: 4, min: 50, max: 100, mean: 75, p50: 75, p95: 100, p99: 100 };
+  return {
+    manifest: { captureId, complete: true, droppedFrames: 0 },
+    objectiveTiming: {
+      evidence: {
+        scenarioCoverage: { scenarios: scenarioEntries },
+        independentObjectiveReferences: [{ matched: true, residualMs: 10 }],
+      },
+      metrics: {
+        activePacketIntervalMs: stats,
+        terminalEvents: [
+          { kind: 'plant', remainingAtTerminalMs: 0 },
+          { kind: 'defuse', remainingAtTerminalMs: 0 },
+          { kind: 'explosion', remainingAtTerminalMs: 0 },
+        ],
+        lease: { configuredLeaseMs: 1_000, requiredMinimumLeaseMs: 300 },
+      },
+      qualification: {
+        sourceSemantics: {
+          gates: {
+            phaseSemanticsConsistent: true,
+            roundBombSemanticsConsistent: true,
+            defuseKitEvidenceConsistent: true,
+            independentKitEvidenceConsistent: true,
+          },
+        },
+        numeric01s: {
+          measurementGates: {
+            activePacketP99Within200Ms: true,
+            sourceInternalPhaseConsistencyWithin100Ms: true,
+          },
+          gates: {
+            countdownSamplesComplete: true,
+            productionGsiConfig: true,
+            realObserverProvenance: true,
+            leaseSufficient: true,
+          },
+        },
+      },
+    },
+  };
+}
+
 describe('objective timing capture analyzer', () => {
   it('measures active cadence, semantic clock residuals, transitions, and terminals', async () => {
     const run = await createCapture([
@@ -167,7 +224,9 @@ describe('objective timing capture analyzer', () => {
       expect(result.qualification.numeric01s.gates.independentTransitionReference).toBeNull();
       expect(result.qualification.numeric01s.gates.terminalResidualCoverage).toBeNull();
       expect(result.qualification.numeric001s.result).toBe('NOT_PROMISED');
-      expect(renderObjectiveTimingReport(result)).toContain('precision_time');
+      const report = renderObjectiveTimingReport(result);
+      expect(report).toContain('precision_time');
+      expect(report).not.toMatch(/Objective Clock|source-local|Capture V1|INCONCLUSIVE/);
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }
@@ -350,7 +409,56 @@ describe('objective timing capture analyzer', () => {
     });
   });
 
-  it('fails source semantics when terminal residuals exceed the 100 ms bound', async () => {
+  it('makes one run-level decision from complete multi-capture evidence', () => {
+    const captureA = analyzedRunCapture('capture-a', [
+      'freezetime-live',
+      'plant-abort',
+      'planted-explode',
+      'defuse-kit-abort-restart',
+      'defuse-no-kit-abort-restart',
+      'too-late-defuse',
+      'fast-defuse-missing-planted-sample',
+    ]);
+    const captureB = analyzedRunCapture('capture-b');
+    const markers = [
+      ...[
+        'freezetime-live',
+        'plant-abort',
+        'planted-explode',
+        'defuse-kit-abort-restart',
+        'defuse-no-kit-abort-restart',
+        'too-late-defuse',
+        'fast-defuse-missing-planted-sample',
+      ].flatMap((scenario, index) => [
+        objectiveMarker(scenario, 'before', index * 100, 'capture-a'),
+        objectiveMarker(scenario, 'after', index * 100 + 50, 'capture-a'),
+      ]),
+      objectiveMarker('reconnect-restart', 'before', 800, 'capture-a'),
+      objectiveMarker('reconnect-restart', 'after', 900, 'capture-b'),
+    ];
+
+    const complete = evaluateObjectiveTimingRun([captureA, captureB], markers);
+    expect(complete.captureIds).toEqual(['capture-a', 'capture-b']);
+    expect(complete.evidence.scenarioCoverage.complete).toBe(true);
+    expect(complete.qualification.numeric01s.result).toBe('PASS');
+    expect(complete.qualification.sourceSemantics.result).toBe('PASS');
+    expect(complete.qualification.production.result).toBe('PASS');
+
+    const missingReconnect = evaluateObjectiveTimingRun(
+      [captureA, captureB],
+      markers.filter(
+        (marker) => marker.kind !== 'objective-reconnect-restart' || marker.phase !== 'after',
+      ),
+    );
+    expect(missingReconnect.qualification.production.result).not.toBe('PASS');
+
+    const rejectedCapture = evaluateObjectiveTimingRun([captureA, captureB], markers, {
+      captureErrors: [new Error('rejected capture')],
+    });
+    expect(rejectedCapture.qualification.production.result).not.toBe('PASS');
+  });
+
+  it('fails numeric precision when terminal residuals exceed the 100 ms bound', async () => {
     const run = await createCapture([
       frame(0, 0, { bomb: { state: 'planting', countdown: '3' } }),
       frame(1, 100, {
@@ -381,10 +489,13 @@ describe('objective timing capture analyzer', () => {
     try {
       const result = await analyzeObjectiveTimingCapture(run.captureDir);
       expect(result.qualification.numeric01s.gates.terminalResidualCoverage).toBe(true);
-      expect(result.qualification.sourceSemantics.gates.terminalResidualWithin100Ms).toBe(false);
-      expect(result.qualification.sourceSemantics.result).toBe('FAIL');
+      expect(result.qualification.numeric01s.gates.terminalResidualWithin100Ms).toBe(false);
+      expect(
+        result.qualification.sourceSemantics.gates.terminalResidualWithin100Ms,
+      ).toBeUndefined();
+      expect(result.qualification.sourceSemantics.result).toBe('INCONCLUSIVE');
       expect(result.qualification.production.result).toBe('FAIL');
-      expect(result.qualification.numeric01s.result).toBe('INCONCLUSIVE');
+      expect(result.qualification.numeric01s.result).toBe('FAIL');
     } finally {
       await rm(run.root, { recursive: true, force: true });
     }

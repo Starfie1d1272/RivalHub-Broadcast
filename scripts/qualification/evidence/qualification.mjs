@@ -26,6 +26,7 @@ import { liveObservationReferences, readScenario } from './scenario.mjs';
 import {
   aggregateObjectiveScenarioCoverage,
   analyzeObjectiveTimingCapture,
+  evaluateObjectiveTimingRun,
 } from './objective-timing.mjs';
 import { renderReport } from './report.mjs';
 
@@ -68,6 +69,7 @@ async function readCaptureResults(runDir, markers, qualificationContext) {
     captureResults,
     captureErrors,
     objectiveTimingCoverage: aggregateObjectiveScenarioCoverage(captureResults, markers),
+    objectiveTiming: evaluateObjectiveTimingRun(captureResults, markers, { captureErrors }),
   };
 }
 
@@ -75,20 +77,20 @@ export async function readQualificationEvidence(runDir) {
   const resolvedRunDir = resolve(runDir);
   const qualification = await readJson(join(resolvedRunDir, 'qualification.json'));
   if (!isRecord(qualification) || qualification.schemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.json schema 不受支持');
+    throw new QualificationEvidenceError(
+      'INVALID_EVIDENCE',
+      'qualification.json 的格式版本不受支持',
+    );
   }
   const runId = requireString(qualification.runId, 'qualification.runId');
   if (!isRecord(qualification.artifact))
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', '缺少 qualification.artifact');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '缺少验收包身份信息');
   requireString(qualification.artifact.gitSha, 'qualification.artifact.gitSha');
   if (!SHA256_PATTERN.test(qualification.artifact.artifactSha256)) {
-    throw new QualificationEvidenceError(
-      'INVALID_EVIDENCE',
-      'qualification.artifact.artifactSha256 无效',
-    );
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份摘要无效');
   }
   if (!QUALIFICATION_RESULT_VALUES.has(qualification.result)) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification.result 无效');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收结果无效');
   }
   if (
     !isRecord(qualification.checks) ||
@@ -97,27 +99,27 @@ export async function readQualificationEvidence(runDir) {
       return !isRecord(check) && typeof check !== 'string';
     })
   ) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'qualification checks 不完整');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收检查不完整');
   }
   for (const key of QUALIFICATION_CHECK_KEYS) {
     const check = qualification.checks[key];
     const status = typeof check === 'string' ? check : check.status;
     if (!QUALIFICATION_RESULT_VALUES.has(status)) {
-      throw new QualificationEvidenceError('INVALID_EVIDENCE', `qualification check ${key} 无效`);
+      throw new QualificationEvidenceError('INVALID_EVIDENCE', `现场验收检查 ${key} 无效`);
     }
   }
   const artifact = validateArtifact(await readJson(join(resolvedRunDir, 'artifact.json')));
   if (artifact.gitSha !== qualification.artifact.gitSha) {
     throw new QualificationEvidenceError(
       'ARTIFACT_MISMATCH',
-      'qualification 与 evidence artifact 的 SHA 不一致',
+      '现场验收结果与验收包身份信息的 SHA 不一致',
     );
   }
   const scenario = await readScenario(resolvedRunDir);
   if (scenario.runId !== undefined && scenario.runId !== runId) {
     throw new QualificationEvidenceError(
       'SCENARIO_MISMATCH',
-      'scenario runId 与 qualification runId 不一致',
+      '场景记录的验收轮次编号与现场验收结果的编号不一致',
     );
   }
   scanJsonForSecrets(qualification, '$.qualification');
@@ -132,23 +134,20 @@ export async function readQualificationEvidence(runDir) {
   if (environment.runId !== runId) {
     throw new QualificationEvidenceError(
       'EVIDENCE_MISMATCH',
-      'environment runId 与 qualification runId 不一致',
+      '环境记录的验收轮次编号与现场验收结果的编号不一致',
     );
   }
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
   scanJsonForSecrets(environment, '$.environment');
   if (finalRuntime !== undefined) scanJsonForSecrets(finalRuntime, '$.finalRuntime');
-  const { captureResults, captureErrors, objectiveTimingCoverage } = await readCaptureResults(
-    resolvedRunDir,
-    scenario.markers,
-    {
+  const { captureResults, captureErrors, objectiveTimingCoverage, objectiveTiming } =
+    await readCaptureResults(resolvedRunDir, scenario.markers, {
       runId,
       artifactGitSha: qualification.artifact.gitSha,
       artifactSha256: qualification.artifact.artifactSha256,
       windowsVersion: environment.windowsVersion,
       cs2Version: environment.cs2Version,
-    },
-  );
+    });
   const result = {
     runDir: resolvedRunDir,
     qualification,
@@ -159,6 +158,7 @@ export async function readQualificationEvidence(runDir) {
     captureResults,
     captureErrors,
     objectiveTimingCoverage,
+    objectiveTiming,
     checks: checksFrom({
       markers: scenario.markers,
       finalRuntime,
@@ -175,15 +175,12 @@ export async function readQualificationEvidence(runDir) {
     if (stored !== result.checks[key].status) {
       throw new QualificationEvidenceError(
         'CHECK_MISMATCH',
-        `qualification check ${key} 与重新计算的 evidence 不一致`,
+        `现场验收检查 ${key} 与重新计算的证据不一致`,
       );
     }
   }
   if (qualification.result !== resultFromChecks(result.checks)) {
-    throw new QualificationEvidenceError(
-      'CHECK_MISMATCH',
-      'qualification result 与重新计算的 evidence 不一致',
-    );
+    throw new QualificationEvidenceError('CHECK_MISMATCH', '现场验收结果与重新计算的证据不一致');
   }
   await verifyHashes(resolvedRunDir);
   return result;
@@ -199,17 +196,14 @@ export async function writeQualificationEvidence({
   validateArtifact(artifact);
   const scenario = await readScenario(resolvedRunDir);
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
-  const { captureResults, captureErrors, objectiveTimingCoverage } = await readCaptureResults(
-    resolvedRunDir,
-    scenario.markers,
-    {
+  const { captureResults, captureErrors, objectiveTimingCoverage, objectiveTiming } =
+    await readCaptureResults(resolvedRunDir, scenario.markers, {
       runId: scenario.runId ?? environment.runId ?? 'unknown',
       artifactGitSha: artifact.gitSha,
       artifactSha256: artifact.artifactSha256,
       windowsVersion: environment.windowsVersion,
       cs2Version: environment.cs2Version,
-    },
-  );
+    });
   const checks = checksFrom({
     markers: scenario.markers,
     finalRuntime,
@@ -221,10 +215,7 @@ export async function writeQualificationEvidence({
   const artifactSha256 =
     archiveSha256 ?? artifact.artifactSha256 ?? sha256Text(JSON.stringify(artifact));
   if (!SHA256_PATTERN.test(artifactSha256)) {
-    throw new QualificationEvidenceError(
-      'INVALID_EVIDENCE',
-      'artifact digest 必须是小写 SHA-256 值',
-    );
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包摘要必须是小写 SHA-256 值');
   }
   const qualification = {
     schemaVersion: QUALIFICATION_SCHEMA_VERSION,
@@ -254,6 +245,7 @@ export async function writeQualificationEvidence({
     captureResults,
     captureErrors,
     objectiveTimingCoverage,
+    objectiveTiming,
     checks,
   });
   await writeFile(join(resolvedRunDir, 'REPORT.md'), report, 'utf8');
@@ -270,6 +262,7 @@ export async function writeQualificationEvidence({
     captureResults,
     captureErrors,
     objectiveTimingCoverage,
+    objectiveTiming,
     checks,
   };
 }

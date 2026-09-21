@@ -11,7 +11,7 @@ import {
   type TelemetryReceiveContext,
 } from '@rivalhub-broadcast/telemetry-gsi';
 
-import type { CaptureRecorder } from './capture-recorder.js';
+import { resolveCaptureRecorder, type CaptureRecorderSource } from './capture-recorder.js';
 
 export const GSI_BODY_LIMIT_BYTES = 64 * 1024;
 export const GSI_REQUEST_TIMEOUT_MS = 5_000;
@@ -52,7 +52,7 @@ export type CompanionRuntimeDiagnosticCode =
 
 export interface GsiIngressOptions {
   readonly gsiToken: string;
-  readonly recorder: CaptureRecorder;
+  readonly recorder: CaptureRecorderSource;
   readonly sequenceSource?: GsiSequenceSource;
   readonly onAcceptedRaw?: AcceptedRawSink;
   readonly onObservation?: ObservationSink;
@@ -146,7 +146,7 @@ export function registerGsiIngress(app: FastifyInstance, options: GsiIngressOpti
       };
 
       try {
-        options.recorder.tryRecord({
+        resolveCaptureRecorder(options.recorder).tryRecord({
           sequence: acceptedSequence,
           receivedAt: receive.receivedAt,
           receivedMonotonicMs: receive.receivedMonotonicMs,

@@ -13,6 +13,8 @@ RivalHub Broadcast Windows 现场验收包
 6. 页面会自动整理并验证验收证据、恢复原 GSI 配置，然后显示“通过”“失败”或“证据不足”以及报告路径。
 7. 最终证据写入 `evidence\<runId>\`；`REPORT.md` 是便于人工阅读的报告，`qualification.json` 是机器可读结果。
 
+目标时钟的八类专项场景需要使用 `scripts\mark.ps1` 记录开始与结束。重连或接收端重启场景的操作顺序是：先记录 `-Phase before`，实际重连或重启接收端后执行 `scripts\rotate.ps1`，再记录 `-Phase after`。`rotate.ps1` 只会在同一轮现场验收中开始新的采集记录，不会新建验收轮次。
+
 备用自动化命令：
 
   `powershell -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-a-live`
@@ -22,4 +24,4 @@ RivalHub Broadcast Windows 现场验收包
   `powershell -ExecutionPolicy Bypass -File .\scripts\stop.ps1`
 
 验收服务只监听本机回环地址的 3000 端口。现场不需要、也不应修改代码或查看原始 JSON。
-GSI Token 与验收控制 Token 不会写入最终报告。正常流程由验收管理进程负责结束服务、验证证据、恢复配置和清理临时状态；只有该流程不可用时，`stop.ps1` 才作为备用入口。
+访问令牌与验收控制令牌不会写入最终报告。正常流程由验收管理进程负责结束服务、验证证据、恢复配置和清理临时状态；只有该流程不可用时，`stop.ps1` 才作为备用入口。

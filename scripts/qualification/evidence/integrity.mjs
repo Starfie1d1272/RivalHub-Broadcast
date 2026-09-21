@@ -65,33 +65,33 @@ export function assertUtc(value, name) {
 
 export function validateArtifact(artifact) {
   if (!isRecord(artifact))
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.json 必须是对象');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份文件必须是对象');
   if (artifact.schemaVersion !== 1)
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact schema 不受支持');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份文件的格式版本不受支持');
   if (artifact.repository !== QUALIFICATION_REPOSITORY)
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      'artifact repository 不是 RivalHub Broadcast',
+      '验收包身份信息不属于 RivalHub Broadcast',
     );
   requireString(artifact.gitSha, 'artifact.gitSha');
   assertUtc(artifact.buildTimestamp, 'artifact.buildTimestamp');
   if (artifact.platform !== 'win32-x64') {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.platform 必须是 win32-x64');
+    throw new QualificationEvidenceError(
+      'INVALID_EVIDENCE',
+      '验收包身份信息的平台必须是 win32-x64',
+    );
   }
   if (artifact.nodeVersion !== QUALIFICATION_CONTRACT.nodeRuntimeVersion) {
     throw new QualificationEvidenceError(
       'INVALID_EVIDENCE',
-      `artifact.nodeVersion 必须是固定版本 ${QUALIFICATION_CONTRACT.nodeRuntimeVersion}`,
+      `验收包内置运行时必须是固定版本 ${QUALIFICATION_CONTRACT.nodeRuntimeVersion}`,
     );
   }
   if (artifact.qualificationSchemaVersion !== QUALIFICATION_SCHEMA_VERSION) {
-    throw new QualificationEvidenceError(
-      'INVALID_EVIDENCE',
-      'artifact qualification schema 不受支持',
-    );
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包的现场验收格式版本不受支持');
   }
   if (artifact.artifactSha256 !== undefined && !SHA256_PATTERN.test(artifact.artifactSha256)) {
-    throw new QualificationEvidenceError('INVALID_EVIDENCE', 'artifact.artifactSha256 无效');
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份摘要无效');
   }
   return artifact;
 }
@@ -102,7 +102,7 @@ function scanForSecrets(value, path) {
     throw new QualificationEvidenceError('SECRET_LEAK', `${path} 包含疑似 Steam 身份标识`);
   }
   if (SECRET_PATTERN.test(path) && value.length > 0) {
-    throw new QualificationEvidenceError('SECRET_LEAK', `${path} 包含携带 secret 的值`);
+    throw new QualificationEvidenceError('SECRET_LEAK', `${path} 包含不应公开的敏感值`);
   }
 }
 
@@ -161,15 +161,18 @@ export async function verifyHashes(runDir) {
   for (const line of entries) {
     const match = /^(?<hash>[a-f0-9]{64})\x20{2}(?<path>.+)$/.exec(line);
     if (match?.groups === undefined)
-      throw new QualificationEvidenceError('INVALID_HASHES', `无效的 hash 行：${line}`);
+      throw new QualificationEvidenceError('INVALID_HASHES', `无效的完整性摘要记录：${line}`);
     if (seenPaths.has(match.groups.path)) {
-      throw new QualificationEvidenceError('INVALID_HASHES', 'hash 路径重复：' + match.groups.path);
+      throw new QualificationEvidenceError(
+        'INVALID_HASHES',
+        '完整性摘要路径重复：' + match.groups.path,
+      );
     }
     seenPaths.add(match.groups.path);
     if (!expectedPaths.has(match.groups.path)) {
       throw new QualificationEvidenceError(
         'INVALID_HASHES',
-        'hash 列表包含意外路径：' + match.groups.path,
+        '完整性摘要列表包含意外路径：' + match.groups.path,
       );
     }
     const path = resolve(runDir, match.groups.path);
@@ -177,13 +180,13 @@ export async function verifyHashes(runDir) {
     if (relativePath === '' || relativePath.startsWith('..') || isAbsolute(relativePath)) {
       throw new QualificationEvidenceError(
         'INVALID_HASHES',
-        `hash 路径超出 evidence 根目录：${match.groups.path}`,
+        `完整性摘要路径超出验收证据根目录：${match.groups.path}`,
       );
     }
     if ((await sha256File(path)) !== match.groups.hash) {
       throw new QualificationEvidenceError(
         'HASH_MISMATCH',
-        `hash 与文件不一致：${match.groups.path}`,
+        `完整性摘要与文件不一致：${match.groups.path}`,
       );
     }
   }
@@ -191,7 +194,7 @@ export async function verifyHashes(runDir) {
     const missing = [...expectedPaths].find((path) => !seenPaths.has(path));
     throw new QualificationEvidenceError(
       'INVALID_HASHES',
-      'hash 列表缺少 ' + (missing ?? '一个或多个 evidence 文件'),
+      '完整性摘要列表缺少 ' + (missing ?? '一个或多个验收证据文件'),
     );
   }
   return entries.length;

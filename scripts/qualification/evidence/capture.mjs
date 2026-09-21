@@ -18,7 +18,7 @@ function validateCaptureManifest(manifest, captureDir) {
   if (!isRecord(manifest) || manifest.formatVersion !== 1) {
     throw new QualificationEvidenceError(
       'INVALID_CAPTURE_SCHEMA',
-      `${captureDir}/manifest.json 必须声明 formatVersion 1`,
+      `${captureDir}/manifest.json 必须声明格式版本 1`,
     );
   }
   requireString(manifest.captureId, 'manifest.captureId');
@@ -27,22 +27,25 @@ function validateCaptureManifest(manifest, captureDir) {
   requireString(manifest.broadcastCommit, 'manifest.broadcastCommit');
   requireString(manifest.scenario, 'manifest.scenario');
   if (!isRecord(manifest.gsiConfig)) {
-    throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest.gsiConfig 必须是对象');
+    throw new QualificationEvidenceError(
+      'INVALID_CAPTURE_SCHEMA',
+      'manifest 中的 GSI 配置必须是对象',
+    );
   }
   if (
     !isSafeNonNegativeInteger(manifest.frameCount) ||
     !isSafeNonNegativeInteger(manifest.droppedFrames)
   ) {
-    throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest 中的 frame 数量无效');
+    throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest 中的数据帧数量无效');
   }
   if (typeof manifest.complete !== 'boolean') {
     throw new QualificationEvidenceError(
       'INVALID_CAPTURE_SCHEMA',
-      'manifest.complete 必须是 boolean',
+      'manifest 的完整性标记必须是布尔值',
     );
   }
   if (manifest.framesSha256 !== undefined && !SHA256_PATTERN.test(manifest.framesSha256)) {
-    throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest.framesSha256 无效');
+    throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest 的数据帧摘要无效');
   }
   return manifest;
 }
@@ -75,7 +78,7 @@ function parseCaptureFrame(line, lineNumber, captureDir) {
   ) {
     throw new QualificationEvidenceError(
       'INVALID_CAPTURE_FRAME',
-      `${captureDir}/frames.jsonl 第 ${lineNumber} 行的 Capture V1 结构无效`,
+      `${captureDir}/frames.jsonl 第 ${lineNumber} 行的采集记录结构无效`,
     );
   }
   assertUtc(frame.receivedAt, `frame ${lineNumber}.receivedAt`);
@@ -164,13 +167,13 @@ export async function verifyCaptureDirectory(captureDir, observationReferences =
     if (previousSequence !== undefined && frame.sequence <= previousSequence) {
       throw new QualificationEvidenceError(
         'INVALID_CAPTURE_FRAME',
-        `${framesPath} 的 sequence 未递增`,
+        `${framesPath} 的数据帧序号未递增`,
       );
     }
     if (previousElapsedUs !== undefined && frame.elapsedUs < previousElapsedUs) {
       throw new QualificationEvidenceError(
         'INVALID_CAPTURE_FRAME',
-        `${framesPath} 的 elapsedUs 不是单调递增`,
+        `${framesPath} 的采集时间未单调递增`,
       );
     }
     previousSequence = frame.sequence;
@@ -182,14 +185,14 @@ export async function verifyCaptureDirectory(captureDir, observationReferences =
   if (count !== manifest.frameCount) {
     throw new QualificationEvidenceError(
       'FRAME_COUNT_MISMATCH',
-      `${framesPath} 包含 ${count} 个 frame，但 manifest 声明为 ${manifest.frameCount} 个`,
+      `${framesPath} 包含 ${count} 个数据帧，但 manifest 声明为 ${manifest.frameCount} 个`,
     );
   }
   const computedFramesSha256 = hash.digest('hex');
   if (manifest.framesSha256 !== undefined && manifest.framesSha256 !== computedFramesSha256) {
     throw new QualificationEvidenceError(
       'FRAMES_HASH_MISMATCH',
-      `${framesPath} 的 hash ${computedFramesSha256} 与 manifest 中的 ${manifest.framesSha256} 不一致`,
+      `${framesPath} 的完整性摘要 ${computedFramesSha256} 与 manifest 中的 ${manifest.framesSha256} 不一致`,
     );
   }
   return {

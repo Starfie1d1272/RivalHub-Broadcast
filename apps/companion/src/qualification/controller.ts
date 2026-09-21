@@ -6,7 +6,11 @@ import type { MapExecutionResetReason, RuntimeTime } from '@rivalhub-broadcast/c
 
 import type { DebugRuntimeResponse } from '../runtime/debug-state.js';
 import type { ProgramRuntime, ProgramRuntimeSnapshot } from '../runtime/program-runtime.js';
-import type { RecorderHealth } from '../telemetry/capture-recorder.js';
+import {
+  resolveCaptureRecorder,
+  type CaptureRecorderSource,
+  type RecorderHealth,
+} from '../telemetry/capture-recorder.js';
 import {
   QUALIFICATION_CHECK_KEYS,
   QUALIFICATION_LIVE_MARKER_KINDS,
@@ -31,11 +35,11 @@ export interface QualificationControllerOptions {
   readonly clock?: QualificationClock;
   readonly getDebugResponse: (nowMonotonicMs: number) => DebugRuntimeResponse;
   readonly programRuntime: ProgramRuntime;
-  readonly recorder: {
-    readonly captureId?: string;
-    readonly captureElapsedUsAt?: (monotonicMs: number) => number | undefined;
-    getHealth(): RecorderHealth;
-  };
+  readonly recorder: CaptureRecorderSource;
+  readonly rotateRecorder?: () => Promise<{
+    readonly previousCaptureId: string;
+    readonly captureId: string;
+  }>;
   readonly onAcceptedMapReset?: () => void;
   readonly onFinish?: (input: QualificationFinishInput) => void | Promise<void>;
 }
@@ -268,24 +272,24 @@ function evaluateChecks(
   const silenceToStalePassed = realSilenceToStalePassed(markers, resetBefore);
   const checks: Record<string, QualificationCheck> = {
     productionChain: {
-      label: '第一场数据进入制播数据链路（production chain）',
+      label: '第一场数据进入制播数据链路',
       status: productionChainPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: productionChainPassed
-        ? 'Demo A 场景标记已绑定第一场地图执行（map execution）内的已接受正常观测（fresh accepted observation）。'
-        : '等待第一场地图执行（map execution）内与采集记录对应的已接受正常观测（fresh accepted observation）。',
+        ? '第一场场景标记已绑定第一场地图执行内的已接收正常观测。'
+        : '等待第一场地图执行内与采集记录对应的已接收正常观测。',
     },
     realSilenceToStale: {
-      label: '停止输入后进入数据已过期状态（stale）',
+      label: '停止输入后进入数据已过期状态',
       status: silenceToStalePassed ? 'PASS' : 'INCONCLUSIVE',
       reason: silenceToStalePassed
-        ? '本地制播服务未重启即观察到数据已过期状态（stale），并在下一场显式重置（reset）前记录了 CS2 退出。'
-        : '等待 Demo A 后运行状态进入数据已过期状态（stale），并在下一场显式重置（reset）前确认 CS2 退出。',
+        ? '本地制播服务未重启即观察到数据已过期，并在下一场显式重置前记录了 CS2 退出。'
+        : '等待第一场数据后运行状态进入数据已过期，并在下一场显式重置前确认 CS2 退出。',
     },
     explicitNextExecution: {
-      label: '下一场从显式新地图执行（map execution）开始',
+      label: '下一场从显式新地图执行开始',
       status: resetPassed ? 'PASS' : 'INCONCLUSIVE',
       reason: resetPassed
-        ? '显式重置（reset）已推进 mapEpoch，并清理上一场正式节目数据（Program telemetry）。'
+        ? '显式重置已推进地图执行编号，并清理上一场正式节目数据。'
         : '等待一次成功的“开始下一场”控制。',
     },
     demoBRecovery: {
@@ -296,8 +300,8 @@ function evaluateChecks(
           : 'INCONCLUSIVE',
       reason:
         hasMarker(markers, 'cs2-reopened') && resetPassed && demoBRecoveryPassed
-          ? 'Demo B 场景标记已绑定显式重置（reset）后新地图执行（map execution）的已接受正常观测（fresh accepted observation）。'
-          : '等待 CS2 重开、显式重置（reset）后的正常 Demo B 观测（fresh observation）与状态恢复。',
+          ? '第二场场景标记已绑定显式重置后新地图执行中的已接收正常观测。'
+          : '等待 CS2 重开、显式重置后的正常第二场观测与状态恢复。',
     },
     captureIntegrity: {
       label: '采集记录可安全导出',
@@ -310,11 +314,11 @@ function evaluateChecks(
             ? 'PASS'
             : 'INCONCLUSIVE',
       reason: snapshot.scenarioWriteFailed
-        ? 'scenario marker 写入失败。'
+        ? '场景标记写入失败。'
         : recorderHealth.state === 'failed' || recorderHealth.incomplete
           ? '采集记录已报告失败或不完整。'
           : recorderHealth.state === 'closed' && recorderHealth.frameCount > 0
-            ? '采集记录已完成整理（finalize），且存在已接受的数据帧（accepted frame）。'
+            ? '采集记录已完成整理，且存在已接收的数据帧。'
             : '等待服务正常结束并完成采集记录整理。',
     },
   };
@@ -323,7 +327,7 @@ function evaluateChecks(
     checkKeys.length !== QUALIFICATION_CHECK_KEYS.length ||
     QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
   ) {
-    throw new Error('qualification check 实现与 evidence contract 不一致');
+    throw new Error('现场验收检查与证据契约不一致');
   }
   return checks;
 }
@@ -414,7 +418,7 @@ export function registerQualificationRoutes(
   options: QualificationControllerOptions,
 ): void {
   if (options.controlToken.trim().length === 0) {
-    throw new Error('qualification control token 不能为空');
+    throw new Error('现场验收控制令牌不能为空。');
   }
   const clock = options.clock ?? defaultClock;
   const getDebug = (): DebugRuntimeResponse => options.getDebugResponse(clock.now().monotonicMs);
@@ -428,7 +432,7 @@ export function registerQualificationRoutes(
       options.runId,
       debug,
       options.evidence.getSnapshot(),
-      options.recorder.getHealth(),
+      resolveCaptureRecorder(options.recorder).getHealth(),
       nowMonotonicMs,
     );
   };
@@ -467,8 +471,7 @@ export function registerQualificationRoutes(
     if (kind === 'runtime-stale' || kind === 'next-execution') {
       return reply.code(409).send({
         error: 'qualification_marker_automatic',
-        message:
-          '数据过期状态（runtime-stale）由系统自动记录；下一场执行（next-execution）请使用“开始下一场”控制。',
+        message: '数据过期状态由系统自动记录；下一场执行请使用“开始下一场”控制。',
       });
     }
     try {
@@ -488,16 +491,17 @@ export function registerQualificationRoutes(
         if (phase !== 'before' && phase !== 'after') {
           return reply.code(400).send({
             error: 'invalid_objective_scenario_phase',
-            message: 'objective scenario marker 必须声明 before 或 after phase',
+            message: '目标时钟场景标记必须指定“开始”或“结束”。',
           });
         }
-        const captureId = options.recorder.captureId;
+        const recorder = resolveCaptureRecorder(options.recorder);
+        const captureId = recorder.captureId;
         const at = clock.now();
-        const captureElapsedUs = options.recorder.captureElapsedUsAt?.(at.monotonicMs);
+        const captureElapsedUs = recorder.captureElapsedUsAt?.(at.monotonicMs);
         if (captureId === undefined || captureElapsedUs === undefined) {
           return reply.code(409).send({
             error: 'objective_scenario_capture_unavailable',
-            message: '当前 recorder 没有可绑定的 Capture V1 clock identity',
+            message: '当前无法为场景标记绑定采集记录时间。',
           });
         }
         await options.evidence.recordMarker(kind, runtime, freshnessFromDebug(debug), {
@@ -577,6 +581,32 @@ export function registerQualificationRoutes(
     return reply.code(result.disposition.kind === 'accepted' ? 200 : 409).send(body);
   });
 
+  app.post('/qualification/recorder/rotate', async (request, reply) => {
+    if (!tokenMatches(request, options.controlToken)) {
+      unauthorized(reply);
+      return;
+    }
+    if (options.rotateRecorder === undefined) {
+      return reply.code(409).send({
+        error: 'qualification_recorder_rotation_unavailable',
+        message: '当前现场验收服务不支持在同一轮验收中切换采集记录。',
+      });
+    }
+    try {
+      const result = await options.rotateRecorder();
+      return {
+        ok: true,
+        ...result,
+        message: '已在同一轮现场验收中开始新的采集记录。',
+      };
+    } catch (error: unknown) {
+      return reply.code(503).send({
+        error: 'qualification_recorder_rotation_failed',
+        message: String(error),
+      });
+    }
+  });
+
   app.post('/qualification/finish', async (request, reply) => {
     if (!tokenMatches(request, options.controlToken)) {
       unauthorized(reply);
@@ -588,7 +618,7 @@ export function registerQualificationRoutes(
     const finishInput: QualificationFinishInput = {
       debug: finishDebug,
       runtime: finishRuntime,
-      recorderHealth: options.recorder.getHealth(),
+      recorderHealth: resolveCaptureRecorder(options.recorder).getHealth(),
     };
     setImmediate(() => {
       void Promise.resolve(options.onFinish?.(finishInput)).catch(() => {

@@ -375,11 +375,13 @@ provenance 或完整 scenario coverage 时，production decision 必须保持 `I
 
 source semantics/lifecycle qualification 与 numeric precision qualification 是两个独立结论。
 前者必须处理 overloaded countdown 的 phase 切换、`round.bomb`、matching defuser 的 kit
-evidence、abort/restart、terminal residual 和显式场景 consequence；显式 semantic mismatch
-或 terminal residual 超过 100 ms 为 `FAIL`，缺少样本为 `INCONCLUSIVE`。后者的 0.1 s gate
+evidence、abort/restart 和显式场景 consequence；显式 semantic mismatch 为 `FAIL`，缺少语义证据为
+`INCONCLUSIVE`。terminal residual 与 countdown sample completeness 属于 numeric/availability
+gate：终止时刻误差超过 100 ms 为 numeric `FAIL`，缺少终止样本或倒计时样本时 numeric 保持
+`INCONCLUSIVE`，不把数值/可用性缺口误判成 source semantic `FAIL`。后者的 0.1 s gate
 包括 active packet interval p99 ≤ 200 ms、独立 reference transition residual p95 ≤ 100 ms、
 独立 absolute offset ≤ 100 ms、canonical production config 匹配、完整 scenario coverage，
-并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy 上限。lease 与 Core
+countdown samples complete、terminal residual coverage/bound，并且 configured objective lease ≥ `3 × measured p99` 且不超过 Core policy 上限。lease 与 Core
 共用 canonical policy；因此一次 capture 即使 0.1 s gate FAIL，也必须单独报告 lease sufficiency。
 plant、defuse、explosion 三类 terminal residual 必须各自有统计样本；缺样本时 coverage gate
 保持 `INCONCLUSIVE`。`precision_time=3` 不构成 1 ms 保证，0.01 s 不承诺。
@@ -390,8 +392,10 @@ plant、defuse、explosion 三类 terminal residual 必须各自有统计样本�
 `reconnect-restart`。每个窗口必须有同一 Capture V1 `captureId` 绑定的 `before`/`after`
 marker；raw frames 验证实际 consequence。fast-defuse 只看窗口内的第一帧，不能看整段 capture
 的第一帧。reconnect 不由 heartbeat 间隙或 sequence gap 推断，只能由显式 marker 绑定不同
-recorder capture identity 的 run-level aggregator 验证。Windows 备用入口为：
-`mark.ps1 objective-plant-abort -Phase before` / `-Phase after`。
+recorder capture identity 的 run-level aggregator 验证。现场验收通过 `rotate.ps1` 在同一
+qualification run 内切换到新的 recorder capture identity；Windows 备用入口为：
+`mark.ps1 objective-plant-abort -Phase before` / `-Phase after`，重连场景还需在实际重连或
+接收端重启后执行 `rotate.ps1`，再记录 `objective-reconnect-restart -Phase after`。
 
 canonical production GSI config 的唯一代码来源是
 `packages/telemetry-gsi/src/production-config.json`；analyzer 会对 capture manifest 的

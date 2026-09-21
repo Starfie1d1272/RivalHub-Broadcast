@@ -18,9 +18,13 @@ const GSI_TOKEN = 'qualification-gsi-token';
 const CONTROL_TOKEN = 'qualification-control-token';
 
 class FakeRecorder implements CaptureRecorder {
-  readonly captureId = 'qualification-test-capture';
+  readonly captureId: string;
   readonly inputs: CaptureFrameInput[] = [];
   private closed = false;
+
+  constructor(captureId = 'qualification-test-capture') {
+    this.captureId = captureId;
+  }
 
   tryRecord(input: CaptureFrameInput): boolean {
     this.inputs.push(input);
@@ -43,6 +47,12 @@ class FakeRecorder implements CaptureRecorder {
   finalize(): Promise<void> {
     this.closed = true;
     return Promise.resolve();
+  }
+}
+
+class ClockedFakeRecorder extends FakeRecorder {
+  captureElapsedUsAt(monotonicMs: number): number {
+    return monotonicMs * 1_000;
   }
 }
 
@@ -139,6 +149,76 @@ describe('qualification-only Companion surface', () => {
     });
     expect(missingClock.statusCode).toBe(409);
     expect(missingClock.json()).toMatchObject({ error: 'objective_scenario_capture_unavailable' });
+  });
+
+  it('rotates Capture V1 identity inside one qualification run for reconnect evidence', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-rotation-'));
+    const first = new ClockedFakeRecorder('capture-a');
+    const second = new ClockedFakeRecorder('capture-b');
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: first,
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'qualification-rotation-run',
+      qualificationScenarioPath: join(temporaryDirectory, 'scenario.jsonl'),
+      onQualificationRecorderRotate: (current) => {
+        expect(current).toBe(first);
+        return Promise.resolve({
+          previousCaptureId: current.captureId,
+          captureId: second.captureId,
+          nextRecorder: second,
+        });
+      },
+      qualificationClock: {
+        now: () => ({ monotonicMs: 100, utc: '2026-09-21T00:00:00.100Z' }),
+      },
+    });
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'objective-reconnect-restart', phase: 'before' },
+        })
+      ).statusCode,
+    ).toBe(200);
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/recorder/rotate',
+          headers,
+        })
+      ).json(),
+    ).toMatchObject({
+      ok: true,
+      previousCaptureId: 'capture-a',
+      captureId: 'capture-b',
+    });
+    expect(first.getHealth().state).toBe('closed');
+    expect(
+      (
+        await app.inject({
+          method: 'POST',
+          url: '/qualification/marker',
+          headers,
+          payload: { kind: 'objective-reconnect-restart', phase: 'after' },
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const markers = (await readFile(join(temporaryDirectory, 'scenario.jsonl'), 'utf8'))
+      .trim()
+      .split('\n')
+      .map((line) => JSON.parse(line) as { captureId: string; phase: string });
+    expect(markers.map(({ captureId, phase }) => ({ captureId, phase }))).toEqual([
+      { captureId: 'capture-a', phase: 'before' },
+      { captureId: 'capture-b', phase: 'after' },
+    ]);
   });
 
   it('hands the final runtime snapshot to the qualification launcher before shutdown', async () => {

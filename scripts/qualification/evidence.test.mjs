@@ -379,7 +379,7 @@ describe('qualification evidence verifier', () => {
   });
 
   it('rejects secret-bearing evidence fields', () => {
-    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('携带 secret');
+    expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('不应公开的敏感值');
     expect(() => scanJsonForSecrets({ player: '76561198000000001' })).toThrow('Steam 身份');
   });
 });

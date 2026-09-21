@@ -20,6 +20,7 @@ export { iterateCaptureFrames, verifyCaptureDirectory } from './evidence/capture
 export {
   analyzeObjectiveTimingCapture,
   aggregateObjectiveScenarioCoverage,
+  evaluateObjectiveTimingRun,
   renderObjectiveTimingReport,
 } from './evidence/objective-timing.mjs';
 export { checksFrom, resultFromChecks } from './evidence/checks.mjs';

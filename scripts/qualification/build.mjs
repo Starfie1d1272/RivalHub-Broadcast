@@ -317,6 +317,7 @@ async function main() {
       'common.ps1',
       'install-gsi.ps1',
       'start.ps1',
+      'rotate.ps1',
       'mark.ps1',
       'check.ps1',
       'stop.ps1',

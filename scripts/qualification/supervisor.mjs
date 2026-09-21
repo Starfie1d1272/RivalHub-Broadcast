@@ -24,7 +24,7 @@ function loadQualificationContract() {
       // Try the next repository or bundle location.
     }
   }
-  throw new Error('缺少 qualification contract');
+  throw new Error('缺少现场验收契约');
 }
 
 const QUALIFICATION_RESULT_VALUES = new Set(loadQualificationContract().resultValues);
@@ -137,9 +137,9 @@ function escapeHtml(value) {
 }
 
 function resultLabel(result) {
-  if (result === 'PASS') return '通过（PASS）';
-  if (result === 'FAIL') return '失败（FAIL）';
-  return '证据不足（INCONCLUSIVE）';
+  if (result === 'PASS') return '通过';
+  if (result === 'FAIL') return '失败';
+  return '证据不足';
 }
 
 export function completionPage(completion) {
@@ -255,9 +255,9 @@ async function restoreGsiConfig(statePath) {
   const state = await readJson(statePath);
   if (state.gsiRestored === true) return;
   const cfgPath = typeof state.cfgPath === 'string' ? state.cfgPath : undefined;
-  if (cfgPath === undefined) throw new Error('缺少 qualification cfg 路径');
+  if (cfgPath === undefined) throw new Error('缺少现场验收配置路径');
   if (state.hadExistingConfig === true) {
-    if (typeof state.backupPath !== 'string') throw new Error('缺少 qualification cfg 备份');
+    if (typeof state.backupPath !== 'string') throw new Error('缺少现场验收配置备份');
     await copyFile(state.backupPath, cfgPath);
     await rm(state.backupPath, { force: true });
   } else {
@@ -279,10 +279,9 @@ async function main() {
   );
   const controlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
   const port = Number.parseInt(process.env.PORT ?? '3000', 10);
-  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535)
-    throw new Error('qualification 端口无效');
+  if (!Number.isSafeInteger(port) || port < 1 || port > 65_535) throw new Error('现场验收端口无效');
   if (controlToken === undefined || controlToken.length === 0)
-    throw new Error('缺少 qualification control token');
+    throw new Error('缺少现场验收控制令牌');
 
   const logsDir = join(runDir, 'logs');
   await mkdir(logsDir, { recursive: true });

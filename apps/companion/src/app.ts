@@ -80,6 +80,11 @@ export interface CompanionAppOptions {
     readonly artifactId: string;
     readonly artifactSha256: string;
   };
+  readonly onQualificationRecorderRotate?: (current: CaptureRecorder) => Promise<{
+    readonly previousCaptureId: string;
+    readonly captureId: string;
+    readonly nextRecorder: CaptureRecorder;
+  }>;
   readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
   readonly webRoot?: string;
   readonly host?: string;
@@ -97,7 +102,8 @@ function projectionDiagnosticDegradesRuntime(code: string): boolean {
 }
 
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
-  const recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
+  let recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
+  const currentRecorder = (): CaptureRecorder => recorder;
   const programRuntime =
     options.programRuntime ??
     createProgramRuntime(options.producerInstanceId ?? randomUUID(), {
@@ -116,7 +122,8 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const cstvSources = options.cstvSources ?? createCstvSourceManagers({});
   const objectiveReferenceSource = options.objectiveReferenceSource;
   const objectiveReferenceUnsubscribe =
-    objectiveReferenceSource === undefined || recorder.tryRecordObjectiveReference === undefined
+    objectiveReferenceSource === undefined ||
+    currentRecorder().tryRecordObjectiveReference === undefined
       ? undefined
       : cstvSources.program.subscribeLiveGameEvents((observation) => {
           if (!(
@@ -141,7 +148,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
           )
             return;
           const referenceId = `cstv-${objective.cursor.role}-${objective.cursor.generation}-${objective.cursor.sequence}-${objective.kind}`;
-          recorder.tryRecordObjectiveReference?.({
+          currentRecorder().tryRecordObjectiveReference?.({
             referenceId,
             kind: objective.kind,
             source: 'cstv',
@@ -239,7 +246,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {
-    const recorderHealth = recorder.getHealth();
+    const recorderHealth = currentRecorder().getHealth();
     const recorderDegraded =
       recorderHealth.state === 'degraded' || recorderHealth.state === 'failed';
     const cstvHealth = {
@@ -259,7 +266,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   app.get('/debug/runtime', () =>
     debugEvidenceStore.getResponse({
       nowMonotonicMs: debugClock.nowMonotonicMs(),
-      recorderHealth: recorder.getHealth(),
+      recorderHealth: currentRecorder().getHealth(),
       deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
       cstvSources: {
         program: cstvSources.program.getSnapshot(),
@@ -271,7 +278,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   if (options.gsiToken !== undefined) {
     registerGsiIngress(app, {
       gsiToken: options.gsiToken,
-      recorder,
+      recorder: currentRecorder,
       ...(options.gsiSequenceSource === undefined
         ? {}
         : { sequenceSource: options.gsiSequenceSource }),
@@ -301,7 +308,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   if (qualificationMode) {
     const controlToken = options.qualificationControlToken;
     if (controlToken === undefined || controlToken.trim().length === 0) {
-      throw new Error('启用 qualificationMode 时必须设置 qualificationControlToken');
+      throw new Error('启用现场验收模式时必须设置现场验收控制令牌。');
     }
     const runId = options.qualificationRunId ?? 'local-qualification';
     const evidence =
@@ -323,7 +330,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       getDebugResponse: (nowMonotonicMs) =>
         debugEvidenceStore.getResponse({
           nowMonotonicMs,
-          recorderHealth: recorder.getHealth(),
+          recorderHealth: currentRecorder().getHealth(),
           deliveryHealth: deliveryConsumers.map((consumer) => consumer.getHealth()),
           cstvSources: {
             program: cstvSources.program.getSnapshot(),
@@ -331,7 +338,22 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
           },
         }),
       programRuntime,
-      recorder,
+      recorder: currentRecorder,
+      ...(options.onQualificationRecorderRotate === undefined
+        ? {}
+        : {
+            rotateRecorder: async () => {
+              const previous = currentRecorder();
+              const result = await options.onQualificationRecorderRotate?.(previous);
+              if (result === undefined) throw new Error('采集记录切换回调未配置。');
+              recorder = result.nextRecorder;
+              await previous.finalize();
+              return {
+                previousCaptureId: result.previousCaptureId,
+                captureId: result.captureId,
+              };
+            },
+          }),
       onAcceptedMapReset: () => {
         debugEvidenceStore.clearCurrentTelemetry();
         debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
@@ -347,7 +369,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
 
   if (options.operatorControlToken !== undefined) {
     if (options.operatorControlToken.trim().length === 0) {
-      throw new Error('设置 operatorControlToken 时必须为非空值');
+      throw new Error('设置操作员控制令牌时必须为非空值。');
     }
     registerOperatorCommandRoutes(app, {
       controlToken: options.operatorControlToken,
@@ -366,7 +388,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     await Promise.all([projectionCoordinator.close(), programCueCoordinator.close()]);
     await programRuntime.close();
     await localWebTransport.close();
-    await recorder.finalize();
+    await currentRecorder().finalize();
   });
 
   return app;

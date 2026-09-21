@@ -15,10 +15,10 @@
 
 $objectiveMarker = $Marker.StartsWith('objective-')
 if ($objectiveMarker -and [string]::IsNullOrWhiteSpace($Phase)) {
-    throw 'objective 场景 marker 必须指定 -Phase before 或 -Phase after'
+    throw '目标时钟场景标记必须使用 -Phase 指定“开始”或“结束”。'
 }
 if (-not $objectiveMarker -and -not [string]::IsNullOrWhiteSpace($Phase)) {
-    throw '只有 objective 场景 marker 可以指定 -Phase'
+    throw '只有目标时钟场景标记可以使用 -Phase。'
 }
 $body = @{ kind = $Marker }
 if ($objectiveMarker) { $body.phase = $Phase }

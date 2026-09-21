@@ -142,10 +142,10 @@ function isObjectiveScenarioMarkerKind(
 
 function assertFiniteRuntimeTime(at: RuntimeTime): void {
   if (!Number.isFinite(at.monotonicMs)) {
-    throw new RangeError('qualification clock 必须返回有限的 monotonic 时间戳');
+    throw new RangeError('现场验收时钟必须返回有限的单调时间戳。');
   }
   if (typeof at.utc !== 'string' || at.utc.length === 0) {
-    throw new RangeError('qualification clock 必须返回非空的 UTC 时间戳');
+    throw new RangeError('现场验收时钟必须返回非空的 UTC 时间戳。');
   }
 }
 
@@ -178,16 +178,14 @@ export class QualificationEvidenceStore {
   private scenarioWriteFailed = false;
 
   constructor(options: QualificationEvidenceStoreOptions) {
-    if (options.runId.trim().length === 0) throw new Error('qualification runId 不能为空');
+    if (options.runId.trim().length === 0) throw new Error('现场验收轮次编号不能为空。');
     if (
       options.maxMarkers !== undefined &&
       (!Number.isSafeInteger(options.maxMarkers) ||
         options.maxMarkers <= 0 ||
         options.maxMarkers > QUALIFICATION_MAX_MARKERS)
     ) {
-      throw new RangeError(
-        `qualification maxMarkers 必须在 1 到 ${QUALIFICATION_MAX_MARKERS} 之间`,
-      );
+      throw new RangeError(`现场验收标记数量上限必须在 1 到 ${QUALIFICATION_MAX_MARKERS} 之间`);
     }
     this.runId = options.runId;
     this.scenarioPath = options.scenarioPath;
@@ -207,7 +205,7 @@ export class QualificationEvidenceStore {
     } = {},
   ): Promise<QualificationMarker> {
     if (!isQualificationMarkerKind(kind)) {
-      throw new Error(`不支持的 qualification marker：${String(kind)}`);
+      throw new Error(`不支持的现场验收场景标记：${String(kind)}`);
     }
     const at = this.clock.now();
     assertFiniteRuntimeTime(at);
@@ -221,14 +219,14 @@ export class QualificationEvidenceStore {
         !Number.isSafeInteger(options.captureElapsedUs) ||
         options.captureElapsedUs < 0
       ) {
-        throw new Error(`${kind} 需要 captureId、captureElapsedUs 和 before/after phase`);
+        throw new Error(`${kind} 需要采集记录编号、采集时间以及“开始/结束”阶段。`);
       }
     }
     if (
       QUALIFICATION_LIVE_MARKER_KINDS.includes(kind) &&
       (freshness !== 'fresh' || observation === null)
     ) {
-      throw new Error(`${kind} 需要 fresh accepted observation`);
+      throw new Error(`${kind} 需要数据正常时的已接收观测。`);
     }
     const marker: QualificationMarker = {
       schemaVersion: QUALIFICATION_SCHEMA_VERSION,

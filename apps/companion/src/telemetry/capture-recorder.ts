@@ -70,6 +70,12 @@ export interface CaptureRecorder {
   finalize(): Promise<void>;
 }
 
+export type CaptureRecorderSource = CaptureRecorder | (() => CaptureRecorder);
+
+export function resolveCaptureRecorder(source: CaptureRecorderSource): CaptureRecorder {
+  return typeof source === 'function' ? source() : source;
+}
+
 export interface CaptureRecorderOptions {
   readonly captureDir: string;
   readonly broadcastCommit?: string;

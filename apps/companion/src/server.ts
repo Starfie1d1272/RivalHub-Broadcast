@@ -66,7 +66,7 @@ function logRecorderDiagnostic(diagnostic: RecorderDiagnostic): void {
     ...(diagnostic.operation === undefined ? {} : { operation: diagnostic.operation }),
     ...(diagnostic.causeCode === undefined ? {} : { causeCode: diagnostic.causeCode }),
   };
-  console.warn(`Companion capture recorder 诊断：${JSON.stringify(fields)}`);
+  console.warn(`Companion 采集记录诊断：${JSON.stringify(fields)}`);
 }
 
 async function writeFinalRuntime(path: string, response: unknown): Promise<void> {
@@ -81,10 +81,10 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   console.error('Companion 启动失败：GSI_TOKEN 必须设置为非空值');
   process.exitCode = 1;
 } else if (qualificationMode && (qualificationControlToken?.trim().length ?? 0) === 0) {
-  console.error('Companion 启动失败：qualification 模式下必须设置 QUALIFICATION_CONTROL_TOKEN');
+  console.error('Companion 启动失败：现场验收模式下必须设置 QUALIFICATION_CONTROL_TOKEN');
   process.exitCode = 1;
 } else if (qualificationMode && host !== '127.0.0.1') {
-  console.error('Companion 启动失败：qualification 模式必须监听 loopback 127.0.0.1');
+  console.error('Companion 启动失败：现场验收模式必须监听本机回环地址 127.0.0.1');
   process.exitCode = 1;
 } else if (operatorControlToken !== undefined && operatorControlToken.trim().length === 0) {
   console.error('Companion 启动失败：OPERATOR_CONTROL_TOKEN 必须设置为非空值');
@@ -94,9 +94,8 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   process.exitCode = 1;
 } else {
   let recorder: CaptureRecorder;
-
-  try {
-    recorder = await createCaptureRecorder({
+  const createRecorder = () =>
+    createCaptureRecorder({
       captureDir,
       broadcastCommit,
       gsiConfig: PRODUCTION_GSI_CONFIG,
@@ -112,19 +111,21 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
         : {}),
       onDiagnostic: logRecorderDiagnostic,
     });
+
+  try {
+    recorder = await createRecorder();
   } catch (error: unknown) {
     recorder = createDisabledRecorder('recorder_start_failed');
-    console.error(`Companion capture recorder 不可用：${String(error)}`);
+    console.error(`Companion 采集记录不可用：${String(error)}`);
   }
 
   const seriesProgressCheckpointStore = new JsonSeriesProgressCheckpointStore({
     filePath: seriesProgressCheckpointPath,
-    onDiagnostic: (code) => console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+    onDiagnostic: (code) => console.warn(`系列进度检查点诊断：${code}`),
   });
   const programRuntime = createProgramRuntime(producerInstanceId, {
     seriesProgressCheckpointStore,
-    onSeriesProgressDiagnostic: ({ code }) =>
-      console.warn(`SeriesProgress checkpoint 诊断：${code}`),
+    onSeriesProgressDiagnostic: ({ code }) => console.warn(`系列进度检查点诊断：${code}`),
   });
   const app = buildApp({
     logger: true,
@@ -143,13 +144,26 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       ? {
           qualificationRunId,
           qualificationScenarioPath,
+          onQualificationRecorderRotate: async (currentRecorder) => {
+            if (currentRecorder !== recorder) {
+              throw new Error('采集记录在切换过程中发生了意外变化。');
+            }
+            const nextRecorder = await createRecorder();
+            const previousCaptureId = currentRecorder.captureId;
+            recorder = nextRecorder;
+            return {
+              previousCaptureId,
+              captureId: nextRecorder.captureId,
+              nextRecorder,
+            };
+          },
           onQualificationFinish: async ({ debug }: { readonly debug: unknown }) => {
             try {
               if (qualificationFinalRuntimePath !== undefined) {
                 await writeFinalRuntime(qualificationFinalRuntimePath, debug);
               }
             } catch (error: unknown) {
-              console.error(`Qualification final runtime snapshot 获取失败：${String(error)}`);
+              console.error(`现场验收最终运行状态快照获取失败：${String(error)}`);
             } finally {
               shutdown('qualification-finish');
             }
@@ -173,7 +187,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       const watchdog = setTimeout(() => {
         if (appClosed && recorder.getHealth().state === 'closed') return;
         console.error(
-          `Companion shutdown watchdog 在 ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS}ms 后超时`,
+          `Companion 关闭监视器在 ${COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS} 毫秒后超时`,
         );
         process.exit(1);
       }, COMPANION_SHUTDOWN_WATCHDOG_TIMEOUT_MS);
