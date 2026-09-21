@@ -165,21 +165,17 @@ describe('qualification-only Companion surface', () => {
     const first = new ClockedFakeRecorder('capture-a');
     const second = new ClockedFakeRecorder('capture-b');
     let monotonicMs = 100;
-    let receiverGeneration = 0;
     let sequence = 0;
     app = buildApp({
       gsiToken: GSI_TOKEN,
       recorder: first,
       gsiSequenceSource: () => sequence++,
-      gsiReceiverGenerationSource: () => receiverGeneration,
       qualificationMode: true,
       qualificationControlToken: CONTROL_TOKEN,
       qualificationRunId: 'qualification-rotation-run',
       qualificationScenarioPath: join(temporaryDirectory, 'scenario.jsonl'),
       onQualificationRecorderRotate: (current) => {
         expect(current).toBe(first);
-        receiverGeneration = 1;
-        sequence = 0;
         return Promise.resolve({
           previousCaptureId: current.captureId,
           captureId: second.captureId,
@@ -201,15 +197,18 @@ describe('qualification-only Companion surface', () => {
     });
     const headers = { 'x-qualification-token': CONTROL_TOKEN };
 
-    expect(
-      (
-        await app.inject({
-          method: 'POST',
-          url: '/gsi',
-          payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
-        })
-      ).statusCode,
-    ).toBe(204);
+    for (const now of [100, 110, 120]) {
+      monotonicMs = now;
+      expect(
+        (
+          await app.inject({
+            method: 'POST',
+            url: '/gsi',
+            payload: { auth: { token: GSI_TOKEN }, ...plantedPayload() },
+          })
+        ).statusCode,
+      ).toBe(204);
+    }
 
     expect(
       (
@@ -235,6 +234,15 @@ describe('qualification-only Companion surface', () => {
       captureId: 'capture-b',
     });
     expect(first.getHealth().state).toBe('closed');
+    expect(
+      (
+        await app.inject({
+          method: 'GET',
+          url: '/qualification/status',
+          headers,
+        })
+      ).json(),
+    ).toMatchObject({ sourceGeneration: 1, freshness: 'awaiting' });
     const missingRecoveryObservation = await app.inject({
       method: 'POST',
       url: '/qualification/marker',
@@ -255,6 +263,14 @@ describe('qualification-only Companion surface', () => {
         })
       ).statusCode,
     ).toBe(204);
+    expect((await app.inject({ method: 'GET', url: '/debug/runtime' })).json()).toMatchObject({
+      sourceGeneration: 1,
+      freshness: 'fresh',
+      runtime: {
+        lastDisposition: { kind: 'accepted', reason: 'contiguous' },
+      },
+    });
+    expect(second.inputs.map((input) => input.sequence)).toEqual([3]);
     expect(
       (
         await app.inject({
@@ -269,10 +285,35 @@ describe('qualification-only Companion surface', () => {
     const markers = (await readFile(join(temporaryDirectory, 'scenario.jsonl'), 'utf8'))
       .trim()
       .split('\n')
-      .map((line) => JSON.parse(line) as { captureId: string; phase: string });
-    expect(markers.map(({ captureId, phase }) => ({ captureId, phase }))).toEqual([
-      { captureId: 'capture-a', phase: 'before' },
-      { captureId: 'capture-b', phase: 'after' },
+      .map(
+        (line) =>
+          JSON.parse(line) as {
+            captureId: string;
+            phase: string;
+            sourceGeneration: number;
+            observation: { sourceGeneration: number };
+          },
+      );
+    expect(
+      markers.map(({ captureId, phase, sourceGeneration, observation }) => ({
+        captureId,
+        phase,
+        sourceGeneration,
+        observationSourceGeneration: observation.sourceGeneration,
+      })),
+    ).toEqual([
+      {
+        captureId: 'capture-a',
+        phase: 'before',
+        sourceGeneration: 0,
+        observationSourceGeneration: 0,
+      },
+      {
+        captureId: 'capture-b',
+        phase: 'after',
+        sourceGeneration: 1,
+        observationSourceGeneration: 1,
+      },
     ]);
   });
 
