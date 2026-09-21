@@ -105,6 +105,16 @@ function projectionDiagnosticDegradesRuntime(code: string): boolean {
   return code.endsWith('-schema-validation-failed') || code.endsWith('-wire-validation-failed');
 }
 
+const PROGRAM_OBJECTIVE_REFERENCE_KINDS: ReadonlySet<string> = new Set([
+  'bomb-begin-plant',
+  'bomb-abort-plant',
+  'bomb-planted',
+  'bomb-begin-defuse',
+  'bomb-abort-defuse',
+  'bomb-defused',
+  'bomb-exploded',
+]);
+
 export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   let recorder = options.recorder ?? createDisabledRecorder('recorder_not_configured');
   const currentRecorder = (): CaptureRecorder => recorder;
@@ -130,18 +140,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     currentRecorder().tryRecordObjectiveReference === undefined
       ? undefined
       : cstvSources.program.subscribeLiveGameEvents((observation) => {
-          if (
-            !(
-              observation.kind === 'bomb-begin-plant' ||
-              observation.kind === 'bomb-abort-plant' ||
-              observation.kind === 'bomb-planted' ||
-              observation.kind === 'bomb-begin-defuse' ||
-              observation.kind === 'bomb-abort-defuse' ||
-              observation.kind === 'bomb-defused' ||
-              observation.kind === 'bomb-exploded'
-            )
-          )
-            return;
+          if (!PROGRAM_OBJECTIVE_REFERENCE_KINDS.has(observation.kind)) return;
           const objective = observation;
           const mapName = objective.cursor.mapName;
           const ticksPerSecond = objective.cursor.ticksPerSecond;
