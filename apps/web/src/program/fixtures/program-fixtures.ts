@@ -16,6 +16,16 @@ export const PROGRAM_FIXTURE_IDS = [
   'bomb-defusing',
   'timeout-ct',
   'stress-long-labels',
+  'series-bo1',
+  'series-bo5',
+  'series-halftime-swap',
+  'series-timeout-b',
+  'series-paused',
+  'series-decider',
+  'series-partial-history',
+  'series-history-unavailable',
+  'series-mapping-unavailable',
+  'series-long-labels',
 ] as const;
 
 export type ProgramFixtureId = (typeof PROGRAM_FIXTURE_IDS)[number];
@@ -31,6 +41,16 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'bomb-defusing': '正在拆弹',
   'timeout-ct': 'CT 暂停',
   'stress-long-labels': '长名称压力场景',
+  'series-bo1': 'BO1 系列赛',
+  'series-bo5': 'BO5 中盘',
+  'series-halftime-swap': '半场换边',
+  'series-timeout-b': 'B 队战术暂停',
+  'series-paused': '比赛暂停',
+  'series-decider': '决胜图',
+  'series-partial-history': '回合历史不完整',
+  'series-history-unavailable': '回合历史不可用',
+  'series-mapping-unavailable': '队伍映射暂不可用',
+  'series-long-labels': '系列赛长名称压力场景',
 };
 
 type ProgramPlayer = ProgramPayload['players'][number];
@@ -40,6 +60,7 @@ type ProgramWeapon = ProgramPlayer['weapons'][number];
 type ProgramTeam = ProgramPayload['teams']['ct'];
 type ProgramMatch = NonNullable<ProgramPayload['match']>;
 type LiveStatus = ProgramPayload['status'];
+type ProgramSeries = NonNullable<ProgramPayload['series']>;
 
 const FIXTURE_CURSOR = {
   producerInstanceId: 'fixture-producer',
@@ -191,6 +212,280 @@ function fixtureMatch(overrides: Partial<ProgramMatch> = {}): ProgramMatch {
   };
 }
 
+const SERIES_ENTRANTS: ProgramSeries['entrants'] = {
+  a: { entryId: 'fixture-entry-a', name: 'Northstar', logoUrl: null },
+  b: { entryId: 'fixture-entry-b', name: 'Southpoint', logoUrl: null },
+};
+
+function seriesMap(
+  overrides: Partial<ProgramSeries['maps'][number]> &
+    Pick<ProgramSeries['maps'][number], 'mapOrder' | 'mapName'>,
+): ProgramSeries['maps'][number] {
+  const { mapOrder, mapName, ...rest } = overrides;
+  return {
+    mapId: null,
+    mapOrder,
+    mapName,
+    selection: { kind: 'unknown' },
+    teamAStartSide: null,
+    status: 'pending',
+    finalScore: null,
+    winnerEntryId: null,
+    ...rest,
+  };
+}
+
+function completeRoundHistory(
+  count = 12,
+  entrants: ProgramSeries['entrants'] = SERIES_ENTRANTS,
+  mapOrder = 2,
+): NonNullable<ProgramSeries['roundHistory']> {
+  return {
+    mapOrder,
+    completeness: 'complete',
+    rounds: Array.from({ length: count }, (_, index) => {
+      const winnerIsA = index % 2 === 0;
+      return {
+        roundNumber: index + 1,
+        winnerSide: index % 3 === 0 ? 'CT' : 'T',
+        winnerEntryId: winnerIsA ? entrants.a.entryId : entrants.b.entryId,
+        winCondition: index % 3 === 0 ? 'elimination' : 'time',
+      };
+    }),
+  };
+}
+
+function makeSeries({
+  format = 'bo3',
+  entrants = SERIES_ENTRANTS,
+  score = { a: 1, b: 0 },
+  currentMapOrder = 2,
+  maps,
+  roundHistory,
+}: {
+  readonly format?: ProgramSeries['format'];
+  readonly entrants?: ProgramSeries['entrants'];
+  readonly score?: ProgramSeries['score'];
+  readonly currentMapOrder?: number | null;
+  readonly maps: readonly ProgramSeries['maps'][number][];
+  readonly roundHistory?: ProgramSeries['roundHistory'];
+}): ProgramSeries {
+  const resolvedRoundHistory =
+    roundHistory ?? completeRoundHistory(12, entrants, currentMapOrder ?? 1);
+  return {
+    format,
+    requiredWins: format === 'bo1' ? 1 : format === 'bo3' ? 2 : 3,
+    entrants,
+    score,
+    status: 'live',
+    bindingState: 'bound',
+    currentMapOrder,
+    maps: [...maps],
+    veto: [],
+    roundHistory: resolvedRoundHistory,
+  };
+}
+
+const BO3_SERIES = makeSeries({
+  maps: [
+    seriesMap({
+      mapId: 'fixture-map-1',
+      mapOrder: 1,
+      mapName: 'de_ancient',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
+      status: 'completed',
+      finalScore: { a: 13, b: 9 },
+      winnerEntryId: SERIES_ENTRANTS.a.entryId,
+    }),
+    seriesMap({
+      mapId: 'fixture-map-2',
+      mapOrder: 2,
+      mapName: 'de_mirage',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
+      status: 'current',
+    }),
+    seriesMap({
+      mapId: 'fixture-map-3',
+      mapOrder: 3,
+      mapName: 'de_nuke',
+      selection: { kind: 'decider' },
+      status: 'pending',
+    }),
+  ],
+});
+
+const BO1_SERIES = makeSeries({
+  format: 'bo1',
+  score: { a: 0, b: 0 },
+  currentMapOrder: 1,
+  roundHistory: completeRoundHistory(8),
+  maps: [
+    seriesMap({
+      mapId: 'fixture-bo1-map',
+      mapOrder: 1,
+      mapName: 'de_vertigo',
+      selection: { kind: 'unknown' },
+      status: 'current',
+    }),
+  ],
+});
+
+const BO5_SERIES = makeSeries({
+  format: 'bo5',
+  score: { a: 1, b: 1 },
+  currentMapOrder: 3,
+  maps: [
+    seriesMap({
+      mapId: 'fixture-bo5-map-1',
+      mapOrder: 1,
+      mapName: 'de_ancient',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      status: 'completed',
+      finalScore: { a: 13, b: 11 },
+      winnerEntryId: SERIES_ENTRANTS.a.entryId,
+    }),
+    seriesMap({
+      mapId: 'fixture-bo5-map-2',
+      mapOrder: 2,
+      mapName: 'de_anubis',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      status: 'completed',
+      finalScore: { a: 8, b: 13 },
+      winnerEntryId: SERIES_ENTRANTS.b.entryId,
+    }),
+    seriesMap({
+      mapId: 'fixture-bo5-map-3',
+      mapOrder: 3,
+      mapName: 'de_inferno',
+      selection: { kind: 'unknown' },
+      status: 'current',
+    }),
+    seriesMap({
+      mapId: 'fixture-bo5-map-4',
+      mapOrder: 4,
+      mapName: 'de_mirage',
+      selection: { kind: 'unknown' },
+      status: 'pending',
+    }),
+    seriesMap({
+      mapId: 'fixture-bo5-map-5',
+      mapOrder: 5,
+      mapName: 'de_nuke',
+      selection: { kind: 'decider' },
+      status: 'pending',
+    }),
+  ],
+});
+
+const DECIDER_SERIES = makeSeries({
+  score: { a: 1, b: 1 },
+  currentMapOrder: 3,
+  maps: [
+    seriesMap({
+      mapId: 'fixture-decider-map-1',
+      mapOrder: 1,
+      mapName: 'de_ancient',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      status: 'completed',
+      finalScore: { a: 13, b: 6 },
+      winnerEntryId: SERIES_ENTRANTS.a.entryId,
+    }),
+    seriesMap({
+      mapId: 'fixture-decider-map-2',
+      mapOrder: 2,
+      mapName: 'de_anubis',
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      status: 'completed',
+      finalScore: { a: 10, b: 13 },
+      winnerEntryId: SERIES_ENTRANTS.b.entryId,
+    }),
+    seriesMap({
+      mapId: 'fixture-decider-map-3',
+      mapOrder: 3,
+      mapName: 'de_nuke',
+      selection: { kind: 'decider' },
+      status: 'current',
+    }),
+  ],
+});
+
+const PARTIAL_HISTORY_SERIES = makeSeries({
+  maps: BO3_SERIES.maps,
+  roundHistory: {
+    mapOrder: 2,
+    completeness: 'partial',
+    rounds: [
+      {
+        roundNumber: 3,
+        winnerSide: 'CT',
+        winnerEntryId: SERIES_ENTRANTS.a.entryId,
+        winCondition: 'elimination',
+      },
+      {
+        roundNumber: 5,
+        winnerSide: 'unknown',
+        winnerEntryId: SERIES_ENTRANTS.b.entryId,
+        winCondition: 'unknown',
+      },
+    ],
+  },
+});
+
+const UNAVAILABLE_HISTORY_SERIES = makeSeries({
+  maps: BO3_SERIES.maps,
+  roundHistory: { mapOrder: 2, completeness: 'unavailable', rounds: [] },
+});
+
+const LONG_SERIES: ProgramSeries = makeSeries({
+  format: 'bo5',
+  score: { a: 2, b: 1 },
+  currentMapOrder: 4,
+  entrants: {
+    a: {
+      entryId: 'fixture-entry-long-a',
+      name: 'Northstar International Academy Development Roster',
+      logoUrl: null,
+    },
+    b: {
+      entryId: 'fixture-entry-long-b',
+      name: 'Southpoint Competitive Collective Select Division',
+      logoUrl: null,
+    },
+  },
+  maps: [
+    seriesMap({
+      mapOrder: 1,
+      mapName: 'de_ancient',
+      status: 'completed',
+      finalScore: { a: 13, b: 11 },
+      winnerEntryId: 'fixture-entry-long-a',
+    }),
+    seriesMap({
+      mapOrder: 2,
+      mapName: 'de_anubis',
+      status: 'completed',
+      finalScore: { a: 10, b: 13 },
+      winnerEntryId: 'fixture-entry-long-b',
+    }),
+    seriesMap({
+      mapOrder: 3,
+      mapName: 'de_inferno',
+      status: 'completed',
+      finalScore: { a: 13, b: 9 },
+      winnerEntryId: 'fixture-entry-long-a',
+    }),
+    seriesMap({ mapOrder: 4, mapName: 'de_mirage', status: 'current' }),
+    seriesMap({
+      mapOrder: 5,
+      mapName: 'de_nuke',
+      selection: { kind: 'decider' },
+      status: 'pending',
+    }),
+  ],
+});
+
 function makeLivePayload({
   context = 'unbound',
   identity = 'unbound',
@@ -305,7 +600,12 @@ const canonicalPayload = makeLivePayload({
   identity: 'matched',
   match: fixtureMatch(),
   teams: canonicalTeams,
+  series: BO3_SERIES,
   players: canonicalPlayers(),
+  mapName: 'de_mirage',
+  roundNumber: 13,
+  score: { ct: 7, t: 5 },
+  clock: { phase: 'live', endsInSeconds: 48 },
   observedPlayerSourceId: 'fixture-player-ct-1',
 });
 
@@ -384,6 +684,7 @@ const stressPlayers = [
 });
 
 const stressMatch = fixtureMatch({
+  format: 'bo5',
   competition: {
     competitionId: 'fixture-competition-stress',
     slug: 'fixture-long-label-competition',
@@ -504,9 +805,164 @@ const fixtureRecord = {
           0,
         ),
       },
+      series: LONG_SERIES,
       players: stressPlayers,
       roundNumber: 19,
       score: { ct: 10, t: 8 },
+      clock: { phase: 'live', endsInSeconds: 17 },
+    }),
+  ),
+  'series-bo1': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo1' }),
+      teams: canonicalTeams,
+      series: BO1_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_vertigo',
+      roundNumber: 8,
+      score: { ct: 4, t: 4 },
+      clock: { phase: 'freezetime', endsInSeconds: 12 },
+    }),
+  ),
+  'series-bo5': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch({ format: 'bo5' }),
+      teams: canonicalTeams,
+      series: BO5_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_inferno',
+      roundNumber: 18,
+      score: { ct: 9, t: 8 },
+      clock: { phase: 'live', endsInSeconds: 36 },
+    }),
+  ),
+  'series-halftime-swap': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: {
+        ct: canonicalTeam('fixture-entry-b', 'Southpoint', 0),
+        t: canonicalTeam('fixture-entry-a', 'Northstar', 1),
+      },
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 13,
+      score: { ct: 5, t: 7 },
+      clock: { phase: 'live', endsInSeconds: 48 },
+    }),
+  ),
+  'series-timeout-b': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 14,
+      score: { ct: 8, t: 6 },
+      clock: { phase: 'timeout_t', endsInSeconds: 22 },
+    }),
+  ),
+  'series-paused': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 14,
+      score: { ct: 8, t: 6 },
+      clock: { phase: 'paused', endsInSeconds: 0 },
+    }),
+  ),
+  'series-decider': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: DECIDER_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_nuke',
+      roundNumber: 27,
+      score: { ct: 12, t: 11 },
+      clock: { phase: 'live', endsInSeconds: 63 },
+    }),
+  ),
+  'series-partial-history': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: PARTIAL_HISTORY_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 5,
+      score: { ct: 3, t: 2 },
+      clock: { phase: 'live', endsInSeconds: 51 },
+    }),
+  ),
+  'series-history-unavailable': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: fixtureMatch(),
+      teams: canonicalTeams,
+      series: UNAVAILABLE_HISTORY_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 5,
+      score: { ct: 3, t: 2 },
+      clock: { phase: 'live', endsInSeconds: 51 },
+    }),
+  ),
+  'series-mapping-unavailable': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'degraded',
+      match: fixtureMatch(),
+      teams: { ct: neutralTeam('CT'), t: neutralTeam('T') },
+      series: BO3_SERIES,
+      players: canonicalPlayers(),
+      mapName: 'de_mirage',
+      roundNumber: 13,
+      score: { ct: 7, t: 5 },
+      clock: { phase: 'timeout_ct', endsInSeconds: 22 },
+    }),
+  ),
+  'series-long-labels': makeSnapshot(
+    makeLivePayload({
+      context: 'fresh',
+      identity: 'matched',
+      match: stressMatch,
+      teams: {
+        ct: canonicalTeam(
+          'fixture-entry-long-a',
+          'Northstar International Academy Development Roster',
+          2,
+        ),
+        t: canonicalTeam(
+          'fixture-entry-long-b',
+          'Southpoint Competitive Collective Select Division',
+          1,
+        ),
+      },
+      series: LONG_SERIES,
+      players: stressPlayers,
+      mapName: 'de_mirage',
+      roundNumber: 22,
+      score: { ct: 11, t: 9 },
       clock: { phase: 'live', endsInSeconds: 17 },
     }),
   ),

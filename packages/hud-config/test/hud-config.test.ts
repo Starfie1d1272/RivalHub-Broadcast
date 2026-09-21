@@ -41,6 +41,27 @@ describe('hud-config schema and framework contract', () => {
     expect(layout.id).toBe(BUILTIN_LAYOUT_ID);
     expect(Object.keys(layout.widgets).sort()).toEqual([...HUD_WIDGET_IDS].sort());
     expect(layout.widgets.radar.size).toEqual({ width: 320, height: 320 });
+    expect(placementToBox('top-score-bar', layout.widgets['top-score-bar'])).toMatchObject({
+      left: 600,
+      top: 24,
+      width: 720,
+      height: 104,
+    });
+    expect(placementToBox('series-strip', layout.widgets['series-strip'])).toMatchObject({
+      left: 24,
+      top: 24,
+      width: 420,
+      height: 112,
+    });
+    expect(placementToBox('round-history', layout.widgets['round-history'])).toMatchObject({
+      left: 680,
+      top: 136,
+      width: 560,
+      height: 56,
+    });
+    expect(getHudWidgetDescriptor('top-score-bar').rendererAvailability).toBe('implemented');
+    expect(getHudWidgetDescriptor('series-strip').rendererAvailability).toBe('implemented');
+    expect(getHudWidgetDescriptor('round-history').rendererAvailability).toBe('implemented');
     expect(
       HUD_WIDGET_IDS.every((id) => {
         const box = placementToBox(id, layout.widgets[id]);

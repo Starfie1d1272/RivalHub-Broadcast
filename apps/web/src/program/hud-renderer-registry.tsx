@@ -11,6 +11,8 @@ import {
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
+import { RoundHistory, SeriesStrip, TopScoreBar } from './widgets/match-header';
+
 export interface HudWidgetRendererProps {
   readonly snapshot: ProgramSnapshot;
   readonly resolvedPreset: HudResolvedPreset;
@@ -34,12 +36,25 @@ const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
   renderer: null,
 });
 
+const IMPLEMENTED_RENDERERS: Partial<Record<HudWidgetId, HudWidgetRenderer>> = {
+  'top-score-bar': TopScoreBar,
+  'series-strip': SeriesStrip,
+  'round-history': RoundHistory,
+};
+
 /** Web-owned React seam. Future component Issues add their renderer here only. */
 export const HUD_RENDERER_REGISTRY: HudRendererRegistry = Object.freeze(
-  Object.fromEntries(HUD_WIDGET_IDS.map((id) => [id, UNIMPLEMENTED_RENDERER_ENTRY])) as Record<
-    HudWidgetId,
-    HudRendererEntry
-  >,
+  Object.fromEntries(
+    HUD_WIDGET_IDS.map((id) => {
+      const renderer = IMPLEMENTED_RENDERERS[id];
+      return [
+        id,
+        renderer === undefined
+          ? UNIMPLEMENTED_RENDERER_ENTRY
+          : { availability: 'implemented' as const, renderer },
+      ];
+    }),
+  ) as Record<HudWidgetId, HudRendererEntry>,
 );
 
 export function getHudRendererEntry(

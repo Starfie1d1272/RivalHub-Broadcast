@@ -48,7 +48,7 @@ describe('GameplayHud shared renderer boundary', () => {
     ).toBeNull();
   });
 
-  it('keeps production output free of placeholder widgets while editor shows the registry', () => {
+  it('renders the implemented Match Header widgets while editor keeps the registry chrome', () => {
     const resolvedPreset = getBuiltinResolvedPreset();
     const snapshot = getProgramFixture('live-canonical');
     expect(snapshot).not.toBeNull();
@@ -60,7 +60,7 @@ describe('GameplayHud shared renderer boundary', () => {
 
     expect(program).toMatchObject({ props: { 'data-gameplay-hud': 'true' } });
     expect(childrenOf(program)).toHaveLength(9);
-    expect(childrenOf(program).every((child) => child === null)).toBe(true);
+    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(3);
     expect(editor).toMatchObject({ props: { 'data-hud-editor-overlay': 'true' } });
     expect(childrenOf(editor)).toHaveLength(9);
     const preview = HudEditorOverlay({
@@ -96,9 +96,9 @@ describe('GameplayHud shared renderer boundary', () => {
 
   it('keeps framework-neutral and Web renderer availability aligned', () => {
     expect(() => assertHudRendererRegistryConsistency()).not.toThrow();
-    expect(Object.values(HUD_RENDERER_REGISTRY).every((entry) => entry.renderer === null)).toBe(
-      true,
-    );
+    expect(
+      Object.values(HUD_RENDERER_REGISTRY).filter((entry) => entry.renderer !== null),
+    ).toHaveLength(3);
   });
 
   it('renders hook-based components through the same registry and resets only at the boundary key', () => {
