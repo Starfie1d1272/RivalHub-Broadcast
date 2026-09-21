@@ -8,6 +8,8 @@
     "pnpm": "12.x"
   },
   "scripts": {
+    "fixtures:program:generate": "pnpm --filter @rivalhub-broadcast/companion exec tsx test/program-fixtures/generate-real-program-fixtures.ts --write",
+    "fixtures:program:verify": "pnpm --filter @rivalhub-broadcast/companion exec tsx test/program-fixtures/generate-real-program-fixtures.ts --check",
     "architecture:check": "node scripts/architecture/check.mjs",
     "build": "pnpm --recursive --sort --workspace-concurrency=1 run build",
     "cs2-assets:import": "node scripts/cs2-assets/import.mjs",

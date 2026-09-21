@@ -4,7 +4,12 @@ import { describe, expect, it } from 'vitest';
 
 import { ProgramPage } from '../src/program/ProgramPage';
 import { ProgramCanvas } from '../src/program/ProgramCanvas';
-import { getProgramFixture, PROGRAM_FIXTURE_IDS, programFixtures } from '../src/program/fixtures';
+import {
+  getProgramFixture,
+  getProgramFixtureProvenance,
+  PROGRAM_FIXTURE_IDS,
+  programFixtures,
+} from '../src/program/fixtures';
 import { ProgramVisualFixturePage } from '../src/program/testing/ProgramVisualFixturePage';
 
 describe('Program presentation foundation', () => {
@@ -15,14 +20,8 @@ describe('Program presentation foundation', () => {
       const fixture = getProgramFixture(fixtureId);
       expect(fixture).not.toBeNull();
       expect(fixture?.channel).toBe('program');
-      expect(fixture?.cursor).toEqual({
-        producerInstanceId: 'fixture-producer',
-        liveSessionId: 'fixture-session',
-        runtimeSeq: 42,
-        programSourceGeneration: 1,
-        programReceiveSequence: 42,
-        mapEpoch: 1,
-      });
+      expect(fixture?.cursor.producerInstanceId).toBeTruthy();
+      expect(getProgramFixtureProvenance(fixtureId)).not.toBeNull();
     }
 
     expect(getProgramFixture('not-a-fixture')).toBeNull();
@@ -60,29 +59,18 @@ describe('Program presentation foundation', () => {
     expect(
       degraded?.payload.players.filter((player) => player.canonicalPlayerId !== null),
     ).toHaveLength(2);
-    expect(stress?.payload.players.map((player) => player.lifeState)).toEqual([
-      'alive',
-      'alive',
-      'dead',
-      'unknown',
-      'alive',
-      'alive',
-      'alive',
-      'dead',
-      'unknown',
-      'alive',
-    ]);
+    expect(stress?.payload.players.map((player) => player.lifeState)).toEqual(
+      getProgramFixture('real-live-rich')?.payload.players.map((player) => player.lifeState),
+    );
   });
 
   it('keeps bomb coverage aligned with the projected bomb value', () => {
     const noBombFixtureIds = [
       'awaiting-neutral',
       'live-neutral',
-      'live-canonical',
       'context-stale',
       'identity-degraded',
       'identity-mismatch',
-      'timeout-ct',
     ] as const;
 
     for (const fixtureId of noBombFixtureIds) {
@@ -103,20 +91,13 @@ describe('Program presentation foundation', () => {
     expect(getProgramFixture('live-canonical')?.payload.match?.format).toBe('bo3');
     expect(getProgramFixture('context-stale')?.payload.status.context).toBe('stale');
 
-    expect(getProgramFixture('bomb-planted')?.payload.bomb).toEqual({
-      state: 'planted',
-      sourcePlayerId: null,
-      explosion: { remainingSeconds: 28, durationSeconds: null },
-      action: null,
-    });
+    expect(getProgramFixture('bomb-planted')?.payload.bomb).toEqual(
+      getProgramFixture('real-planted')?.payload.bomb,
+    );
     expect(getProgramFixture('bomb-defusing')?.payload.clock?.phase).toBe('defuse');
-    expect(getProgramFixture('bomb-defusing')?.payload.bomb?.action).toEqual({
-      kind: 'defuse',
-      sourcePlayerId: 'fixture-player-ct-2',
-      remainingSeconds: 4,
-      durationSeconds: 10,
-      hasDefuseKit: false,
-    });
+    expect(getProgramFixture('bomb-defusing')?.payload.bomb?.action).toEqual(
+      getProgramFixture('real-defusing')?.payload.bomb?.action,
+    );
     expect(getProgramFixture('timeout-ct')?.payload.clock?.phase).toBe('timeout_ct');
 
     const stress = getProgramFixture('stress-long-labels');

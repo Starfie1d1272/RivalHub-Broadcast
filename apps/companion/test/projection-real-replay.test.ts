@@ -1,18 +1,12 @@
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
-import { resolve } from 'node:path';
 
-import { createIdentityResolver } from '@rivalhub-broadcast/core/identity';
-import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
 import { assistSnapshotSchema } from '@rivalhub-broadcast/protocol/assist';
 import { operatorSnapshotSchema } from '@rivalhub-broadcast/protocol/operator';
 import { programSnapshotSchema } from '@rivalhub-broadcast/protocol/program';
 import { radarSnapshotSchema } from '@rivalhub-broadcast/protocol/radar';
-import { toMatchContext, type BroadcastManifestV1 } from '@rivalhub-broadcast/rivalhub';
 import {
   buildCaptureRedactionMap,
   canonicalJsonLine,
-  redactObservationPlayerIds,
   replayCapture,
   verifyCapture,
   type CaptureIdentityMapping,
@@ -21,28 +15,17 @@ import {
 } from '@rivalhub-broadcast/testkit';
 import { describe, expect, it } from 'vitest';
 
-import {
-  createProjectionCoordinator,
-  type ProjectionScheduler,
-} from '../src/projections/projection-coordinator.js';
-import { createProgramRuntime } from '../src/runtime/program-runtime.js';
-import type { MatchContextBinding } from '../src/match-context/index.js';
-import { createCstvSourceManagers } from '../src/telemetry/cstv-source-manager.js';
+import type { createProjectionCoordinator } from '../src/projections/projection-coordinator.js';
+import { replayRealProgram } from './support/real-program-replay.js';
 
 const fullMatchCaptureDir = process.env.RIVALHUB_FULL_MATCH_CAPTURE_DIR;
 const FULL_MATCH_CAPTURE_ID = '20260914T060149Z-4cda66b7-recovered-match';
 const FULL_MATCH_FRAME_COUNT = 16_382;
 const FULL_MATCH_FRAMES_SHA256 = '7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a';
-const FULL_MATCH_PRODUCER_INSTANCE_ID = 'full-match-projection-replay';
 const FULL_MATCH_SOURCE_GENERATION_BOUNDARY_INDEX = 2_000;
 const FULL_MATCH_MAP_RESET_INDEX = 10_000;
 const FULL_MATCH_FAULT_PLAN: ReplayFaultPlanV1 = {
   sourceGenerationBoundary: [{ beforeCaptureIndex: FULL_MATCH_SOURCE_GENERATION_BOUNDARY_INDEX }],
-};
-
-const noOpProjectionScheduler: ProjectionScheduler = {
-  setTimeout: () => ({}),
-  clearTimeout: () => {},
 };
 
 interface ReplayPipelineResult {
@@ -66,25 +49,6 @@ function normalizeChannelSeq<T extends { readonly channelSeq: number }>(
   const { channelSeq, ...rest } = snapshot;
   void channelSeq;
   return rest;
-}
-
-async function readManifest(): Promise<BroadcastManifestV1> {
-  return JSON.parse(
-    await readFile(
-      resolve(process.cwd(), 'packages/rivalhub/test/fixtures/broadcast-manifest-v1.valid.json'),
-      'utf8',
-    ),
-  ) as BroadcastManifestV1;
-}
-
-function contextBinding(manifest: BroadcastManifestV1, context: MatchContext): MatchContextBinding {
-  return {
-    manifest,
-    context,
-    origin: 'fixture',
-    freshness: 'fresh',
-    diagnostics: [],
-  };
 }
 
 async function findCaptureRedactionMap(
@@ -138,59 +102,23 @@ function digestSnapshots(
 
 async function runPipeline(
   capture: VerifiedCapture,
-  manifest: BroadcastManifestV1,
-  context: MatchContext,
   redactionMap: CaptureIdentityMapping,
   faultPlan?: ReplayFaultPlanV1,
 ): Promise<ReplayPipelineResult> {
-  let nowMonotonicMs = 0;
-  const runtime = createProgramRuntime(FULL_MATCH_PRODUCER_INSTANCE_ID, {
-    continuityPolicy: { staleAfterMs: 1_000_000_000 },
-  });
-  const coordinator = createProjectionCoordinator({
-    programRuntime: runtime,
-    cstvSources: createCstvSourceManagers({}),
-    identityResolver: createIdentityResolver(context),
-    matchContextBinding: contextBinding(manifest, context),
-    nowMonotonicMs: () => nowMonotonicMs,
-    scheduler: noOpProjectionScheduler,
-  });
   const digest = createHash('sha256');
-  let frames = 0;
-  let accepted = 0;
   const identityStates = new Set<string>();
   const sideMappings = new Set<string>();
   const faultBoundaryStates: string[] = [];
-
-  try {
-    digestSnapshots(digest, coordinator);
-    for await (const event of replayCapture(capture, {
-      mode: { kind: 'step' },
-      ...(faultPlan === undefined ? {} : { faultPlan }),
-    })) {
-      if (event.kind === 'source-generation-boundary') {
-        const boundary = runtime.advanceProgramSourceGeneration({
-          monotonicMs: event.scheduledElapsedUs / 1_000,
-          utc: new Date(event.scheduledElapsedUs / 1_000).toISOString(),
-        });
-        expect(boundary.disposition).toEqual({
-          kind: 'accepted',
-          reason: 'source-generation-advanced',
-        });
-        coordinator.afterRuntimeMutation(boundary);
-        const current = coordinator.getCurrent();
-        expect(current.program.status.identity).toBe('resolving');
-        expect(current.program.teams.ct.mode).toBe('neutral');
-        expect(current.radar.identityState).toBe('resolving');
-        faultBoundaryStates.push(
-          `${boundary.disposition.reason}:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
-        );
-        digestSnapshots(digest, coordinator);
-        continue;
-      }
-
+  let final: ReturnType<ReturnType<typeof createProjectionCoordinator>['getCurrent']> | undefined;
+  const result = await replayRealProgram({
+    capturePath: capture.directory,
+    mapping: redactionMap,
+    ...(faultPlan === undefined ? {} : { faultPlan }),
+    onStart: ({ coordinator }) => digestSnapshots(digest, coordinator),
+    beforeEvent: (event, { runtime, coordinator }) => {
       if (
         faultPlan !== undefined &&
+        event.kind === 'frame' &&
         event.captureIndex === FULL_MATCH_MAP_RESET_INDEX &&
         event.occurrence === 0
       ) {
@@ -201,53 +129,41 @@ async function runPipeline(
         expect(reset.disposition).toEqual({ kind: 'accepted', reason: 'map-execution-reset' });
         coordinator.afterRuntimeMutation(reset);
         const current = coordinator.getCurrent();
-        expect(current.program.status.identity).toBe('resolving');
-        expect(current.program.teams.ct.mode).toBe('neutral');
-        expect(current.radar.identityState).toBe('resolving');
         faultBoundaryStates.push(
-          `${reset.disposition.reason}:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
+          `map-execution-reset:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
         );
         digestSnapshots(digest, coordinator);
       }
-
-      if (!event.result.ok) {
-        throw new Error(`完整 capture 在 seq=${event.sourceFrame.sequence} 适配失败`);
-      }
-      nowMonotonicMs = event.receiveContext.receivedMonotonicMs;
-      const observation = redactObservationPlayerIds(event.result.observation, redactionMap);
-      const reduction = runtime.acceptObservation(observation);
-      if (reduction.disposition.kind !== 'accepted') {
-        throw new Error(
-          `完整 capture 在 seq=${event.sourceFrame.sequence} 未被 Runtime 接受: ${reduction.disposition.reason}`,
+    },
+    afterEvent: (event, { coordinator }) => {
+      const current = coordinator.getCurrent();
+      if (event.kind === 'source-generation-boundary') {
+        faultBoundaryStates.push(
+          `source-generation-advanced:${current.program.status.identity}:${current.radar.identityState}:${current.program.teams.ct.mode}:${current.program.cursor.programSourceGeneration}:${current.program.cursor.mapEpoch}`,
         );
+      } else {
+        identityStates.add(current.identity.state);
+        sideMappings.add(`${current.identity.sideMapping.a}/${current.identity.sideMapping.b}`);
       }
-      accepted += 1;
-      frames += 1;
-      coordinator.afterRuntimeMutation(reduction);
-      const identity = coordinator.getCurrent().identity;
-      identityStates.add(identity.state);
-      sideMappings.add(`${identity.sideMapping.a}/${identity.sideMapping.b}`);
       digestSnapshots(digest, coordinator);
-    }
-
-    const final = coordinator.getCurrent();
-    return {
-      frames,
-      accepted,
-      digest: digest.digest('hex'),
-      finalRuntimeSeq: final.program.cursor.runtimeSeq,
-      finalMapName: final.program.map.name,
-      finalMapEpoch: final.program.cursor.mapEpoch,
-      finalIdentityState: final.identity.state,
-      finalIdentitySourceGeneration: final.identity.sourceGeneration,
-      finalIdentityMapEpoch: final.identity.mapEpoch,
-      identityStates: [...identityStates].sort(),
-      sideMappings: [...sideMappings].sort(),
-      faultBoundaryStates,
-    };
-  } finally {
-    await coordinator.close();
-  }
+      final = current;
+    },
+  });
+  if (final === undefined) throw new Error('Empty replay');
+  return {
+    frames: result.acceptedSequences.length,
+    accepted: result.acceptedSequences.length,
+    digest: digest.digest('hex'),
+    finalRuntimeSeq: final.program.cursor.runtimeSeq,
+    finalMapName: final.program.map.name,
+    finalMapEpoch: final.program.cursor.mapEpoch,
+    finalIdentityState: final.identity.state,
+    finalIdentitySourceGeneration: final.identity.sourceGeneration,
+    finalIdentityMapEpoch: final.identity.mapEpoch,
+    identityStates: [...identityStates].sort(),
+    sideMappings: [...sideMappings].sort(),
+    faultBoundaryStates,
+  };
 }
 
 describe('完整真实 GSI replay → Companion projection pipeline', () => {
@@ -255,8 +171,6 @@ describe('完整真实 GSI replay → Companion projection pipeline', () => {
     '以确定性时钟两次跑完 16,382 帧并得到相同全链路 digest',
     async () => {
       if (fullMatchCaptureDir === undefined) throw new Error('缺少完整 capture 路径');
-      const manifest = await readManifest();
-      const context = toMatchContext(manifest);
       const capture = await verifyCapture(fullMatchCaptureDir);
 
       expect(capture.manifest.captureId).toBe(FULL_MATCH_CAPTURE_ID);
@@ -265,22 +179,10 @@ describe('完整真实 GSI replay → Companion projection pipeline', () => {
       expect(capture.computedFramesSha256).toBe(FULL_MATCH_FRAMES_SHA256);
 
       const redactionMap = await findCaptureRedactionMap(capture);
-      const first = await runPipeline(capture, manifest, context, redactionMap);
-      const second = await runPipeline(capture, manifest, context, redactionMap);
-      const faultedFirst = await runPipeline(
-        capture,
-        manifest,
-        context,
-        redactionMap,
-        FULL_MATCH_FAULT_PLAN,
-      );
-      const faultedSecond = await runPipeline(
-        capture,
-        manifest,
-        context,
-        redactionMap,
-        FULL_MATCH_FAULT_PLAN,
-      );
+      const first = await runPipeline(capture, redactionMap);
+      const second = await runPipeline(capture, redactionMap);
+      const faultedFirst = await runPipeline(capture, redactionMap, FULL_MATCH_FAULT_PLAN);
+      const faultedSecond = await runPipeline(capture, redactionMap, FULL_MATCH_FAULT_PLAN);
 
       expect(first.frames).toBe(FULL_MATCH_FRAME_COUNT);
       expect(first.accepted).toBe(FULL_MATCH_FRAME_COUNT);

@@ -130,7 +130,7 @@ describe('Player Rails card presentation', () => {
   });
 
   it('keeps live armor, kit, and C4 owner equipment visible', () => {
-    const snapshot = getProgramFixture('stress-long-labels');
+    const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');
     const presentation = buildPlayerRailsPresentation(snapshot.payload);
     const carrier = presentation.ct.players.find(
@@ -142,7 +142,12 @@ describe('Player Rails card presentation', () => {
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
-      root?.render(<PlayerCard player={carrier} />);
+      root?.render(
+        <>
+          <PlayerCard player={carrier} />
+          <PlayerCard player={presentation.t.players[0]!} />
+        </>,
+      );
     });
 
     expect(container.querySelector('[data-player-equipment="true"]')).not.toBeNull();
@@ -152,7 +157,7 @@ describe('Player Rails card presentation', () => {
   });
 
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
-    const snapshot = getProgramFixture('series-bo1');
+    const snapshot = getProgramFixture('player-rails-freezetime');
     if (snapshot === null) throw new Error('fixture missing');
     const presentation = buildPlayerRailsPresentation(snapshot.payload);
     const player = presentation.ct.players[0];
@@ -173,7 +178,7 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('.player-rail__spent')?.textContent).toBe('-$1,200');
 
     const dead = buildPlayerRailsPresentation(
-      getProgramFixture('stress-long-labels')?.payload ?? snapshot.payload,
+      getProgramFixture('player-rails-dead-observed')?.payload ?? snapshot.payload,
     ).ct.players.find((candidate) => candidate.mode === 'dead');
     if (dead === undefined) throw new Error('dead player missing');
     act(() => {
@@ -185,7 +190,7 @@ describe('Player Rails card presentation', () => {
   });
 
   it('renders unavailable dead ADR as a dash independently of the positive visual fixture', () => {
-    const snapshot = getProgramFixture('stress-long-labels');
+    const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');
     const dead = buildPlayerRailsPresentation(snapshot.payload).ct.players.find(
       (candidate) => candidate.mode === 'dead',

@@ -133,9 +133,9 @@ describe('GameplayHud shared renderer boundary', () => {
       );
     });
     const button = container.querySelector('button');
-    expect(button?.textContent).toBe('42:0');
+    expect(button?.textContent).toBe(`${snapshot.cursor.runtimeSeq}:0`);
     act(() => button?.click());
-    expect(container.querySelector('button')?.textContent).toBe('42:1');
+    expect(container.querySelector('button')?.textContent).toBe(`${snapshot.cursor.runtimeSeq}:1`);
 
     act(() => {
       root?.render(
@@ -159,7 +159,7 @@ describe('GameplayHud shared renderer boundary', () => {
         />,
       );
     });
-    expect(container.querySelector('button')?.textContent).toBe('42:0');
+    expect(container.querySelector('button')?.textContent).toBe(`${snapshot.cursor.runtimeSeq}:0`);
 
     const editor = HudEditorOverlay({
       rendererRegistry: registry,
@@ -174,7 +174,9 @@ describe('GameplayHud shared renderer boundary', () => {
     if (snapshot === null) throw new Error('fixture missing');
 
     const accepted = programPresentationBoundaryKey(snapshot, 'live');
-    expect(accepted).toContain('fixture-producer:fixture-session:1:1');
+    expect(accepted).toContain(
+      `${snapshot.cursor.producerInstanceId}:${snapshot.cursor.liveSessionId ?? 'unbound'}:${snapshot.cursor.programSourceGeneration}:${snapshot.cursor.mapEpoch}`,
+    );
     expect(programPresentationBoundaryKey(snapshot, 'reconnecting')).toBe('fail-closed');
     expect(
       programPresentationBoundaryKey(

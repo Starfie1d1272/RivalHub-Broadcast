@@ -76,7 +76,7 @@ test.describe('Player Rails HUD', () => {
   test('freezetime keeps the fixed five-card geometry and visible team summary', async ({
     page,
   }) => {
-    await page.goto('/__visual/program/series-bo1');
+    await page.goto('/__visual/program/player-rails-freezetime');
     await assertRailGeometry(page);
     await expect(page.locator('[data-player-rail="CT"] [data-team-summary="CT"]')).toHaveAttribute(
       'data-summary-visible',
@@ -101,7 +101,7 @@ test.describe('Player Rails HUD', () => {
   test('live stress coverage keeps observed and dead states inside the same rail geometry', async ({
     page,
   }) => {
-    await page.goto('/__visual/program/stress-long-labels');
+    await page.goto('/__visual/program/player-rails-dead-observed');
     await assertRailGeometry(page);
     await expect(page.locator('[data-player-rail="CT"] [data-life-state="dead"]')).toHaveCount(1);
     await expect(page.locator('[data-player-rail="CT"] [data-observed="true"]')).toHaveCount(1);
@@ -117,9 +117,7 @@ test.describe('Player Rails HUD', () => {
       ),
     ).toHaveCount(1);
     await expect(
-      page.locator(
-        '[data-player-rail="CT"] [data-player-card="stress-player-1"] [aria-label="C4"]',
-      ),
+      page.locator('[data-player-rail="T"] [data-player-card="stress-player-6"] [aria-label="C4"]'),
     ).toHaveCount(1);
     await assertDeadCardGeometry(page);
     await expect(
