@@ -9,19 +9,19 @@ import type {
 
 const WIDGET_DIMENSIONS: Record<HudWidgetId, { readonly width: number; readonly height: number }> =
   {
-    'top-score-bar': { width: 600, height: 96 },
+    'top-score-bar': { width: 720, height: 104 },
     'team-ct-rail': { width: 300, height: 640 },
     'team-t-rail': { width: 300, height: 640 },
     radar: { width: 320, height: 320 },
     'focused-player': { width: 420, height: 180 },
-    'series-strip': { width: 520, height: 96 },
-    'round-history': { width: 380, height: 220 },
+    'series-strip': { width: 420, height: 112 },
+    'round-history': { width: 560, height: 56 },
     objective: { width: 360, height: 160 },
     'round-result': { width: 500, height: 160 },
   };
 
 export const DEFAULT_PLACEMENTS: Record<HudWidgetId, HudWidgetPlacement> = {
-  'top-score-bar': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 28 },
+  'top-score-bar': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 24 },
   'team-ct-rail': { visible: true, anchor: 'center-left', offsetX: 28, offsetY: 0 },
   'team-t-rail': { visible: true, anchor: 'center-right', offsetX: -28, offsetY: 0 },
   radar: {
@@ -32,8 +32,8 @@ export const DEFAULT_PLACEMENTS: Record<HudWidgetId, HudWidgetPlacement> = {
     size: { width: 320, height: 320 },
   },
   'focused-player': { visible: true, anchor: 'bottom-left', offsetX: 28, offsetY: -28 },
-  'series-strip': { visible: true, anchor: 'top-left', offsetX: 28, offsetY: 28 },
-  'round-history': { visible: true, anchor: 'bottom-right', offsetX: -28, offsetY: -28 },
+  'series-strip': { visible: true, anchor: 'top-left', offsetX: 24, offsetY: 24 },
+  'round-history': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 136 },
   objective: { visible: true, anchor: 'top-right', offsetX: -28, offsetY: 28 },
   'round-result': { visible: true, anchor: 'center', offsetX: 0, offsetY: 210 },
 };

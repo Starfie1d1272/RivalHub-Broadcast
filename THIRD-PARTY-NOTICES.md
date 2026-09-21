@@ -41,6 +41,57 @@
 
 `cs2parser` 只通过 `packages/telemetry-cstv` 内部 binding 使用；其第三方类型不成为 Broadcast 公共 contract。本仓库未因研究参考而复制 HOT、Boltobserv、Lexogrine HUD Manager、Obserview、Zhenhai HUD Manager 等应用的代码或图片资产。
 
+## Adapted presentation sources
+
+本 Issue 的比赛头部展示只借鉴并改写下列已固定版本的 presentation source。它们不是安装依赖；本仓库不携带其 runtime、图片资产或原始数据处理逻辑。改写后的文件只消费 Broadcast `ProgramPayload` presentation model，并保留本节 provenance。
+
+| 来源                      | 固定版本与改写参考文件                                                                                                                                    | 许可证                              |
+| ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
+| Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx` | MIT                                 |
+| Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | 固定版本 `package.json` 声明 ISC；该 revision 无独立 `LICENSE` 文件 |
+
+Lexogrine MIT notice（固定版本 `LICENSE`）：
+
+```text
+MIT License
+
+Copyright (c) 2021 Lexogrine
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
+```
+
+Eon provenance note：固定 revision 的 `package.json` 明确声明 `"license": "ISC"`，但该 revision 没有独立的 `LICENSE` 文件。下面的 ISC 文本是根据该 metadata 整理的标准许可参考，**不是该 revision 的 upstream exact notice**。本仓库当前代码只是 `maps-sleek` 的 presentation adaptation/reference，不携带 Eon runtime、图片资产或原始数据处理逻辑：
+
+```text
+Permission to use, copy, modify, and/or distribute this software for any
+purpose with or without fee is hereby granted, provided that the above
+copyright notice and this permission notice appear in all copies.
+
+THE SOFTWARE IS PROVIDED "AS IS" AND THE AUTHOR DISCLAIMS ALL WARRANTIES
+WITH REGARD TO THIS SOFTWARE INCLUDING ALL IMPLIED WARRANTIES OF
+MERCHANTABILITY AND FITNESS. IN NO EVENT SHALL THE AUTHOR BE LIABLE FOR
+ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
+WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
+OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
+CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
 许可证参考：
 
 - MIT: https://opensource.org/license/mit
