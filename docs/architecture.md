@@ -73,7 +73,7 @@ DAK、OCR 或其它赛后来源属于 evidence / reconciliation 链，不进入�
 ```text
 apps/companion
   本地服务与 composition root。
-  组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、capture 与 qualification tooling。
+  组装 HTTP、GSI/CSTV、比赛上下文、Core、Local Protocol、Web、HUD 配置持久化、capture 与 qualification tooling。
   拥有 ProgramCueCoordinator 与 transient delivery publisher。
 
 apps/web
@@ -85,6 +85,18 @@ packages/core
   纯 TypeScript Runtime domain。
   拥有 continuity、identity、RuntimeState、RuntimeTransition、accumulator、Projection 和
   framework-neutral ProgramCue projector。
+
+packages/hud-config
+  framework-neutral HUD 配置 owner：HudPreset、HudLayout、HudTheme、组件 registry、严格 v1 schema、
+  逻辑坐标几何约束和纯 Theme resolver。
+  不依赖 React、ProgramSnapshot、GSI、RuntimeState、浏览器 API 或 Node 文件系统；Companion 负责持久化，
+  Web 负责编辑器与 renderer host。组件 settings 的通用 envelope 不锁死未来 variant；每个 descriptor
+  自己验证完整 settings。resolved activation snapshot 由独立版本化兼容边界校验，不依赖当前 recipe 重算。
+
+apps/web/src/program
+  Web-owned HUD renderer registry。它把 framework-neutral descriptor 的 availability 与 React renderer
+  entry 一致性锁在一起；未实现组件在 production 隐藏，只能在编辑器预览显示语义占位。Program 与 HUD
+  控制台 Current Live preview 共用同一个 stable presentation boundary identity。
 
 packages/protocol
   Broadcast 自有的 Local Protocol、schema 和 acceptance rules。
@@ -187,7 +199,11 @@ RuntimeTransition + MatchContext + 当前已证明的 side mapping
 
 Series checkpoint 是小型、有界、单文件的本地恢复事实，复用 Companion 现有 durable JSON 原子替换与串行提交队列。它按 `matchId + entrants + format + ordered canonical map plan fingerprint` 校验兼容性；不兼容时丢弃旧 checkpoint 并产生诊断。checkpoint 只在回合、地图绑定、地图结束、reset/restore、operator bind 或 Series completion 等业务边界写入，不按每帧 GSI 写盘。Companion shutdown 会先 quiesce Projection / ProgramCue owner，再 await ProgramRuntime checkpoint drain，因此最后一个已提交业务边界可以作为重启恢复的 durability contract。
 
-Operator projection 暴露有界的 SeriesProgress binding、map status、score 与 issues；配置独立的 `OPERATOR_CONTROL_TOKEN` 后，`POST /operator/series/bind` 作为现有 OperatorCommand 的本地 ingress，成功或拒绝都返回明确 acknowledgement。
+Operator projection 暴露有界的 SeriesProgress binding、map status、score 与 issues；`POST
+/operator/series/bind` 作为现有 OperatorCommand 的本地 ingress，不建立普通 Operator credential
+机制，只接受 loopback bind 且 Origin 通过 local Web Origin policy 的写请求；LAN mode 一律拒绝
+mutation。成功或拒绝都返回明确 acknowledgement。GSI 与 qualification-only 路径各自保留自己的
+token 边界。
 
 ## 5. 状态、转换、命令与事件
 
@@ -320,6 +336,16 @@ state。Program cue 只来自 delayed Program CSTV，不进入 snapshot `LocalCh
 Lookahead source 或通用 event bus。protocol version 与 channel schema version 分离，因此单个 payload
 演进不要求整个 Local Protocol 同步升级。
 
+HUD 配置属于独立的 presentation control-plane，不是 Local Protocol channel，也不修改
+`ProgramSnapshot` schema。`packages/hud-config` 定义并解析 `HudPreset`、`HudLayout`、`HudTheme` 和
+组件 registry；Companion 将 `/local/v1/hud-config` 作为只读的 Program/on-air read model，将
+`/operator/hud-config` 作为保存文档的 editor read model。两者各自拥有覆盖完整 HTTP representation 的
+ETag/revision；保存资源不会改变正式节目的 ETag，只有启用 preset 才会冻结新的 resolved snapshot。Web
+编辑器通过仅限 loopback 且要求 valid local Origin 的本地 HTTP mutation 保存资源或启用 preset；LAN
+mode 下该 endpoint 只读，任何 mutation 都会拒绝。custom snapshot 在重启和 recipe 升级后仍保持最后
+一次上屏内容，直到重新启用，built-in reference 则解析当前代码版本。配置读取/解析失败保留
+last-known-valid runtime，不让 HUD 配置故障伪造或中断 Gameplay telemetry。
+
 连接建立后立即发送当前 baseline；断线重连重新取得 current baseline，不补发历史 snapshot。
 
 每个 consumer 的发送状态保持常数级：
@@ -346,12 +372,15 @@ bind = 127.0.0.1
 
 非 loopback 监听必须显式开启，并配置精确 Origin allowlist。
 
-凭据分离：
+凭据分离与本地写入边界：
 
 ```text
 GSI token
-!= local control credential
+!= qualification-only token
 != RivalHub producer credential
+
+normal local mutation = loopback bind + valid local Origin
+LAN mutation = denied
 ```
 
 Local WebSocket 校验 Origin 与 subprotocol；只读 snapshot channel 不接受浏览器业务消息。日志、fixture 和导出文件不得包含不必要的 token 或个人数据。
