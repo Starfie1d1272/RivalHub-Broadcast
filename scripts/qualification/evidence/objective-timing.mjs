@@ -819,17 +819,19 @@ function worstCaseMetricStats(captureResults, key) {
       .filter((value) => value !== undefined);
     return candidates.length === 0 ? fallback : reducer(candidates);
   };
+  const minimum = (candidates) => Math.min(...candidates);
+  const maximum = (candidates) => Math.max(...candidates);
   const counts = values
     .map((value) => finiteNumber(value.count))
     .filter((value) => value !== undefined);
   return {
     count: counts.length === 0 ? 0 : counts.reduce((total, value) => total + value, 0),
-    min: numeric('min', Math.min),
-    max: numeric('max', Math.max),
+    min: numeric('min', minimum),
+    max: numeric('max', maximum),
     mean: null,
-    p50: numeric('p50', Math.max),
-    p95: numeric('p95', Math.max),
-    p99: numeric('p99', Math.max),
+    p50: numeric('p50', maximum),
+    p95: numeric('p95', maximum),
+    p99: numeric('p99', maximum),
   };
 }
 
