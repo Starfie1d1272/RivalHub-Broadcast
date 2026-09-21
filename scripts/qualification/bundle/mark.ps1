@@ -7,7 +7,7 @@
         'objective-too-late-defuse', 'objective-fast-defuse-missing-planted-sample',
         'objective-reconnect-restart'
     )]
-    [string]$Marker
+    [string]$Marker,
     [ValidateSet('before', 'after')]
     [string]$Phase
 )
