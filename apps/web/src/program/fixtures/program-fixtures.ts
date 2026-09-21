@@ -434,7 +434,8 @@ const NOT_PLAYED_SERIES = makeSeries({
   ),
 });
 
-const MIXED_LOGO_URL = 'https://example.test/assets/northstar.svg';
+const MIXED_LOGO_URL =
+  'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2228%22 height=%2228%22 viewBox=%220 0 28 28%22%3E%3Crect width=%2228%22 height=%2228%22 rx=%224%22 fill=%22%23888888%22/%3E%3C/svg%3E';
 const MIXED_LOGO_ENTRANTS: ProgramSeries['entrants'] = {
   a: { ...SERIES_ENTRANTS.a, logoUrl: MIXED_LOGO_URL },
   b: SERIES_ENTRANTS.b,
