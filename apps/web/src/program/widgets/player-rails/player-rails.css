@@ -1,3 +1,9 @@
+/**
+ * Presentation adaptation based on Lexogrine cs2-react-hud at
+ * 7874750c97fcecd8f72eb3fad382917e035ec651 (MIT), using players.scss.
+ * Donor assets, raw GSI coupling, and donor lifecycle semantics are omitted.
+ */
+
 .player-rail {
   color: var(--rh-hud-text-primary);
   display: flex;
