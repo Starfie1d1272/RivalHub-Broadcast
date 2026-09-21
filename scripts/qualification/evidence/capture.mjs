@@ -44,15 +44,6 @@ function validateCaptureManifest(manifest, captureDir) {
       'manifest 的完整性标记必须是布尔值',
     );
   }
-  if (
-    manifest.receiverGeneration !== undefined &&
-    !isSafeNonNegativeInteger(manifest.receiverGeneration)
-  ) {
-    throw new QualificationEvidenceError(
-      'INVALID_CAPTURE_SCHEMA',
-      'manifest.receiverGeneration 必须是非负整数',
-    );
-  }
   if (manifest.framesSha256 !== undefined && !SHA256_PATTERN.test(manifest.framesSha256)) {
     throw new QualificationEvidenceError('INVALID_CAPTURE_SCHEMA', 'manifest 的数据帧摘要无效');
   }
