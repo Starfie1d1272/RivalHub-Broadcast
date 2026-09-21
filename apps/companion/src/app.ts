@@ -54,7 +54,6 @@ export interface CompanionAppOptions {
   readonly recorder?: CaptureRecorder;
   readonly producerInstanceId?: string;
   readonly gsiSequenceSource?: GsiSequenceSource;
-  readonly gsiReceiverGenerationSource?: () => number;
   readonly programRuntime?: ProgramRuntime;
   readonly seriesProgressCheckpointStore?: SeriesProgressCheckpointStore;
   readonly onSeriesProgressDiagnostic?: (diagnostic: { readonly code: string }) => void;
@@ -75,6 +74,7 @@ export interface CompanionAppOptions {
   readonly operatorControlToken?: string;
   readonly qualificationRunId?: string;
   readonly qualificationScenarioPath?: string;
+  readonly qualificationProfile?: 'base' | 'objective-timing';
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
   readonly objectiveReferenceSource?: {
@@ -283,9 +283,6 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       ...(options.gsiSequenceSource === undefined
         ? {}
         : { sequenceSource: options.gsiSequenceSource }),
-      ...(options.gsiReceiverGenerationSource === undefined
-        ? {}
-        : { receiverGenerationSource: options.gsiReceiverGenerationSource }),
       onAcceptedRaw: (input) => {
         debugEvidenceStore.recordAcceptedRaw(input);
         options.onAcceptedRaw?.(input);
@@ -330,6 +327,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       controlToken,
       runId,
       evidence,
+      qualificationProfile: options.qualificationProfile ?? 'base',
       ...(options.qualificationClock === undefined ? {} : { clock: options.qualificationClock }),
       getDebugResponse: (nowMonotonicMs) =>
         debugEvidenceStore.getResponse({
@@ -350,6 +348,22 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
               const previous = currentRecorder();
               const result = await options.onQualificationRecorderRotate?.(previous);
               if (result === undefined) throw new Error('采集记录切换回调未配置。');
+              const at =
+                options.qualificationClock?.now() ?? {
+                  monotonicMs: performance.now(),
+                  utc: new Date().toISOString(),
+                };
+              const generationAdvance = programRuntime.advanceProgramSourceGeneration(at);
+              if (
+                generationAdvance.disposition.kind !== 'accepted' ||
+                generationAdvance.disposition.reason !== 'source-generation-advanced'
+              ) {
+                await result.nextRecorder.finalize();
+                throw new Error('接收链路代际推进失败。');
+              }
+              projectionCoordinator.afterRuntimeMutation(generationAdvance);
+              programCueCoordinator.afterRuntimeMutation(generationAdvance);
+              debugEvidenceStore.recordRuntime(programRuntime.getSnapshot());
               recorder = result.nextRecorder;
               await previous.finalize();
               return {
