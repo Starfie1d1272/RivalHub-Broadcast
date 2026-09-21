@@ -553,10 +553,7 @@ describe('objective timing capture analyzer', () => {
     const complete = evaluateObjectiveTimingRun([captureA, captureB], markers);
     expect(complete.captureIds).toEqual(['capture-a', 'capture-b']);
     expect(complete.evidence.scenarioCoverage.complete).toBe(true);
-    expect(
-      complete.qualification.numeric01s.result,
-      JSON.stringify(complete.qualification.numeric01s.gates),
-    ).toBe('PASS');
+    expect(complete.qualification.numeric01s.result).toBe('PASS');
     expect(complete.qualification.sourceSemantics.result).toBe('PASS');
     expect(complete.qualification.production.result).toBe('PASS');
 
