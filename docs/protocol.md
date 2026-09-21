@@ -10,7 +10,7 @@
 
 ## 1. RivalHub 只读赛事上下文
 
-RivalHub 连接模式通过 ``packages/rivalhub`` 消费公开、版本化的只读契约。Broadcast 不直连 RivalHub 数据库，也不导入 RivalHub 内部 domain 类型。
+RivalHub 连接模式通过 `packages/rivalhub` 消费公开、版本化的只读契约。Broadcast 不直连 RivalHub 数据库，也不导入 RivalHub 内部 domain 类型。
 
 ```text
 RivalHub API / 同形 fixture / 本地 LKG
@@ -22,7 +22,7 @@ packages/core
   MatchContext / ScheduleWindow / identity
 ```
 
-``schemaVersion``、``revision``、来源和新鲜度属于 acquisition metadata，不进入纯 ``MatchContext``。
+`schemaVersion`、`revision`、来源和新鲜度属于 acquisition metadata，不进入纯 `MatchContext`。
 
 ### 1.1 BroadcastManifestV1
 
@@ -68,9 +68,9 @@ rivalhub.broadcast-manifest.v1
 }
 ```
 
-Entrant 包含 ``entryId / name / logoUrl / roster``。Roster 中的选手包含 ``playerId / steam64 / displayName / avatarUrl / isStarter``。
+Entrant 包含 `entryId / name / logoUrl / roster`。Roster 中的选手包含 `playerId / steam64 / displayName / avatarUrl / isStarter`。
 
-地图包含 ``mapId / mapOrder / mapName / pickedByEntryId / teamAStartSide / scoreA / scoreB / completedAt``。``teamAStartSide`` 只表示地图起始边，不是整场永久 CT/T 映射。
+地图包含 `mapId / mapOrder / mapName / pickedByEntryId / teamAStartSide / scoreA / scoreB / completedAt`。`teamAStartSide` 只表示地图起始边，不是整场永久 CT/T 映射。
 
 时间字段保持赛事 authority 的原始语义：
 
@@ -170,7 +170,7 @@ MatchContext 与 ScheduleWindow 分别维护独立的 Last Known Good（LKG）�
 - ScheduleWindow 失败不清除当前 MatchContext；
 - latest-wins generation 防止旧请求晚返回后覆盖当前选择。
 
-``stale`` 表示上下文获取或新鲜度问题，不等于 identity mismatch。
+`stale` 表示上下文获取或新鲜度问题，不等于 identity mismatch。
 
 ## 4. Local Protocol V1
 
@@ -228,8 +228,12 @@ Operator credential：只允许 Companion 以 loopback bind 接收，且请求�
 Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Origin 在 LAN allowlist 中也
 必须拒绝 mutation。GSI ingress 继续使用独立的 `GSI_TOKEN`，qualification-only control plane
 继续使用独立的 `QUALIFICATION_CONTROL_TOKEN`。内置 `builtin:*` 资源只读；配置文件由 Companion
-以同目录临时文件加原子 rename 保存。该 control-plane 的版本与 Local Protocol / channel schema
-版本独立。
+以同目录临时文件加原子 rename 保存。`HudResolvedPreset` activation snapshot 有独立的 v1
+compatibility boundary：严格校验 schema version、exact widget keys、嵌入布局、preset/layout/theme
+引用一致性、descriptor-owned settings，以及颜色、透明度、圆角和字体等 semantic value 的安全域；
+加载时不得通过当前 Theme recipe 重算并要求 canonical bytes 相同。recipe 变化不会改写旧 custom
+snapshot，重新 Activate 才产生当前 recipe 的新 snapshot；真正不兼容的版本必须在该 boundary 增加显式
+migration。该 control-plane 的版本与 Local Protocol / channel schema 版本独立。
 
 ### 4.3 快照 envelope
 
@@ -254,9 +258,9 @@ Origin；`LOCAL_WEB_LAN_MODE=1` 时 control-plane 保持 read-only，即使 Orig
 }
 ```
 
-``schemaVersion`` 由具体 channel schema 决定，不能假定所有 channel 都是 1。
+`schemaVersion` 由具体 channel schema 决定，不能假定所有 channel 都是 1。
 
-``channelSeq`` 在 ``producerInstanceId + channel`` 范围内单调递增。``runtimeSeq``、``programSourceGeneration`` 与 ``mapEpoch`` 分别表达不同的连续性语义，不能互相替代。
+`channelSeq` 在 `producerInstanceId + channel` 范围内单调递增。`runtimeSeq`、`programSourceGeneration` 与 `mapEpoch` 分别表达不同的连续性语义，不能互相替代。
 
 ### 4.3.1 Program transient cue envelope
 
@@ -306,7 +310,7 @@ Program payload 只包含正式节目允许显示的信息：
 - `lineupEvidence: current | retained`，表达当前 entry 是否来自本帧或稳定 baseline；`retained` 不等于已确认掉线；
 - `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
 - `completedAdr`，只按已完成 counted rounds 的 damage / rounds 计算；在当前回合进行中保持稳定，尚无 counted round 时为 `null`；
-- ``lifeState: alive | dead | unknown``；
+- `lifeState: alive | dead | unknown`；
 - C4；
 - 数据覆盖状态。
 
@@ -320,7 +324,7 @@ Program 不包含：
 - LKG metadata；
 - Lookahead / future 信息。
 
-``lifeState`` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
+`lifeState` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
 
 `ProgramProjection` 不从 renderer 侧推断 active player，也不累计 ADR。Active lineup 只有在 `coverage.allPlayers = present`、10 个唯一稳定 Steam64、CT 5 人 + T 5 人且无歧义时才建立或替换 baseline；稳定 baseline 遇到 transient missing/extra 或 `degraded` evidence 时可以保留并标记 `retained` / `degraded`。没有 previous baseline 时，degraded 的 clean-looking 5+5 仍不得晋升。same-map source generation 变化时，retained membership 重新挂到当前 generation；generation continuity 由 resolution cursor 表达，证据质量由 `lineupEvidence` 表达。RivalHub roster 是 connected mode 的 strongest prior，但未知 Steam64 的稳定 active player 仍可进入节目，canonical identity 保留为 `null` 并通过 Operator/diagnostics 报告 warning。
 
@@ -362,10 +366,10 @@ acceptance；`program-cue` connection 使用 cue-specific acceptance，不能把
 接收方必须：
 
 - 拒绝 protocol / channel / schema version 不兼容；
-- 忽略重复或倒序 ``channelSeq``；
-- 拒绝同一 producer 下 ``runtimeSeq`` 回退；
-- 拒绝一个连接中途切换 ``producerInstanceId``；
-- 在 ``liveSessionId``、``programSourceGeneration`` 或 ``mapEpoch`` 改变时重置对应连续性证明；
+- 忽略重复或倒序 `channelSeq`；
+- 拒绝同一 producer 下 `runtimeSeq` 回退；
+- 拒绝一个连接中途切换 `producerInstanceId`；
+- 在 `liveSessionId`、`programSourceGeneration` 或 `mapEpoch` 改变时重置对应连续性证明；
 - `program-cue` 连接在 baseline 前不接受 cue；重复或倒序 `channelSeq` 忽略，允许 sequence gap；
   每个 baseline 最多保留最近 128 个 cue id 做 bounded dedupe。
 
@@ -398,19 +402,19 @@ Companion 使用同一 Fastify 实例提供网页静态资源和 Local Protocol 
 
 当前传输约束：
 
-- 子协议：``rivalhub-broadcast.local.v1``；
-- 默认监听：``127.0.0.1``；
+- 子协议：`rivalhub-broadcast.local.v1`；
+- 默认监听：`127.0.0.1`；
 - 本机回环模式只接受本机 HTTP(S) Origin；
-- 非回环监听必须显式开启 ``LOCAL_WEB_LAN_MODE=1``；
-- ``LOCAL_WEB_ALLOWED_ORIGINS`` 使用精确 Origin 允许列表；
+- 非回环监听必须显式开启 `LOCAL_WEB_LAN_MODE=1`；
+- `LOCAL_WEB_ALLOWED_ORIGINS` 使用精确 Origin 允许列表；
 - 本地 snapshot 与 transient channel 均为 server → browser 只读；
-- 浏览器发送业务消息时以 close code ``1008`` 关闭；
-- ``perMessageDeflate`` 关闭；
+- 浏览器发送业务消息时以 close code `1008` 关闭；
+- `perMessageDeflate` 关闭；
 - 单条 WebSocket payload 上限 64 KiB；
-- ``bufferedAmount`` 与序列化快照使用 256 KiB hard guard；
+- `bufferedAmount` 与序列化快照使用 256 KiB hard guard；
 - ping/pong heartbeat 周期 15 秒，约 30 秒无 pong 时清理连接。
 
-浏览器从当前页面 Origin 推导 ``ws:`` / ``wss:`` 地址。每次新连接建立独立 acceptance state；
+浏览器从当前页面 Origin 推导 `ws:` / `wss:` 地址。每次新连接建立独立 acceptance state；
 收到第一份有效基线后重连退避重新计时。Program cue 还必须与当前 Program snapshot 的
 `producerInstanceId`、`liveSessionId` 和 `mapEpoch` 相同；不一致时立即丢弃，不等待未来 snapshot，
 也不比较 CSTV generation 与 GSI source generation。断线、刷新、baseline 或 Program continuity

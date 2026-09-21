@@ -27,19 +27,33 @@
   width: 1920px;
 }
 
+.hud-editor-overlay__placeholder,
 .hud-editor-overlay__widget {
   background: color-mix(in srgb, var(--rh-hud-brand) 10%, var(--rh-hud-surface));
   border-color: color-mix(in srgb, var(--rh-hud-brand) 56%, transparent);
-  cursor: grab;
   color: inherit;
   font: inherit;
   outline: 1px dashed rgb(255 255 255 / 0.18);
   outline-offset: 5px;
-  padding: 0;
-  pointer-events: auto;
   place-items: center;
   display: grid;
   position: absolute;
+}
+
+.hud-editor-overlay__placeholder {
+  pointer-events: none;
+}
+
+.hud-editor-overlay__widget {
+  cursor: grab;
+  padding: 0;
+  pointer-events: auto;
+}
+
+.hud-editor-overlay__widget.is-chrome {
+  background: transparent;
+  border-color: transparent;
+  outline-color: rgb(255 255 255 / 0.3);
 }
 
 .hud-editor-overlay__widget:active {
@@ -51,6 +65,10 @@
   box-shadow:
     0 0 0 2px color-mix(in srgb, var(--rh-hud-brand) 24%, transparent),
     0 18px 40px rgb(0 0 0 / 0.2);
+}
+
+.hud-editor-overlay__placeholder .hud-editor-overlay__widget-label {
+  color: var(--rh-hud-text);
 }
 
 .hud-editor-overlay__widget:focus-visible {

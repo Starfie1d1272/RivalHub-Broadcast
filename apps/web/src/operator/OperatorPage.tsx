@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
+import { useState, useSyncExternalStore } from 'react';
 import type { FormEvent } from 'react';
 
 import type { OperatorSnapshot } from '@rivalhub-broadcast/protocol/operator';
 
-import { createLocalChannelClient, type LocalChannelConnectionState } from '../realtime';
+import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
 
 type OperatorSeriesProgress = NonNullable<OperatorSnapshot['payload']['seriesProgress']>;
 
@@ -38,11 +38,7 @@ function seriesBindingLabel(bindingState: OperatorSeriesProgress['bindingState']
 }
 
 export function OperatorPage() {
-  const client = useMemo(() => createLocalChannelClient('operator'), []);
-  useEffect(() => {
-    client.start();
-    return () => client.dispose();
-  }, [client]);
+  const client = useLocalChannelClient('operator');
   const connection = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   const snapshot = connection.current;
   const series = snapshot?.payload.seriesProgress ?? null;

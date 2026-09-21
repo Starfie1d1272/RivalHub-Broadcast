@@ -1,12 +1,17 @@
 import { z } from 'zod';
 
-import { canonicalJson } from './canonical-json.js';
 import { resolveHudThemeRecipe } from './theme-recipe.js';
 
 export { canonicalJson } from './canonical-json.js';
 export { HUD_THEME_RECIPE_REGISTRY } from './theme-recipe.js';
 
 export const HUD_CONFIG_SCHEMA_VERSION = 1 as const;
+/**
+ * Resolved snapshots are an on-air compatibility boundary.  A future recipe
+ * change must not reinterpret an already activated snapshot; incompatible
+ * snapshot versions need an explicit migration here.
+ */
+export const HUD_RESOLVED_SNAPSHOT_SCHEMA_VERSION = 1 as const;
 export const HUD_CANVAS_WIDTH = 1920 as const;
 export const HUD_CANVAS_HEIGHT = 1080 as const;
 export const HUD_GRID_SIZE = 10 as const;
@@ -56,6 +61,12 @@ const resourceNameSchema = z
   .refine((value) => value.trim().length > 0, '名称不能为空')
   .refine((value) => [...value.trim()].length <= 80, '名称最多 80 个 Unicode 字符');
 const hexColorSchema = z.string().regex(/^#[0-9a-fA-F]{6}$/, '必须是 #RRGGBB 格式');
+const unitIntervalSchema = finiteNumber
+  .refine((value) => value >= 0, '透明度不能小于 0')
+  .refine((value) => value <= 1, '透明度不能大于 1');
+const radiusSchema = finiteNumber
+  .refine((value) => value >= 0, '圆角不能小于 0')
+  .refine((value) => value <= 128, '圆角超出支持范围');
 
 export const hudWidgetPlacementSchema = z
   .object({
@@ -94,9 +105,10 @@ export const hudThemeSchema = z
   })
   .strict();
 
+/** The outer envelope is intentionally future-neutral; descriptors own strict settings parsing. */
 export const hudWidgetSettingsSchema = z
   .object({
-    variant: z.literal('default'),
+    variant: z.string().trim().min(1, '组件 variant 不能为空'),
     settings: z.record(z.string(), z.unknown()),
   })
   .strict();
@@ -170,7 +182,7 @@ export type HudPreset = Omit<z.infer<typeof hudPresetSchema>, 'widgets'> & {
 };
 
 export interface HudResolvedPreset {
-  readonly schemaVersion: typeof HUD_CONFIG_SCHEMA_VERSION;
+  readonly schemaVersion: typeof HUD_RESOLVED_SNAPSHOT_SCHEMA_VERSION;
   readonly preset: {
     readonly id: string;
     readonly name: string;
@@ -194,27 +206,27 @@ export const hudResolvedThemeSchema = z
       .object({
         colors: z
           .object({
-            textPrimary: z.string().min(1),
-            textMuted: z.string().min(1),
-            sideCt: z.string().min(1),
-            sideT: z.string().min(1),
-            stateDanger: z.string().min(1),
-            stateWarning: z.string().min(1),
-            stateSuccess: z.string().min(1),
-            stateUnknown: z.string().min(1),
-            objectiveBomb: z.string().min(1),
-            objectiveDefuse: z.string().min(1),
+            textPrimary: hexColorSchema,
+            textMuted: hexColorSchema,
+            sideCt: hexColorSchema,
+            sideT: hexColorSchema,
+            stateDanger: hexColorSchema,
+            stateWarning: hexColorSchema,
+            stateSuccess: hexColorSchema,
+            stateUnknown: hexColorSchema,
+            objectiveBomb: hexColorSchema,
+            objectiveDefuse: hexColorSchema,
           })
           .strict(),
         surface: z
           .object({
-            primary: z.string().min(1),
-            strong: z.string().min(1),
-            opacity: finiteNumber,
-            borderOpacity: finiteNumber,
+            primary: hexColorSchema,
+            strong: hexColorSchema,
+            opacity: unitIntervalSchema,
+            borderOpacity: unitIntervalSchema,
           })
           .strict(),
-        radius: z.object({ sm: finiteNumber, md: finiteNumber, lg: finiteNumber }).strict(),
+        radius: z.object({ sm: radiusSchema, md: radiusSchema, lg: radiusSchema }).strict(),
         fontFamily: z.literal('Inter'),
       })
       .strict(),
@@ -223,7 +235,7 @@ export const hudResolvedThemeSchema = z
 
 export const hudResolvedPresetSchema = z
   .object({
-    schemaVersion: z.literal(HUD_CONFIG_SCHEMA_VERSION),
+    schemaVersion: z.literal(HUD_RESOLVED_SNAPSHOT_SCHEMA_VERSION),
     preset: z
       .object({
         id: z.string().min(1),
@@ -277,13 +289,47 @@ export type HudActivePresetReference = HudConfigDocument['activePreset'];
 export interface HudWidgetDescriptor {
   readonly id: HudWidgetId;
   readonly label: string;
-  readonly rendererAvailability: 'unimplemented';
-  readonly supportedVariants: readonly ['default'];
-  readonly defaultVariant: 'default';
+  readonly rendererAvailability: 'implemented' | 'unimplemented';
+  readonly supportedVariants: readonly [string, ...string[]];
+  readonly defaultVariant: string;
   readonly resizePolicy: HudResizePolicy;
   readonly defaultPlacement: HudWidgetPlacement;
-  /** Registry-owned seam for future widget variants and settings. */
-  readonly validateSettings: (value: unknown) => Record<string, unknown>;
+  /** Registry-owned parser for the complete persisted widget settings envelope. */
+  readonly validateSettings: (value: unknown) => HudWidgetSettings;
+}
+
+export interface HudWidgetDescriptorDefinition extends Omit<
+  HudWidgetDescriptor,
+  'validateSettings'
+> {
+  /** Strict settings parser owned by the individual widget descriptor. */
+  readonly settingsSchema: (value: unknown) => Record<string, unknown>;
+}
+
+/**
+ * Framework-neutral registry seam. Future widget Issues can register a real
+ * renderer and controlled variants without changing the common settings
+ * envelope or parser dispatch in this package.
+ */
+export function defineHudWidgetDescriptor(
+  definition: HudWidgetDescriptorDefinition,
+): HudWidgetDescriptor {
+  if (!definition.supportedVariants.includes(definition.defaultVariant)) {
+    throw new Error(`组件 ${definition.id} 的 defaultVariant 必须属于 supportedVariants`);
+  }
+  return {
+    ...definition,
+    validateSettings: (value: unknown): HudWidgetSettings => {
+      const parsed = hudWidgetSettingsSchema.parse(value);
+      if (!definition.supportedVariants.includes(parsed.variant)) {
+        throw new Error(`组件 ${definition.id} 不支持 variant：${parsed.variant}`);
+      }
+      return {
+        variant: parsed.variant,
+        settings: definition.settingsSchema(parsed.settings),
+      };
+    },
+  };
 }
 
 export interface HudWidgetBox {
@@ -388,15 +434,25 @@ export function parseHudPreset(value: unknown): HudPreset {
   const parsed = hudPresetSchema.parse(value);
   if (!hasExactWidgetKeys(parsed.widgets))
     throw new Error('HudPreset 必须完整包含第一版组件 Registry');
-  for (const id of HUD_WIDGET_IDS) {
+  const widgets = completeWidgetRecord((id) => {
     const settings = parsed.widgets[id];
     if (settings === undefined) throw new Error(`HudPreset 缺少组件设置：${id}`);
-    getHudWidgetDescriptor(id).validateSettings(settings.settings);
-  }
-  return parsed;
+    return getHudWidgetDescriptor(id).validateSettings(settings);
+  });
+  return { ...parsed, widgets };
 }
 
 export function parseHudResolvedPreset(value: unknown): HudResolvedPreset {
+  // Compatibility boundary: add an explicit migration before this switch when
+  // a future resolved snapshot schema is introduced. Never re-resolve through
+  // the current Theme recipe here, because the snapshot is the last on-air value.
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    (value as Record<string, unknown>).schemaVersion !== HUD_RESOLVED_SNAPSHOT_SCHEMA_VERSION
+  ) {
+    throw new Error('不支持的 HUD resolved snapshot schema version');
+  }
   const parsed = hudResolvedPresetSchema.parse(value);
   if (!hasExactWidgetKeys(parsed.widgets)) {
     throw new Error('HudResolvedPreset 必须完整包含第一版组件 Registry');
@@ -408,27 +464,12 @@ export function parseHudResolvedPreset(value: unknown): HudResolvedPreset {
   if (parsed.preset.themeId !== parsed.theme.id) {
     throw new Error('HudResolvedPreset 的 themeId 与外观 ID 不一致');
   }
-  const theme = hudThemeSchema.parse({
-    schemaVersion: parsed.theme.schemaVersion,
-    id: parsed.theme.id,
-    name: parsed.theme.name,
-    brandColor: parsed.theme.brandColor,
-    panelStyle: parsed.theme.panelStyle,
-    cornerStyle: parsed.theme.cornerStyle,
+  const widgets = completeWidgetRecord((id) => {
+    const settings = parsed.widgets[id];
+    if (settings === undefined) throw new Error(`HudResolvedPreset 缺少组件设置：${id}`);
+    return getHudWidgetDescriptor(id).validateSettings(settings);
   });
-  const preset = parseHudPreset({
-    schemaVersion: parsed.schemaVersion,
-    id: parsed.preset.id,
-    name: parsed.preset.name,
-    layoutId: parsed.preset.layoutId,
-    themeId: parsed.preset.themeId,
-    widgets: parsed.widgets,
-  });
-  const expected = resolveHudPreset(preset, layout, theme);
-  if (canonicalJson(parsed) !== canonicalJson(expected)) {
-    throw new Error('HudResolvedPreset 的 resolved snapshot 与基础资源不一致');
-  }
-  return expected;
+  return { ...parsed, layout, widgets };
 }
 
 function assertUniqueCustomIds<T extends { readonly id: string }>(
@@ -484,14 +525,16 @@ export function parseHudConfigDocument(value: unknown): HudConfigDocument {
 
 export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
   HUD_WIDGET_IDS.map((id) => ({
-    id,
-    label: HUD_WIDGET_LABELS[id],
-    rendererAvailability: 'unimplemented' as const,
-    supportedVariants: ['default'] as const,
-    defaultVariant: 'default' as const,
-    resizePolicy: id === 'radar' ? ('square' as const) : ('none' as const),
-    defaultPlacement: cloneJson(DEFAULT_PLACEMENTS[id]),
-    validateSettings: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
+    ...defineHudWidgetDescriptor({
+      id,
+      label: HUD_WIDGET_LABELS[id],
+      rendererAvailability: 'unimplemented' as const,
+      supportedVariants: ['default'] as const,
+      defaultVariant: 'default' as const,
+      resizePolicy: id === 'radar' ? ('square' as const) : ('none' as const),
+      defaultPlacement: cloneJson(DEFAULT_PLACEMENTS[id]),
+      settingsSchema: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
+    }),
   })),
 );
 
@@ -568,7 +611,7 @@ export function resolveHudPreset(
     throw new Error('HudPreset 与 HudLayout 引用不一致');
   if (parsedPreset.themeId !== parsedTheme.id) throw new Error('HudPreset 与 HudTheme 引用不一致');
   return {
-    schemaVersion: HUD_CONFIG_SCHEMA_VERSION,
+    schemaVersion: HUD_RESOLVED_SNAPSHOT_SCHEMA_VERSION,
     preset: {
       id: parsedPreset.id,
       name: parsedPreset.name.trim(),

@@ -1,5 +1,61 @@
 import { expect, test } from '@playwright/test';
 
+const CURRENT_LIVE_BASELINE = {
+  type: 'snapshot',
+  protocolVersion: 1,
+  channel: 'program',
+  schemaVersion: 5,
+  channelSeq: 1,
+  cursor: {
+    producerInstanceId: 'visual-program-producer',
+    liveSessionId: 'visual-live-session',
+    runtimeSeq: 1,
+    programSourceGeneration: 0,
+    programReceiveSequence: 1,
+    mapEpoch: 0,
+  },
+  payload: {
+    status: { telemetry: 'fresh', context: 'unbound', identity: 'unbound' },
+    match: null,
+    teams: {
+      ct: { mode: 'neutral', entryId: null, name: 'CT', logoUrl: null, seriesScore: null },
+      t: { mode: 'neutral', entryId: null, name: 'T', logoUrl: null, seriesScore: null },
+    },
+    series: null,
+    map: {
+      name: 'de_mirage',
+      mode: null,
+      phase: 'live',
+      roundNumber: 1,
+      score: { ct: 0, t: 0 },
+      timeoutsRemaining: { ct: null, t: null },
+    },
+    round: null,
+    clock: null,
+    observedPlayerSourceId: null,
+    players: [],
+    bomb: null,
+    coverage: {
+      map: 'present',
+      round: 'absent',
+      phaseCountdowns: 'absent',
+      player: 'absent',
+      allPlayers: 'absent',
+      bomb: 'absent',
+    },
+  },
+} as const;
+
+const STALE_CURRENT_LIVE_SNAPSHOT = {
+  ...CURRENT_LIVE_BASELINE,
+  channelSeq: 2,
+  cursor: { ...CURRENT_LIVE_BASELINE.cursor, runtimeSeq: 2 },
+  payload: {
+    ...CURRENT_LIVE_BASELINE.payload,
+    status: { ...CURRENT_LIVE_BASELINE.payload.status, telemetry: 'stale' },
+  },
+} as const;
+
 const HUD_SCREENSHOT_OPTIONS = {
   animations: 'disabled' as const,
   caret: 'hide' as const,
@@ -18,19 +74,132 @@ test.describe('节目 HUD 控制台', () => {
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     const fixtureSelect = page.locator('select[aria-label="测试场景"]');
     await expect(fixtureSelect).toHaveValue('live-canonical');
-    await expect(page.getByRole('option', { name: /当前实时节目/ })).toBeEnabled();
-
-    await page.getByLabel('选择预览来源').selectOption('current-live');
-    await expect(page.getByText('当前实时节目不可用')).toBeVisible();
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
-    await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
-
-    await page.getByLabel('选择预览来源').selectOption('fixture');
+    await expect(page.locator('option[value="current-live"]')).toHaveAttribute('disabled', '');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('.hud-console')).toHaveScreenshot(
       'hud-console-preset.png',
       HUD_SCREENSHOT_OPTIONS,
     );
+  });
+
+  test('覆盖当前实时节目从等待、接收、重连到新初始状态的状态机', async ({ page }) => {
+    await page.addInitScript(() => {
+      class MockWebSocket {
+        static readonly instances: MockWebSocket[] = [];
+        readonly protocol: string;
+        readyState = 0;
+        onopen: (() => void) | null = null;
+        onmessage: ((event: { readonly data: unknown }) => void) | null = null;
+        onerror: (() => void) | null = null;
+        onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null =
+          null;
+
+        constructor(_url: string, protocol: string) {
+          this.protocol = protocol;
+          MockWebSocket.instances.push(this);
+          window.setTimeout(() => {
+            if (this.readyState !== 0) return;
+            this.readyState = 1;
+            this.onopen?.();
+          }, 0);
+        }
+
+        close(code = 1000, reason = ''): void {
+          this.readyState = 3;
+          this.onclose?.({ code, reason });
+        }
+
+        send(): void {}
+
+        emit(data: string): void {
+          this.onmessage?.({ data });
+        }
+
+        disconnect(): void {
+          this.readyState = 3;
+          this.onclose?.({ code: 1006, reason: '' });
+        }
+      }
+
+      Object.defineProperty(window, '__rhProgramSockets', {
+        configurable: true,
+        value: MockWebSocket.instances,
+      });
+      Object.defineProperty(window, 'WebSocket', {
+        configurable: true,
+        value: MockWebSocket,
+      });
+    });
+
+    await page.goto('/operator/hud');
+    const sourceSelect = page.getByLabel('选择预览来源');
+    const liveOption = page.locator('option[value="current-live"]');
+    await expect(liveOption).toHaveAttribute('disabled', '');
+    await expect(page.locator('.hud-console__source-status')).toContainText('等待初始状态');
+
+    await page.evaluate((snapshot) => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+    }, CURRENT_LIVE_BASELINE);
+    await expect(page.locator('.hud-console__source-status')).toContainText('已接收初始状态');
+    await expect(liveOption).not.toHaveAttribute('disabled');
+    await sourceSelect.selectOption('current-live');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+
+    await page.evaluate((snapshot) => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+    }, STALE_CURRENT_LIVE_SNAPSHOT);
+    await expect(sourceSelect).toHaveValue('current-live');
+    await expect(liveOption).toHaveAttribute('disabled', '');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
+
+    await page.evaluate(() => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ disconnect(): void }>;
+        }
+      ).__rhProgramSockets;
+      sockets.at(-1)?.disconnect();
+    });
+    await expect(sourceSelect).toHaveValue('current-live');
+    await expect(liveOption).toHaveAttribute('disabled', '');
+    await expect(page.getByText('当前实时节目不可用')).toBeVisible();
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
+
+    await page.waitForTimeout(350);
+    await page.evaluate((snapshot) => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+    }, CURRENT_LIVE_BASELINE);
+    await expect(liveOption).not.toHaveAttribute('disabled');
+    await expect(sourceSelect).toHaveValue('current-live');
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+
+    await page.evaluate(() => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      sockets.at(-1)?.emit('{not-json');
+    });
+    await expect(sourceSelect).toHaveValue('current-live');
+    await expect(liveOption).toHaveAttribute('disabled', '');
+    await expect(page.getByText('当前实时节目不可用')).toBeVisible();
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
   });
 
   test('覆盖测试场景、拖动、尺寸调整与网格吸附开关', async ({ page }) => {
@@ -73,6 +242,18 @@ test.describe('节目 HUD 控制台', () => {
       'hud-console-theme.png',
       HUD_SCREENSHOT_OPTIONS,
     );
+  });
+
+  test('切换工作区保留三套独立草稿', async ({ page }) => {
+    await page.goto('/operator/hud');
+    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
+    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await page.getByLabel('名称').fill('临时布局草稿');
+    await page.getByRole('button', { name: 'HUD 外观' }).click();
+    await expect(page.getByLabel('品牌色十六进制值')).toHaveValue('#ff00aa');
+    await page.getByRole('button', { name: 'HUD 布局' }).click();
+    await expect(page.getByLabel('名称')).toHaveValue('临时布局草稿');
   });
 
   test('正式节目路由不包含编辑辅助层', async ({ page }) => {

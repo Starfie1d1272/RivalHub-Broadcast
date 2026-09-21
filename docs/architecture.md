@@ -90,7 +90,13 @@ packages/hud-config
   framework-neutral HUD 配置 owner：HudPreset、HudLayout、HudTheme、组件 registry、严格 v1 schema、
   逻辑坐标几何约束和纯 Theme resolver。
   不依赖 React、ProgramSnapshot、GSI、RuntimeState、浏览器 API 或 Node 文件系统；Companion 负责持久化，
-  Web 负责编辑器与 renderer host。
+  Web 负责编辑器与 renderer host。组件 settings 的通用 envelope 不锁死未来 variant；每个 descriptor
+  自己验证完整 settings。resolved activation snapshot 由独立版本化兼容边界校验，不依赖当前 recipe 重算。
+
+apps/web/src/program
+  Web-owned HUD renderer registry。它把 framework-neutral descriptor 的 availability 与 React renderer
+  entry 一致性锁在一起；未实现组件在 production 隐藏，只能在编辑器预览显示语义占位。Program 与 HUD
+  控制台 Current Live preview 共用同一个 stable presentation boundary identity。
 
 packages/protocol
   Broadcast 自有的 Local Protocol、schema 和 acceptance rules。
@@ -333,7 +339,8 @@ HUD 配置属于独立的 presentation control-plane，不是 Local Protocol cha
 组件 registry；Companion 的 `GET /local/v1/hud-config` 返回当前已启用的 resolved preset，Web
 编辑器通过仅限 loopback 且要求 valid local Origin 的本地 HTTP mutation 保存资源或启用 preset；LAN
 mode 下该 endpoint 只读，任何 mutation 都会拒绝。保存资源不会改变正式节目的 ETag；只有启用 preset
-才会冻结新的 resolved snapshot。该 endpoint 使用 500ms conditional
+才会冻结新的 resolved snapshot；custom snapshot 在重启和 recipe 升级后仍保持最后一次上屏内容，直到
+重新启用，built-in reference 则解析当前代码版本。该 endpoint 使用 500ms conditional
 polling 与 ETag，配置读取/解析失败保留 last-known-valid runtime，不让 HUD 配置故障伪造或中断
 Gameplay telemetry。
 

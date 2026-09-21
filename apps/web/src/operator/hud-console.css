@@ -14,13 +14,13 @@
   box-sizing: border-box;
   color: var(--hud-ink);
   display: grid;
-  gap: 1.5rem;
+  gap: 1.1rem;
   isolation: isolate;
   margin: 0 auto;
   max-width: 118rem;
   min-height: 100vh;
   overflow: hidden;
-  padding: clamp(1.25rem, 4vw, 4rem);
+  padding: clamp(1.1rem, 3vw, 2.75rem);
 }
 
 .hud-console::before {
@@ -52,17 +52,17 @@
 }
 
 .hud-console__header h1 {
-  font-size: clamp(2.5rem, 6vw, 5.4rem);
-  letter-spacing: -0.065em;
-  line-height: 0.92;
+  font-size: clamp(2.1rem, 4vw, 3.6rem);
+  letter-spacing: -0.055em;
+  line-height: 0.98;
   margin: 0;
-  max-width: 11ch;
+  max-width: 18ch;
 }
 
 .hud-console__intro {
   color: var(--hud-muted);
   line-height: 1.6;
-  margin: 1.2rem 0 0;
+  margin: 0.8rem 0 0;
   max-width: 44rem;
 }
 

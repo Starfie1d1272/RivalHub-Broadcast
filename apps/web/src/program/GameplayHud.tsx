@@ -7,6 +7,7 @@ import {
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
+import { getHudRendererEntry } from './hud-renderer-registry';
 import './gameplay-hud.css';
 
 export interface GameplayHudProps {
@@ -42,7 +43,8 @@ export function GameplayHud({ snapshot, resolvedPreset }: GameplayHudProps) {
       {HUD_WIDGET_REGISTRY.map((descriptor) => {
         const placement = resolvedPreset.layout.widgets[descriptor.id];
         if (placement === undefined || !placement.visible) return null;
-        if (descriptor.rendererAvailability === 'unimplemented') return null;
+        const rendererEntry = getHudRendererEntry(descriptor.id);
+        if (rendererEntry.renderer === null) return null;
         const box = placementToBox(descriptor.id, placement);
         return (
           <div
@@ -56,7 +58,16 @@ export function GameplayHud({ snapshot, resolvedPreset }: GameplayHudProps) {
               top: `${box.top}px`,
               width: `${box.width}px`,
             }}
-          />
+          >
+            {rendererEntry.renderer({
+              box,
+              placement,
+              resolvedPreset,
+              settings: resolvedPreset.widgets[descriptor.id],
+              snapshot,
+              widgetId: descriptor.id,
+            })}
+          </div>
         );
       })}
     </div>

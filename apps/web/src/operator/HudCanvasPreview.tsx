@@ -11,6 +11,10 @@ import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
 import { HudEditorOverlay } from '../program/HudEditorOverlay';
 import { GameplayHud } from '../program/GameplayHud';
+import {
+  hasAcceptedProgramSnapshot,
+  presentationBoundaryKey,
+} from '../program/presentation-boundary';
 import type { LocalChannelConnectionState } from '../realtime';
 
 export interface HudCanvasPreviewProps {
@@ -18,6 +22,7 @@ export interface HudCanvasPreviewProps {
   readonly snapshot: ProgramSnapshot | null;
   readonly connectionState: LocalChannelConnectionState;
   readonly liveSource: boolean;
+  readonly editorMode?: 'layout' | 'preview';
   readonly selectedWidgetId: HudWidgetId | null;
   readonly showGrid: boolean;
   readonly showCenter: boolean;
@@ -33,6 +38,7 @@ export function HudCanvasPreview({
   snapshot,
   connectionState,
   liveSource,
+  editorMode = 'layout',
   selectedWidgetId,
   showGrid,
   showCenter,
@@ -54,6 +60,15 @@ export function HudCanvasPreview({
   }, []);
 
   const guideStyle = { width: HUD_CANVAS_WIDTH, height: HUD_CANVAS_HEIGHT } satisfies CSSProperties;
+  const presentationSnapshot = liveSource
+    ? hasAcceptedProgramSnapshot(snapshot, connectionState)
+      ? snapshot
+      : null
+    : snapshot;
+  const boundaryKey = presentationBoundaryKey(
+    presentationSnapshot,
+    liveSource ? connectionState : undefined,
+  );
 
   return (
     <div className="hud-console__canvas-frame" ref={frameRef}>
@@ -72,10 +87,12 @@ export function HudCanvasPreview({
           <div className="hud-console__guide hud-console__guide--safe" style={guideStyle} />
         ) : null}
         <GameplayHud
+          key={boundaryKey}
           resolvedPreset={resolvedPreset}
-          snapshot={liveSource && connectionState !== 'live' ? null : snapshot}
+          snapshot={presentationSnapshot}
         />
         <HudEditorOverlay
+          mode={editorMode}
           onRadarResizePointerDown={onRadarResizePointerDown}
           onWidgetPointerDown={onWidgetPointerDown}
           resolvedPreset={resolvedPreset}

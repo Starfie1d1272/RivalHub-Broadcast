@@ -39,8 +39,15 @@ import {
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
+import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
 import { HudCanvasPreview } from './HudCanvasPreview';
-import { createLocalChannelClient, type LocalChannelConnectionState } from '../realtime';
+import {
+  hudResourceNavigationBlockReason,
+  type HudDraftDirtyState,
+  type HudResource,
+  type HudWorkspace,
+} from './hud-console-state';
+import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
 import {
   mutateHudConfig,
   useHudConfigClient,
@@ -48,9 +55,6 @@ import {
 } from '../realtime/hud-config-client';
 
 import './hud-console.css';
-
-type HudWorkspace = 'preset' | 'layout' | 'theme';
-type HudResource = HudPreset | HudLayout | HudTheme;
 
 const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }[] = [
   { id: 'preset', label: 'HUD 预设' },
@@ -116,9 +120,9 @@ function activePresetId(document: HudConfigDocument): string {
 function connectionLabel(state: LocalChannelConnectionState): string {
   switch (state) {
     case 'live':
-      return '已接受 baseline';
+      return '已接收初始状态';
     case 'awaiting-baseline':
-      return '等待 baseline';
+      return '等待初始状态';
     case 'connecting':
       return '正在连接';
     case 'reconnecting':
@@ -136,11 +140,7 @@ function useProgramConnection(): {
   readonly current: ProgramSnapshot | null;
   readonly state: LocalChannelConnectionState;
 } {
-  const client = useMemo(() => createLocalChannelClient('program'), []);
-  useEffect(() => {
-    client.start();
-    return () => client.dispose();
-  }, [client]);
+  const client = useLocalChannelClient('program');
   const snapshot = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   return { current: snapshot.current, state: snapshot.state };
 }
@@ -187,10 +187,7 @@ export function HudConsolePage() {
     readonly placement: HudLayout['widgets'][HudWidgetId];
   } | null>(null);
   const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
-  const previewSourceLive =
-    program.state === 'live' &&
-    program.current !== null &&
-    program.current.payload.status.telemetry === 'fresh';
+  const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
 
@@ -202,6 +199,11 @@ export function HudConsolePage() {
   const presetDirty = savedPreset === undefined || !isSame(savedPreset, presetDraft);
   const layoutDirty = savedLayout === undefined || !isSame(savedLayout, layoutDraft);
   const themeDirty = savedTheme === undefined || !isSame(savedTheme, themeDraft);
+  const dirtyDrafts: HudDraftDirtyState = {
+    preset: presetDirty,
+    layout: layoutDirty,
+    theme: themeDirty,
+  };
   const hasDirtyDraft = presetDirty || layoutDirty || themeDirty;
   const activationStale = hudConfig.activationStale;
 
@@ -299,20 +301,30 @@ export function HudConsolePage() {
   }
 
   function selectResource(kind: HudWorkspace, id: string): void {
-    if (hasDirtyDraft) {
-      setCommandState('当前存在未保存草稿，请先保存、另存为或放弃。');
-      return;
-    }
     const resource = resourceFor(configDocument, kind, id);
     if (resource === undefined) return;
+    const blockReason = hudResourceNavigationBlockReason(
+      kind,
+      resource,
+      { preset: selectedPresetId, layout: selectedLayoutId, theme: selectedThemeId },
+      dirtyDrafts,
+    );
+    if (blockReason !== null) {
+      setCommandState(blockReason);
+      return;
+    }
     if (kind === 'preset') {
       const preset = resource as HudPreset;
       setSelectedPresetId(id);
       setPresetDraft(clone(preset));
-      setSelectedLayoutId(preset.layoutId);
-      setSelectedThemeId(preset.themeId);
-      setLayoutDraft(clone(resourceFor(configDocument, 'layout', preset.layoutId) as HudLayout));
-      setThemeDraft(clone(resourceFor(configDocument, 'theme', preset.themeId) as HudTheme));
+      if (preset.layoutId !== selectedLayoutId) {
+        setSelectedLayoutId(preset.layoutId);
+        setLayoutDraft(clone(resourceFor(configDocument, 'layout', preset.layoutId) as HudLayout));
+      }
+      if (preset.themeId !== selectedThemeId) {
+        setSelectedThemeId(preset.themeId);
+        setThemeDraft(clone(resourceFor(configDocument, 'theme', preset.themeId) as HudTheme));
+      }
     } else if (kind === 'layout') {
       setSelectedLayoutId(id);
       setLayoutDraft(clone(resource as HudLayout));
@@ -325,12 +337,30 @@ export function HudConsolePage() {
 
   function changeWorkspace(next: HudWorkspace): void {
     if (next === workspace) return;
-    if (hasDirtyDraft) {
-      setCommandState('当前存在未保存草稿，请先保存、另存为或放弃。');
-      return;
-    }
     setWorkspace(next);
     setCommandState(null);
+  }
+
+  function updatePresetReference(kind: 'layout' | 'theme', id: string): void {
+    const resource = resourceFor(configDocument, kind, id);
+    if (resource === undefined) return;
+    const selectedId = kind === 'layout' ? selectedLayoutId : selectedThemeId;
+    const dirty = kind === 'layout' ? layoutDirty : themeDirty;
+    if (dirty && id !== selectedId) {
+      setCommandState(
+        `当前 HUD ${kind === 'layout' ? '布局' : '外观'} 有未保存草稿；修改预设引用会覆盖它，请先保存或放弃。`,
+      );
+      return;
+    }
+    setPresetDraft((current) => ({ ...current, [`${kind}Id`]: id }));
+    if (id === selectedId) return;
+    if (kind === 'layout') {
+      setSelectedLayoutId(id);
+      setLayoutDraft(clone(resource as HudLayout));
+    } else {
+      setSelectedThemeId(id);
+      setThemeDraft(clone(resource as HudTheme));
+    }
   }
 
   function applyResponse(response: Parameters<typeof hudConfig.applyResponse>[0]): void {
@@ -571,12 +601,7 @@ export function HudConsolePage() {
             布局引用
             <select
               value={presetDraft.layoutId}
-              onChange={(event) => {
-                setPresetDraft({ ...presetDraft, layoutId: event.target.value });
-                setSelectedLayoutId(event.target.value);
-                const next = resourceFor(configDocument, 'layout', event.target.value);
-                if (next !== undefined) setLayoutDraft(clone(next as HudLayout));
-              }}
+              onChange={(event) => updatePresetReference('layout', event.target.value)}
             >
               {resourceList(configDocument, 'layout').map((resource) => (
                 <option key={resource.id} value={resource.id}>
@@ -589,12 +614,7 @@ export function HudConsolePage() {
             外观引用
             <select
               value={presetDraft.themeId}
-              onChange={(event) => {
-                setPresetDraft({ ...presetDraft, themeId: event.target.value });
-                setSelectedThemeId(event.target.value);
-                const next = resourceFor(configDocument, 'theme', event.target.value);
-                if (next !== undefined) setThemeDraft(clone(next as HudTheme));
-              }}
+              onChange={(event) => updatePresetReference('theme', event.target.value)}
             >
               {resourceList(configDocument, 'theme').map((resource) => (
                 <option key={resource.id} value={resource.id}>
@@ -937,7 +957,9 @@ export function HudConsolePage() {
             onChange={(event) => setPreviewSource(event.target.value as 'fixture' | 'current-live')}
           >
             <option value="fixture">测试场景</option>
-            <option value="current-live">当前实时节目 · {connectionLabel(program.state)}</option>
+            <option disabled={!previewSourceLive} value="current-live">
+              当前实时节目 · {connectionLabel(program.state)}
+            </option>
           </select>
         </label>
         {activePreviewSource === 'fixture' ? (
@@ -966,6 +988,7 @@ export function HudConsolePage() {
         <div className="hud-console__preview-column">
           <HudCanvasPreview
             connectionState={program.state}
+            editorMode={workspace === 'layout' ? 'layout' : 'preview'}
             liveSource={activePreviewSource === 'current-live'}
             onRadarResizePointerDown={workspace === 'layout' ? startRadarResize : undefined}
             onWidgetPointerDown={workspace === 'layout' ? startMove : undefined}

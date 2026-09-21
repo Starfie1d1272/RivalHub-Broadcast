@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import {
   BUILTIN_LAYOUT_ID,
@@ -9,17 +10,22 @@ import {
   HUD_WIDGET_IDS,
   canonicalJson,
   createDefaultHudConfigDocument,
+  defineHudWidgetDescriptor,
   getBuiltinLayout,
   getBuiltinPreset,
   getBuiltinResolvedPreset,
   getBuiltinTheme,
+  getHudWidgetDescriptor,
   moveWidgetPlacement,
   parseHudConfigDocument,
   parseHudLayout,
+  parseHudPreset,
   parseHudResolvedPreset,
   placementToBox,
   normalizeHudPlacement,
   resetLayoutDraft,
+  resolveActiveHudPreset,
+  resolveHudPreset,
   resolveHudTheme,
   resizeRadarPlacement,
   snapToGrid,
@@ -59,7 +65,7 @@ describe('hud-config schema and framework contract', () => {
       parseHudConfigDocument({ ...document, customLayouts: [getBuiltinLayout()] }),
     ).toThrow();
     expect(() => parseHudResolvedPreset({ ...getBuiltinResolvedPreset(), widgets: {} })).toThrow();
-    expect(() =>
+    expect(
       parseHudResolvedPreset({
         ...getBuiltinResolvedPreset(),
         theme: {
@@ -70,6 +76,18 @@ describe('hud-config schema and framework contract', () => {
               ...getBuiltinResolvedPreset().theme.semantic.colors,
               textPrimary: '#ffffff',
             },
+          },
+        },
+      }).theme.semantic.colors.textPrimary,
+    ).toBe('#ffffff');
+    expect(() =>
+      parseHudResolvedPreset({
+        ...getBuiltinResolvedPreset(),
+        theme: {
+          ...getBuiltinResolvedPreset().theme,
+          semantic: {
+            ...getBuiltinResolvedPreset().theme.semantic,
+            surface: { ...getBuiltinResolvedPreset().theme.semantic.surface, opacity: 2 },
           },
         },
       }),
@@ -110,6 +128,84 @@ describe('hud-config schema and framework contract', () => {
     expect(light.semantic.colors.stateDanger).toBe('#f06f6f');
     expect(light.semantic.surface.opacity).toBeLessThan(1);
     expect(light.semantic.radius.lg).toBeGreaterThan(0);
+  });
+
+  it('keeps a valid custom activation snapshot across a recipe change', () => {
+    const layout = { ...getBuiltinLayout(), id: 'custom-layout', name: '现场布局' };
+    const theme = { ...getBuiltinTheme(), id: 'custom-theme', name: '现场外观' };
+    const preset = {
+      ...getBuiltinPreset(),
+      id: 'custom-preset',
+      name: '现场预设',
+      layoutId: layout.id,
+      themeId: theme.id,
+    };
+    const activated = resolveHudPreset(preset, layout, theme);
+    const oldOnAirSnapshot = {
+      ...activated,
+      theme: {
+        ...activated.theme,
+        semantic: {
+          ...activated.theme.semantic,
+          colors: { ...activated.theme.semantic.colors, textPrimary: '#ffffff' },
+          surface: { ...activated.theme.semantic.surface, opacity: 0.61 },
+        },
+      },
+    };
+    const document = {
+      ...createDefaultHudConfigDocument(),
+      customLayouts: [layout],
+      customThemes: [theme],
+      customPresets: [preset],
+      activePreset: { kind: 'custom' as const, sourceId: preset.id, snapshot: oldOnAirSnapshot },
+    };
+
+    const parsed = parseHudConfigDocument(document);
+    expect(resolveActiveHudPreset(parsed).theme.semantic.colors.textPrimary).toBe('#ffffff');
+    expect(resolveActiveHudPreset(parsed).theme.semantic.surface.opacity).toBe(0.61);
+    expect(resolveHudPreset(preset, layout, theme).theme.semantic.colors.textPrimary).toBe(
+      '#f3f6fa',
+    );
+  });
+
+  it('lets a future descriptor own a non-default variant while current widgets stay fail-closed', () => {
+    const futureDescriptor = defineHudWidgetDescriptor({
+      id: 'radar',
+      label: '雷达',
+      rendererAvailability: 'implemented',
+      supportedVariants: ['default', 'compact'] as const,
+      defaultVariant: 'compact',
+      resizePolicy: 'square',
+      defaultPlacement: getBuiltinLayout().widgets.radar,
+      settingsSchema: (value: unknown) =>
+        z
+          .object({ density: z.literal('tight') })
+          .strict()
+          .parse(value),
+    });
+
+    expect(
+      futureDescriptor.validateSettings({ variant: 'compact', settings: { density: 'tight' } }),
+    ).toEqual({ variant: 'compact', settings: { density: 'tight' } });
+    expect(() =>
+      getHudWidgetDescriptor('radar').validateSettings({ variant: 'compact', settings: {} }),
+    ).toThrow();
+    expect(() =>
+      parseHudPreset({
+        ...getBuiltinPreset(),
+        widgets: {
+          ...getBuiltinPreset().widgets,
+          radar: { variant: 'compact', settings: {} },
+        },
+      }),
+    ).toThrow();
+    expect(() =>
+      defineHudWidgetDescriptor({
+        ...futureDescriptor,
+        defaultVariant: 'missing',
+        settingsSchema: () => ({}),
+      }),
+    ).toThrow();
   });
 
   it('resets a custom layout without changing its identity', () => {

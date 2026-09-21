@@ -19,10 +19,10 @@ import {
   ProgramVisualFixturePage,
 } from './program/testing/ProgramVisualFixturePage';
 import {
-  createLocalChannelClient,
   createProgramCueClient,
   type LocalChannelClient,
   type LocalChannelConnectionState,
+  useLocalChannelClient,
 } from './realtime';
 import type { LocalSnapshotChannel } from '@rivalhub-broadcast/protocol/version';
 
@@ -102,12 +102,7 @@ function recorderStateLabel(state: string | undefined): string {
 function useLocalChannelConnection<C extends LocalSnapshotChannel>(
   channel: C,
 ): LocalChannelClient<C> {
-  const client = useMemo(() => createLocalChannelClient(channel), [channel]);
-  useEffect(() => {
-    client.start();
-    return () => client.dispose();
-  }, [client]);
-  return client;
+  return useLocalChannelClient(channel);
 }
 
 function SurfaceConnectionMarker({ channel }: { readonly channel: LocalSnapshotChannel }) {
@@ -158,7 +153,6 @@ function ProgramRoute() {
       <ProgramPage
         connectionState={programConnection.state}
         resolvedPreset={hudConfig.current}
-        reset={programConnection.reset}
         snapshot={programConnection.current}
       />
     </>

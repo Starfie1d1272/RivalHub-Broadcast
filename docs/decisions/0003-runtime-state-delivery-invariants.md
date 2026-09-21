@@ -11,6 +11,8 @@
 
 > 2026-09-18 clarification：Issue #48 将 `SeriesProgress` 落为 Core-owned 的纯规则模型，由 Companion 当前唯一的 runtime composition owner 持有；它消费 `RuntimeTransition`、`MatchContext` 和同一 `sourceGeneration + mapEpoch` 下已证明的 side mapping，不复制 `RuntimeState`、`IdentityResolver`、`ActiveLineupResolution` 或 side-mapping ownership。地图计划不匹配时 Series fail closed 为 `needs_operator`，Program 仍可显示原始 telemetry。系列赛恢复只使用兼容的有界原子 JSON checkpoint，不建立 event-sourcing；Round History 由 `round_ended` 为 primary truth，`map_round_wins` 只作保守恢复、未知 `winCondition` 补充和冲突校验，不能覆盖已冻结的 `winnerSide`。兼容 checkpoint 加载后还必须校验当前 execution 的 `roundNumber`、score 与 `round_wins`；矛盾时保留 primary history 并标记 `partial/diagnostic`。Operator projection 暴露绑定与诊断；正常 Operator ingress 不建立 credential，显式 map bind command 只允许 loopback + valid local Origin，LAN mode 拒绝 mutation；GSI token 与 qualification-only token 保持独立。Companion shutdown await checkpoint flush。该 clarification 不改变现有 single-runtime、Program/Assist isolation 与 latest-wins 决定。
 
+> 2026-09-21 clarification：Issue #56 的 HUD presentation control-plane 继续属于 Runtime 之外的 presentation owner。custom activation snapshot 是最后一次 Activate 生成的独立版本化 on-air 内容，加载时做自身 semantic safety validation，不通过当前 Theme recipe 重算来判断兼容；built-in reference 才随代码版本解析。framework-neutral widget descriptor 负责完整 settings envelope 与 variant 校验，Web React renderer registry 负责具体 renderer，未实现 widget 不得以 placeholder 泄漏到 Program。Program 与 Current Live preview 共用 stable cursor identity + fail-closed presentation boundary；producer/session/source-generation/map-epoch 变化或 accepted↔fail-closed 才 remount，不把一次性 reset flags 叠加为第二次 remount。该 clarification 不新增 RuntimeState、gameplay truth 或 normal Operator credential。
+
 ## 背景
 
 ADR-0002 已冻结 Runtime / Workspace 技术栈，但在正式实现 Core 前，还需要把实时系统最容易走偏的语义边界固定下来：
