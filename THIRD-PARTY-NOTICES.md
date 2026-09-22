@@ -43,7 +43,7 @@
 
 ## Adapted presentation sources
 
-本 Issue 的 HUD presentation adaptation 只借鉴并改写下列已固定版本的 presentation source。它们不是安装依赖；本仓库不携带其 runtime、图片资产或原始数据处理逻辑。改写后的文件只消费 Broadcast `ProgramPayload` presentation model，并保留本节 provenance。
+本 Issue 的 HUD presentation adaptation 只借鉴并改写下列已固定版本的 presentation source。它们不是安装依赖；本仓库不携带其 runtime、图片资产或原始数据处理逻辑。改写后的文件只消费 Broadcast `ProgramPayload` / `RadarSnapshot` presentation models，并保留本节 provenance。
 
 | 来源                      | 固定版本与改写参考文件                                                                                                                                    | 许可证                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
