@@ -106,7 +106,9 @@ export function selectLayer(snapshot: RadarSnapshot, geometry: MapGeometry): Rad
   return upper === lower ? 'unknown' : upper > lower ? 'upper' : 'lower';
 }
 export function onLayer(point: RadarProjectedPosition, layer: RadarLayer): boolean {
-  return !point.outOfBounds && (layer === 'unknown' || point.layer === layer);
+  if (point.outOfBounds) return false;
+  if (layer === 'unknown') return false;
+  return point.layer === layer || point.layer === 'single';
 }
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;
@@ -192,6 +194,8 @@ export class RadarPresentation {
   snapshot: RadarSnapshot | null = null;
   geometry: MapGeometry | null = null;
   layer: RadarLayer = 'unknown';
+  unsupportedMap: string | null = null;
+  diagnosticReason: 'unsupported-map' | 'stale' | 'awaiting' | null = 'awaiting';
   readonly players = new Map<string, PlayerMarker>();
   readonly grenades = new Map<string, GrenadeMarker>();
   readonly exits = new Map<string, GrenadeExit>();
@@ -201,7 +205,7 @@ export class RadarPresentation {
   private acceptedAt: number | null = null;
   private bombTerminalAt: number | null = null;
 
-  reset(): void {
+  reset(reason: 'unsupported-map' | 'stale' | 'awaiting' | null = null): void {
     this.snapshot = null;
     this.geometry = null;
     this.layer = 'unknown';
@@ -213,18 +217,29 @@ export class RadarPresentation {
     this.lastFrame = null;
     this.acceptedAt = null;
     this.bombTerminalAt = null;
+    if (reason !== null) {
+      this.diagnosticReason = reason;
+    }
   }
 
   accept(snapshot: RadarSnapshot | null, now: number, reconnect = false): void {
-    if (!snapshot || snapshot.payload.telemetryFreshness !== 'fresh') {
-      this.reset();
+    if (!snapshot) {
+      this.unsupportedMap = null;
+      this.reset('awaiting');
+      return;
+    }
+    if (snapshot.payload.telemetryFreshness !== 'fresh') {
+      this.reset('stale');
       return;
     }
     const geometry = defaultMapGeometryProvider.resolve(snapshot.payload.mapName);
     if (!geometry) {
-      this.reset();
+      this.unsupportedMap = snapshot.payload.mapName;
+      this.reset('unsupported-map');
       return;
     }
+    this.unsupportedMap = null;
+    this.diagnosticReason = null;
     const boundary = radarBoundary(snapshot);
     const layer = selectLayer(snapshot, geometry);
     if (

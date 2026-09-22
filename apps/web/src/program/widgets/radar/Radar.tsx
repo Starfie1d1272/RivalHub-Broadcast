@@ -216,6 +216,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           bomb &&
           bomb.state !== 'carried' &&
           bomb.state !== 'unknown' &&
+          !(bomb.state === 'planting' && bomb.sourcePlayerId !== null) &&
           model.bombVisible(now)
         ) {
           const p = projectWorldPosition(bomb.position, geometry);

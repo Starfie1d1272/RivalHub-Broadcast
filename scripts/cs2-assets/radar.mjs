@@ -23,6 +23,15 @@ export async function supportedRadarMaps(root = REPOSITORY_ROOT) {
   return [...body.matchAll(/'(de_[a-z0-9]+)'/g)].map((m) => m[1]);
 }
 
+export function normalizeOverviewText(raw) {
+  const text = raw
+    .toString('utf8')
+    .replace(/^\uFEFF/, '')
+    .replace(/\r\n/g, '\n')
+    .trimEnd();
+  return text + '\n';
+}
+
 export function parseOverview(text, mapKey) {
   const tokens = text.replace(/\/\/[^\r\n]*/g, '').match(/"(?:\\.|[^"\\])*"|[{}]|[^\s{}"]+/g) ?? [];
   let i = 0;
@@ -127,10 +136,13 @@ export async function importRadarAssets({
         '-f',
         sourcePath,
       ]);
-      const overview = parseOverview(await readFile(metadataPath, 'utf8'), mapKey);
+      const rawText = await readFile(metadataPath, 'utf8');
+      const normalizedText = normalizeOverviewText(rawText);
+      await writeFile(metadataPath, normalizedText, 'utf8');
+      const overview = parseOverview(normalizedText, mapKey);
       metadata[mapKey] = {
         sourcePath,
-        sourceSha256: await sha256File(metadataPath),
+        sourceSha256: await sha256(Buffer.from(normalizedText, 'utf8')),
         material: overview.material,
         posX: Number(overview.pos_x),
         posY: Number(overview.pos_y),
@@ -218,8 +230,13 @@ export async function verifyRadarAssets(generatedRoot = join(PACKAGE_ROOT, 'gene
   for (const key of keys) {
     const meta = manifest.metadata[key];
     const file = join(generatedRoot, 'radar-overviews', `${key}.txt`);
+    const fileContent = await readFile(file, 'utf8');
     assert((await sha256File(file)) === meta.sourceSha256, `Overview hash mismatch: ${key}`);
-    const overview = parseOverview(await readFile(file, 'utf8'), key);
+    assert(
+      (await sha256(Buffer.from(normalizeOverviewText(fileContent), 'utf8'))) === meta.sourceSha256,
+      `Overview canonical hash mismatch: ${key}`,
+    );
+    const overview = parseOverview(fileContent, key);
     assert(
       meta.material === overview.material &&
         meta.posX === Number(overview.pos_x) &&

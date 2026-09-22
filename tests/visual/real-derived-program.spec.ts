@@ -5,6 +5,7 @@ for (const fixtureId of [
   'real-planted',
   'real-defusing',
   'real-halftime-after',
+  'program-radar-integrated',
 ]) {
   test(`real-derived production Program renders ${fixtureId}`, async ({ page }) => {
     await page.goto(`/__visual/program/${fixtureId}`);

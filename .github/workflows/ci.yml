@@ -90,6 +90,9 @@ jobs:
       - name: Verify real-derived Program fixtures
         run: pnpm fixtures:program:verify
 
+      - name: Verify real-derived Radar fixtures
+        run: pnpm fixtures:radar:verify
+
       - name: Test
         run: pnpm test
 

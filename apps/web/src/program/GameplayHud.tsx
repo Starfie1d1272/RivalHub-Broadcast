@@ -1,5 +1,5 @@
 import { presentationBoundaryKey } from './presentation-boundary';
-import { Radar, type RadarProps } from './widgets/radar/Radar';
+import type { RadarProps } from './widgets/radar/Radar';
 import type { CSSProperties } from 'react';
 
 import {
@@ -59,7 +59,8 @@ export function GameplayHud({
   resolvedPreset,
   rendererRegistry = HUD_RENDERER_REGISTRY,
 }: GameplayHudProps) {
-  const programFresh = snapshot !== null && snapshot.payload.status.telemetry === 'fresh';
+  if (snapshot === null) return null;
+  const programFresh = snapshot.payload.status.telemetry === 'fresh';
   if (!programFresh && radarClient === undefined && radarSnapshot == null) return null;
 
   return (
@@ -76,6 +77,8 @@ export function GameplayHud({
         if (rendererEntry.renderer === null) return null;
         const Renderer = rendererEntry.renderer;
         if (descriptor.id !== 'radar' && !programFresh) return null;
+        if (descriptor.id === 'radar' && radarClient === undefined && radarSnapshot == null)
+          return null;
         const box = placementToBox(descriptor.id, placement);
         return (
           <div
@@ -94,25 +97,19 @@ export function GameplayHud({
               width: `${box.width}px`,
             }}
           >
-            {descriptor.id === 'radar' && rendererRegistry === HUD_RENDERER_REGISTRY ? (
-              <Radar
-                client={radarClient}
-                snapshot={radarSnapshot}
-                zoomMode={
-                  resolvedPreset.widgets.radar.settings.zoomMode === 'auto' ? 'auto' : 'full-map'
-                }
+            {(snapshot !== null ||
+              (descriptor.id === 'radar' &&
+                (radarSnapshot !== undefined || radarClient !== undefined))) && (
+              <Renderer
+                box={box}
+                placement={placement}
+                radarClient={radarClient}
+                radarSnapshot={radarSnapshot}
+                resolvedPreset={resolvedPreset}
+                settings={resolvedPreset.widgets[descriptor.id]}
+                snapshot={snapshot ?? ({} as ProgramSnapshot)}
+                widgetId={descriptor.id}
               />
-            ) : (
-              snapshot && (
-                <Renderer
-                  box={box}
-                  placement={placement}
-                  resolvedPreset={resolvedPreset}
-                  settings={resolvedPreset.widgets[descriptor.id]}
-                  snapshot={snapshot}
-                  widgetId={descriptor.id}
-                />
-              )
             )}
           </div>
         );

@@ -102,7 +102,9 @@ test.describe('HUD 编辑器', () => {
         onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null =
           null;
 
-        constructor(_url: string, protocol: string) {
+        readonly url: string;
+        constructor(url: string, protocol: string) {
+          this.url = url;
           this.protocol = protocol;
           MockWebSocket.instances.push(this);
           window.setTimeout(() => {
@@ -148,10 +150,12 @@ test.describe('HUD 编辑器', () => {
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_BASELINE);
     await expect(page.locator('.hud-console__source-status')).toContainText('实时数据可用');
     await expect(liveOption).not.toHaveAttribute('disabled');
@@ -161,10 +165,12 @@ test.describe('HUD 编辑器', () => {
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, STALE_CURRENT_LIVE_SNAPSHOT);
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
@@ -173,10 +179,12 @@ test.describe('HUD 编辑器', () => {
     await page.evaluate(() => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ disconnect(): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; disconnect(): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.disconnect();
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.disconnect();
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
@@ -187,10 +195,12 @@ test.describe('HUD 编辑器', () => {
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_BASELINE);
     await expect(liveOption).not.toHaveAttribute('disabled');
     await expect(sourceSelect).toHaveValue('current-live');
@@ -199,10 +209,12 @@ test.describe('HUD 编辑器', () => {
     await page.evaluate(() => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit('{not-json');
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit('{not-json');
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
