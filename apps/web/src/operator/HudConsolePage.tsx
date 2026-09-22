@@ -176,11 +176,20 @@ export function HudConsolePage() {
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
-  const liveRadarMap = radar.state === 'live' ? radar.current?.payload.mapName ?? null : null;
-  const unsupportedRadarMap =
-    liveRadarMap !== null && defaultMapGeometryProvider.resolve(liveRadarMap) === null
-      ? liveRadarMap
-      : null;
+  let unsupportedRadarMap: string | null = null;
+  if (radar.state === 'live') {
+    const mapName = radar.current?.payload.mapName;
+    if (mapName && defaultMapGeometryProvider.resolve(mapName) === null) {
+      unsupportedRadarMap = mapName;
+    }
+  }
+  const radarDiagnosticAttributes =
+    unsupportedRadarMap === null
+      ? {}
+      : {
+          'data-radar-diagnostic': 'unsupported-map',
+          'data-radar-unsupported-map': unsupportedRadarMap,
+        };
 
   const savedPreset = resourceFor(configDocument, 'preset', selectedPresetId) as
     HudPreset | undefined;
@@ -724,8 +733,7 @@ export function HudConsolePage() {
             <span
               className="hud-console__source-status"
               data-connection-state={program.state}
-              data-radar-diagnostic={unsupportedRadarMap === null ? undefined : 'unsupported-map'}
-              data-radar-unsupported-map={unsupportedRadarMap ?? undefined}
+              {...radarDiagnosticAttributes}
             >
               {connectionLabel(program.state)}
               {activePreviewSource === 'current-live' && unsupportedRadarMap !== null

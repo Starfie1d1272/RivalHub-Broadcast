@@ -123,7 +123,9 @@ describe('GameplayHud shared renderer boundary', () => {
       childrenOf(program) as Array<ReactElement<{ readonly 'data-hud-widget': string }>>
     ).find((child) => child?.props?.['data-hud-widget'] === 'radar');
     expect(wrapper).toBeDefined();
-    const radarRenderer = (wrapper?.props as { readonly children?: ReactElement }).children;
+    const radarRenderer = (wrapper?.props as { readonly children?: ReactElement }).children as
+      | ReactElement<RadarHudWidgetRendererProps>
+      | undefined;
     expect(radarRenderer?.props.radarSnapshot).toMatchObject({ channel: 'radar' });
   });
 
