@@ -90,7 +90,7 @@ describe('GameplayHud shared renderer boundary', () => {
 
     expect(program).toMatchObject({ props: { 'data-gameplay-hud': 'true' } });
     expect(childrenOf(program)).toHaveLength(9);
-    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(6);
+    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(5);
     expect(editor).toMatchObject({ props: { 'data-hud-editor-overlay': 'true' } });
     expect(childrenOf(editor)).toHaveLength(9);
     const preview = HudEditorOverlay({

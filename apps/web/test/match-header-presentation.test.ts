@@ -80,15 +80,15 @@ describe('Match Header presentation selector', () => {
 
   it('keeps objective phases free of donor countdown reconstruction', () => {
     const planted = presentation('bomb-planted');
-    expect(planted.phaseLabel).toBe('C4 已安装');
+    expect(planted.phaseLabel).toBe('PLANTED');
     expect(planted.clockText).toBeNull();
 
     const defusing = presentation('bomb-defusing');
-    expect(defusing.phaseLabel).toBe('正在拆弹');
+    expect(defusing.phaseLabel).toBe('DEFUSING');
     expect(defusing.clockText).toBeNull();
 
     const paused = presentation('series-paused');
-    expect(paused.phaseLabel).toBe('比赛暂停');
+    expect(paused.phaseLabel).toBe('TECH PAUSE');
     expect(paused.clockText).toBeNull();
   });
 
@@ -98,19 +98,19 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps).toHaveLength(5);
     expect(value.seriesMaps?.map((map) => map.statusText)).toEqual([
       '13–11',
-      '8–13',
-      '当前',
-      '未开始',
-      '未开始',
+      '13–8',
+      'CURRENT',
+      'PENDING',
+      'PENDING',
     ]);
     expect(value.seriesMaps?.[0]).toMatchObject({
-      selectionText: 'Northstar 选择',
+      selectionText: 'PICK',
       winner: 'a',
       winnerName: 'Northstar',
     });
     expect(value.seriesMaps?.[1]).toMatchObject({ winner: 'b', winnerName: 'Southpoint' });
     expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
-    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: '决胜图' });
+    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER' });
   });
 
   it('fails closed when a completed map has no known winner', () => {
@@ -138,7 +138,7 @@ describe('Match Header presentation selector', () => {
     expect(presentation('series-bo3-map1').seriesMaps?.[0]).toMatchObject({
       mapName: 'Ancient',
       status: 'current',
-      selectionText: 'Northstar 选择',
+      selectionText: 'PICK',
     });
     expect(
       presentation('series-not-played').seriesMaps?.some((map) => map.status === 'not_played'),

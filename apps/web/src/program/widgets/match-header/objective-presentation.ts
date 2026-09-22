@@ -35,7 +35,7 @@ export function buildObjectiveCenterPresentation(
 ): ObjectiveCenterPresentation {
   const phase = payload.clock?.phase;
   const bomb = payload.bomb;
-  const paused = phase === 'paused' || phase === 'timeout_ct' || phase === 'timeout_t';
+  const paused = phase === 'paused';
   const terminal =
     payload.round?.phase === 'over' ||
     phase === 'over' ||

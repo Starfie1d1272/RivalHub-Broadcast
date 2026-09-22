@@ -13,13 +13,13 @@ async function assertRailGeometry(page: Page) {
   for (const side of ['CT', 'T'] as const) {
     const rail = page.locator(`[data-player-rail="${side}"]`);
     await expect(rail).toHaveCount(1);
-    await expect(rail).toHaveCSS('width', '300px');
-    await expect(rail).toHaveCSS('height', '640px');
+    await expect(rail).toHaveCSS('width', '440px');
+    await expect(rail).toHaveCSS('height', '478px');
     await expect(rail.locator('[data-player-card], .player-rail__empty-card')).toHaveCount(5);
     const cardHeights = await rail
       .locator('[data-player-card], .player-rail__empty-card')
       .evaluateAll((cards) => cards.map((card) => card.getBoundingClientRect().height));
-    expect(cardHeights).toEqual([100, 100, 100, 100, 100]);
+    expect(cardHeights).toEqual([78, 78, 78, 78, 78]);
   }
 }
 
@@ -44,9 +44,9 @@ async function assertDeadCardGeometry(page: Page, side: 'CT' | 'T' = 'CT') {
       return { left: rect.left, top: rect.top };
     }),
   }));
-  expect(geometry.cardHeight).toBe(100);
+  expect(geometry.cardHeight).toBe(78);
   expect(geometry.spacerHeight).toBe(3);
-  expect(geometry.deadStatsHeight).toBe(34);
+  expect(geometry.deadStatsHeight).toBe(29);
   expect(geometry.kadColumns).toHaveLength(3);
   expect(
     Math.max(...geometry.kadColumns.map(({ top }) => top)) -

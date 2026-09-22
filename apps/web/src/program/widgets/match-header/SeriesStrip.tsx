@@ -20,12 +20,6 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
       className="match-header match-header__series-strip"
       data-match-header-widget="series-strip"
     >
-      <div className="match-header__series-strip-heading">
-        <span>系列赛</span>
-        <span>
-          {presentation.bestOfLabel ?? 'BO —'} {presentation.seriesScoreText ?? '—'}
-        </span>
-      </div>
       <div className="match-header__series-maps" role="list">
         {presentation.seriesMaps.map((map) => (
           <div
@@ -41,6 +35,17 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
             <span className="match-header__series-map-name" title={map.mapName}>
               {map.mapName}
             </span>
+            {map.pickerLogoUrl ? (
+              <img alt="" className="match-header__series-map-picker" src={map.pickerLogoUrl} />
+            ) : null}
+            {map.startSide ? (
+              <span
+                aria-label={`开始方 ${map.startSide}`}
+                className={`match-header__series-map-start-side match-header__series-map-start-side--${map.startSide}`}
+              >
+                {map.startSide}
+              </span>
+            ) : null}
             <span className="match-header__series-map-selection" title={map.selectionText}>
               {map.selectionText}
             </span>
@@ -57,7 +62,7 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
                     {map.winnerName}
                   </span>
                   <span className="match-header__series-map-winner-score">{map.statusText}</span>
-                  <span aria-label="获胜" className="match-header__series-map-winner-mark">
+                  <span aria-label="WIN" className="match-header__series-map-winner-mark">
                     ✓
                   </span>
                 </>

@@ -56,16 +56,13 @@ describe('Focused media and combat presentation lifecycle', () => {
     render({ ...player, avatarUrl: null });
     expect(media()).toBeNull();
   });
-  it('hides team logo on error while preserving team and player identity', () => {
+  it('keeps the fixed avatar slot while removing team identity duplication', () => {
     const container = host();
     const player = buildFocusedPlayerPresentation(getProgramFixture('focused-long-name')!.payload)!;
     act(() => root!.render(<FocusedPlayerCard player={player} />));
-    const image = container.querySelector<HTMLImageElement>('.focused-player__team-logo')!;
-    act(() => {
-      image.dispatchEvent(new Event('error'));
-    });
+    expect(container.querySelector('[data-avatar-slot="true"]')).not.toBeNull();
     expect(container.querySelector('.focused-player__team-logo')).toBeNull();
-    expect(container.textContent).toContain(player.teamName);
+    expect(container.textContent).not.toContain(player.teamName);
     expect(container.textContent).toContain(player.displayName);
   });
   it('clears weapon/ammo on missing evidence or death without retaining old icon', () => {

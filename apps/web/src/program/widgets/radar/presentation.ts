@@ -110,6 +110,14 @@ export function onLayer(point: RadarProjectedPosition, layer: RadarLayer): boole
   if (layer === 'unknown') return false;
   return point.layer === layer || point.layer === 'single';
 }
+export function isMultiLayerGeometry(geometry: MapGeometry): boolean {
+  return geometry.layerRule.kind !== 'single';
+}
+
+export function layerOpacity(point: RadarProjectedPosition, primary: RadarLayer): number {
+  if (point.layer === 'unknown' || primary === 'unknown') return 0.76;
+  return point.layer === primary ? 0.88 : 0.62;
+}
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;
   return d ? (Math.atan2(d.y, d.x) * 180) / Math.PI : 0;
@@ -245,7 +253,6 @@ export class RadarPresentation {
     if (
       reconnect ||
       this.boundary !== boundary ||
-      this.layer !== layer ||
       (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs)
     )
       this.reset();
@@ -263,7 +270,7 @@ export class RadarPresentation {
     const currentPlayers = new Set<string>();
     for (const source of snapshot.payload.players.slice(0, RADAR_PRESENTATION.maxPlayers)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || !onLayer(point, layer)) continue;
+      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourcePlayerId;
       currentPlayers.add(id);
       const old = this.players.get(id);
@@ -300,7 +307,7 @@ export class RadarPresentation {
     const currentGrenades = new Set<string>();
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || !onLayer(point, layer)) continue;
+      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourceEntityId;
       currentGrenades.add(id);
       this.exits.delete(id);

@@ -244,3 +244,99 @@
     opacity: 1;
   }
 }
+
+/* Issue #66 focused player: fixed 360×176 card with a retained 64px avatar slot. */
+.focused-player {
+  box-sizing: border-box;
+  display: grid;
+  grid-template-columns: 64px 148px 108px;
+  grid-template-rows: 42px 82px 52px;
+  height: 176px;
+  margin: 0;
+  width: 360px;
+}
+.focused-player[data-avatar='true'] {
+  grid-template-columns: 64px 148px 108px;
+  width: 360px;
+}
+.focused-player__media {
+  align-items: center;
+  display: flex !important;
+  grid-column: 1;
+  grid-row: 1 / -1;
+  height: 64px;
+  justify-content: center;
+  margin: 8px 0 0;
+  width: 64px;
+}
+.focused-player__media img {
+  height: 64px;
+  object-fit: cover;
+  width: 64px;
+}
+.focused-player__media .focused-player__slot {
+  align-items: center;
+  display: flex;
+  font-size: 11px;
+  height: 64px;
+  justify-content: center;
+  position: absolute;
+  width: 64px;
+}
+.focused-player__identity {
+  box-sizing: border-box;
+  grid-column: 2 / -1;
+  grid-row: 1;
+  padding: 5px 8px 0;
+}
+.focused-player__name-row {
+  height: 20px;
+}
+.focused-player__name-row strong {
+  font-size: 16px;
+}
+.focused-player__metrics {
+  font-size: 11px;
+  height: 16px;
+}
+.focused-player__bottom,
+.focused-player__team,
+.focused-player__utility {
+  display: none;
+}
+.focused-player__combat {
+  box-sizing: border-box;
+  display: grid;
+  grid-column: 2 / -1;
+  grid-row: 2 / -1;
+  grid-template-columns: 148px 108px;
+  grid-template-rows: 42px 92px;
+  padding: 0 8px 0 8px;
+}
+.focused-player__vitals {
+  grid-column: 1 / -1;
+  grid-row: 1;
+}
+.focused-player__vitals > strong {
+  font-size: 24px;
+}
+.focused-player__active {
+  grid-column: 1;
+  grid-row: 2;
+}
+.focused-player__active .focused-player__icon {
+  height: 30px;
+  max-width: 140px;
+  width: 140px;
+}
+.focused-player__ammo {
+  grid-column: 2;
+  grid-row: 2;
+}
+.focused-player__ammo > strong {
+  font-size: 24px;
+}
+.focused-player__dead {
+  grid-column: 1 / -1;
+  grid-row: 1 / -1;
+}

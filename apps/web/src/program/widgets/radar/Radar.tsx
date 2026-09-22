@@ -9,8 +9,9 @@ import {
   RADAR_PRESENTATION,
   SMOKE_PRESENTATION_DURATION_SECONDS,
   grenadeIcon,
+  isMultiLayerGeometry,
   isActiveSmoke,
-  onLayer,
+  layerOpacity,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
@@ -104,13 +105,23 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       };
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
-      const map = geometry ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
+      const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
+      const layerRect = (layer: 'upper' | 'lower' | 'single' | 'unknown') =>
+        multiLayer
+          ? { x: 10, y: layer === 'lower' ? 510 : 10, width: 980, height: 480 }
+          : { x: 0, y: 0, width: 1000, height: 1000 };
+      const pointAt = (point: { x: number; y: number; layer: string }) => {
+        const rect = layerRect(point.layer as 'upper' | 'lower' | 'single' | 'unknown');
+        return { x: rect.x + point.x * rect.width, y: rect.y + point.y * rect.height };
+      };
+      const map = geometry && !multiLayer ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
       const background = map ? imageFor(map.outputPath) : null;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
+      element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
       element.dataset.radarPlayers = String(model.players.size);
       element.dataset.radarTrails = String(
         [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
@@ -124,6 +135,16 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         ctx.globalAlpha = 0.85;
         ctx.drawImage(background, 0, 0, 1000, 1000);
         ctx.globalAlpha = 1;
+      } else if (geometry && multiLayer) {
+        for (const floor of ['upper', 'lower'] as const) {
+          const asset = getRadarMapAsset(geometry.mapKey, floor);
+          const image = asset ? imageFor(asset.outputPath) : null;
+          if (!image) continue;
+          const rect = layerRect(floor);
+          ctx.globalAlpha = floor === model.layer ? 0.88 : model.layer === 'unknown' ? 0.76 : 0.62;
+          ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+        }
+        ctx.globalAlpha = 1;
       }
       if (geometry && payload) {
         // Effects are behind every player. Flame z is projected independently.
@@ -135,14 +156,20 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           for (const flame of source.flames) {
             if (++flameCount > RADAR_PRESENTATION.maxFlames) break;
             const p = projectWorldPosition(flame.position, geometry);
-            if (p && onLayer(p, model.layer))
-              circle(p.x * 1000, p.y * 1000, 9, '#e99b4680', sideColor(side), 2);
+            if (p && !p.outOfBounds) {
+              const point = pointAt(p);
+              ctx.globalAlpha = layerOpacity(p, model.layer);
+              circle(point.x, point.y, 9, '#e99b4680', sideColor(side), 2);
+              ctx.globalAlpha = 1;
+            }
           }
         }
         for (const marker of model.grenades.values()) {
           if (!isActiveSmoke(marker.source)) continue;
-          const x = marker.target.x * 1000;
-          const y = marker.target.y * 1000;
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          const x = point.x;
+          const y = point.y;
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
           const radius = (projectWorldRadius(144, geometry) ?? 0) * 1000;
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
@@ -169,6 +196,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.lineWidth = 5;
             ctx.stroke();
           }
+          ctx.globalAlpha = 1;
         }
         const drawTrail = (
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
@@ -179,7 +207,15 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.lineWidth = 3;
           ctx.beginPath();
           marker.trail.forEach((p, i) =>
-            i ? ctx.lineTo(p.x * 1000, p.y * 1000) : ctx.moveTo(p.x * 1000, p.y * 1000),
+            i
+              ? ctx.lineTo(
+                  pointAt({ ...p, layer: marker.target.layer }).x,
+                  pointAt({ ...p, layer: marker.target.layer }).y,
+                )
+              : ctx.moveTo(
+                  pointAt({ ...p, layer: marker.target.layer }).x,
+                  pointAt({ ...p, layer: marker.target.layer }).y,
+                ),
           );
           ctx.stroke();
           ctx.globalAlpha = 1;
@@ -188,9 +224,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
           drawTrail(exit.marker, alpha);
           ctx.globalAlpha = alpha;
+          const exitPoint = pointAt(exit.marker.target);
           circle(
-            exit.marker.target.x * 1000,
-            exit.marker.target.y * 1000,
+            exitPoint.x,
+            exitPoint.y,
             15 + (1 - alpha) * 18,
             '#ffffff10',
             sideColor(exit.marker.side),
@@ -201,9 +238,11 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         for (const marker of model.grenades.values()) {
           if (!marker.airborne) continue;
           drawTrail(marker, 1);
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
-          circle(x, y, 13, '#142028', sideColor(marker.side), 3);
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          const x = point.x;
+          const y = point.y;
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          circle(x, y, 20, '#142028', sideColor(marker.side), 3);
           const url = grenadeIcon(marker.source.kind);
           const icon = url && imageFor(url);
           if (icon) ctx.drawImage(icon, x - 10, y - 10, 20, 20);
@@ -211,6 +250,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.fillStyle = '#ecedef';
             ctx.fillRect(x - 4, y - 4, 8, 8);
           }
+          ctx.globalAlpha = 1;
         }
         const bomb = payload.bomb;
         const bombAsset = getCs2Asset('objective.c4');
@@ -223,29 +263,33 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           model.bombVisible(now)
         ) {
           const p = projectWorldPosition(bomb.position, geometry);
-          if (p && onLayer(p, model.layer)) {
-            const x = p.x * 1000;
-            const y = p.y * 1000;
+          if (p && !p.outOfBounds) {
+            const point = pointAt(p);
+            const x = point.x;
+            const y = point.y;
+            ctx.globalAlpha = layerOpacity(p, model.layer);
             circle(
               x,
               y,
-              22,
+              25,
               '#211c16',
               bomb.state === 'defusing' || bomb.state === 'defused' ? '#89d7b3' : '#f0ae6d',
               5,
             );
             if (bombIcon) ctx.drawImage(bombIcon, x - 13, y - 13, 26, 26);
+            ctx.globalAlpha = 1;
           }
         }
         for (const marker of model.players.values()) {
           const p = marker.source;
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          const x = point.x;
+          const y = point.y;
           const alive = p.lifeState === 'alive';
-          ctx.globalAlpha = alive ? 1 : 0.4;
+          ctx.globalAlpha = (alive ? 1 : 0.4) * layerOpacity(marker.target, model.layer);
           const color = sideColor(p.side);
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
-            circle(x, y, 26, '#00000000', '#ffffff', 5);
+            circle(x, y, 34, '#00000000', '#ffffff', 5);
           if (alive && p.forward) {
             ctx.save();
             ctx.translate(x, y);
@@ -263,7 +307,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
-          circle(x, y, 18, color, '#10171f', 3);
+          circle(x, y, 26, color, '#10171f', 3);
           if (p.lifeState === 'dead') {
             ctx.strokeStyle = '#10171f';
             ctx.lineWidth = 5;
@@ -294,22 +338,12 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.fillRect(x + 10, y + 10, 22, 22);
             if (bombIcon) ctx.drawImage(bombIcon, x + 11, y + 11, 20, 20);
           }
-          if (model.layer === 'unknown' && marker.target.layer !== 'single') {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '20px sans-serif';
-            ctx.fillText(marker.target.layer === 'upper' ? '↑' : '↓', x, y - 32);
-          }
           ctx.globalAlpha = 1;
         }
       }
       ctx.restore();
       if (!payload) {
         // Safe fail-closed presentation without disruptive center placeholder
-      } else if (model.layer === 'upper' || model.layer === 'lower') {
-        ctx.fillStyle = '#d8e3eb';
-        ctx.font = '27px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(model.layer === 'upper' ? '上层' : '下层', 25, 45);
       }
       frame = requestAnimationFrame(render);
     };

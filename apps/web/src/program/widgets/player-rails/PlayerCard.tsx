@@ -112,6 +112,9 @@ export function PlayerCard({ player }: { readonly player: PlayerCardPresentation
       data-observed={player.observed}
       data-player-card={player.sourcePlayerId}
     >
+      <div className="player-rail__avatar" aria-hidden="true">
+        {player.avatarUrl ? <img alt="" src={player.avatarUrl} /> : <span />}
+      </div>
       <div className="player-rail__identity">
         <span className="player-rail__slot">{player.observerSlot ?? '—'}</span>
         <span className="player-rail__name" title={player.displayName ?? undefined}>

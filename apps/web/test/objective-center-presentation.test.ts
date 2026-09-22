@@ -30,7 +30,7 @@ describe('objective center real-first state and edge matrix', () => {
       clock: { phase: 'bomb' as const, endsInSeconds: 8 },
     };
     expect(buildMatchHeaderPresentation(p)).toMatchObject({
-      phaseLabel: '回合结束',
+      phaseLabel: 'ROUND OVER',
       clockText: null,
       objective: { mode: 'normal' },
     });
@@ -40,7 +40,7 @@ describe('objective center real-first state and edge matrix', () => {
     ['real-planted', 'planted'],
     ['real-defusing', 'defusing'],
     ['real-paused', 'paused'],
-    ['real-timeout-ct', 'paused'],
+    ['real-timeout-ct', 'normal'],
     ['real-defused', 'normal'],
     ['real-exploded', 'normal'],
   ] as const)('%s resolves %s', (id, mode) =>
@@ -93,11 +93,19 @@ describe('objective center real-first state and edge matrix', () => {
       action: null,
     }),
   );
-  it.each(['paused', 'timeout_ct', 'timeout_t'] as const)('%s overrides objective', (phase) =>
+  it.each(['paused'] as const)('%s overrides objective', (phase) =>
     expect(build({ ...bomb('planted'), clock: { phase, endsInSeconds: 10 } })).toMatchObject({
       mode: 'paused',
       aliveCount: null,
     }),
+  );
+  it.each(['timeout_ct', 'timeout_t'] as const)(
+    '%s keeps objective state while timeout owns center',
+    (phase) =>
+      expect(build({ ...bomb('planted'), clock: { phase, endsInSeconds: 10 } })).toMatchObject({
+        mode: 'planted',
+        aliveCount: null,
+      }),
   );
   it('requires complete 5+5 current evidence and entrant orientation', () => {
     expect(build(base).aliveCount).toBeNull();

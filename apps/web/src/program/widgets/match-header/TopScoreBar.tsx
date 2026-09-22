@@ -15,15 +15,14 @@ function Team({ team }: { readonly team: MatchHeaderTeamPresentation }) {
       className={`match-header__team match-header__team--${team.key}`}
       data-team={team.key}
       data-side={team.side}
+      aria-label={team.name}
     >
       <div className="match-header__team-identity">
         {team.logoUrl ? (
-          <img alt={`${team.name} 标志`} className="match-header__team-logo" src={team.logoUrl} />
-        ) : null}
-        <span className="match-header__team-name" title={team.name}>
-          {team.name}
-        </span>
-        <span className="match-header__side-badge">{team.side ?? '—'}</span>
+          <img alt="" className="match-header__team-logo" src={team.logoUrl} />
+        ) : (
+          <span aria-hidden="true" className="match-header__team-logo-placeholder" />
+        )}
       </div>
       <div className="match-header__score-stack">
         <strong className="match-header__map-score" data-score={team.key}>
@@ -44,7 +43,11 @@ function Team({ team }: { readonly team: MatchHeaderTeamPresentation }) {
 export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
   const p = buildMatchHeaderPresentation(snapshot.payload);
   const timeout = p.timeoutPanel;
-  const objective = p.objective.mode !== 'normal' && p.objective.mode !== 'paused';
+  const objective =
+    p.objective.mode !== 'normal' &&
+    p.objective.mode !== 'paused' &&
+    p.clockTone !== 'timeout' &&
+    p.clockTone !== 'paused';
   return (
     <section
       aria-label="比赛头部"
@@ -60,26 +63,6 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
         >
           {objective ? (
             <ObjectiveCenter presentation={p} />
-          ) : timeout !== null ? (
-            <div
-              className="match-header__timeout-panel"
-              data-timeout-owner={timeout.owner ?? 'unknown'}
-              data-timeout-panel="true"
-              aria-label="战术暂停"
-            >
-              <strong className="match-header__timeout-label">战术暂停</strong>
-              {timeout.ownerName === null ? null : (
-                <span className="match-header__timeout-owner">{timeout.ownerName}</span>
-              )}
-              <div className="match-header__timeout-facts">
-                {timeout.remaining === null ? null : (
-                  <span data-timeout-remaining>剩余 {timeout.remaining} 次</span>
-                )}
-                {timeout.clockText === null ? null : (
-                  <strong data-timeout-countdown>{timeout.clockText}</strong>
-                )}
-              </div>
-            </div>
           ) : (
             <>
               <div className="match-header__round-meta">
@@ -98,6 +81,8 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
           <ObjectiveFuse center={p.objective} />
         ) : null}
       </div>
+      {timeout?.owner === 'a' ? <TimeoutPanel timeout={timeout} side="a" /> : null}
+      {timeout?.owner === 'b' ? <TimeoutPanel timeout={timeout} side="b" /> : null}
       {p.objective.aliveCount === null ? null : (
         <div
           className="match-header__alive-matchup"
@@ -109,5 +94,26 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
         </div>
       )}
     </section>
+  );
+}
+
+function TimeoutPanel({
+  timeout,
+  side,
+}: {
+  readonly timeout: NonNullable<ReturnType<typeof buildMatchHeaderPresentation>['timeoutPanel']>;
+  readonly side: 'a' | 'b';
+}) {
+  return (
+    <div
+      className={`match-header__timeout-panel match-header__timeout-panel--${side}`}
+      data-timeout-owner={side}
+      data-timeout-panel="true"
+      aria-label="TACTICAL TIMEOUT"
+    >
+      <strong className="match-header__timeout-label">
+        TACTICAL TIMEOUT · {timeout.remaining ?? '—'} LEFT
+      </strong>
+    </div>
   );
 }

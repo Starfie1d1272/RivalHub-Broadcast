@@ -31,6 +31,8 @@ export interface MatchHeaderSeriesMapPresentation {
   readonly mapOrder: number;
   readonly mapName: string;
   readonly selectionText: string;
+  readonly pickerLogoUrl: string | null;
+  readonly startSide: MatchHeaderSide | null;
   readonly status: 'pending' | 'current' | 'completed' | 'not_played';
   readonly statusText: string;
   readonly finalScore: { readonly a: number; readonly b: number } | null;
@@ -71,10 +73,10 @@ export interface MatchHeaderPresentation {
 }
 
 const MAP_STATUS_LABELS = {
-  pending: '未开始',
-  current: '当前',
-  completed: '已结束',
-  not_played: '未进行',
+  pending: 'PENDING',
+  current: 'CURRENT',
+  completed: 'COMPLETED',
+  not_played: 'NOT PLAYED',
 } as const;
 
 function nullableNumber(value: number | null | undefined): number | null {
@@ -172,11 +174,11 @@ function selectionText(
   selection: NonNullable<ProgramPayload['series']>['maps'][number]['selection'],
   entrants: NonNullable<ProgramPayload['series']>['entrants'],
 ): string {
-  if (selection.kind === 'decider') return '决胜图';
+  if (selection.kind === 'decider') return 'DECIDER';
   if (selection.kind === 'unknown') return '';
   if (selection.kind !== 'pick') return '';
-  if (selection.entryId === entrants.a.entryId) return `${entrants.a.name} 选择`;
-  if (selection.entryId === entrants.b.entryId) return `${entrants.b.name} 选择`;
+  if (selection.entryId === entrants.a.entryId) return 'PICK';
+  if (selection.entryId === entrants.b.entryId) return 'PICK';
   return '';
 }
 
@@ -190,15 +192,30 @@ function buildSeriesMaps(
         : map.winnerEntryId === series.entrants.b.entryId
           ? 'b'
           : null;
+    const picker =
+      map.selection.kind === 'pick'
+        ? map.selection.entryId === series.entrants.a.entryId
+          ? 'a'
+          : map.selection.entryId === series.entrants.b.entryId
+            ? 'b'
+            : null
+        : null;
+    const score =
+      map.status === 'completed' && map.finalScore !== null && picker !== null
+        ? picker === 'a'
+          ? `${map.finalScore.a}–${map.finalScore.b}`
+          : `${map.finalScore.b}–${map.finalScore.a}`
+        : map.status === 'completed' && map.finalScore !== null
+          ? `${map.finalScore.a}–${map.finalScore.b}`
+          : MAP_STATUS_LABELS[map.status];
     return {
       mapOrder: map.mapOrder,
       mapName: displayMapName(map.mapName) ?? map.mapName,
       selectionText: selectionText(map.selection, series.entrants),
+      pickerLogoUrl: picker === null ? null : series.entrants[picker].logoUrl,
+      startSide: map.teamAStartSide,
       status: map.status,
-      statusText:
-        map.status === 'completed' && map.finalScore !== null
-          ? `${map.finalScore.a}–${map.finalScore.b}`
-          : MAP_STATUS_LABELS[map.status],
+      statusText: score,
       finalScore: map.finalScore,
       winner,
       winnerName:
@@ -287,43 +304,43 @@ function clockPresentation(
       payload.bomb?.state === 'defused' ||
       payload.bomb?.state === 'exploded')
   ) {
-    return { phaseLabel: '回合结束', clockText: null, clockTone: 'normal', timeoutPanel: null };
+    return { phaseLabel: 'ROUND OVER', clockText: null, clockTone: 'normal', timeoutPanel: null };
   }
 
   switch (phase) {
     case 'warmup':
-      return { phaseLabel: '热身', clockText, clockTone: 'normal', timeoutPanel };
+      return { phaseLabel: 'WARMUP', clockText, clockTone: 'normal', timeoutPanel };
     case 'freezetime':
-      return { phaseLabel: '准备中', clockText, clockTone: 'normal', timeoutPanel };
+      return { phaseLabel: 'FREEZETIME', clockText, clockTone: 'normal', timeoutPanel };
     case 'live':
-      return { phaseLabel: '进行中', clockText, clockTone: 'normal', timeoutPanel };
+      return { phaseLabel: 'LIVE', clockText, clockTone: 'normal', timeoutPanel };
     case 'timeout_ct':
     case 'timeout_t':
-      return { phaseLabel: '战术暂停', clockText, clockTone: 'timeout', timeoutPanel };
+      return { phaseLabel: 'TACTICAL TIMEOUT', clockText, clockTone: 'timeout', timeoutPanel };
     case 'paused':
       return {
-        phaseLabel: '比赛暂停',
+        phaseLabel: 'TECH PAUSE',
         clockText: null,
         clockTone: 'paused',
         timeoutPanel,
       };
     case 'bomb':
       return {
-        phaseLabel: 'C4 已安装',
+        phaseLabel: 'PLANTED',
         clockText: null,
         clockTone: 'objective',
         timeoutPanel,
       };
     case 'defuse':
       return {
-        phaseLabel: '正在拆弹',
+        phaseLabel: 'DEFUSING',
         clockText: null,
         clockTone: 'objective',
         timeoutPanel,
       };
     case 'over':
       return {
-        phaseLabel: '回合结束',
+        phaseLabel: 'ROUND OVER',
         clockText: null,
         clockTone: 'normal',
         timeoutPanel,
@@ -331,7 +348,7 @@ function clockPresentation(
     case 'unknown':
     case null:
       return {
-        phaseLabel: '状态未知',
+        phaseLabel: 'UNKNOWN',
         clockText: null,
         clockTone: 'unknown',
         timeoutPanel,
@@ -372,8 +389,8 @@ export function buildMatchHeaderPresentation(payload: ProgramPayload): MatchHead
       payload.map.roundNumber <= 0
         ? null
         : payload.map.roundNumber <= 24
-          ? `第 ${payload.map.roundNumber} 回合`
-          : `加时 · 第 ${payload.map.roundNumber} 回合`,
+          ? `ROUND ${payload.map.roundNumber}`
+          : `OVERTIME · ROUND ${payload.map.roundNumber}`,
     ...clock,
     seriesMaps: series === null ? null : buildSeriesMaps(series),
     roundHistory: buildRoundHistory(series),

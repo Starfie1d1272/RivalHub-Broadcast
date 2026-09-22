@@ -367,3 +367,234 @@
   border-style: dashed;
   opacity: 0.35;
 }
+
+/* Issue #66 rails: fixed 440×478 envelope, 48 summary + 28 header + 5×78 cards. */
+.player-rail {
+  box-sizing: border-box;
+  gap: 0;
+  height: 478px;
+  width: 440px;
+}
+.player-rail__summary {
+  box-sizing: border-box;
+  display: grid;
+  flex: 0 0 48px;
+  gap: 0;
+  grid-template-rows: 24px 24px;
+  height: 48px;
+  opacity: 1;
+  padding: 0;
+  transform: none;
+}
+.player-rail__summary:not(.is-visible) {
+  visibility: hidden;
+}
+.player-rail__economy,
+.player-rail__utility {
+  background: color-mix(in srgb, var(--rh-hud-surface-primary) 88%, transparent);
+  border: 1px solid color-mix(in srgb, var(--rh-hud-text-primary) 18%, transparent);
+  border-radius: 0;
+  box-sizing: border-box;
+  height: 24px;
+  min-height: 24px;
+  padding: 0 8px;
+}
+.player-rail__economy {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+.player-rail__economy div {
+  flex-direction: row;
+  gap: 4px;
+  justify-content: space-between;
+}
+.player-rail__economy span,
+.player-rail__utility > span {
+  font-size: 8px;
+}
+.player-rail__economy strong {
+  font-size: 11px;
+}
+.player-rail__utility {
+  gap: 0;
+  padding: 0;
+}
+.player-rail__utility > span {
+  display: none;
+}
+.player-rail__utility-values {
+  display: grid;
+  flex: 0 0 100%;
+  gap: 0;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  width: 100%;
+}
+.player-rail__utility-item {
+  justify-content: center;
+  width: auto;
+}
+.player-rail__utility-item .player-rail__icon {
+  height: 16px;
+  width: 16px;
+}
+.player-rail__header {
+  align-items: center;
+  box-sizing: border-box;
+  display: flex;
+  flex: 0 0 28px;
+  gap: 8px;
+  height: 28px;
+  justify-content: flex-start;
+  padding: 0 8px;
+  width: 440px;
+}
+.player-rail--right .player-rail__header {
+  flex-direction: row-reverse;
+  justify-content: flex-start;
+}
+.player-rail__header-side {
+  color: var(--rh-hud-text-muted);
+  font-size: 10px;
+  font-weight: 800;
+}
+.player-rail__header strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.player-rail__players {
+  flex: 0 0 402px;
+  gap: 3px;
+  grid-template-rows: repeat(5, 78px);
+  height: 402px;
+}
+.player-rail__card,
+.player-rail__empty-card {
+  border-radius: 0;
+  box-sizing: border-box;
+  height: 78px;
+  width: 440px;
+}
+.player-rail__card {
+  grid-template-rows: 26px 3px 29px 20px;
+}
+.player-rail__card.is-observed {
+  border-width: 2px;
+  box-shadow: none;
+}
+.player-rail__card--dead {
+  border-color: color-mix(in srgb, var(--rh-hud-text-muted) 28%, transparent);
+}
+.player-rail__avatar {
+  align-items: center;
+  background: color-mix(in srgb, var(--rh-hud-surface-strong) 70%, transparent);
+  display: flex;
+  height: 78px;
+  justify-content: center;
+  left: 0;
+  overflow: hidden;
+  position: absolute;
+  top: 0;
+  width: 78px;
+}
+.player-rail--right .player-rail__avatar {
+  left: auto;
+  right: 0;
+}
+.player-rail__avatar img {
+  height: 100%;
+  object-fit: cover;
+  width: 100%;
+}
+.player-rail__avatar span {
+  border: 2px solid var(--rh-hud-text-muted);
+  border-radius: 50%;
+  height: 28px;
+  opacity: 0.55;
+  width: 28px;
+}
+.player-rail__identity,
+.player-rail__combat,
+.player-rail__dead-stats,
+.player-rail__bottom {
+  padding-left: 86px;
+  padding-right: 8px;
+}
+.player-rail--right .player-rail__identity,
+.player-rail--right .player-rail__combat,
+.player-rail--right .player-rail__dead-stats,
+.player-rail--right .player-rail__bottom {
+  padding-left: 8px;
+  padding-right: 86px;
+}
+.player-rail__identity {
+  gap: 6px;
+}
+.player-rail__slot {
+  flex-basis: 24px;
+  font-size: 10px;
+}
+.player-rail__name {
+  font-size: 12px;
+}
+.player-rail__health-value {
+  font-size: 16px;
+}
+.player-rail__combat {
+  gap: 4px;
+}
+.player-rail__weapons {
+  display: grid;
+  flex: 0 0 88px;
+  gap: 4px;
+  grid-template-columns: 82px;
+}
+.player-rail__icon.is-primary {
+  height: 22px;
+  max-width: 82px;
+  width: 82px;
+}
+.player-rail__icon.is-secondary {
+  height: 14px;
+  max-width: 32px;
+  width: 32px;
+}
+.player-rail__equipment {
+  flex: 0 0 82px;
+  gap: 3px;
+}
+.player-rail__equipment .player-rail__icon {
+  height: 18px;
+  width: 18px;
+}
+.player-rail__utility-icons {
+  flex: 0 0 140px;
+  gap: 5px;
+  justify-content: space-between;
+}
+.player-rail__utility-icons .player-rail__utility-item {
+  width: 24px;
+}
+.player-rail__utility-icons .player-rail__utility-item .player-rail__icon {
+  height: 16px;
+  width: 18px;
+}
+.player-rail__bottom {
+  gap: 8px;
+}
+.player-rail__dead-stats {
+  gap: 10px;
+}
+.player-rail__card--dead .player-rail__avatar img {
+  filter: grayscale(1);
+  opacity: 0.7;
+}
+.player-rail__card--dead .player-rail__health-spacer {
+  background: transparent;
+}
+.player-rail__card--dead .player-rail__dead-label {
+  color: var(--rh-hud-text-muted);
+}
+.player-rail__card--dead .player-rail__dead-stats::after {
+  content: 'DMG';
+}

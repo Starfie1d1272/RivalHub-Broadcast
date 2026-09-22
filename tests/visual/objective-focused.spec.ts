@@ -35,12 +35,12 @@ for (const id of cases)
     if (id === 'objective-stale-edge')
       await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
     else {
-      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('width', '620px');
-      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('height', '132px');
+      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('width', '360px');
+      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('height', '176px');
       if (id === 'focused-avatar') {
         await expect(page.locator('[data-focused-player]')).toHaveAttribute('data-avatar', 'true');
-        await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '620px');
-      } else await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '516px');
+        await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '360px');
+      } else await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '360px');
       if (await page.locator('[data-objective-mode]').count())
         await expect(page.locator('[data-objective-mode]')).not.toContainText(/\d+\.\d/);
       if (id === 'real-defusing' || id === 'objective-dual-progress-edge')

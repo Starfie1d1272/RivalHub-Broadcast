@@ -375,8 +375,8 @@ export interface HudWidgetBox {
 
 export const HUD_WIDGET_LABELS: Record<HudWidgetId, string> = {
   'top-score-bar': '顶部比分条',
-  'team-ct-rail': 'CT 选手栏',
-  'team-t-rail': 'T 选手栏',
+  'team-ct-rail': '左选手栏',
+  'team-t-rail': '右选手栏',
   radar: '雷达',
   'focused-player': '当前观察选手',
   'series-strip': '系列赛信息',

@@ -43,7 +43,7 @@ export function ObjectiveCenter({
       data-danger={c.danger}
       data-timing-available={c.fuse !== null}
       aria-label={
-        c.mode === 'planting' ? '正在安装 C4' : c.mode === 'defusing' ? '正在拆弹' : 'C4 已安装'
+        c.mode === 'planting' ? 'PLANTING' : c.mode === 'defusing' ? 'DEFUSING' : 'PLANTED'
       }
     >
       {c.mode === 'defusing' ? (
@@ -71,7 +71,7 @@ export function ObjectiveCenter({
             </svg>
           </div>
           <span className="objective-center__caption" title={c.playerName ?? undefined}>
-            {c.playerName ?? '拆弹中'}
+            {c.playerName ?? 'DEFUSING'}
           </span>
         </>
       ) : (
@@ -93,7 +93,7 @@ export function ObjectiveCenter({
           </div>
           {c.stateOnly || (c.mode === 'planting' && c.action === null) ? (
             <span className="objective-center__caption">
-              {c.mode === 'planting' ? '安装中' : '已安装'}
+              {c.mode === 'planting' ? 'PLANTING' : 'PLANTED'}
             </span>
           ) : null}
         </>

@@ -24,20 +24,6 @@ function Icon({
     />
   );
 }
-function TeamLogo({ url }: { readonly url: string }) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  return failed ? null : (
-    <img
-      className="focused-player__team-logo"
-      src={url}
-      alt="队伍标志"
-      style={{ display: loaded ? undefined : 'none' }}
-      onLoad={() => setLoaded(true)}
-      onError={() => setFailed(true)}
-    />
-  );
-}
 export function FocusedPlayerCard({ player }: { readonly player: FocusedPlayerPresentation }) {
   return <Card key={`${player.sourcePlayerId}:${player.avatarUrl ?? ''}`} player={player} />;
 }
@@ -45,7 +31,6 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const showAvatar = p.avatarUrl !== null && avatarLoaded && !avatarFailed;
-  const activeKey = p.activeItem?.asset?.canonicalKey;
   return (
     <article
       aria-label="当前观察选手"
@@ -55,22 +40,20 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
       data-side={p.side}
       data-dead={p.dead}
     >
-      {p.avatarUrl === null || avatarFailed ? null : (
-        <div className="focused-player__media" style={{ display: showAvatar ? undefined : 'none' }}>
+      <div className="focused-player__media" data-avatar-slot="true">
+        {p.avatarUrl === null || avatarFailed ? null : (
           <img
             src={p.avatarUrl}
             alt={`${p.displayName} 头像`}
+            style={{ display: showAvatar ? undefined : 'none' }}
             onLoad={() => setAvatarLoaded(true)}
             onError={() => setAvatarFailed(true)}
           />
-          <span className="focused-player__slot">{p.observerSlot ?? '—'}</span>
-        </div>
-      )}
+        )}
+        <span className="focused-player__slot">{p.observerSlot ?? '—'}</span>
+      </div>
       <div className="focused-player__identity">
         <div className="focused-player__name-row">
-          {showAvatar ? null : (
-            <span className="focused-player__slot">{p.observerSlot ?? '—'}</span>
-          )}
           <strong title={p.displayName}>{p.displayName}</strong>
         </div>
         <div className="focused-player__metrics">
@@ -90,25 +73,6 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
             <small>ADR</small>
             {p.completedAdr === null ? '—' : Number(p.completedAdr.toFixed(1))}
           </span>
-        </div>
-        <div className="focused-player__bottom">
-          <div className="focused-player__team">
-            {p.teamLogoUrl === null ? null : <TeamLogo key={p.teamLogoUrl} url={p.teamLogoUrl} />}
-            <span title={p.teamName ?? undefined}>{p.teamName}</span>
-          </div>
-          {p.dead ? null : (
-            <div className="focused-player__utility">
-              {p.utility.map((u) => (
-                <span key={u.sourceWeaponId}>
-                  <Icon asset={u.asset} active={u.asset?.canonicalKey === activeKey} />
-                  {u.count > 1 ? <b>×{u.count}</b> : null}
-                </span>
-              ))}
-              <Icon asset={p.zeus?.asset ?? null} active={activeKey === 'utility.taser'} />
-              <Icon asset={p.kit} />
-              <Icon asset={p.c4} active={activeKey === 'objective.c4'} />
-            </div>
-          )}
         </div>
       </div>
       <div className="focused-player__combat">
