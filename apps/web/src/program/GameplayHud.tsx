@@ -76,9 +76,7 @@ export function GameplayHud({
         const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
         if (rendererEntry.renderer === null) return null;
         const Renderer = rendererEntry.renderer;
-        if (descriptor.id !== 'radar' && !programFresh) return null;
-        if (descriptor.id === 'radar' && radarClient === undefined && radarSnapshot == null)
-          return null;
+        if (!programFresh && descriptor.id !== 'radar') return null;
         const box = placementToBox(descriptor.id, placement);
         return (
           <div
@@ -97,20 +95,16 @@ export function GameplayHud({
               width: `${box.width}px`,
             }}
           >
-            {(snapshot !== null ||
-              (descriptor.id === 'radar' &&
-                (radarSnapshot !== undefined || radarClient !== undefined))) && (
-              <Renderer
-                box={box}
-                placement={placement}
-                radarClient={radarClient}
-                radarSnapshot={radarSnapshot}
-                resolvedPreset={resolvedPreset}
-                settings={resolvedPreset.widgets[descriptor.id]}
-                snapshot={snapshot ?? ({} as ProgramSnapshot)}
-                widgetId={descriptor.id}
-              />
-            )}
+            <Renderer
+              box={box}
+              placement={placement}
+              radarClient={radarClient}
+              radarSnapshot={radarSnapshot}
+              resolvedPreset={resolvedPreset}
+              settings={resolvedPreset.widgets[descriptor.id]}
+              snapshot={snapshot ?? ({} as ProgramSnapshot)}
+              widgetId={descriptor.id}
+            />
           </div>
         );
       })}

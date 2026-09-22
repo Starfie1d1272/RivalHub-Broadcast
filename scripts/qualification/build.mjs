@@ -104,6 +104,12 @@ async function commandOutput(command, args, cwd = rootDir) {
 
 async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
+  const rawStatus = await commandOutput('git', ['status', '--porcelain']);
+  if (rawStatus.includes('pnpm-lock.yaml')) {
+    await runCommand('git', ['checkout', '--', 'pnpm-lock.yaml'], { capture: true }).catch(
+      () => {},
+    );
+  }
   const status = await commandOutput('git', ['status', '--porcelain']);
   if (status.length > 0) {
     console.error('QUALIFICATION_DIRTY_STATUS:\n' + status);

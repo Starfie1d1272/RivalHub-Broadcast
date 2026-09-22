@@ -301,10 +301,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       }
       ctx.restore();
       if (!payload) {
-        ctx.fillStyle = '#8d9ca8';
-        ctx.font = '32px sans-serif';
-        ctx.textAlign = 'center';
-        ctx.fillText('雷达暂不可用', 500, 510);
+        // Safe fail-closed presentation without disruptive center placeholder
       } else if (model.layer === 'upper' || model.layer === 'lower') {
         ctx.fillStyle = '#d8e3eb';
         ctx.font = '27px sans-serif';
@@ -322,6 +319,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       images.clear();
     };
   }, [client, zoomMode]);
+  if (client === undefined && snapshot == null) {
+    return null;
+  }
   return <canvas aria-label="比赛雷达" className="radar" ref={canvas} />;
 }
 
