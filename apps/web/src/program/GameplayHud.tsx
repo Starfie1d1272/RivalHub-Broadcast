@@ -1,4 +1,6 @@
-import type { CSSProperties } from 'react';
+import { presentationBoundaryKey } from './presentation-boundary';
+import type { RadarProps } from './widgets/radar/Radar';
+import type { CSSProperties, ReactElement } from 'react';
 
 import {
   HUD_WIDGET_REGISTRY,
@@ -18,6 +20,8 @@ import './widgets/match-header/match-header.css';
 import './widgets/player-rails/player-rails.css';
 
 export interface GameplayHudProps {
+  readonly radarClient?: RadarProps['client'];
+  readonly radarSnapshot?: RadarProps['snapshot'];
   readonly snapshot: ProgramSnapshot | null;
   readonly resolvedPreset: HudResolvedPreset;
   /** Test-only injection keeps the production registry closed while exercising the React seam. */
@@ -50,10 +54,14 @@ export function themeStyle(theme: HudResolvedPreset['theme']): CSSProperties {
 
 export function GameplayHud({
   snapshot,
+  radarClient,
+  radarSnapshot,
   resolvedPreset,
   rendererRegistry = HUD_RENDERER_REGISTRY,
 }: GameplayHudProps) {
-  if (snapshot === null || snapshot.payload.status.telemetry !== 'fresh') return null;
+  const programFresh = snapshot?.payload.status.telemetry === 'fresh';
+  const radarAvailable = radarClient !== undefined || radarSnapshot != null;
+  if (!programFresh && !radarAvailable) return null;
 
   return (
     <div
@@ -67,21 +75,13 @@ export function GameplayHud({
         if (placement === undefined || !placement.visible) return null;
         const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
         if (rendererEntry.renderer === null) return null;
-        const Renderer = rendererEntry.renderer;
+
         const box = placementToBox(descriptor.id, placement);
-        return (
-          <div
-            className="gameplay-hud__widget"
-            data-hud-widget={descriptor.id}
-            data-renderer-availability={descriptor.rendererAvailability}
-            key={descriptor.id}
-            style={{
-              height: `${box.height}px`,
-              left: `${box.left}px`,
-              top: `${box.top}px`,
-              width: `${box.width}px`,
-            }}
-          >
+        let content: ReactElement;
+        if (rendererEntry.source === 'program') {
+          if (!programFresh || snapshot === null) return null;
+          const Renderer = rendererEntry.renderer;
+          content = (
             <Renderer
               box={box}
               placement={placement}
@@ -90,6 +90,41 @@ export function GameplayHud({
               snapshot={snapshot}
               widgetId={descriptor.id}
             />
+          );
+        } else {
+          if (!radarAvailable) return null;
+          const Renderer = rendererEntry.renderer;
+          content = (
+            <Renderer
+              box={box}
+              placement={placement}
+              radarClient={radarClient}
+              radarSnapshot={radarSnapshot}
+              resolvedPreset={resolvedPreset}
+              settings={resolvedPreset.widgets[descriptor.id]}
+              widgetId={descriptor.id}
+            />
+          );
+        }
+
+        return (
+          <div
+            className="gameplay-hud__widget"
+            data-hud-widget={descriptor.id}
+            data-renderer-availability={descriptor.rendererAvailability}
+            key={
+              rendererEntry.source === 'radar'
+                ? 'radar'
+                : `${descriptor.id}:${presentationBoundaryKey(snapshot, undefined)}`
+            }
+            style={{
+              height: `${box.height}px`,
+              left: `${box.left}px`,
+              top: `${box.top}px`,
+              width: `${box.width}px`,
+            }}
+          >
+            {content}
           </div>
         );
       })}

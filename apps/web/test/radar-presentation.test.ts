@@ -1,0 +1,274 @@
+import { describe, expect, it } from 'vitest';
+import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
+import { RADAR_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
+import {
+  RadarPresentation,
+  shortestAngle,
+  smokeRemaining,
+  RADAR_PRESENTATION,
+} from '../src/program/widgets/radar/presentation';
+import fixtures from '../src/program/fixtures/generated/real-radar-fixtures.generated.json';
+
+function real(): RadarSnapshot {
+  return radarSnapshotSchema.parse(fixtures.fixtures['dense-utility'].samples[0]!.snapshot);
+}
+function next(s: RadarSnapshot): RadarSnapshot {
+  const n = structuredClone(s);
+  n.channelSeq++;
+  n.cursor.runtimeSeq++;
+  n.cursor.programReceiveSequence = (n.cursor.programReceiveSequence ?? 0) + 1;
+  return n;
+}
+// Explicit synthetic mutations exercise edges that a repeatable real capture cannot guarantee.
+function single(): RadarSnapshot {
+  const s = real();
+  s.payload.mapName = 'de_mirage';
+  s.payload.observedPlayerSourceId = null;
+  s.payload.players = [
+    {
+      ...s.payload.players[0]!,
+      position: { x: -1000, y: 0, z: 0 },
+      forward: { x: 1, y: 0, z: 0 },
+      lifeState: 'alive',
+      health: 100,
+      flashAmount: 0,
+      activeWeapon: { name: 'weapon_ak47', ammoClip: 30, state: 'active' },
+    },
+  ];
+  s.payload.grenades = [
+    {
+      sourceEntityId: 'synthetic-projectile',
+      kind: 'frag',
+      ownerSourceId: null,
+      position: { x: -1000, y: 0, z: 0 },
+      velocity: { x: 100, y: 0, z: 0 },
+      lifetimeSeconds: 0,
+      effectTimeSeconds: null,
+      flames: [],
+    },
+  ];
+  return s;
+}
+
+describe('Radar renderer local lifecycle', () => {
+  it('accepts real source truth and rejects old/malformed/extra Radar fields', () => {
+    const s = real();
+    expect(s.schemaVersion).toBe(RADAR_SCHEMA_VERSION);
+    expect(s.payload.players).toHaveLength(10);
+    expect(s.payload.grenades.some((g) => g.effectTimeSeconds !== null)).toBe(true);
+    expect(s.payload.grenades.some((g) => g.flames.length > 0)).toBe(true);
+    expect(radarSnapshotSchema.safeParse({ ...s, schemaVersion: 1 }).success).toBe(false);
+    const malformed = structuredClone(s);
+    delete (malformed.payload.players[0] as Partial<(typeof malformed.payload.players)[number]>)
+      .health;
+    expect(radarSnapshotSchema.safeParse(malformed).success).toBe(false);
+    expect(
+      radarSnapshotSchema.safeParse({ ...s, payload: { ...s.payload, futurePosition: [] } })
+        .success,
+    ).toBe(false);
+  });
+  it('wraps angles along the shortest distance and eases movement without changing truth', () => {
+    expect(shortestAngle(359, 1)).toBe(2);
+    expect(shortestAngle(1, 359)).toBe(-2);
+    const m = new RadarPresentation();
+    const a = single();
+    m.accept(a, 0);
+    m.tick(0, false);
+    const before = [...m.players.values()][0]!.x;
+    const b = next(a);
+    b.payload.players[0]!.position!.x += 100;
+    m.accept(b, 100);
+    m.tick(116, false);
+    const p = [...m.players.values()][0]!;
+    expect(p.x).toBeGreaterThan(before);
+    expect(p.x).toBeLessThan(p.target.x);
+    expect(b.payload.players[0]!.position!.x).toBe(-900);
+  });
+  it('snaps teleports, resets HP/ammo baselines and does not infer on first sample', () => {
+    const m = new RadarPresentation();
+    const a = single();
+    m.accept(a, 0);
+    expect([...m.players.values()][0]!.shootingUntil).toBe(0);
+    const b = next(a);
+    b.payload.players[0]!.health = 80;
+    b.payload.players[0]!.activeWeapon!.ammoClip = 29;
+    m.accept(b, 100);
+    expect([...m.players.values()][0]!.damageUntil).toBeGreaterThan(100);
+    expect([...m.players.values()][0]!.shootingUntil).toBeGreaterThan(100);
+    const c = next(b);
+    c.payload.players[0]!.position!.x += 2000;
+    c.payload.players[0]!.health = 70;
+    m.accept(c, 200);
+    const p = [...m.players.values()][0]!;
+    expect(p.x).toBe(p.target.x);
+    expect(p.damageUntil).toBe(0);
+    expect(p.shootingUntil).toBe(0);
+  });
+  it('does not infer shots from reloads, equipment, weapon switches or evidence gaps', () => {
+    for (const name of ['weapon_smokegrenade', 'weapon_knife', 'unknown']) {
+      const m = new RadarPresentation();
+      const a = single();
+      a.payload.players[0]!.activeWeapon!.name = name;
+      m.accept(a, 0);
+      const b = next(a);
+      b.payload.players[0]!.activeWeapon!.ammoClip = 29;
+      m.accept(b, 100);
+      expect([...m.players.values()][0]!.shootingUntil).toBe(0);
+    }
+    const m = new RadarPresentation();
+    const a = single();
+    m.accept(a, 0);
+    const b = next(a);
+    b.payload.players[0]!.activeWeapon!.ammoClip = 10;
+    b.payload.players[0]!.activeWeapon!.state = 'reloading';
+    m.accept(b, 100);
+    expect([...m.players.values()][0]!.shootingUntil).toBe(0);
+    const c = next(b);
+    c.payload.players[0]!.health = 1;
+    m.accept(c, 1000);
+    expect([...m.players.values()][0]!.damageUntil).toBe(0);
+  });
+  it('bounds real-observation trails and starts ID reuse with new history', () => {
+    const m = new RadarPresentation();
+    let s = single();
+    for (let i = 0; i < 1000; i++) {
+      s = next(s);
+      s.payload.grenades[0]!.position!.x += 0.1;
+      m.accept(s, i * 10);
+      m.tick(i * 10, false);
+    }
+    const g = [...m.grenades.values()][0]!;
+    expect(g.trail.length).toBeLessThanOrEqual(RADAR_PRESENTATION.trailPoints);
+    expect(g.side).toBe('unknown');
+    const gone = next(s);
+    gone.payload.grenades = [];
+    m.accept(gone, 10000);
+    expect(m.grenades.size).toBe(0);
+    expect(m.exits.size).toBe(1);
+    const reused = next(gone);
+    reused.payload.grenades = s.payload.grenades;
+    m.accept(reused, 10100);
+    expect([...m.grenades.values()][0]!.trail).toHaveLength(1);
+    expect(m.exits.size).toBe(0);
+  });
+  it.each(['producer', 'generation', 'epoch', 'session', 'reconnect', 'stale', 'unsupported'])(
+    'clears ephemeral state on %s',
+    (kind) => {
+      const m = new RadarPresentation();
+      const a = single();
+      m.accept(a, 0);
+      const b = next(a);
+      if (kind === 'producer') b.cursor.producerInstanceId += '-new';
+      if (kind === 'generation') b.cursor.programSourceGeneration++;
+      if (kind === 'epoch') b.cursor.mapEpoch++;
+      if (kind === 'session') b.cursor.liveSessionId = 'new-session';
+      if (kind === 'stale') b.payload.telemetryFreshness = 'stale';
+      if (kind === 'unsupported') b.payload.mapName = 'unsupported';
+      b.payload.players[0]!.health = 10;
+      m.accept(b, 100, kind === 'reconnect');
+      expect(m.exits.size).toBe(0);
+      expect([...m.players.values()].every((p) => p.damageUntil === 0)).toBe(true);
+      expect([...m.grenades.values()].every((g) => g.trail.length === 1)).toBe(true);
+      if (kind === 'stale' || kind === 'unsupported') expect(m.players.size).toBe(0);
+    },
+  );
+  it('selects focused floors and resets buffers across floor changes', () => {
+    const m = new RadarPresentation();
+    const a = single();
+    a.payload.mapName = 'de_nuke';
+    a.payload.observedPlayerSourceId = a.payload.players[0]!.sourcePlayerId;
+    m.accept(a, 0);
+    expect(m.layer).toBe('upper');
+    const b = next(a);
+    b.payload.players[0]!.position!.z = -600;
+    b.payload.players[0]!.health = 50;
+    m.accept(b, 100);
+    expect(m.layer).toBe('lower');
+    expect([...m.players.values()][0]!.damageUntil).toBe(0);
+    expect(m.grenades.size).toBe(0);
+  });
+  it('uses only effecttime, clamps remaining, and verifies real replay monotonicity', () => {
+    expect(smokeRemaining(null)).toBeNull();
+    expect(smokeRemaining(22)).toBe(0);
+    expect(smokeRemaining(-1)).toBe(20);
+    const previous = new Map<string, number>();
+    let comparisons = 0;
+    for (const sample of fixtures.fixtures['bomb-plant'].samples)
+      for (const g of sample.snapshot.payload.grenades) {
+        if (g.kind !== 'smoke' || g.effectTimeSeconds === null) continue;
+        const remaining = smokeRemaining(g.effectTimeSeconds)!;
+        const before = previous.get(g.sourceEntityId);
+        if (before !== undefined) {
+          expect(remaining).toBeLessThanOrEqual(before);
+          comparisons++;
+        }
+        previous.set(g.sourceEntityId, remaining);
+      }
+    expect(comparisons).toBeGreaterThan(0);
+  });
+  it('defaults to full map, bounds auto zoom and returns when no alive targets remain', () => {
+    const m = new RadarPresentation();
+    const s = single();
+    m.accept(s, 0);
+    m.tick(0, false);
+    m.tick(100, false);
+    expect(m.zoom.scale).toBe(1);
+    for (let i = 1; i <= 100; i++) m.tick(i * 16, true);
+    expect(m.zoom.scale).toBeGreaterThan(1);
+    expect(m.zoom.scale).toBeLessThanOrEqual(RADAR_PRESENTATION.maxZoom);
+    const b = next(s);
+    b.payload.players = [];
+    m.accept(b, 1700);
+    m.tick(1700, true);
+    expect(m.zoom.scale).toBe(1);
+  });
+
+  it('correctly handles planting C4 presentation authoritative single representation', () => {
+    const s = single();
+    s.payload.bomb = {
+      state: 'planting',
+      position: { x: -1000, y: 0, z: 0 },
+      sourcePlayerId: s.payload.players[0]!.sourcePlayerId,
+    };
+    const p = new RadarPresentation();
+    p.accept(s, 1000);
+    expect(p.players.has(s.payload.players[0]!.sourcePlayerId)).toBe(true);
+    expect(s.payload.bomb.state === 'planting' && s.payload.bomb.sourcePlayerId !== null).toBe(
+      true,
+    );
+  });
+
+  it('fails closed with neutral presentation on unresolved layers for Nuke, Train, and Vertigo', () => {
+    for (const mapName of ['de_nuke', 'de_train', 'de_vertigo']) {
+      const s = single();
+      s.payload.mapName = mapName;
+      const upperZ = mapName === 'de_nuke' ? -400 : mapName === 'de_vertigo' ? 12000 : 100;
+      const lowerZ = mapName === 'de_nuke' ? -1000 : mapName === 'de_vertigo' ? 11500 : -200;
+      s.payload.players = [
+        {
+          ...s.payload.players[0]!,
+          sourcePlayerId: 'p-upper',
+          position: { x: 0, y: 0, z: upperZ },
+        },
+        {
+          ...s.payload.players[0]!,
+          sourcePlayerId: 'p-lower',
+          position: { x: 0, y: 0, z: lowerZ },
+        },
+      ];
+      const p = new RadarPresentation();
+      p.accept(s, 1000);
+      expect(p.layer).toBe('unknown');
+    }
+  });
+
+  it('retains unsupported-map diagnostic reason across reset', () => {
+    const s = single();
+    s.payload.mapName = 'de_unsupported_test_map';
+    const p = new RadarPresentation();
+    p.accept(s, 1000);
+    expect(p.unsupportedMap).toBe('de_unsupported_test_map');
+    expect(p.diagnosticReason).toBe('unsupported-map');
+    expect(p.players.size).toBe(0);
+  });
+});

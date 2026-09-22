@@ -16,6 +16,13 @@ export interface RadarPlayer {
   readonly lifeState: 'alive' | 'dead' | 'unknown';
   readonly position: ObservedVector3 | null;
   readonly forward: ObservedVector3 | null;
+  readonly health: number | null;
+  readonly flashAmount: number | null;
+  readonly activeWeapon: {
+    readonly name: string | null;
+    readonly ammoClip: number | null;
+    readonly state: 'active' | 'holstered' | 'reloading' | 'unknown' | null;
+  } | null;
 }
 
 export interface RadarBomb {
@@ -31,6 +38,7 @@ export interface RadarGrenade {
   readonly position: ObservedVector3 | null;
   readonly velocity: ObservedVector3 | null;
   readonly lifetimeSeconds: number | null;
+  readonly effectTimeSeconds: number | null;
   readonly flames: readonly ObservedGrenadeFlame[];
 }
 

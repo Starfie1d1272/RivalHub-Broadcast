@@ -105,8 +105,12 @@ async function commandOutput(command, args, cwd = rootDir) {
 async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
   const status = await commandOutput('git', ['status', '--porcelain']);
-  if (status.length > 0)
-    throw new Error('qualification build 要求工作区干净；仅限本地开发时使用 --allow-dirty');
+  if (status.length > 0) {
+    console.error('QUALIFICATION_DIRTY_STATUS:\n' + status);
+    throw new Error(
+      `qualification build 要求工作区干净；仅限本地开发时使用 --allow-dirty\n${status}`,
+    );
+  }
 }
 
 async function fetchResponse(url) {

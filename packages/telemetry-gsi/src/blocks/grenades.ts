@@ -69,6 +69,12 @@ function parseGrenade(
     diagnostics,
     `${path}.lifetime`,
   );
+  const effectTimeSeconds = optionalDecimalString(
+    record,
+    'effecttime',
+    diagnostics,
+    `${path}.effecttime`,
+  );
   const flames = Object.hasOwn(record, 'flames')
     ? parseFlames(record.flames, diagnostics, `${path}.flames`)
     : undefined;
@@ -80,6 +86,7 @@ function parseGrenade(
     ...(position === undefined ? {} : { position }),
     ...(velocity === undefined ? {} : { velocity }),
     ...(lifetimeSeconds === undefined ? {} : { lifetimeSeconds }),
+    ...(effectTimeSeconds === undefined ? {} : { effectTimeSeconds }),
     ...(flames === undefined ? {} : { flames }),
   };
 }

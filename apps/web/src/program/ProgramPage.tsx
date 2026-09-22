@@ -1,20 +1,29 @@
 import { getBuiltinResolvedPreset, type HudResolvedPreset } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
+import type { RadarProps } from './widgets/radar/Radar';
 import type { LocalChannelConnectionState } from '../realtime';
 import { ProgramCanvas } from './ProgramCanvas';
 import { GameplayHud } from './GameplayHud';
-import { hasAcceptedProgramSnapshot, presentationBoundaryKey } from './presentation-boundary';
+import { hasAcceptedProgramSnapshot } from './presentation-boundary';
 
 export { presentationBoundaryKey as programPresentationBoundaryKey } from './presentation-boundary';
 
 export interface ProgramPageProps {
+  readonly radarClient?: RadarProps['client'];
+  readonly radarSnapshot?: RadarProps['snapshot'];
   readonly snapshot?: ProgramSnapshot | null;
   readonly connectionState?: LocalChannelConnectionState;
   readonly resolvedPreset?: HudResolvedPreset;
 }
 
-export function ProgramPage({ snapshot, connectionState, resolvedPreset }: ProgramPageProps = {}) {
+export function ProgramPage({
+  snapshot,
+  connectionState,
+  resolvedPreset,
+  radarClient,
+  radarSnapshot,
+}: ProgramPageProps = {}) {
   if (snapshot === undefined && connectionState === undefined && resolvedPreset === undefined) {
     return <ProgramCanvas />;
   }
@@ -25,7 +34,8 @@ export function ProgramPage({ snapshot, connectionState, resolvedPreset }: Progr
   return (
     <ProgramCanvas>
       <GameplayHud
-        key={presentationBoundaryKey(presentationSnapshot, connectionState)}
+        radarClient={radarClient}
+        radarSnapshot={radarSnapshot}
         resolvedPreset={resolvedPreset ?? getBuiltinResolvedPreset()}
         snapshot={presentationSnapshot}
       />

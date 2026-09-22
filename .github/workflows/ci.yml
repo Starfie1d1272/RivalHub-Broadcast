@@ -90,6 +90,9 @@ jobs:
       - name: Verify real-derived Program fixtures
         run: pnpm fixtures:program:verify
 
+      - name: Verify real-derived Radar fixtures
+        run: pnpm fixtures:radar:verify
+
       - name: Test
         run: pnpm test
 
@@ -206,6 +209,10 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Restore committed lockfile after Windows install
+        shell: pwsh
+        run: git checkout -- pnpm-lock.yaml
 
       - name: Build exact-SHA Windows qualification bundle
         run: node scripts/qualification/build.mjs --output "$env:QUALIFICATION_BUILD_ROOT"

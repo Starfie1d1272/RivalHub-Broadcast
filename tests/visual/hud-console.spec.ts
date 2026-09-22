@@ -1,4 +1,7 @@
-import { PROGRAM_SCHEMA_VERSION } from '../../packages/protocol/src/version.js';
+import {
+  PROGRAM_SCHEMA_VERSION,
+  RADAR_SCHEMA_VERSION,
+} from '../../packages/protocol/src/version.js';
 import { expect, test } from '@playwright/test';
 
 const CURRENT_LIVE_BASELINE = {
@@ -58,6 +61,32 @@ const STALE_CURRENT_LIVE_SNAPSHOT = {
   },
 } as const;
 
+const CURRENT_LIVE_RADAR = {
+  type: 'snapshot',
+  protocolVersion: 1,
+  channel: 'radar',
+  schemaVersion: RADAR_SCHEMA_VERSION,
+  channelSeq: 1,
+  cursor: CURRENT_LIVE_BASELINE.cursor,
+  payload: {
+    telemetryFreshness: 'fresh',
+    identityState: 'matched',
+    mapName: 'de_mirage',
+    observedPlayerSourceId: null,
+    coverage: { allPlayers: 'present', bomb: 'present', grenades: 'present' },
+    players: [],
+    bomb: null,
+    grenades: [],
+  },
+} as const;
+
+const UNSUPPORTED_LIVE_RADAR = {
+  ...CURRENT_LIVE_RADAR,
+  channelSeq: 2,
+  cursor: { ...CURRENT_LIVE_RADAR.cursor, runtimeSeq: 2 },
+  payload: { ...CURRENT_LIVE_RADAR.payload, mapName: 'de_unsupported_test_map' },
+} as const;
+
 const HUD_SCREENSHOT_OPTIONS = {
   animations: 'disabled' as const,
   caret: 'hide' as const,
@@ -102,7 +131,9 @@ test.describe('HUD 编辑器', () => {
         onclose: ((event: { readonly code: number; readonly reason: string }) => void) | null =
           null;
 
-        constructor(_url: string, protocol: string) {
+        readonly url: string;
+        constructor(url: string, protocol: string) {
+          this.url = url;
           this.protocol = protocol;
           MockWebSocket.instances.push(this);
           window.setTimeout(() => {
@@ -142,72 +173,125 @@ test.describe('HUD 编辑器', () => {
     await page.goto('/operator/hud');
     const sourceSelect = page.getByLabel('预览来源');
     const liveOption = page.locator('option[value="current-live"]');
+    const programOnlyWidgets = page.locator(
+      '[data-gameplay-hud="true"] [data-hud-widget]:not([data-hud-widget="radar"])',
+    );
     await expect(liveOption).toHaveAttribute('disabled', '');
     await expect(page.locator('.hud-console__source-status')).toContainText('等待实时数据');
 
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_BASELINE);
     await expect(page.locator('.hud-console__source-status')).toContainText('实时数据可用');
     await expect(liveOption).not.toHaveAttribute('disabled');
+    await page.evaluate((snapshot) => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      const radarSocket = sockets.filter((s) => s.url.includes('/local/v1/radar')).at(-1);
+      radarSocket?.emit(JSON.stringify(snapshot));
+    }, CURRENT_LIVE_RADAR);
     await sourceSelect.selectOption('current-live');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
 
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, STALE_CURRENT_LIVE_SNAPSHOT);
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
+    await expect(programOnlyWidgets).toHaveCount(0);
 
     await page.evaluate(() => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ disconnect(): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; disconnect(): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.disconnect();
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.disconnect();
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
     await expect(page.getByText('实时数据不可用')).toBeVisible();
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
+    await expect(programOnlyWidgets).toHaveCount(0);
 
     await page.waitForTimeout(350);
     await page.evaluate((snapshot) => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit(JSON.stringify(snapshot));
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_BASELINE);
     await expect(liveOption).not.toHaveAttribute('disabled');
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
 
+    await page.evaluate((snapshot) => {
+      const sockets = (
+        window as unknown as {
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
+        }
+      ).__rhProgramSockets;
+      const radarSocket = sockets.filter((s) => s.url.includes('/local/v1/radar')).at(-1);
+      radarSocket?.emit(JSON.stringify(snapshot));
+    }, UNSUPPORTED_LIVE_RADAR);
+    await expect(page.locator('.hud-console__source-status')).toContainText(
+      '雷达不可用：不支持地图 de_unsupported_test_map',
+    );
+    await expect(page.locator('.hud-console__source-status')).toHaveAttribute(
+      'data-radar-diagnostic',
+      'unsupported-map',
+    );
+    await expect(page.locator('canvas.radar')).toHaveAttribute(
+      'data-radar-diagnostic',
+      'unsupported-map',
+    );
+
     await page.evaluate(() => {
       const sockets = (
         window as unknown as {
-          __rhProgramSockets: Array<{ emit(data: string): void }>;
+          __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets.at(-1)?.emit('{not-json');
+      const sock =
+        sockets.filter((s) => s.url.includes('/local/v1/program')).at(-1) ?? sockets.at(-1);
+      sock?.emit('{not-json');
     });
     await expect(sourceSelect).toHaveValue('current-live');
     await expect(liveOption).toHaveAttribute('disabled', '');
     await expect(page.getByText('实时数据不可用')).toBeVisible();
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
+    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
+    await expect(programOnlyWidgets).toHaveCount(0);
   });
 
   test('覆盖测试场景、拖动、尺寸调整与网格吸附开关', async ({ page }) => {

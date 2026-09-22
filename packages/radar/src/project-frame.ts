@@ -35,6 +35,10 @@ function canonicalPlayerFor(input: RadarProjectionInput, sourcePlayerId: string)
 
 function projectRadarPlayer(input: RadarProjectionInput, player: ObservedPlayer): RadarPlayer {
   const canonical = canonicalPlayerFor(input, player.sourcePlayerId);
+  const candidates =
+    player.weapons?.filter((weapon) => weapon.state === 'active' || weapon.state === 'reloading') ??
+    [];
+  const weapon = candidates.length === 1 ? candidates[0] : undefined;
   return {
     sourcePlayerId: player.sourcePlayerId,
     canonicalPlayerId: canonical?.canonicalPlayerId ?? null,
@@ -44,6 +48,16 @@ function projectRadarPlayer(input: RadarProjectionInput, player: ObservedPlayer)
     lifeState: derivePlayerLifeState(player.state?.health),
     position: player.position ?? null,
     forward: player.forward ?? null,
+    health: player.state?.health ?? null,
+    flashAmount: player.state?.flashed ?? null,
+    activeWeapon:
+      weapon === undefined
+        ? null
+        : {
+            name: weapon.name ?? null,
+            ammoClip: weapon.ammoClip ?? null,
+            state: weapon.state ?? null,
+          },
   };
 }
 
@@ -55,6 +69,7 @@ function projectRadarGrenade(grenade: ObservedGrenade): RadarGrenade {
     position: grenade.position ?? null,
     velocity: grenade.velocity ?? null,
     lifetimeSeconds: grenade.lifetimeSeconds ?? null,
+    effectTimeSeconds: grenade.effectTimeSeconds ?? null,
     flames: [...(grenade.flames ?? [])].sort((left, right) =>
       left.sourceFlameId.localeCompare(right.sourceFlameId),
     ),

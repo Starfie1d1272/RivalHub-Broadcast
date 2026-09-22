@@ -1,0 +1,8 @@
+.radar {
+  display: block;
+  width: 100%;
+  height: 100%;
+  border: 1px solid rgb(211 227 238 / 18%);
+  border-radius: var(--rh-hud-radius-md, 4px);
+  box-sizing: border-box;
+}

@@ -1,5 +1,6 @@
+import { verifyRadarAssets } from './radar.mjs';
 import { access, readFile } from 'node:fs/promises';
-import { basename, join, relative, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import {
@@ -136,6 +137,10 @@ export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT, generatedRoot
     );
   }
 
+  const radarManifest = join(dirname(publicRoot), 'radar-maps.json');
+  if (await fileExists(radarManifest)) {
+    for (const path of await verifyRadarAssets(dirname(publicRoot))) expectedPublicFiles.add(path);
+  }
   const publicFiles = await listFiles(publicRoot);
   for (const file of publicFiles) {
     const relativeFile = relative(publicRoot, file).replaceAll('\\', '/');

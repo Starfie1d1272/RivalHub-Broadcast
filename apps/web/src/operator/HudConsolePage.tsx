@@ -25,6 +25,7 @@ import {
   type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
   getProgramFixture,
@@ -33,6 +34,7 @@ import {
   type ProgramFixtureId,
 } from '../program/fixtures';
 import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
+
 import { HudCanvasPreview } from './HudCanvasPreview';
 import { HudConsoleWorkspaces } from './HudConsoleWorkspaces';
 import { clientPointToHudLogicalPoint } from './hud-canvas-geometry';
@@ -104,6 +106,13 @@ export function HudConsolePage() {
   const visualFixtureMode = import.meta.env.VITE_VISUAL_FIXTURES === '1';
   const hudEditor = useHudConfigEditorClient(!visualFixtureMode);
   const program = useProgramConnection();
+  const radarClient = useLocalChannelClient('radar');
+  const radar = useSyncExternalStore(
+    radarClient.subscribe,
+    radarClient.getSnapshot,
+    radarClient.getSnapshot,
+  );
+
   const fixtureDocument = useMemo(() => createDefaultHudConfigDocument(), []);
   const authoritativeDocument = hudEditor.document ?? (visualFixtureMode ? fixtureDocument : null);
   const configDocument = authoritativeDocument ?? fixtureDocument;
@@ -167,6 +176,20 @@ export function HudConsolePage() {
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
+  let unsupportedRadarMap: string | null = null;
+  if (radar.state === 'live') {
+    const mapName = radar.current?.payload.mapName;
+    if (mapName && defaultMapGeometryProvider.resolve(mapName) === null) {
+      unsupportedRadarMap = mapName;
+    }
+  }
+  const radarDiagnosticAttributes =
+    unsupportedRadarMap === null
+      ? {}
+      : {
+          'data-radar-diagnostic': 'unsupported-map',
+          'data-radar-unsupported-map': unsupportedRadarMap,
+        };
 
   const savedPreset = resourceFor(configDocument, 'preset', selectedPresetId) as
     HudPreset | undefined;
@@ -707,12 +730,21 @@ export function HudConsolePage() {
                 </select>
               </label>
             ) : null}
-            <span className="hud-console__source-status" data-connection-state={program.state}>
+            <span
+              className="hud-console__source-status"
+              data-connection-state={program.state}
+              {...radarDiagnosticAttributes}
+            >
               {connectionLabel(program.state)}
+              {activePreviewSource === 'current-live' && unsupportedRadarMap !== null
+                ? ` · 雷达不可用：不支持地图 ${unsupportedRadarMap}`
+                : null}
             </span>
           </section>
 
           <HudCanvasPreview
+            radarSnapshot={null}
+            radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
             editorMode={workspace === 'layout' ? 'layout' : 'preview'}

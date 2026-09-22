@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest';
 
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { programSnapshotSchema } from '@rivalhub-broadcast/protocol/program';
-import { PROGRAM_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
+import type { RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
+import { radarSnapshotSchema } from '@rivalhub-broadcast/protocol/radar';
+import { PROGRAM_SCHEMA_VERSION, RADAR_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
 import {
   createLocalChannelClient,
   localWebSocketUrl,
@@ -297,5 +299,201 @@ describe('local realtime browser client', () => {
     sockets.sockets[2]!.message(JSON.stringify(snapshot(1)));
     expect(recreated.getSnapshot()).toMatchObject({ state: 'live', current: { channelSeq: 1 } });
     recreated.dispose();
+  });
+
+  describe('dual-channel Program and Radar independent orchestration', () => {
+    function radarSnapshot(
+      channelSeq: number,
+      cursorOverrides: Partial<typeof cursor> = {},
+    ): RadarSnapshot {
+      return radarSnapshotSchema.parse({
+        type: 'snapshot',
+        protocolVersion: 1,
+        channel: 'radar',
+        schemaVersion: RADAR_SCHEMA_VERSION,
+        channelSeq,
+        cursor: { ...cursor, ...cursorOverrides },
+        payload: {
+          telemetryFreshness: 'fresh',
+          identityState: 'matched',
+          mapName: 'de_mirage',
+          observedPlayerSourceId: '76561198000000001',
+          coverage: {
+            allPlayers: 'present',
+            bomb: 'present',
+            grenades: 'present',
+          },
+          players: [
+            {
+              sourcePlayerId: '76561198000000001',
+              canonicalPlayerId: 'player-1',
+              displayName: 'Player One',
+              side: 'CT',
+              observerSlot: 1,
+              lifeState: 'alive',
+              position: { x: 100, y: 200, z: 0 },
+              forward: { x: 1, y: 0, z: 0 },
+              health: 100,
+              flashAmount: 0,
+              activeWeapon: { name: 'weapon_m4a1_silencer', ammoClip: 20, state: 'active' },
+            },
+          ],
+          bomb: {
+            state: 'carried',
+            position: null,
+            sourcePlayerId: '76561198000000002',
+          },
+          grenades: [],
+        },
+      });
+    }
+
+    it('subscribes Program and Radar channels simultaneously with independent baselines', () => {
+      const sockets = socketFactory();
+      const clock = scheduler();
+
+      const programClient = createLocalChannelClient('program', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+      const radarClient = createLocalChannelClient('radar', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+
+      programClient.start();
+      radarClient.start();
+
+      expect(sockets.urls).toEqual([
+        'ws://127.0.0.1:4173/local/v1/program',
+        'ws://127.0.0.1:4173/local/v1/radar',
+      ]);
+
+      const [programSocket, radarSocket] = sockets.sockets;
+      programSocket!.open();
+      radarSocket!.open();
+
+      const programSnap = snapshot(1);
+      const radarSnap = radarSnapshot(1);
+
+      programSocket!.message(JSON.stringify(programSnap));
+      radarSocket!.message(JSON.stringify(radarSnap));
+
+      expect(programClient.getSnapshot()).toMatchObject({
+        state: 'live',
+        current: { channel: 'program', channelSeq: 1 },
+      });
+      expect(radarClient.getSnapshot()).toMatchObject({
+        state: 'live',
+        current: { channel: 'radar', channelSeq: 1 },
+      });
+
+      programClient.dispose();
+      radarClient.dispose();
+    });
+
+    it('does not disrupt Program client when Radar channel reconnects', () => {
+      const sockets = socketFactory();
+      const clock = scheduler();
+
+      const programClient = createLocalChannelClient('program', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+      const radarClient = createLocalChannelClient('radar', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+
+      programClient.start();
+      radarClient.start();
+
+      const [programSocket, radarSocket] = sockets.sockets;
+      programSocket!.open();
+      radarSocket!.open();
+
+      programSocket!.message(JSON.stringify(snapshot(1)));
+      radarSocket!.message(JSON.stringify(radarSnapshot(1)));
+
+      expect(programClient.getSnapshot().state).toBe('live');
+      expect(radarClient.getSnapshot().state).toBe('live');
+
+      // Radar connection drops
+      radarSocket!.serverClose(1006, 'abnormal closure');
+      expect(radarClient.getSnapshot().state).toBe('reconnecting');
+
+      // Program client remains unaffected and continues to accept live messages
+      expect(programClient.getSnapshot().state).toBe('live');
+      expect(programClient.getSnapshot().current?.channelSeq).toBe(1);
+
+      programSocket!.message(JSON.stringify(snapshot(2)));
+      expect(programClient.getSnapshot().current?.channelSeq).toBe(2);
+
+      // Radar reconnects with fresh baseline
+      clock.runNext();
+      const nextRadarSocket = sockets.sockets[2]!;
+      nextRadarSocket.open();
+      nextRadarSocket.message(JSON.stringify(radarSnapshot(2)));
+
+      expect(radarClient.getSnapshot()).toMatchObject({
+        state: 'live',
+        current: { channel: 'radar', channelSeq: 2 },
+      });
+      expect(programClient.getSnapshot().state).toBe('live');
+
+      programClient.dispose();
+      radarClient.dispose();
+    });
+
+    it('does not allow Program reconnect to spoof or mutate Radar generation', () => {
+      const sockets = socketFactory();
+      const clock = scheduler();
+
+      const programClient = createLocalChannelClient('program', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+      const radarClient = createLocalChannelClient('radar', {
+        location: { protocol: 'http:', host: '127.0.0.1:4173' },
+        webSocketFactory: sockets.factory,
+        scheduler: clock.scheduler,
+      });
+
+      programClient.start();
+      radarClient.start();
+
+      const [programSocket, radarSocket] = sockets.sockets;
+      programSocket!.open();
+      radarSocket!.open();
+
+      programSocket!.message(JSON.stringify(snapshot(1, { programSourceGeneration: 1 })));
+      radarSocket!.message(JSON.stringify(radarSnapshot(1, { programSourceGeneration: 1 })));
+
+      // Program server triggers reset with new generation
+      programSocket!.serverClose(1006, 'program disconnect');
+      expect(programClient.getSnapshot().state).toBe('reconnecting');
+
+      // Radar remains on its existing generation and baseline
+      expect(radarClient.getSnapshot().state).toBe('live');
+      expect(radarClient.getSnapshot().current?.cursor.programSourceGeneration).toBe(1);
+
+      // Program reconnects under generation 2
+      clock.runNext();
+      const nextProgramSocket = sockets.sockets[2]!;
+      nextProgramSocket.open();
+      nextProgramSocket.message(JSON.stringify(snapshot(1, { programSourceGeneration: 2 })));
+
+      expect(programClient.getSnapshot().current?.cursor.programSourceGeneration).toBe(2);
+      // Radar state is NOT mutated or spoofed by Program reconnect
+      expect(radarClient.getSnapshot().current?.cursor.programSourceGeneration).toBe(1);
+
+      programClient.dispose();
+      radarClient.dispose();
+    });
   });
 });

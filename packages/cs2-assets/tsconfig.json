@@ -5,5 +5,5 @@
     "rootDir": ".",
     "resolveJsonModule": true
   },
-  "include": ["src", "catalog/items.json", "generated/manifest.json"]
+  "include": ["src", "catalog/items.json", "generated/manifest.json", "generated/radar-maps.json"]
 }

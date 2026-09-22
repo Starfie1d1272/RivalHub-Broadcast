@@ -1,4 +1,7 @@
 * text=auto eol=lf
+pnpm-lock.yaml text eol=lf
+*.yaml text eol=lf
+*.yml text eol=lf
 
 *.bat text eol=crlf
 *.cmd text eol=crlf

@@ -10,6 +10,7 @@ import {
   type DebugRuntimeResponse,
 } from './debug/runtime';
 import { ProgramCueRendererBridge } from './program/ProgramCueRendererBridge';
+import { RadarVisualFixturePage } from './program/testing/RadarVisualFixturePage';
 import { ProgramPage } from './program/ProgramPage';
 import { OperatorPage } from './operator/OperatorPage';
 import { HudConsolePage } from './operator/HudConsolePage';
@@ -121,6 +122,7 @@ function SurfaceConnectionMarker({ channel }: { readonly channel: LocalSnapshotC
 }
 
 function ProgramRoute() {
+  const radarClient = useLocalChannelConnection('radar');
   const programClient = useLocalChannelConnection('program');
   const programConnection = useSyncExternalStore(
     programClient.subscribe,
@@ -151,6 +153,7 @@ function ProgramRoute() {
     <>
       <ProgramCueRendererBridge client={cueClient} />
       <ProgramPage
+        radarClient={radarClient}
         connectionState={programConnection.state}
         resolvedPreset={hudConfig.current}
         snapshot={programConnection.current}
@@ -441,6 +444,9 @@ export function DebugPage() {
 
 export function App() {
   const pathname = window.location.pathname;
+  const radarRoute = /^\/__visual\/radar\/([^/]+)\/?$/.exec(pathname);
+  if (radarRoute && import.meta.env.DEV && import.meta.env.VITE_VISUAL_FIXTURES === '1')
+    return <RadarVisualFixturePage id={radarRoute[1]!} />;
   const visualRoute = /^\/__visual\/program\/([^/]+)\/?$/.exec(pathname);
   const isVisualPath =
     pathname === '/__visual/program' || pathname.startsWith('/__visual/program/');

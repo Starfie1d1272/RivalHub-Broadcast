@@ -9,15 +9,15 @@ import {
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
+import type { RadarProps } from '../program/widgets/radar/Radar';
 import { HudEditorOverlay } from '../program/HudEditorOverlay';
 import { GameplayHud } from '../program/GameplayHud';
-import {
-  hasAcceptedProgramSnapshot,
-  presentationBoundaryKey,
-} from '../program/presentation-boundary';
+import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
 import type { LocalChannelConnectionState } from '../realtime';
 
 export interface HudCanvasPreviewProps {
+  readonly radarClient?: RadarProps['client'];
+  readonly radarSnapshot?: RadarProps['snapshot'];
   readonly resolvedPreset: HudResolvedPreset;
   readonly snapshot: ProgramSnapshot | null;
   readonly connectionState: LocalChannelConnectionState;
@@ -37,6 +37,8 @@ export interface HudCanvasPreviewProps {
 
 export function HudCanvasPreview({
   resolvedPreset,
+  radarClient,
+  radarSnapshot,
   snapshot,
   connectionState,
   liveSource,
@@ -74,10 +76,6 @@ export function HudCanvasPreview({
       ? snapshot
       : null
     : snapshot;
-  const boundaryKey = presentationBoundaryKey(
-    presentationSnapshot,
-    liveSource ? connectionState : undefined,
-  );
 
   return (
     <div className="hud-console__canvas-frame" ref={frameRef}>
@@ -96,7 +94,8 @@ export function HudCanvasPreview({
           <div className="hud-console__guide hud-console__guide--safe" style={guideStyle} />
         ) : null}
         <GameplayHud
-          key={boundaryKey}
+          radarClient={radarClient}
+          radarSnapshot={radarSnapshot}
           resolvedPreset={resolvedPreset}
           snapshot={presentationSnapshot}
         />

@@ -13,7 +13,8 @@
     "@rivalhub-broadcast/hud-config": "workspace:*",
     "@rivalhub-broadcast/protocol": "workspace:*",
     "react": "catalog:",
-    "react-dom": "catalog:"
+    "react-dom": "catalog:",
+    "@rivalhub-broadcast/radar": "workspace:*"
   },
   "devDependencies": {
     "@types/node": "catalog:",
