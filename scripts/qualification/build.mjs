@@ -102,13 +102,24 @@ async function commandOutput(command, args, cwd = rootDir) {
   return (await runCommand(command, args, { cwd, capture: true })).stdout.trim();
 }
 
+async function hasOnlyCrAtEolDiff(path) {
+  try {
+    await runCommand('git', ['diff', '--ignore-cr-at-eol', '--quiet', '--', path], {
+      capture: true,
+    });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
   const rawStatus = await commandOutput('git', ['status', '--porcelain']);
-  if (rawStatus.includes('pnpm-lock.yaml')) {
-    await runCommand('git', ['checkout', '--', 'pnpm-lock.yaml'], { capture: true }).catch(
-      () => {},
-    );
+  if (rawStatus.includes('pnpm-lock.yaml') && (await hasOnlyCrAtEolDiff('pnpm-lock.yaml'))) {
+    // Windows tooling can rewrite only CR-at-EOL despite the LF repository contract.
+    // Restore only that proven normalization case; never discard semantic lockfile edits.
+    await runCommand('git', ['checkout', '--', 'pnpm-lock.yaml'], { capture: true });
   }
   const status = await commandOutput('git', ['status', '--porcelain']);
   if (status.length > 0) {

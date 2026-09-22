@@ -18,10 +18,7 @@ import type { LocalChannelClient } from '../realtime';
 import { RadarWidget } from './widgets/radar/Radar';
 import { PlayerRail } from './widgets/player-rails';
 
-export interface HudWidgetRendererProps {
-  readonly snapshot: ProgramSnapshot;
-  readonly radarSnapshot?: RadarSnapshot | null | undefined;
-  readonly radarClient?: LocalChannelClient<'radar'> | undefined;
+interface HudWidgetRendererBaseProps {
   readonly resolvedPreset: HudResolvedPreset;
   readonly widgetId: HudWidgetId;
   readonly placement: HudWidgetPlacement;
@@ -29,42 +26,56 @@ export interface HudWidgetRendererProps {
   readonly settings: HudWidgetSettings;
 }
 
-export type HudWidgetRenderer = ComponentType<HudWidgetRendererProps>;
-
-export interface HudRendererEntry {
-  readonly availability: 'implemented' | 'unimplemented';
-  readonly renderer: HudWidgetRenderer | null;
+/** Program-owned widgets cannot access Radar-only spatial truth by type. */
+export interface HudWidgetRendererProps extends HudWidgetRendererBaseProps {
+  readonly snapshot: ProgramSnapshot;
 }
+
+/** Radar owns an independent source contract and does not require ProgramSnapshot. */
+export interface RadarHudWidgetRendererProps extends HudWidgetRendererBaseProps {
+  readonly radarSnapshot?: RadarSnapshot | null | undefined;
+  readonly radarClient?: LocalChannelClient<'radar'> | undefined;
+}
+
+export type HudRendererEntry =
+  | {
+      readonly availability: 'implemented';
+      readonly source: 'program';
+      readonly renderer: ComponentType<HudWidgetRendererProps>;
+    }
+  | {
+      readonly availability: 'implemented';
+      readonly source: 'radar';
+      readonly renderer: ComponentType<RadarHudWidgetRendererProps>;
+    }
+  | {
+      readonly availability: 'unimplemented';
+      readonly source: null;
+      readonly renderer: null;
+    };
 
 export type HudRendererRegistry = Readonly<Record<HudWidgetId, HudRendererEntry>>;
 
 const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
   availability: 'unimplemented',
+  source: null,
   renderer: null,
 });
 
-const IMPLEMENTED_RENDERERS: Partial<Record<HudWidgetId, HudWidgetRenderer>> = {
-  radar: RadarWidget,
-  'focused-player': FocusedPlayer,
-  'top-score-bar': TopScoreBar,
-  'team-ct-rail': PlayerRail,
-  'team-t-rail': PlayerRail,
-  'series-strip': SeriesStrip,
-  'round-history': RoundHistory,
+const IMPLEMENTED_RENDERERS: Partial<Record<HudWidgetId, HudRendererEntry>> = {
+  radar: { availability: 'implemented', source: 'radar', renderer: RadarWidget },
+  'focused-player': { availability: 'implemented', source: 'program', renderer: FocusedPlayer },
+  'top-score-bar': { availability: 'implemented', source: 'program', renderer: TopScoreBar },
+  'team-ct-rail': { availability: 'implemented', source: 'program', renderer: PlayerRail },
+  'team-t-rail': { availability: 'implemented', source: 'program', renderer: PlayerRail },
+  'series-strip': { availability: 'implemented', source: 'program', renderer: SeriesStrip },
+  'round-history': { availability: 'implemented', source: 'program', renderer: RoundHistory },
 };
 
 /** Web-owned React seam. Future component Issues add their renderer here only. */
 export const HUD_RENDERER_REGISTRY: HudRendererRegistry = Object.freeze(
   Object.fromEntries(
-    HUD_WIDGET_IDS.map((id) => {
-      const renderer = IMPLEMENTED_RENDERERS[id];
-      return [
-        id,
-        renderer === undefined
-          ? UNIMPLEMENTED_RENDERER_ENTRY
-          : { availability: 'implemented' as const, renderer },
-      ];
-    }),
+    HUD_WIDGET_IDS.map((id) => [id, IMPLEMENTED_RENDERERS[id] ?? UNIMPLEMENTED_RENDERER_ENTRY]),
   ) as Record<HudWidgetId, HudRendererEntry>,
 );
 
@@ -86,6 +97,12 @@ export function assertHudRendererRegistryConsistency(): void {
     }
     if ((entry.renderer === null) !== (entry.availability === 'unimplemented')) {
       throw new Error(`HUD renderer entry 状态不一致：${descriptor.id}`);
+    }
+    if (entry.renderer !== null) {
+      const expectedSource = descriptor.id === 'radar' ? 'radar' : 'program';
+      if (entry.source !== expectedSource) {
+        throw new Error(`HUD renderer source owner 不一致：${descriptor.id}`);
+      }
     }
   }
 }

@@ -3,7 +3,7 @@ import type { RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
 import { projectWorldPosition, projectWorldRadius } from '@rivalhub-broadcast/radar';
 import { getCs2Asset, getRadarMapAsset } from '@rivalhub-broadcast/cs2-assets';
 import type { LocalChannelClient } from '../../../realtime';
-import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
+import type { RadarHudWidgetRendererProps } from '../../hud-renderer-registry';
 import {
   RadarPresentation,
   RADAR_PRESENTATION,
@@ -107,6 +107,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       const map = geometry ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
       const background = map ? imageFor(map.outputPath) : null;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
+      element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
+      if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
+      else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
       element.dataset.radarPlayers = String(model.players.size);
       element.dataset.radarTrails = String(
@@ -325,7 +328,11 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
   return <canvas aria-label="比赛雷达" className="radar" ref={canvas} />;
 }
 
-export function RadarWidget({ radarClient, radarSnapshot, settings }: HudWidgetRendererProps) {
+export function RadarWidget({
+  radarClient,
+  radarSnapshot,
+  settings,
+}: RadarHudWidgetRendererProps) {
   return (
     <Radar
       client={radarClient}

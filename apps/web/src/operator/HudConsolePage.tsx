@@ -25,6 +25,7 @@ import {
   type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
   getProgramFixture,
@@ -106,6 +107,11 @@ export function HudConsolePage() {
   const hudEditor = useHudConfigEditorClient(!visualFixtureMode);
   const program = useProgramConnection();
   const radarClient = useLocalChannelClient('radar');
+  const radar = useSyncExternalStore(
+    radarClient.subscribe,
+    radarClient.getSnapshot,
+    radarClient.getSnapshot,
+  );
 
   const fixtureDocument = useMemo(() => createDefaultHudConfigDocument(), []);
   const authoritativeDocument = hudEditor.document ?? (visualFixtureMode ? fixtureDocument : null);
@@ -170,6 +176,11 @@ export function HudConsolePage() {
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
+  const liveRadarMap = radar.state === 'live' ? radar.current?.payload.mapName ?? null : null;
+  const unsupportedRadarMap =
+    liveRadarMap !== null && defaultMapGeometryProvider.resolve(liveRadarMap) === null
+      ? liveRadarMap
+      : null;
 
   const savedPreset = resourceFor(configDocument, 'preset', selectedPresetId) as
     HudPreset | undefined;
@@ -710,8 +721,16 @@ export function HudConsolePage() {
                 </select>
               </label>
             ) : null}
-            <span className="hud-console__source-status" data-connection-state={program.state}>
+            <span
+              className="hud-console__source-status"
+              data-connection-state={program.state}
+              data-radar-diagnostic={unsupportedRadarMap === null ? undefined : 'unsupported-map'}
+              data-radar-unsupported-map={unsupportedRadarMap ?? undefined}
+            >
               {connectionLabel(program.state)}
+              {activePreviewSource === 'current-live' && unsupportedRadarMap !== null
+                ? ` · 雷达不可用：不支持地图 ${unsupportedRadarMap}`
+                : null}
             </span>
           </section>
 

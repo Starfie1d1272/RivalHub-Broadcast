@@ -1,6 +1,6 @@
 import { presentationBoundaryKey } from './presentation-boundary';
 import type { RadarProps } from './widgets/radar/Radar';
-import type { CSSProperties } from 'react';
+import type { CSSProperties, ReactElement } from 'react';
 
 import {
   HUD_WIDGET_REGISTRY,
@@ -59,9 +59,9 @@ export function GameplayHud({
   resolvedPreset,
   rendererRegistry = HUD_RENDERER_REGISTRY,
 }: GameplayHudProps) {
-  if (snapshot === null) return null;
-  const programFresh = snapshot.payload.status.telemetry === 'fresh';
-  if (!programFresh && radarClient === undefined && radarSnapshot == null) return null;
+  const programFresh = snapshot?.payload.status.telemetry === 'fresh';
+  const radarAvailable = radarClient !== undefined || radarSnapshot != null;
+  if (!programFresh && !radarAvailable) return null;
 
   return (
     <div
@@ -75,16 +75,45 @@ export function GameplayHud({
         if (placement === undefined || !placement.visible) return null;
         const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
         if (rendererEntry.renderer === null) return null;
-        const Renderer = rendererEntry.renderer;
-        if (!programFresh && descriptor.id !== 'radar') return null;
+
         const box = placementToBox(descriptor.id, placement);
+        let content: ReactElement;
+        if (rendererEntry.source === 'program') {
+          if (!programFresh || snapshot === null) return null;
+          const Renderer = rendererEntry.renderer;
+          content = (
+            <Renderer
+              box={box}
+              placement={placement}
+              resolvedPreset={resolvedPreset}
+              settings={resolvedPreset.widgets[descriptor.id]}
+              snapshot={snapshot}
+              widgetId={descriptor.id}
+            />
+          );
+        } else {
+          if (!radarAvailable) return null;
+          const Renderer = rendererEntry.renderer;
+          content = (
+            <Renderer
+              box={box}
+              placement={placement}
+              radarClient={radarClient}
+              radarSnapshot={radarSnapshot}
+              resolvedPreset={resolvedPreset}
+              settings={resolvedPreset.widgets[descriptor.id]}
+              widgetId={descriptor.id}
+            />
+          );
+        }
+
         return (
           <div
             className="gameplay-hud__widget"
             data-hud-widget={descriptor.id}
             data-renderer-availability={descriptor.rendererAvailability}
             key={
-              descriptor.id === 'radar'
+              rendererEntry.source === 'radar'
                 ? 'radar'
                 : `${descriptor.id}:${presentationBoundaryKey(snapshot, undefined)}`
             }
@@ -95,16 +124,7 @@ export function GameplayHud({
               width: `${box.width}px`,
             }}
           >
-            <Renderer
-              box={box}
-              placement={placement}
-              radarClient={radarClient}
-              radarSnapshot={radarSnapshot}
-              resolvedPreset={resolvedPreset}
-              settings={resolvedPreset.widgets[descriptor.id]}
-              snapshot={snapshot ?? ({} as ProgramSnapshot)}
-              widgetId={descriptor.id}
-            />
+            {content}
           </div>
         );
       })}
