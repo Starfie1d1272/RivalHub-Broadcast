@@ -3303,7 +3303,798 @@
               "kind": "plant",
               "sourcePlayerId": "76561198000000014",
               "remainingSeconds": 2.943,
-              "durationSeconds": null
+              "durationSeconds": 2.943
+            }
+          },
+          "coverage": {
+            "map": "present",
+            "round": "present",
+            "phaseCountdowns": "present",
+            "player": "present",
+            "allPlayers": "present",
+            "bomb": "present"
+          }
+        }
+      }
+    },
+    "real-planting-late": {
+      "provenance": {
+        "kind": "real-derived",
+        "capturePath": "fixtures/gsi/semantic/bomb/plant",
+        "sourceCaptureId": "20260914T060149Z-4cda66b7-recovered-match",
+        "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+        "targetSequence": 1027,
+        "firstSequence": 1015,
+        "lastSequence": 1029,
+        "sanitizerVersion": 1
+      },
+      "snapshot": {
+        "type": "snapshot",
+        "protocolVersion": 1,
+        "channel": "program",
+        "schemaVersion": 7,
+        "channelSeq": 14,
+        "cursor": {
+          "producerInstanceId": "real-program-replay",
+          "liveSessionId": null,
+          "runtimeSeq": 13,
+          "programSourceGeneration": 0,
+          "programReceiveSequence": 1027,
+          "mapEpoch": 1
+        },
+        "payload": {
+          "status": { "telemetry": "fresh", "context": "fresh", "identity": "matched" },
+          "match": {
+            "matchId": "match-m2-01",
+            "competition": {
+              "competitionId": "competition-m2",
+              "slug": "m2-sample",
+              "name": "M2 示例赛",
+              "themeColor": "#1d4ed8"
+            },
+            "format": "bo3",
+            "stage": "瑞士赛"
+          },
+          "teams": {
+            "ct": {
+              "mode": "canonical",
+              "entryId": "entry-m2-a",
+              "name": "Fixture Team 001",
+              "logoUrl": null,
+              "seriesScore": 0
+            },
+            "t": {
+              "mode": "canonical",
+              "entryId": "entry-m2-b",
+              "name": "Fixture Team 002",
+              "logoUrl": null,
+              "seriesScore": 0
+            }
+          },
+          "series": {
+            "format": "bo3",
+            "requiredWins": 2,
+            "entrants": {
+              "a": { "entryId": "entry-m2-a", "name": "Fixture Team 001", "logoUrl": null },
+              "b": { "entryId": "entry-m2-b", "name": "Fixture Team 002", "logoUrl": null }
+            },
+            "score": { "a": 0, "b": 0 },
+            "status": "live",
+            "bindingState": "bound",
+            "currentMapOrder": 1,
+            "maps": [
+              {
+                "mapId": "map-m2-01",
+                "mapOrder": 1,
+                "mapName": "de_ancient",
+                "selection": { "kind": "pick", "entryId": "entry-m2-a" },
+                "teamAStartSide": "CT",
+                "status": "current",
+                "finalScore": null,
+                "winnerEntryId": null
+              },
+              {
+                "mapId": "map-m2-02",
+                "mapOrder": 2,
+                "mapName": "de_mirage",
+                "selection": { "kind": "pick", "entryId": "entry-m2-b" },
+                "teamAStartSide": "CT",
+                "status": "pending",
+                "finalScore": null,
+                "winnerEntryId": null
+              },
+              {
+                "mapId": "map-m2-03",
+                "mapOrder": 3,
+                "mapName": "de_nuke",
+                "selection": { "kind": "unknown" },
+                "teamAStartSide": null,
+                "status": "pending",
+                "finalScore": null,
+                "winnerEntryId": null
+              }
+            ],
+            "veto": [
+              {
+                "stepOrder": 1,
+                "actionType": "ban",
+                "mapName": "de_dust2",
+                "entryId": "entry-m2-a",
+                "side": null
+              },
+              {
+                "stepOrder": 2,
+                "actionType": "ban",
+                "mapName": "de_inferno",
+                "entryId": "entry-m2-b",
+                "side": null
+              },
+              {
+                "stepOrder": 3,
+                "actionType": "pick",
+                "mapName": "de_ancient",
+                "entryId": "entry-m2-a",
+                "side": "T"
+              }
+            ],
+            "roundHistory": {
+              "mapOrder": 1,
+              "completeness": "complete",
+              "rounds": [
+                {
+                  "roundNumber": 1,
+                  "winnerSide": "CT",
+                  "winnerEntryId": null,
+                  "winCondition": "elimination"
+                },
+                {
+                  "roundNumber": 2,
+                  "winnerSide": "CT",
+                  "winnerEntryId": null,
+                  "winCondition": "elimination"
+                }
+              ]
+            }
+          },
+          "map": {
+            "name": "de_ancient",
+            "mode": "competitive",
+            "phase": "live",
+            "roundNumber": 2,
+            "score": { "ct": 2, "t": 0 },
+            "timeoutsRemaining": { "ct": 1, "t": 1 },
+            "consecutiveRoundLosses": { "ct": 0, "t": 3 }
+          },
+          "round": { "phase": "live", "winnerSide": "unknown" },
+          "clock": { "phase": "live", "endsInSeconds": 25.6 },
+          "observedPlayerSourceId": "76561198000000002",
+          "players": [
+            {
+              "sourcePlayerId": "76561198000000001",
+              "canonicalPlayerId": "player-m2-a-001",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "星火一号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "CT",
+              "observerSlot": 4,
+              "activity": null,
+              "lifeState": "dead",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 0,
+                "armor": 0,
+                "hasHelmet": false,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 350,
+                "roundTotalDamage": 0,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 0
+              },
+              "matchStats": { "kills": 1, "assists": 0, "deaths": 1, "mvps": 0, "score": 2 },
+              "weapons": []
+            },
+            {
+              "sourcePlayerId": "76561198000000002",
+              "canonicalPlayerId": "player-m2-a-002",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "星火二号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "CT",
+              "observerSlot": 2,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 44,
+                "armor": 59,
+                "hasHelmet": true,
+                "hasDefuser": true,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 300,
+                "roundTotalDamage": 100,
+                "roundKills": 1,
+                "roundKillHeadshots": 0,
+                "equipValue": 5800
+              },
+              "matchStats": { "kills": 5, "assists": 3, "deaths": 0, "mvps": 1, "score": 11 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_butterfly",
+                  "paintKit": "am_emerald_marbleized",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_hkp2000",
+                  "paintKit": "p2k_fractal",
+                  "type": "Pistol",
+                  "ammoClip": 13,
+                  "ammoClipMax": 13,
+                  "ammoReserve": 4,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_flashbang",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_3",
+                  "name": "weapon_m4a1_silencer",
+                  "paintKit": "am_m4a1s_bluesmoke",
+                  "type": "Rifle",
+                  "ammoClip": 13,
+                  "ammoClipMax": 20,
+                  "ammoReserve": 1,
+                  "state": "active"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000003",
+              "canonicalPlayerId": "player-m2-a-003",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "星火三号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "CT",
+              "observerSlot": 1,
+              "activity": null,
+              "lifeState": "dead",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 0,
+                "armor": 0,
+                "hasHelmet": false,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 2400,
+                "roundTotalDamage": 98,
+                "roundKills": 1,
+                "roundKillHeadshots": 1,
+                "equipValue": 0
+              },
+              "matchStats": { "kills": 3, "assists": 1, "deaths": 3, "mvps": 0, "score": 7 },
+              "weapons": []
+            },
+            {
+              "sourcePlayerId": "76561198000000004",
+              "canonicalPlayerId": "player-m2-a-004",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "星火四号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "CT",
+              "observerSlot": 3,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 83,
+                "armor": 98,
+                "hasHelmet": true,
+                "hasDefuser": true,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 2400,
+                "roundTotalDamage": 2,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 4150
+              },
+              "matchStats": { "kills": 0, "assists": 1, "deaths": 1, "mvps": 0, "score": 1 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_karambit",
+                  "paintKit": "am_gamma_doppler_phase2",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_usp_silencer",
+                  "paintKit": "cu_usp_kill_confirmed",
+                  "type": "Pistol",
+                  "ammoClip": 12,
+                  "ammoClipMax": 12,
+                  "ammoReserve": 2,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_mp9",
+                  "paintKit": "am_stained_glass",
+                  "type": "Submachine Gun",
+                  "ammoClip": 25,
+                  "ammoClipMax": 30,
+                  "ammoReserve": 2,
+                  "state": "active"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000005",
+              "canonicalPlayerId": "player-m2-a-005",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "星火五号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "CT",
+              "observerSlot": 0,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 100,
+                "armor": 100,
+                "hasHelmet": true,
+                "hasDefuser": true,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 950,
+                "roundTotalDamage": 0,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 7550
+              },
+              "matchStats": { "kills": 3, "assists": 1, "deaths": 2, "mvps": 1, "score": 7 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_butterfly",
+                  "paintKit": "aa_fade",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_usp_silencer",
+                  "paintKit": "cu_usp_printstream",
+                  "type": "Pistol",
+                  "ammoClip": 12,
+                  "ammoClipMax": 12,
+                  "ammoReserve": 2,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_incgrenade",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_3",
+                  "name": "weapon_flashbang",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 2,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_4",
+                  "name": "weapon_hegrenade",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_5",
+                  "name": "weapon_awp",
+                  "paintKit": "cu_medieval_dragon_awp",
+                  "type": "SniperRifle",
+                  "ammoClip": 4,
+                  "ammoClipMax": 5,
+                  "ammoReserve": 2,
+                  "state": "active"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000011",
+              "canonicalPlayerId": "player-m2-b-001",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "北极光一号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "T",
+              "observerSlot": 7,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 100,
+                "armor": 100,
+                "hasHelmet": true,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 500,
+                "roundTotalDamage": 47,
+                "roundKills": 1,
+                "roundKillHeadshots": 1,
+                "equipValue": 3900
+              },
+              "matchStats": { "kills": 1, "assists": 0, "deaths": 2, "mvps": 0, "score": 2 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_butterfly",
+                  "paintKit": "am_doppler_phase4",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_glock",
+                  "paintKit": "glock_mirror_maze_v2_pearl",
+                  "type": "Pistol",
+                  "ammoClip": 20,
+                  "ammoClipMax": 20,
+                  "ammoReserve": 3,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_galilar",
+                  "paintKit": "hy_galil_signal_red",
+                  "type": "Rifle",
+                  "ammoClip": 28,
+                  "ammoClipMax": 35,
+                  "ammoReserve": 4,
+                  "state": "active"
+                },
+                {
+                  "sourceWeaponId": "weapon_3",
+                  "name": "weapon_hegrenade",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_4",
+                  "name": "weapon_molotov",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_5",
+                  "name": "weapon_flashbang",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000012",
+              "canonicalPlayerId": "player-m2-b-002",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "北极光二号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "T",
+              "observerSlot": 6,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 100,
+                "armor": 100,
+                "hasHelmet": true,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 350,
+                "roundTotalDamage": 127,
+                "roundKills": 1,
+                "roundKillHeadshots": 1,
+                "equipValue": 4800
+              },
+              "matchStats": { "kills": 1, "assists": 0, "deaths": 2, "mvps": 0, "score": 2 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_butterfly",
+                  "paintKit": "am_sapphire_marbleized_b",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_glock",
+                  "paintKit": "cu_glock_eyecontact",
+                  "type": "Pistol",
+                  "ammoClip": 20,
+                  "ammoClipMax": 20,
+                  "ammoReserve": 3,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_ak47",
+                  "paintKit": "am_bamboo_jungle",
+                  "type": "Rifle",
+                  "ammoClip": 25,
+                  "ammoClipMax": 30,
+                  "ammoReserve": 2,
+                  "state": "active"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000013",
+              "canonicalPlayerId": "player-m2-b-003",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "北极光三号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "T",
+              "observerSlot": 9,
+              "activity": null,
+              "lifeState": "dead",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 0,
+                "armor": 0,
+                "hasHelmet": false,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 100,
+                "roundTotalDamage": 96,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 4800
+              },
+              "matchStats": { "kills": 1, "assists": 1, "deaths": 3, "mvps": 0, "score": 3 },
+              "weapons": []
+            },
+            {
+              "sourcePlayerId": "76561198000000014",
+              "canonicalPlayerId": "player-m2-b-004",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "北极光四号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "T",
+              "observerSlot": 8,
+              "activity": null,
+              "lifeState": "alive",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 100,
+                "armor": 100,
+                "hasHelmet": true,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 50,
+                "roundTotalDamage": 0,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 4500
+              },
+              "matchStats": { "kills": 1, "assists": 0, "deaths": 2, "mvps": 0, "score": 2 },
+              "weapons": [
+                {
+                  "sourceWeaponId": "weapon_0",
+                  "name": "weapon_knife_karambit",
+                  "paintKit": "aa_fade",
+                  "type": "Knife",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_1",
+                  "name": "weapon_glock",
+                  "paintKit": "aa_fade",
+                  "type": "Pistol",
+                  "ammoClip": 20,
+                  "ammoClipMax": 20,
+                  "ammoReserve": 3,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_2",
+                  "name": "weapon_ak47",
+                  "paintKit": "cu_fireserpent_ak47_bravo",
+                  "type": "Rifle",
+                  "ammoClip": 30,
+                  "ammoClipMax": 30,
+                  "ammoReserve": 3,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_3",
+                  "name": "weapon_hegrenade",
+                  "paintKit": "default",
+                  "type": "Grenade",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": 1,
+                  "state": "holstered"
+                },
+                {
+                  "sourceWeaponId": "weapon_4",
+                  "name": "weapon_c4",
+                  "paintKit": "default",
+                  "type": "C4",
+                  "ammoClip": null,
+                  "ammoClipMax": null,
+                  "ammoReserve": null,
+                  "state": "active"
+                }
+              ]
+            },
+            {
+              "sourcePlayerId": "76561198000000015",
+              "canonicalPlayerId": "player-m2-b-005",
+              "identityEvidence": "canonical",
+              "lineupEvidence": "current",
+              "displayName": "北极光五号",
+              "displayNameSource": "canonical",
+              "avatarUrl": null,
+              "side": "T",
+              "observerSlot": 5,
+              "activity": null,
+              "lifeState": "dead",
+              "liveAdr": null,
+              "completedAdr": null,
+              "weaponsAvailable": true,
+              "currentRoundDamage": null,
+              "roundMoneySpent": null,
+              "state": {
+                "health": 0,
+                "armor": 0,
+                "hasHelmet": false,
+                "hasDefuser": null,
+                "flashed": 0,
+                "smoked": 0,
+                "burning": 0,
+                "money": 150,
+                "roundTotalDamage": 0,
+                "roundKills": 0,
+                "roundKillHeadshots": 0,
+                "equipValue": 0
+              },
+              "matchStats": { "kills": 3, "assists": 0, "deaths": 3, "mvps": 0, "score": 6 },
+              "weapons": []
+            }
+          ],
+          "bomb": {
+            "state": "planting",
+            "sourcePlayerId": "76561198000000014",
+            "explosion": null,
+            "action": {
+              "kind": "plant",
+              "sourcePlayerId": "76561198000000014",
+              "remainingSeconds": 0.208,
+              "durationSeconds": 2.943
             }
           },
           "coverage": {
@@ -4038,7 +4829,7 @@
           "bomb": {
             "state": "planted",
             "sourcePlayerId": null,
-            "explosion": { "remainingSeconds": 39.836, "durationSeconds": null },
+            "explosion": { "remainingSeconds": 39.836, "durationSeconds": 39.836 },
             "action": null
           },
           "coverage": {

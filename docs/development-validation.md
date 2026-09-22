@@ -56,7 +56,7 @@ Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromi
 
 Gameplay visual acceptance is real-first. Normal Program/HUD states must use generated real-derived Program fixtures whenever committed capture evidence exists. Synthetic fixtures are reserved for explicit edge/fail-closed or presentation stress and must declare provenance/reason.
 
-真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。更新流程为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff → 在正式基准环境运行 `pnpm visual:update` → `pnpm visual:test`。展示压力测试只覆盖文案、logo 与赛制展示；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
+真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。更新流程为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff → 在正式基准环境运行 `pnpm visual:update` → `pnpm visual:test`。展示压力测试只覆盖文案、logo、选手 avatarUrl 与赛制展示；头像验收使用确定性本地/data-URI 图片，加载失败由组件测试验证；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
 
 ### C. 真实 CS2 / CSTV
 

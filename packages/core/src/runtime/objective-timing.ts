@@ -1,3 +1,4 @@
+import type { BombState } from '../telemetry/bomb.js';
 import type { TelemetryObservation } from '../telemetry/observation.js';
 import policy from './objective-timing-policy.json' with { type: 'json' };
 
@@ -21,6 +22,9 @@ export interface RuntimeObjectiveTimingState {
   readonly mapEpoch: number;
   readonly lastAcceptedReceiveSequence: number | null;
   readonly explosionAnchor: RuntimeObjectiveTimingAnchor | null;
+  readonly lastBombState: BombState | null;
+  readonly explosionDurationSeconds: number | null;
+  readonly plantActionDurationSeconds: number | null;
 }
 
 export function createObjectiveTimingState(
@@ -32,6 +36,9 @@ export function createObjectiveTimingState(
     mapEpoch,
     lastAcceptedReceiveSequence: null,
     explosionAnchor: null,
+    lastBombState: null,
+    explosionDurationSeconds: null,
+    plantActionDurationSeconds: null,
   };
 }
 
@@ -90,9 +97,38 @@ export function reduceObjectiveTiming(
     }
   }
 
+  const contiguous =
+    canRetainPreviousAnchor &&
+    previous.sourceGeneration === sourceGeneration &&
+    previous.mapEpoch === mapEpoch;
+  const state = !roundIsOver(observation) ? (bomb?.state ?? null) : null;
+  const countdown = finiteCountdown(bomb?.countdownSeconds);
+  const denominator = countdown !== undefined && countdown >= 0 ? countdown : null;
+  let explosionDurationSeconds: number | null = null;
+  let plantActionDurationSeconds: number | null = null;
+  if (contiguous) {
+    if (state === 'planting') {
+      plantActionDurationSeconds =
+        previous.lastBombState === 'planting'
+          ? previous.plantActionDurationSeconds
+          : previous.lastBombState === 'carried' || previous.lastBombState === 'dropped'
+            ? denominator
+            : null;
+    }
+    if (state === 'planted' || state === 'defusing') {
+      explosionDurationSeconds = previous.explosionDurationSeconds;
+      if (state === 'planted' && previous.lastBombState === 'planting')
+        explosionDurationSeconds = denominator;
+      else if (state === 'planted' && explosionDurationSeconds !== null && denominator !== null)
+        explosionDurationSeconds = Math.max(explosionDurationSeconds, denominator);
+    }
+  }
   return {
     sourceGeneration,
     mapEpoch,
+    lastBombState: state,
+    explosionDurationSeconds,
+    plantActionDurationSeconds,
     lastAcceptedReceiveSequence: observation.receive.sequence,
     explosionAnchor,
   };

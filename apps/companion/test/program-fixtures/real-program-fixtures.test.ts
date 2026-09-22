@@ -136,12 +136,12 @@ describe('real-derived Program fixture generation', { timeout: 30_000 }, () => {
         kind: 'plant',
         sourcePlayerId: '76561198000000014',
         remainingSeconds: 2.943,
-        durationSeconds: null,
+        durationSeconds: 2.943,
       },
     });
     expect(payload('real-planted').bomb).toMatchObject({
       state: 'planted',
-      explosion: { remainingSeconds: 39.836, durationSeconds: null },
+      explosion: { remainingSeconds: 39.836, durationSeconds: 39.836 },
     });
     expect(payload('real-defusing').bomb).toMatchObject({
       state: 'defusing',

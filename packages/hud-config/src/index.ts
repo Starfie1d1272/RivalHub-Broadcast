@@ -534,6 +534,7 @@ export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
       id,
       label: HUD_WIDGET_LABELS[id],
       rendererAvailability:
+        id === 'focused-player' ||
         id === 'top-score-bar' ||
         id === 'team-ct-rail' ||
         id === 'team-t-rail' ||

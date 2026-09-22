@@ -560,7 +560,7 @@ function projectBomb(
           remainingSeconds: objectiveClockLive
             ? remainingFromObjectiveAnchor(explosionAnchor, nowMonotonicMs)
             : null,
-          durationSeconds: null,
+          durationSeconds: runtime.objectiveTiming.explosionDurationSeconds,
         };
   const remainingSeconds =
     objectiveClockLive && lastAccepted !== null && bomb.countdownSeconds !== undefined
@@ -576,7 +576,7 @@ function projectBomb(
         kind: 'plant',
         sourcePlayerId,
         remainingSeconds,
-        durationSeconds: null,
+        durationSeconds: runtime.objectiveTiming.plantActionDurationSeconds,
       };
       break;
     case 'defusing': {

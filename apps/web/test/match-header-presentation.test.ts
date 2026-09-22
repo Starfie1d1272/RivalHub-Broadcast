@@ -13,6 +13,16 @@ function presentation(fixtureId: string) {
 }
 
 describe('Match Header presentation selector', () => {
+  it('maps BO3 and BO5 victory slots to stable entrant series wins', () => {
+    const base = getProgramFixture('real-live-rich')!.payload;
+    const p = buildMatchHeaderPresentation({
+      ...base,
+      series: { ...base.series!, score: { a: 1, b: 0 } },
+    });
+    expect(p.teamA.winSlots).toEqual([true, false]);
+    expect(p.teamB.winSlots).toEqual([false, false]);
+    expect(presentation('series-bo5').teamA.winSlots).toEqual([true, false, false]);
+  });
   it('keeps canonical entrants left/right while joining current side facts by entryId', () => {
     const normal = presentation('live-canonical');
     expect(normal.currentSideMapping).toBe('resolved');

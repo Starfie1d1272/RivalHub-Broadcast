@@ -26,8 +26,9 @@ function gameplay(snapshot: ProgramSnapshot) {
         ct: { mode: p.teams.ct.mode, entryId: p.teams.ct.entryId },
         t: { mode: p.teams.t.mode, entryId: p.teams.t.entryId },
       },
-      players: p.players.map(({ displayName, ...player }) => {
+      players: p.players.map(({ displayName, avatarUrl, ...player }) => {
         void displayName;
+        void avatarUrl;
         return player;
       }),
     },

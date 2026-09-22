@@ -13,6 +13,7 @@ import {
   type HudRendererRegistry,
 } from './hud-renderer-registry';
 import './gameplay-hud.css';
+import './widgets/focused-player/focused-player.css';
 import './widgets/match-header/match-header.css';
 import './widgets/player-rails/player-rails.css';
 

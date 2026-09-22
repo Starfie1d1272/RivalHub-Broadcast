@@ -99,6 +99,10 @@ ProgramProjection 负责完成领域解释；React 组件只负责展示。例�
 
 系列赛比分、地图结果和当前地图绑定由 Broadcast 本地 `SeriesProgress` 统一维护。地图结束后本地立即推进，不等待 RivalHub 回写；进程重启使用有界 checkpoint 恢复已冻结事实。实际服务器地图与赛前计划不一致时，比赛 telemetry 仍可继续显示，但 Series 暂停绑定并等待 Operator 明确确认。Round History 恢复不完整时显示 `partial`，不由 Renderer 补猜缺失回合。
 
+中央比分条采用深色两翼、浅色斜切中央面板；双方比分下按获胜所需局数显示胜场格，已赢地图点亮。正常阶段显示回合与时钟；安装时中央改为 C4 与四格逐步填充的进度窗；安装后底部引信条向中央收缩，C4 图标闪动；拆弹时中央显示逆时针闭合的进度圆环，引信条仍独立继续。暂停优先占用中央区域。默认正式节目隐藏精确 objective 秒数；进度分母证据缺失时只显示状态与不可定量的轨道，不补猜时长。存活人数只在完整 current 5+5 证据且出现死亡后显示，左右沿用 entrant A/B，显示在比分条下方。整个逻辑组件保持 720×104，80px 主面板和 24px 存活人数区域不与回合历史重叠。减少动态效果偏好关闭闪动；时间不可用时停止闪动并隐藏定量进度。
+
+当前观察选手卡使用 `observedPlayerSourceId` 精确匹配 current player，展示身份、K/A/D、`completedAdr`、生命、护甲和真正 active item；阵亡时只保留身份和稳定统计。逻辑尺寸固定 620×132、底部居中；可选头像加载成功时占 104px，缺失或失败时内部卡片缩为居中的 516px。弹药单位来自官方 item metadata，magazine reserve 显示弹匣数量，不换算为旧式备用子弹。Program 与 HUD 编辑器共享 renderer。
+
 ### 5.1.1 Gameplay HUD 自定义
 
 Gameplay HUD 的第一版自定义面向现场制播人员，固定分为三层：

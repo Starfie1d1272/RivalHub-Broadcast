@@ -365,6 +365,6 @@ test.describe('HUD 编辑器', () => {
     await page.goto('/__visual/program/live-canonical');
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(0);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
-    await expect(page.locator('[data-hud-widget]')).toHaveCount(5);
+    await expect(page.locator('[data-hud-widget]')).toHaveCount(6);
   });
 });

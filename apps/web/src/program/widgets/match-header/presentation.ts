@@ -1,5 +1,10 @@
 import type { ProgramPayload } from '@rivalhub-broadcast/protocol/program';
 
+import {
+  buildObjectiveCenterPresentation,
+  type ObjectiveCenterPresentation,
+} from './objective-presentation';
+
 export type MatchHeaderEntrantKey = 'a' | 'b';
 export type MatchHeaderSide = 'CT' | 'T';
 
@@ -9,6 +14,7 @@ export interface MatchHeaderTeamPresentation {
   readonly name: string;
   readonly logoUrl: string | null;
   readonly seriesScore: number | null;
+  readonly winSlots: readonly boolean[];
   readonly side: MatchHeaderSide | null;
   readonly mapScore: number | null;
   readonly timeoutsRemaining: number | null;
@@ -45,6 +51,7 @@ export interface MatchHeaderRoundHistoryPresentation {
 }
 
 export interface MatchHeaderPresentation {
+  readonly objective: ObjectiveCenterPresentation;
   readonly hasCanonicalSeries: boolean;
   readonly currentSideMapping: 'resolved' | 'unavailable' | 'neutral';
   readonly teamA: MatchHeaderTeamPresentation;
@@ -139,6 +146,7 @@ function buildTeam(
       name: side,
       logoUrl: null,
       seriesScore: null,
+      winSlots: [],
       side,
       mapScore: sideScore(payload, side, 'score'),
       timeoutsRemaining: sideScore(payload, side, 'timeoutsRemaining'),
@@ -153,6 +161,7 @@ function buildTeam(
     name: entrant.name,
     logoUrl: entrant.logoUrl,
     seriesScore: series.score[key],
+    winSlots: Array.from({ length: series.requiredWins }, (_, index) => index < series.score[key]),
     side,
     mapScore: sideScore(payload, side, 'score'),
     timeoutsRemaining: sideScore(payload, side, 'timeoutsRemaining'),
@@ -245,11 +254,11 @@ function buildRoundHistory(
 
 function clockPresentation(
   payload: ProgramPayload,
+  sideMapping: ReturnType<typeof resolveSideMapping>,
 ): Pick<MatchHeaderPresentation, 'phaseLabel' | 'clockText' | 'clockTone' | 'timeoutPanel'> {
   const phase = payload.clock?.phase ?? null;
   const clockText = formatClock(payload.clock?.endsInSeconds);
   const timeoutSide = phase === 'timeout_ct' ? 'CT' : phase === 'timeout_t' ? 'T' : null;
-  const sideMapping = resolveSideMapping(payload);
   const timeoutOwner =
     timeoutSide === null || sideMapping.state !== 'resolved'
       ? null
@@ -270,6 +279,16 @@ function clockPresentation(
           remaining: timeoutRemaining,
           clockText,
         };
+
+  if (
+    timeoutSide === null &&
+    phase !== 'paused' &&
+    (payload.round?.phase === 'over' ||
+      payload.bomb?.state === 'defused' ||
+      payload.bomb?.state === 'exploded')
+  ) {
+    return { phaseLabel: '回合结束', clockText: null, clockTone: 'normal', timeoutPanel: null };
+  }
 
   switch (phase) {
     case 'warmup':
@@ -333,9 +352,10 @@ export function buildMatchHeaderPresentation(payload: ProgramPayload): MatchHead
     series?.currentMapOrder === null || series === null
       ? undefined
       : series.maps.find((map) => map.mapOrder === series.currentMapOrder);
-  const clock = clockPresentation(payload);
+  const clock = clockPresentation(payload, sideMapping);
 
   return {
+    objective: buildObjectiveCenterPresentation(payload, teamA, teamB),
     hasCanonicalSeries: series !== null,
     currentSideMapping: sideMapping.state,
     teamA,

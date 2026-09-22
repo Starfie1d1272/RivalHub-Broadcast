@@ -329,10 +329,10 @@ Program 的 `bomb` 结构为：
 {
   state: BombState | null,
   sourcePlayerId: string | null,
-  explosion: { remainingSeconds: number | null, durationSeconds: null } | null,
+  explosion: { remainingSeconds: number | null, durationSeconds: number | null } | null,
   action:
     | { kind: "plant", sourcePlayerId: string | null,
-        remainingSeconds: number | null, durationSeconds: null }
+        remainingSeconds: number | null, durationSeconds: number | null }
     | { kind: "defuse", sourcePlayerId: string | null,
         remainingSeconds: number | null, durationSeconds: number | null,
         hasDefuseKit: boolean | null }
@@ -340,7 +340,7 @@ Program 的 `bomb` 结构为：
 }
 ```
 
-`planting` 的 action duration 保持 `null`；`defusing` 只有当前 player evidence 明确提供
+`planting` 的 action duration 只在同一 generation/mapEpoch 连续观察到 carried/dropped → planting 时记录首个非负 countdown。explosion duration 只在连续 planting → planted 时记录首个非负 planted countdown，后续 planted sample 可向上校准；它是观测到的展示分母，不是 server cvar。late join 不建立分母，gap/stale recovery、generation/mapEpoch、terminal 清空分母。`defusing` 只有当前 player evidence 明确提供
 `hasDefuser` 时才给出 5 秒或 10 秒 duration，不能用默认值猜测。没有已知 planted anchor
 时，defusing 不合成爆炸倒计时。numeric objective clock 只在短 lease 内由 Core 使用
 monotonic time 插值；lease 过期后保留语义状态但将 numeric remaining 置为 `null`。Renderer

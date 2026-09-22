@@ -6,6 +6,7 @@ import {
 
 type Series = NonNullable<ProgramPayload['series']>;
 export interface PresentationStressPatch {
+  readonly playerAvatars?: Readonly<Record<string, string | null>>;
   readonly playerNames?: Readonly<Record<string, string | null>>;
   readonly teamAName?: string;
   readonly teamBName?: string;
@@ -33,6 +34,7 @@ export function derivePresentationStressFixture(
 ): ProgramSnapshot {
   const allowed = [
     'playerNames',
+    'playerAvatars',
     'teamAName',
     'teamBName',
     'teamALogoUrl',
@@ -112,6 +114,10 @@ export function derivePresentationStressFixture(
       teams: { ct: team('ct'), t: team('t') },
       players: payload.players.map((player) => ({
         ...player,
+        avatarUrl:
+          patch.playerAvatars?.[player.sourcePlayerId] === undefined
+            ? player.avatarUrl
+            : patch.playerAvatars[player.sourcePlayerId],
         displayName: patch.playerNames?.[player.sourcePlayerId] ?? player.displayName,
       })),
     },
