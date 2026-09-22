@@ -15,16 +15,16 @@ export function PlayerRail({ snapshot, widgetId }: HudWidgetRendererProps) {
       className={`player-rail player-rail--${physicalSide} player-rail--${side.toLowerCase()}`}
       data-entrant={rail.entrantKey ?? 'unbound'}
       data-player-rail={side}
+      data-physical-side={physicalSide}
       data-player-rail-phase={presentation.phase}
     >
       <TeamSummary phase={presentation.phase} side={side} summary={rail.summary} />
       <div className="player-rail__header" data-rail-header="true">
-        <span className="player-rail__header-side">{side}</span>
         <strong>{rail.entrantName ?? 'TEAM'}</strong>
       </div>
       <div className="player-rail__players">
         {rail.players.slice(0, 5).map((player) => (
-          <PlayerCard key={player.sourcePlayerId} player={player} />
+          <PlayerCard key={player.sourcePlayerId} physicalSide={physicalSide} player={player} />
         ))}
         {Array.from({ length: Math.max(0, 5 - rail.players.length) }, (_, index) => (
           <div aria-hidden="true" className="player-rail__empty-card" key={`empty-${index}`} />

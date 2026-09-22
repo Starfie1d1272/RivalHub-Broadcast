@@ -44,20 +44,16 @@ test.describe('Match Header HUD', () => {
       page.locator('[data-match-header-widget="series-strip"] [data-map-order]'),
     ).toHaveCount(5);
     await expect(
-      page.locator(
-        '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-winner-name',
-      ),
-    ).toHaveText('Northstar');
+      page.locator('[data-match-header-widget="series-strip"] [data-map-order="1"]'),
+    ).toContainText('13–11');
+    await expect(
+      page.locator('[data-match-header-widget="series-strip"] [data-map-order="2"]'),
+    ).toContainText('13–8');
     await expect(
       page.locator(
-        '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-winner-mark',
+        '[data-match-header-widget="series-strip"] .match-header__series-map-winner-name',
       ),
-    ).toHaveText('✓');
-    await expect(
-      page.locator(
-        '[data-match-header-widget="series-strip"] [data-map-order="2"] .match-header__series-map-winner-name',
-      ),
-    ).toHaveText('Southpoint');
+    ).toHaveCount(0);
     await expect(page.locator('[data-program-canvas="true"]')).toHaveScreenshot(
       'bo5.png',
       SCREENSHOT_OPTIONS,
@@ -68,8 +64,11 @@ test.describe('Match Header HUD', () => {
     page,
   }) => {
     await openFixture(page, 'series-timeout-a');
-    await expect(page.locator('[data-timeout-panel="true"][data-timeout-owner="a"]')).toHaveText(
-      'TACTICAL TIMEOUT · 2 LEFT',
+    await expect(page.locator('[data-timeout-panel="true"][data-timeout-owner="a"]')).toContainText(
+      'TACTICAL TIMEOUT',
+    );
+    await expect(page.locator('[data-timeout-panel="true"][data-timeout-owner="a"]')).toContainText(
+      '2 LEFT',
     );
     await expect(page.locator('[data-clock="true"]')).toContainText('0:30');
     await expect(page.locator('[data-program-canvas="true"]')).toHaveScreenshot(
@@ -123,11 +122,11 @@ test.describe('Match Header HUD', () => {
     await page.goto('/__visual/program/series-not-played');
     await expect(
       page.locator('[data-match-header-widget="series-strip"] [data-map-status="not_played"]'),
-    ).toContainText('NOT PLAYED');
+    ).toContainText('PENDING');
 
     await page.goto('/__visual/program/series-logo-mixed');
-    await expect(page.locator('.match-header__team--a .match-header__team-logo')).toHaveCount(1);
-    await expect(page.locator('.match-header__team--b .match-header__team-logo')).toHaveCount(0);
+    await expect(page.locator('[data-team-logo-slot="a"] .match-header__team-logo')).toHaveCount(1);
+    await expect(page.locator('[data-team-logo-slot="b"] .match-header__team-logo')).toHaveCount(0);
 
     await page.goto('/__visual/program/series-round-unavailable');
     await expect(

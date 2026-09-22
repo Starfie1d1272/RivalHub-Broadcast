@@ -81,8 +81,10 @@ describe('Focused media and combat presentation lifecycle', () => {
     expect(container.textContent).not.toContain('MAG');
     act(() => root!.render(<FocusedPlayerCard player={{ ...player, dead: true }} />));
     expect(container.textContent).toContain('DEAD');
+    expect(container.querySelector('.focused-player__active')).toBeNull();
+    expect(container.querySelector('.focused-player__ammo')).toBeNull();
     expect(container.querySelector('.focused-player__utility')).toBeNull();
-    expect(container.querySelector('.focused-player__vitals')).toBeNull();
+    expect(container.querySelector('.focused-player__vitals')?.textContent).toBe('');
   });
   it('renders completed ADR and partial KAD independently', () => {
     const container = host();

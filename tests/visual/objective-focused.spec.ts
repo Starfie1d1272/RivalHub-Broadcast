@@ -58,7 +58,9 @@ for (const id of cases)
         const fuse = page.locator('.objective-center__fuse');
         const track = await fuse.boundingBox();
         const fill = await fuse.locator('span').boundingBox();
-        expect(Math.abs(track!.x + track!.width / 2 - (fill!.x + fill!.width / 2))).toBeLessThan(1);
+        expect(fill!.x).toBeCloseTo(track!.x, 1);
+        expect(fill!.width).toBeGreaterThan(0);
+        expect(fill!.width).toBeLessThan(track!.width);
       }
       if (id === 'real-live-rich')
         await expect(page.locator('[data-focused-player]')).toContainText('MAG ×3');

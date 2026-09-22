@@ -35,25 +35,26 @@ async function assertDeadCardGeometry(page: Page, side: 'CT' | 'T' = 'CT') {
     spacerHeight: card
       .querySelector<HTMLElement>('[data-health-spacer="true"]')
       ?.getBoundingClientRect().height,
-    kadColumns: Array.from(
+    deadStatsColumns: Array.from(
       card.querySelectorAll<HTMLElement>(
-        '.player-rail__dead-stats > .player-rail__kad.is-dead > span',
+        '.player-rail__dead-stats > .player-rail__adr, .player-rail__dead-stats > .player-rail__damage',
       ),
     ).map((column) => {
       const rect = column.getBoundingClientRect();
-      return { left: rect.left, top: rect.top };
+      return { left: rect.left, top: rect.top, height: rect.height };
     }),
   }));
   expect(geometry.cardHeight).toBe(78);
   expect(geometry.spacerHeight).toBe(3);
   expect(geometry.deadStatsHeight).toBe(29);
-  expect(geometry.kadColumns).toHaveLength(3);
+  expect(geometry.deadStatsColumns).toHaveLength(2);
   expect(
-    Math.max(...geometry.kadColumns.map(({ top }) => top)) -
-      Math.min(...geometry.kadColumns.map(({ top }) => top)),
+    Math.max(...geometry.deadStatsColumns.map(({ top, height }) => top + height / 2)) -
+      Math.min(...geometry.deadStatsColumns.map(({ top, height }) => top + height / 2)),
   ).toBeLessThanOrEqual(1);
-  expect(geometry.kadColumns[0]?.left).toBeLessThan(geometry.kadColumns[1]?.left ?? Infinity);
-  expect(geometry.kadColumns[1]?.left).toBeLessThan(geometry.kadColumns[2]?.left ?? Infinity);
+  expect(geometry.deadStatsColumns[0]?.left).toBeLessThan(
+    geometry.deadStatsColumns[1]?.left ?? Infinity,
+  );
 }
 
 async function assertTeamUtilityAssets(page: Page, side: 'CT' | 'T') {
@@ -104,25 +105,42 @@ test.describe('Player Rails HUD', () => {
     await page.goto('/__visual/program/player-rails-dead-observed');
     await assertRailGeometry(page);
     await expect(page.locator('[data-player-rail="CT"] [data-life-state="dead"]')).toHaveCount(1);
-    await expect(page.locator('[data-player-rail="CT"] [data-observed="true"]')).toHaveCount(1);
+    await expect(
+      page.locator('[data-player-rail="CT"] [data-player-card][data-observed="true"]'),
+    ).toHaveCount(1);
     await expect(page.locator('[data-player-rail="CT"] [data-player-card]')).toHaveCount(5);
     await expect(
       page.locator(
-        '[data-player-rail="CT"] [data-player-card="stress-player-1"] [aria-label="护甲"]',
+        '[data-player-rail="CT"] [data-player-card="stress-player-1"] [data-equipment="armor"] [data-asset-id]',
       ),
     ).toHaveCount(1);
     await expect(
       page.locator(
-        '[data-player-rail="CT"] [data-player-card="stress-player-1"] [aria-label="拆弹器"]',
+        '[data-player-rail="CT"] [data-player-card="stress-player-1"] [data-equipment="kit"] [data-asset-id]',
       ),
     ).toHaveCount(1);
     await expect(
-      page.locator('[data-player-rail="T"] [data-player-card="stress-player-6"] [aria-label="C4"]'),
+      page.locator(
+        '[data-player-rail="T"] [data-player-card="stress-player-6"] [data-equipment="c4"] [data-asset-id]',
+      ),
     ).toHaveCount(1);
     await assertDeadCardGeometry(page);
     await expect(
       page.locator('[data-player-rail="CT"] [data-life-state="dead"] .player-rail__dead-stats'),
     ).toContainText('74');
+    await expect(
+      page.locator(
+        '[data-player-rail="CT"] [data-life-state="dead"] .player-rail__dead-stats .player-rail__adr small',
+      ),
+    ).toHaveText('ADR');
+    await expect(
+      page.locator(
+        '[data-player-rail="CT"] [data-life-state="dead"] .player-rail__dead-stats .player-rail__damage small',
+      ),
+    ).toHaveText('DMG');
+    await expect(
+      page.locator('[data-player-rail="CT"] [data-life-state="dead"] .player-rail__kad'),
+    ).toHaveCount(0);
     await expect(page.locator('[data-player-rail="CT"]')).toHaveScreenshot(
       'live-stress-ct.png',
       SCREENSHOT_OPTIONS,
@@ -167,7 +185,9 @@ test.describe('Player Rails HUD', () => {
     const summary = page.locator('[data-player-rail="CT"] [data-team-summary="CT"]');
     await expect(summary).toHaveAttribute('data-summary-visible', 'true');
     await expect(summary.locator('.player-rail__economy strong').first()).toHaveText('—');
-    await expect(summary.locator('.player-rail__utility > strong')).toHaveText('—');
+    await expect(
+      summary.locator('.player-rail__utility .player-rail__summary-utility b'),
+    ).toHaveText(['—', '—', '—', '—', '—']);
     await expect(page.locator('[data-player-rail="CT"]')).toHaveScreenshot(
       'missing-summary-ct.png',
       SCREENSHOT_OPTIONS,

@@ -596,7 +596,7 @@ const BUILTIN_THEME: HudTheme = deepFreeze({
   name: 'RivalHub 默认外观',
   brandColor: '#c8ef78',
   panelStyle: 'standard',
-  cornerStyle: 'soft',
+  cornerStyle: 'square',
 });
 
 const BUILTIN_PRESET: HudPreset = deepFreeze({

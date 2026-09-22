@@ -15,7 +15,50 @@ import {
   smokeRemaining,
   type RadarSide,
 } from './presentation';
+import {
+  findRadarAlphaBounds,
+  mapRadarPoint,
+  multiFloorTransforms,
+  singleFloorTransform,
+  type RadarAlphaBounds,
+  type RadarFloorImage,
+  type RadarFloorTransform,
+} from './compositor';
 import './radar.css';
+
+function imageAlphaBounds(
+  image: HTMLImageElement,
+  cache: WeakMap<HTMLImageElement, RadarAlphaBounds | null>,
+): RadarAlphaBounds | null {
+  if (cache.has(image)) return cache.get(image) ?? null;
+  const source = document.createElement('canvas');
+  source.width = image.naturalWidth;
+  source.height = image.naturalHeight;
+  const context = source.getContext('2d', { willReadFrequently: true });
+  if (!context) {
+    cache.set(image, null);
+    return null;
+  }
+  try {
+    context.drawImage(image, 0, 0);
+    const pixels = context.getImageData(0, 0, source.width, source.height);
+    const bounds = findRadarAlphaBounds(source.width, source.height, pixels.data);
+    cache.set(image, bounds);
+    return bounds;
+  } catch {
+    cache.set(image, null);
+    return null;
+  }
+}
+
+function floorImage(
+  image: HTMLImageElement,
+  bounds: RadarAlphaBounds | null,
+): RadarFloorImage | null {
+  return bounds === null
+    ? null
+    : { imageWidth: image.naturalWidth, imageHeight: image.naturalHeight, bounds };
+}
 
 export interface RadarProps {
   readonly client?: LocalChannelClient<'radar'> | undefined;
@@ -36,6 +79,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
     if (!element || !context) return;
     const model = new RadarPresentation();
     const images = new Map<string, HTMLImageElement>();
+    const alphaBounds = new WeakMap<HTMLImageElement, RadarAlphaBounds | null>();
     let frame = 0;
     let disposed = false;
     let lastStatic: RadarSnapshot | null | undefined;
@@ -76,15 +120,13 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       const ctx = context;
       ctx.setTransform(size / 1000, 0, 0, size / 1000, 0, 0);
       ctx.clearRect(0, 0, 1000, 1000);
-      ctx.fillStyle = '#10191e';
-      ctx.fillRect(0, 0, 1000, 1000);
       const style = getComputedStyle(element);
       const sideColor = (side: RadarSide) =>
         side === 'CT'
-          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#77b8e8'
+          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#6aa8ff'
           : side === 'T'
-            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#eac56d'
-            : '#c2c8ce';
+            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#f2bd4f'
+            : '#aab4c0';
       const circle = (
         x: number,
         y: number,
@@ -106,43 +148,94 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
       const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
-      const layerRect = (layer: 'upper' | 'lower' | 'single' | 'unknown') =>
-        multiLayer
-          ? { x: 10, y: layer === 'lower' ? 510 : 10, width: 980, height: 480 }
-          : { x: 0, y: 0, width: 1000, height: 1000 };
+      const singleAsset =
+        geometry !== null && !multiLayer ? getRadarMapAsset(geometry.mapKey, 'overview') : null;
+      const singleImage = singleAsset ? imageFor(singleAsset.outputPath) : null;
+      const upperAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'upper') : null;
+      const lowerAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'lower') : null;
+      const upperImage = upperAsset ? imageFor(upperAsset.outputPath) : null;
+      const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
+      const singleInfo =
+        singleImage === null
+          ? null
+          : floorImage(singleImage, imageAlphaBounds(singleImage, alphaBounds));
+      const upperInfo =
+        upperImage === null
+          ? null
+          : floorImage(upperImage, imageAlphaBounds(upperImage, alphaBounds));
+      const lowerInfo =
+        lowerImage === null
+          ? null
+          : floorImage(lowerImage, imageAlphaBounds(lowerImage, alphaBounds));
+      const transforms: Partial<Record<'single' | 'upper' | 'lower', RadarFloorTransform>> = {};
+      if (singleInfo !== null) transforms.single = singleFloorTransform(singleInfo);
+      if (upperInfo !== null && lowerInfo !== null) {
+        Object.assign(transforms, multiFloorTransforms(upperInfo, lowerInfo));
+      }
       const pointAt = (point: { x: number; y: number; layer: string }) => {
-        const rect = layerRect(point.layer as 'upper' | 'lower' | 'single' | 'unknown');
-        return { x: rect.x + point.x * rect.width, y: rect.y + point.y * rect.height };
+        const transform = transforms[point.layer as 'single' | 'upper' | 'lower'];
+        return transform === undefined ? null : mapRadarPoint(point, transform);
       };
-      const map = geometry && !multiLayer ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
-      const background = map ? imageFor(map.outputPath) : null;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
       element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
+      element.dataset.radarCompositor = multiLayer ? 'multi-floor' : 'single-floor';
+      element.dataset.radarArtwork = (
+        multiLayer ? transforms.upper && transforms.lower : transforms.single
+      )
+        ? 'ready'
+        : 'loading';
+      element.dataset.radarVisibleFloors =
+        multiLayer && transforms.upper && transforms.lower ? 'upper,lower' : model.layer;
       element.dataset.radarPlayers = String(model.players.size);
       element.dataset.radarTrails = String(
         [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
       );
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(10, 10, 980, 980);
+      ctx.clip();
       const z = model.zoom;
       ctx.translate(500, 500);
       ctx.scale(z.scale, z.scale);
       ctx.translate(-z.x * 1000, -z.y * 1000);
-      if (background) {
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(background, 0, 0, 1000, 1000);
+      if (singleImage && transforms.single) {
+        const transform = transforms.single;
+        ctx.globalAlpha = 1;
+        ctx.drawImage(
+          singleImage,
+          transform.bounds.x,
+          transform.bounds.y,
+          transform.bounds.width,
+          transform.bounds.height,
+          transform.x,
+          transform.y,
+          transform.bounds.width * transform.scale,
+          transform.bounds.height * transform.scale,
+        );
         ctx.globalAlpha = 1;
       } else if (geometry && multiLayer) {
         for (const floor of ['upper', 'lower'] as const) {
-          const asset = getRadarMapAsset(geometry.mapKey, floor);
-          const image = asset ? imageFor(asset.outputPath) : null;
-          if (!image) continue;
-          const rect = layerRect(floor);
+          const image = floor === 'upper' ? upperImage : lowerImage;
+          const transform = transforms[floor];
+          if (!image || !transform) continue;
           ctx.globalAlpha = floor === model.layer ? 0.88 : model.layer === 'unknown' ? 0.76 : 0.62;
-          ctx.drawImage(image, rect.x, rect.y, rect.width, rect.height);
+          ctx.drawImage(
+            image,
+            transform.bounds.x,
+            transform.bounds.y,
+            transform.bounds.width,
+            transform.bounds.height,
+            transform.x,
+            transform.y,
+            transform.bounds.width * transform.scale,
+            transform.bounds.height * transform.scale,
+          );
         }
         ctx.globalAlpha = 1;
       }
@@ -158,20 +251,25 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             const p = projectWorldPosition(flame.position, geometry);
             if (p && !p.outOfBounds) {
               const point = pointAt(p);
-              ctx.globalAlpha = layerOpacity(p, model.layer);
-              circle(point.x, point.y, 9, '#e99b4680', sideColor(side), 2);
-              ctx.globalAlpha = 1;
+              if (point) {
+                ctx.globalAlpha = layerOpacity(p, model.layer);
+                circle(point.x, point.y, 9, '#e99b4680', sideColor(side), 2);
+                ctx.globalAlpha = 1;
+              }
             }
           }
         }
         for (const marker of model.grenades.values()) {
           if (!isActiveSmoke(marker.source)) continue;
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          const transform = transforms[marker.target.layer as 'upper' | 'lower' | 'single'];
+          if (point === null || transform === undefined) continue;
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = (projectWorldRadius(144, geometry) ?? 0) * 1000;
+          const radius =
+            (projectWorldRadius(144, geometry) ?? 0) * transform.imageWidth * transform.scale;
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
           fill.addColorStop(0, '#c5cbd07a');
           fill.addColorStop(0.75, '#a8afb460');
@@ -202,20 +300,16 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
           alpha: number,
         ) => {
+          const trail = marker.trail
+            .map((p) => pointAt({ ...p, layer: marker.target.layer }))
+            .filter((point): point is NonNullable<typeof point> => point !== null);
+          if (trail.length < 2) return;
           ctx.globalAlpha = alpha * 0.6;
           ctx.strokeStyle = sideColor(marker.side);
           ctx.lineWidth = 3;
           ctx.beginPath();
-          marker.trail.forEach((p, i) =>
-            i
-              ? ctx.lineTo(
-                  pointAt({ ...p, layer: marker.target.layer }).x,
-                  pointAt({ ...p, layer: marker.target.layer }).y,
-                )
-              : ctx.moveTo(
-                  pointAt({ ...p, layer: marker.target.layer }).x,
-                  pointAt({ ...p, layer: marker.target.layer }).y,
-                ),
+          trail.forEach((point, index) =>
+            index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
           );
           ctx.stroke();
           ctx.globalAlpha = 1;
@@ -225,30 +319,33 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           drawTrail(exit.marker, alpha);
           ctx.globalAlpha = alpha;
           const exitPoint = pointAt(exit.marker.target);
-          circle(
-            exitPoint.x,
-            exitPoint.y,
-            15 + (1 - alpha) * 18,
-            '#ffffff10',
-            sideColor(exit.marker.side),
-            2,
-          );
+          if (exitPoint) {
+            circle(
+              exitPoint.x,
+              exitPoint.y,
+              15 + (1 - alpha) * 18,
+              '#ffffff10',
+              sideColor(exit.marker.side),
+              2,
+            );
+          }
           ctx.globalAlpha = 1;
         }
         for (const marker of model.grenades.values()) {
           if (!marker.airborne) continue;
           drawTrail(marker, 1);
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          circle(x, y, 20, '#142028', sideColor(marker.side), 3);
+          circle(x, y, 24, '#0b1119', sideColor(marker.side), 3);
           const url = grenadeIcon(marker.source.kind);
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 10, y - 10, 20, 20);
+          if (icon) ctx.drawImage(icon, x - 20, y - 20, 40, 40);
           else {
             ctx.fillStyle = '#ecedef';
-            ctx.fillRect(x - 4, y - 4, 8, 8);
+            ctx.fillRect(x - 6, y - 6, 12, 12);
           }
           ctx.globalAlpha = 1;
         }
@@ -265,24 +362,27 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const p = projectWorldPosition(bomb.position, geometry);
           if (p && !p.outOfBounds) {
             const point = pointAt(p);
-            const x = point.x;
-            const y = point.y;
-            ctx.globalAlpha = layerOpacity(p, model.layer);
-            circle(
-              x,
-              y,
-              25,
-              '#211c16',
-              bomb.state === 'defusing' || bomb.state === 'defused' ? '#89d7b3' : '#f0ae6d',
-              5,
-            );
-            if (bombIcon) ctx.drawImage(bombIcon, x - 13, y - 13, 26, 26);
-            ctx.globalAlpha = 1;
+            if (point !== null) {
+              const x = point.x;
+              const y = point.y;
+              ctx.globalAlpha = layerOpacity(p, model.layer);
+              circle(
+                x,
+                y,
+                34,
+                '#0b1119',
+                bomb.state === 'defusing' || bomb.state === 'defused' ? '#83d8e8' : '#f06f6f',
+                5,
+              );
+              if (bombIcon) ctx.drawImage(bombIcon, x - 25, y - 25, 50, 50);
+              ctx.globalAlpha = 1;
+            }
           }
         }
         for (const marker of model.players.values()) {
           const p = marker.source;
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
           const x = point.x;
           const y = point.y;
           const alive = p.lifeState === 'alive';
@@ -307,9 +407,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
-          circle(x, y, 26, color, '#10171f', 3);
+          circle(x, y, 26, color, '#0b1119', 3);
           if (p.lifeState === 'dead') {
-            ctx.strokeStyle = '#10171f';
+            ctx.strokeStyle = '#0b1119';
             ctx.lineWidth = 5;
             ctx.beginPath();
             ctx.moveTo(x - 8, y - 8);
@@ -318,8 +418,8 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.lineTo(x + 8, y - 8);
             ctx.stroke();
           } else {
-            ctx.fillStyle = '#0c1420';
-            ctx.font = 'bold 25px Inter, sans-serif';
+            ctx.fillStyle = '#0b1119';
+            ctx.font = '800 28px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
@@ -334,9 +434,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
           ) {
-            ctx.fillStyle = '#111a22';
-            ctx.fillRect(x + 10, y + 10, 22, 22);
-            if (bombIcon) ctx.drawImage(bombIcon, x + 11, y + 11, 20, 20);
+            ctx.fillStyle = '#0b1119';
+            ctx.fillRect(x + 12, y + 12, 54, 54);
+            if (bombIcon) ctx.drawImage(bombIcon, x + 14, y + 14, 50, 50);
           }
           ctx.globalAlpha = 1;
         }

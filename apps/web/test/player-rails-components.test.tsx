@@ -151,9 +151,9 @@ describe('Player Rails card presentation', () => {
     });
 
     expect(container.querySelector('[data-player-equipment="true"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="护甲"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="拆弹器"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="C4"]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="armor"] [data-asset-id]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="kit"] [data-asset-id]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="c4"] [data-asset-id]')).not.toBeNull();
   });
 
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {

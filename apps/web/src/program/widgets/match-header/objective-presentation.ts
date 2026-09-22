@@ -75,6 +75,8 @@ export function buildObjectiveCenterPresentation(
     complete &&
     !paused &&
     !terminal &&
+    phase !== 'timeout_ct' &&
+    phase !== 'timeout_t' &&
     phase !== 'freezetime' &&
     payload.round?.phase !== 'freezetime' &&
     (mode !== 'normal' || phase === 'live' || payload.round?.phase === 'live') &&

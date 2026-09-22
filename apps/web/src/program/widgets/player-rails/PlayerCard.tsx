@@ -1,10 +1,3 @@
-/**
- * Presentation adaptation based on Lexogrine cs2-react-hud at
- * 7874750c97fcecd8f72eb3fad382917e035ec651 (MIT), using Player.tsx and
- * TeamBox.tsx. Raw GSI props, donor domain types, and donor lifecycle
- * semantics are intentionally omitted.
- */
-
 import type { CSSProperties } from 'react';
 
 import type { PlayerCardPresentation, PlayerRailAsset, PlayerRailWeapon } from './presentation';
@@ -18,7 +11,7 @@ function displayMoney(value: number | null): string {
 }
 
 function displaySpent(value: number | null): string {
-  return value === null ? '—' : `-${displayMoney(value)}`;
+  return value === null ? '—' : `-$${Math.round(value).toLocaleString('en-US')}`;
 }
 
 function MaskIcon({
@@ -31,9 +24,7 @@ function MaskIcon({
   readonly label: string;
 }) {
   if (asset === null) return null;
-  const style = {
-    '--player-rail-icon': `url("${asset.outputPath}")`,
-  } as CSSProperties;
+  const style = { '--player-rail-icon': `url("${asset.outputPath}")` } as CSSProperties;
   return (
     <span
       aria-label={label}
@@ -47,156 +38,243 @@ function MaskIcon({
 
 function WeaponIcon({
   weapon,
-  className = '',
+  className,
 }: {
-  readonly weapon: PlayerRailWeapon;
-  readonly className?: string;
+  readonly weapon: PlayerRailWeapon | null;
+  readonly className: string;
 }) {
-  return <MaskIcon asset={weapon.asset} className={className} label={weapon.name ?? '未知装备'} />;
+  return (
+    <MaskIcon
+      asset={weapon?.asset ?? null}
+      className={className}
+      label={weapon?.name ?? 'Weapon'}
+    />
+  );
 }
 
-function KAD({
+function Avatar({
   player,
   dead,
 }: {
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
 }) {
+  if (player.avatarUrl === null) return null;
   return (
-    <div className={`player-rail__kad${dead ? ' is-dead' : ''}`} aria-label="击杀助攻死亡">
-      <span>
-        <small>K</small>
-        {displayNumber(player.stats.kills)}
-      </span>
-      <span>
-        <small>A</small>
-        {displayNumber(player.stats.assists)}
-      </span>
-      <span>
-        <small>D</small>
-        {displayNumber(player.stats.deaths)}
-      </span>
+    <div aria-hidden="true" className="player-rail__avatar" data-card-part="avatar">
+      <img
+        alt=""
+        onError={(event) => {
+          event.currentTarget.style.display = 'none';
+        }}
+        src={player.avatarUrl}
+        data-dead={dead}
+      />
     </div>
   );
 }
 
-function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
+function Equipment({ player }: { readonly player: PlayerCardPresentation }) {
+  const slots = [
+    { key: 'armor', label: 'Armor', asset: player.armorAsset },
+    { key: 'kit', label: 'Defuse kit', asset: player.defuserAsset },
+    { key: 'c4', label: 'C4', asset: player.c4Asset },
+    { key: 'zeus', label: 'Zeus', asset: player.zeus?.asset ?? null },
+  ] as const;
   return (
-    <div className="player-rail__utility-icons">
-      {player.utility.map((utility) => (
-        <span
-          className="player-rail__utility-item"
-          data-utility-family={utility.family}
-          key={utility.sourceWeaponId}
-        >
-          <WeaponIcon weapon={utility} />
-          <b>×{utility.count}</b>
+    <div className="player-rail__equipment" data-player-equipment="true">
+      {slots.map((slot) => (
+        <span className="player-rail__equipment-slot" data-equipment={slot.key} key={slot.key}>
+          <MaskIcon asset={slot.asset} label={slot.label} />
         </span>
       ))}
     </div>
   );
 }
 
-export function PlayerCard({ player }: { readonly player: PlayerCardPresentation }) {
-  const dead = player.mode === 'dead';
-  const healthStyle = {
-    '--player-rail-health': `${player.healthPercent ?? 0}%`,
-  } as CSSProperties;
+const UTILITY_FAMILIES = ['smoke', 'fire', 'flash', 'he', 'decoy'] as const;
+
+function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
+  const counts = new Map<
+    PlayerCardPresentation['utility'][number]['family'],
+    { count: number; asset: PlayerRailAsset | null }
+  >();
+  for (const utility of player.utility) {
+    const current = counts.get(utility.family);
+    counts.set(utility.family, {
+      count: (current?.count ?? 0) + utility.count,
+      asset: current?.asset ?? utility.asset,
+    });
+  }
   return (
-    <article
-      aria-label={`${player.displayName ?? '未知选手'} ${dead ? '已阵亡' : '选手卡'}`}
-      className={`player-rail__card player-rail__card--${player.mode}${
-        player.observed ? ' is-observed' : ''
-      }${player.healthPercent !== null && player.healthPercent <= 25 ? ' is-low-health' : ''}`}
-      data-life-state={player.lifeState}
-      data-observed={player.observed}
-      data-player-card={player.sourcePlayerId}
+    <div className="player-rail__utility-icons">
+      {UTILITY_FAMILIES.map((family) => {
+        const utility = counts.get(family);
+        return (
+          <span
+            className="player-rail__utility-item"
+            data-utility-family={family}
+            key={family}
+            aria-label={`${family}${utility === undefined ? '' : ` ${utility.count}`}`}
+          >
+            <MaskIcon asset={utility?.asset ?? null} label={family} />
+            {utility === undefined ? null : <b>{utility.count}</b>}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
+function Kd({ player }: { readonly player: PlayerCardPresentation }) {
+  return (
+    <span className="player-rail__kd" aria-label="Kills and deaths">
+      <span>{displayNumber(player.stats.kills)}</span>
+      <i aria-hidden="true">/</i>
+      <span>{displayNumber(player.stats.deaths)}</span>
+    </span>
+  );
+}
+
+function PlayerBody({
+  player,
+  dead,
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly dead: boolean;
+}) {
+  const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
+  const secondaryVisible = player.mode === 'freezetime' && player.secondaryWeapon !== null;
+  return (
+    <div
+      className="player-rail__body"
+      data-card-part="body"
+      data-avatar={player.avatarUrl !== null}
+      data-dead={dead}
     >
-      <div className="player-rail__avatar" aria-hidden="true">
-        {player.avatarUrl ? <img alt="" src={player.avatarUrl} /> : <span />}
-      </div>
       <div className="player-rail__identity">
-        <span className="player-rail__slot">{player.observerSlot ?? '—'}</span>
         <span className="player-rail__name" title={player.displayName ?? undefined}>
-          {player.displayName ?? '未知选手'}
+          {player.displayName ?? 'PLAYER'}
         </span>
-        {dead ? <strong className="player-rail__dead-label">DEAD</strong> : null}
-        {!dead && player.health !== null ? (
-          <strong className="player-rail__health-value">{displayNumber(player.health)}</strong>
-        ) : null}
-        {player.roundKills !== null && player.roundKills > 0 ? (
-          <b className="player-rail__round-kills">+{displayNumber(player.roundKills)}</b>
-        ) : null}
+        {dead ? (
+          <strong className="player-rail__dead-label">DEAD</strong>
+        ) : (
+          <strong className="player-rail__health-value" data-health-value="true">
+            {displayNumber(player.health)}
+          </strong>
+        )}
+        <b
+          aria-label={
+            player.roundKills === null
+              ? 'Round kills unavailable'
+              : `Round kills ${player.roundKills}`
+          }
+          className="player-rail__round-kills"
+          data-round-kills={player.roundKills ?? 0}
+        >
+          {player.roundKills !== null && player.roundKills > 0 ? player.roundKills : null}
+        </b>
       </div>
 
       {dead ? (
         <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true" />
       ) : (
-        <div className="player-rail__health-bar">
+        <div className="player-rail__health-bar" data-health-bar="true">
           <span style={healthStyle} />
         </div>
       )}
 
       {dead ? (
-        <div className="player-rail__dead-stats">
-          <KAD dead player={player} />
-          <span>
+        <div className="player-rail__dead-stats" data-dead-stats="true">
+          <span className="player-rail__adr">
             <small>ADR</small>
-            {displayNumber(player.liveAdr)}
+            <b>{displayNumber(player.liveAdr)}</b>
           </span>
-          <span>
+          <span className="player-rail__damage">
             <small>DMG</small>
-            {displayNumber(player.currentRoundDamage)}
+            <b>{displayNumber(player.currentRoundDamage)}</b>
           </span>
         </div>
       ) : (
-        <div className="player-rail__combat">
+        <div
+          className="player-rail__combat"
+          data-combat-row="true"
+          data-phase={player.mode}
+          data-secondary={secondaryVisible}
+        >
           <div className="player-rail__weapons">
-            <WeaponIcon
-              className="is-primary"
-              weapon={
-                player.primaryWeapon ?? {
-                  sourceWeaponId: 'none',
-                  name: null,
-                  item: null,
-                  asset: null,
-                  ammoReserve: null,
-                }
-              }
-            />
-            {player.secondaryWeapon ? (
-              <WeaponIcon className="is-secondary" weapon={player.secondaryWeapon} />
+            <WeaponIcon weapon={player.primaryWeapon} className="is-primary" />
+            {secondaryVisible ? (
+              <WeaponIcon weapon={player.secondaryWeapon} className="is-secondary" />
             ) : null}
-            {player.zeus ? <WeaponIcon className="is-zeus" weapon={player.zeus} /> : null}
           </div>
-          {player.mode === 'freezetime' || player.mode === 'live' ? (
-            <div className="player-rail__equipment" data-player-equipment="true">
-              <MaskIcon asset={player.armorAsset} label="护甲" />
-              {player.hasDefuser ? <MaskIcon asset={player.defuserAsset} label="拆弹器" /> : null}
-              {player.hasC4 ? <MaskIcon asset={player.c4Asset} label="C4" /> : null}
-            </div>
-          ) : null}
+          <span aria-hidden="true" className="player-rail__combat-gap player-rail__combat-gap--a" />
+          <Equipment player={player} />
+          <span aria-hidden="true" className="player-rail__combat-gap player-rail__combat-gap--b" />
           <UtilityIcons player={player} />
         </div>
       )}
 
       <div className="player-rail__bottom">
-        {dead ? (
-          <span className="player-rail__money is-dead-money">{displayMoney(player.money)}</span>
-        ) : (
-          <>
-            <span
-              className={`player-rail__money${player.mode === 'freezetime' ? ' is-freeze-money' : ''}`}
-            >
-              {displayMoney(player.money)}
-            </span>
-            {player.mode === 'freezetime' ? (
-              <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
-            ) : null}
-            <KAD dead={false} player={player} />
-          </>
-        )}
+        <span className="player-rail__money">{displayMoney(player.money)}</span>
+        {player.mode === 'freezetime' && !dead ? (
+          <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
+        ) : null}
+        <Kd player={player} />
       </div>
+    </div>
+  );
+}
+
+export function PlayerCard({
+  player,
+  physicalSide = 'left',
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly physicalSide?: 'left' | 'right';
+}) {
+  const dead = player.mode === 'dead';
+  const hasAvatar = player.avatarUrl !== null;
+  const avatar = <Avatar dead={dead} player={player} />;
+  const body = <PlayerBody dead={dead} player={player} />;
+  const endcap = (
+    <div
+      aria-label={`Observer ${player.observerSlot ?? 'unknown'}`}
+      className={`player-rail__endcap player-rail__endcap--${physicalSide}`}
+      data-card-part="observer-endcap"
+      data-observed={player.observed}
+      data-side={player.side}
+    >
+      <strong>{player.observerSlot ?? '—'}</strong>
+    </div>
+  );
+
+  return (
+    <article
+      aria-label={`${player.displayName ?? 'Player'} ${dead ? 'DEAD' : 'player card'}`}
+      className={`player-rail__card player-rail__card--${player.mode}${
+        player.observed ? ' is-observed' : ''
+      }${player.healthPercent !== null && player.healthPercent <= 25 ? ' is-low-health' : ''}`}
+      data-avatar={hasAvatar}
+      data-life-state={player.lifeState}
+      data-observed={player.observed}
+      data-player-card={player.sourcePlayerId}
+      data-side={player.side}
+      data-physical-side={physicalSide}
+    >
+      {physicalSide === 'left' ? (
+        <>
+          {avatar}
+          {body}
+          {endcap}
+        </>
+      ) : (
+        <>
+          {endcap}
+          {body}
+          {avatar}
+        </>
+      )}
     </article>
   );
 }

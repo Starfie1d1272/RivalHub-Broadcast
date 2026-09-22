@@ -30,6 +30,7 @@ export interface MatchHeaderTimeoutPresentation {
 export interface MatchHeaderSeriesMapPresentation {
   readonly mapOrder: number;
   readonly mapName: string;
+  readonly mapKey: string;
   readonly selectionText: string;
   readonly pickerLogoUrl: string | null;
   readonly startSide: MatchHeaderSide | null;
@@ -75,8 +76,8 @@ export interface MatchHeaderPresentation {
 const MAP_STATUS_LABELS = {
   pending: 'PENDING',
   current: 'CURRENT',
-  completed: 'COMPLETED',
-  not_played: 'NOT PLAYED',
+  completed: '',
+  not_played: 'PENDING',
 } as const;
 
 function nullableNumber(value: number | null | undefined): number | null {
@@ -87,6 +88,16 @@ function displayMapName(value: string | null | undefined): string | null {
   if (value === null || value === undefined || value.trim() === '') return null;
   const name = value.trim().replace(/^de_/i, '').replaceAll('_', ' ');
   return name.length === 0 ? null : `${name.slice(0, 1).toUpperCase()}${name.slice(1)}`;
+}
+
+function radarMapKey(value: string): string {
+  const name = value
+    .trim()
+    .toLowerCase()
+    .replace(/^de_/, '')
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^_+|_+$/g, '');
+  return name.length === 0 ? value : `de_${name}`;
 }
 
 function formatClock(seconds: number | null | undefined): string | null {
@@ -163,7 +174,10 @@ function buildTeam(
     name: entrant.name,
     logoUrl: entrant.logoUrl,
     seriesScore: series.score[key],
-    winSlots: Array.from({ length: series.requiredWins }, (_, index) => index < series.score[key]),
+    winSlots:
+      series.requiredWins <= 1
+        ? []
+        : Array.from({ length: series.requiredWins }, (_, index) => index < series.score[key]),
     side,
     mapScore: sideScore(payload, side, 'score'),
     timeoutsRemaining: sideScore(payload, side, 'timeoutsRemaining'),
@@ -211,9 +225,10 @@ function buildSeriesMaps(
     return {
       mapOrder: map.mapOrder,
       mapName: displayMapName(map.mapName) ?? map.mapName,
+      mapKey: radarMapKey(map.mapName),
       selectionText: selectionText(map.selection, series.entrants),
       pickerLogoUrl: picker === null ? null : series.entrants[picker].logoUrl,
-      startSide: map.teamAStartSide,
+      startSide: map.selection.kind === 'decider' ? null : map.teamAStartSide,
       status: map.status,
       statusText: score,
       finalScore: map.finalScore,
@@ -388,9 +403,7 @@ export function buildMatchHeaderPresentation(payload: ProgramPayload): MatchHead
       payload.map.roundNumber === undefined ||
       payload.map.roundNumber <= 0
         ? null
-        : payload.map.roundNumber <= 24
-          ? `ROUND ${payload.map.roundNumber}`
-          : `OVERTIME · ROUND ${payload.map.roundNumber}`,
+        : `ROUND ${payload.map.roundNumber}`,
     ...clock,
     seriesMaps: series === null ? null : buildSeriesMaps(series),
     roundHistory: buildRoundHistory(series),

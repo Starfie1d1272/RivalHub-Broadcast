@@ -9,18 +9,21 @@ import { ProgramFoundationProbe } from './ProgramFoundationProbe';
 import { getBuiltinResolvedPreset } from '@rivalhub-broadcast/hud-config';
 
 import { radarVisualFixture } from '../fixtures/radar-fixtures';
+import { getDefaultHudCompositeFixture } from '../fixtures/default-hud-composite-fixtures';
 
 export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: string }) {
+  const compositeFixture = getDefaultHudCompositeFixture(fixtureId);
   const isIntegrated = fixtureId === 'program-radar-integrated';
-  const snapshot = isIntegrated
-    ? getProgramFixture('live-canonical')
-    : getProgramFixture(fixtureId);
+  const snapshot =
+    compositeFixture?.snapshot ??
+    (isIntegrated ? getProgramFixture('live-canonical') : getProgramFixture(fixtureId));
   if (snapshot === null) {
     return <ProgramVisualFixtureNotFound fixtureId={fixtureId} />;
   }
 
   const basePreset = getBuiltinResolvedPreset();
-  const resolvedPreset = isIntegrated
+  const showRadar = compositeFixture !== null || isIntegrated;
+  const resolvedPreset = showRadar
     ? basePreset
     : {
         ...basePreset,
@@ -33,14 +36,17 @@ export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: st
         },
       };
 
-  const radarSnapshot = isIntegrated ? radarVisualFixture('focused').snapshot : undefined;
+  const radarSnapshot =
+    compositeFixture?.radarSnapshot ??
+    (isIntegrated ? radarVisualFixture('focused').snapshot : undefined);
 
   return (
     <ProgramCanvas>
       <div
         style={{ display: 'contents' }}
         data-program-fixture-kind={
-          isIntegrated ? 'real-derived' : getProgramFixtureProvenance(fixtureId)?.kind
+          compositeFixture?.provenance ??
+          (isIntegrated ? 'real-derived' : getProgramFixtureProvenance(fixtureId)?.kind)
         }
         data-program-fixture-id={fixtureId}
       >
@@ -53,7 +59,9 @@ export function ProgramVisualFixturePage({ fixtureId }: { readonly fixtureId: st
               resolvedPreset={resolvedPreset}
               snapshot={snapshot}
             />
-            <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+            {compositeFixture === null ? (
+              <ProgramFoundationProbe fixtureId={fixtureId} snapshot={snapshot} />
+            ) : null}
           </>
         )}
       </div>
