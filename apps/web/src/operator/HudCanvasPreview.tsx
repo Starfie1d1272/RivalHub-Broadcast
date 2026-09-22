@@ -93,14 +93,12 @@ export function HudCanvasPreview({
         {showSafeArea ? (
           <div className="hud-console__guide hud-console__guide--safe" style={guideStyle} />
         ) : null}
-        {presentationSnapshot ? (
-          <GameplayHud
-            radarClient={radarClient}
-            radarSnapshot={radarSnapshot}
-            resolvedPreset={resolvedPreset}
-            snapshot={presentationSnapshot}
-          />
-        ) : null}
+        <GameplayHud
+          radarClient={radarClient}
+          radarSnapshot={radarSnapshot}
+          resolvedPreset={resolvedPreset}
+          snapshot={presentationSnapshot}
+        />
         <HudEditorOverlay
           mode={editorMode}
           onRadarResizePointerDown={onRadarResizePointerDown}

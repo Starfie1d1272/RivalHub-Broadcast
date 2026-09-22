@@ -210,6 +210,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      - name: Restore committed lockfile after Windows install
+        shell: pwsh
+        run: git checkout -- pnpm-lock.yaml
+
       - name: Build exact-SHA Windows qualification bundle
         run: node scripts/qualification/build.mjs --output "$env:QUALIFICATION_BUILD_ROOT"
 

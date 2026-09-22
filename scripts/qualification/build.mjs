@@ -102,27 +102,8 @@ async function commandOutput(command, args, cwd = rootDir) {
   return (await runCommand(command, args, { cwd, capture: true })).stdout.trim();
 }
 
-function normalizeLineEndings(value) {
-  return value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
-}
-
-async function lockfileDiffIsOnlyLineEndings() {
-  const [workingTree, committed] = await Promise.all([
-    readFile(join(rootDir, 'pnpm-lock.yaml'), 'utf8'),
-    runCommand('git', ['show', 'HEAD:pnpm-lock.yaml'], { capture: true }).then(
-      ({ stdout }) => stdout,
-    ),
-  ]);
-  return normalizeLineEndings(workingTree) === normalizeLineEndings(committed);
-}
-
 async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
-  const rawStatus = await commandOutput('git', ['status', '--porcelain']);
-  if (rawStatus.includes('pnpm-lock.yaml') && (await lockfileDiffIsOnlyLineEndings())) {
-    // Restore only the proven line-ending normalization case; semantic edits still fail closed.
-    await runCommand('git', ['checkout', '--', 'pnpm-lock.yaml'], { capture: true });
-  }
   const status = await commandOutput('git', ['status', '--porcelain']);
   if (status.length > 0) {
     console.error('QUALIFICATION_DIRTY_STATUS:\n' + status);
