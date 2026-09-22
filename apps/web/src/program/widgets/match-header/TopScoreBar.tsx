@@ -107,12 +107,12 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
           )}
         </div>
         <Team team={p.teamB} />
-        {objective &&
-        (p.objective.mode === 'planted' || p.objective.mode === 'defusing') &&
-        !p.objective.stateOnly ? (
-          <ObjectiveFuse center={p.objective} />
-        ) : null}
       </div>
+      {objective &&
+      (p.objective.mode === 'planted' || p.objective.mode === 'defusing') &&
+      !p.objective.stateOnly ? (
+        <ObjectiveFuse center={p.objective} />
+      ) : null}
       {timeout?.owner === 'a' ? (
         <TimeoutPanel timeout={timeout} side="a" ownerSide={p.teamA.side} />
       ) : null}

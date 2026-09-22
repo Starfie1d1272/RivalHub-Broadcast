@@ -1,4 +1,4 @@
-import { getRadarMapAsset } from '@rivalhub-broadcast/cs2-assets';
+import { getMapThumbnail, getSideLogo } from '@rivalhub-broadcast/cs2-assets';
 import type { CSSProperties } from 'react';
 
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
@@ -22,7 +22,8 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
       >
         {maps.map((map) => {
           const decider = map.selectionText === 'DECIDER';
-          const mapAsset = getRadarMapAsset(map.mapKey, 'overview');
+          const mapAsset = getMapThumbnail(map.mapKey);
+          const sideLogo = map.startSide === null ? null : getSideLogo(map.startSide);
           const statusText = decider
             ? 'DECIDER'
             : map.status === 'completed'
@@ -61,9 +62,15 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
                   <span
                     aria-label={`Start side ${map.startSide}`}
                     className={`match-header__series-map-start-side match-header__series-map-start-side--${map.startSide}`}
-                  >
-                    {map.startSide}
-                  </span>
+                    data-side={map.startSide}
+                    style={
+                      sideLogo === null
+                        ? undefined
+                        : ({
+                            '--match-header-side-logo': `url("${sideLogo.outputPath}")`,
+                          } as CSSProperties)
+                    }
+                  ></span>
                 )}
               </div>
               <span className="match-header__series-map-name" title={map.mapName}>

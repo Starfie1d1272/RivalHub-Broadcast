@@ -20,6 +20,7 @@ import {
   readManifest,
   sha256File,
   validateCatalog,
+  validateBroadcastOutputPath,
   validateOutputPath,
   validateSourcePath,
 } from './common.mjs';
@@ -141,6 +142,54 @@ export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT, generatedRoot
   if (await fileExists(radarManifest)) {
     for (const path of await verifyRadarAssets(dirname(publicRoot))) expectedPublicFiles.add(path);
   }
+  const broadcastManifestPath = join(dirname(publicRoot), 'broadcast-assets.json');
+  let broadcastAssets = 0;
+  if (await fileExists(broadcastManifestPath)) {
+    const broadcastManifest = await readJson(broadcastManifestPath);
+    assert(isRecord(broadcastManifest), 'broadcast-assets manifest 必须是 JSON object');
+    assert(broadcastManifest.schemaVersion === 1, 'broadcast-assets schemaVersion 必须为 1');
+    assert(isRecord(broadcastManifest.assets), 'broadcast-assets.assets 必须是 object');
+    assertSortedObjectKeys(broadcastManifest.assets, 'broadcast-assets.assets');
+    for (const [assetId, record] of Object.entries(broadcastManifest.assets)) {
+      const label = `broadcast-assets.assets.${assetId}`;
+      assert(isRecord(record), `${label} 必须是 object`);
+      assert(typeof record.sourceRepository === 'string', `${label}.sourceRepository 无效`);
+      assert(/^[a-f0-9]{40}$/.test(record.sourceCommit), `${label}.sourceCommit 无效`);
+      assert(
+        typeof record.sourcePath === 'string' && record.sourcePath.length > 0,
+        `${label}.sourcePath 无效`,
+      );
+      assert(
+        typeof record.sourceUrl === 'string' && record.sourceUrl.includes(record.sourceCommit),
+        `${label}.sourceUrl 必须固定到 sourceCommit`,
+      );
+      assert(SHA256_PATTERN.test(record.sourceSha256), `${label}.sourceSha256 无效`);
+      assert(
+        typeof record.transformation === 'string' && record.transformation.length > 0,
+        `${label}.transformation 无效`,
+      );
+      assert(SHA256_PATTERN.test(record.outputSha256), `${label}.outputSha256 无效`);
+      assert(record.owner === 'Valve / Counter-Strike 2 game asset', `${label}.owner 无效`);
+      assert(
+        record.mediaType === 'image/jpeg' || record.mediaType === 'image/svg+xml',
+        `${label}.mediaType 无效`,
+      );
+      const relativeOutputPath = validateBroadcastOutputPath(record.outputPath);
+      const hashMatch = /\.([a-f0-9]{12,64})\.(?:jpg|svg)$/.exec(record.outputPath);
+      assert(
+        hashMatch !== null && record.outputSha256.startsWith(hashMatch[1]),
+        `${label}.outputPath hash 不匹配`,
+      );
+      expectedPublicFiles.add(relativeOutputPath);
+      const outputFile = join(publicRoot, relativeOutputPath);
+      assert(await fileExists(outputFile), `broadcast asset 文件不存在：${outputFile}`);
+      assert(
+        (await sha256File(outputFile)) === record.outputSha256,
+        `broadcast asset output hash 不一致：${assetId}`,
+      );
+      broadcastAssets += 1;
+    }
+  }
   const publicFiles = await listFiles(publicRoot);
   for (const file of publicFiles) {
     const relativeFile = relative(publicRoot, file).replaceAll('\\', '/');
@@ -173,6 +222,7 @@ export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT, generatedRoot
   return {
     catalogItems: catalog.items.length,
     assets: Object.keys(manifest.assets).length,
+    broadcastAssets,
     publicFiles: publicFiles.length,
   };
 }

@@ -95,14 +95,12 @@ export function ObjectiveCenter({
             <span aria-hidden="true" className="objective-center__led" />
             {c.mode === 'planting' ? (
               <div
-                className="objective-center__code"
+                className="objective-center__plant-progress"
                 aria-label="安装进度"
                 data-objective-track="action"
                 data-progress={c.action === null ? 'unavailable' : 'determinate'}
               >
-                {[0, 1, 2, 3].map((index) => (
-                  <i key={index} data-filled={c.action !== null && c.action >= (index + 1) / 4} />
-                ))}
+                <span style={{ width: `${(c.action ?? 0) * 100}%` }} />
               </div>
             ) : null}
           </div>

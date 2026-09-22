@@ -18,6 +18,36 @@ export const RADAR_VISUAL_FIXTURES = [
   'unsupported',
 ] as const;
 export type RadarVisualFixture = (typeof RADAR_VISUAL_FIXTURES)[number];
+
+// Synthetic, explicitly placed Nuke positions sampled from traversable rooms
+// across each pinned 1024px floor image and converted through the canonical
+// CS2 calibration. They validate floor projection, not demo evidence.
+export const NUKE_UPPER_WORLD_ANCHORS = [
+  { x: -2333, y: -998 },
+  { x: -1740, y: -949 },
+  { x: -1073, y: -998 },
+  { x: -478, y: -683 },
+  { x: 47, y: 507 },
+  { x: 432, y: -88 },
+  { x: 782, y: -718 },
+  { x: 1447, y: -403 },
+  { x: 2377, y: -683 },
+  { x: 3127, y: -858 },
+] as const;
+
+export const NUKE_LOWER_WORLD_ANCHORS = [
+  { x: -2333, y: -998 },
+  { x: -1703, y: -1138 },
+  { x: -1003, y: -1313 },
+  { x: -478, y: -718 },
+  { x: 47, y: -2013 },
+  { x: 467, y: -1173 },
+  { x: 1712, y: -2013 },
+  { x: 1692, y: -893 },
+  { x: 2377, y: -683 },
+  { x: 3127, y: -858 },
+] as const;
+
 export function realRadarSnapshot(): RadarSnapshot {
   return radarSnapshotSchema.parse(artifact.fixtures['dense-utility'].samples[0]!.snapshot);
 }
@@ -58,19 +88,29 @@ export function radarVisualFixture(id: RadarVisualFixture) {
   }
   if (id.startsWith('nuke') || id.startsWith('vertigo')) {
     synthetic(
-      'Floor readability with controlled world coordinates; source capture is not a floor acceptance claim',
+      id.startsWith('nuke')
+        ? 'Calibrated Nuke overview anchors test map/floor alignment; they are not demo evidence'
+        : 'Floor readability with controlled Vertigo coordinates; source capture is not a floor acceptance claim',
     );
     snapshot.payload.mapName = id.startsWith('nuke') ? 'de_nuke' : 'de_vertigo';
     snapshot.payload.grenades = [];
     snapshot.payload.bomb = null;
     snapshot.payload.observedPlayerSourceId = snapshot.payload.players[0]!.sourcePlayerId;
-    snapshot.payload.players.forEach((p, i) => {
-      p.position = {
-        x: -1600 + i * 180,
-        y: 400 + (i % 3) * 220,
-        z: id === 'nuke-upper' ? 0 : id === 'nuke-lower' ? -600 : 11600,
-      };
-    });
+    if (id.startsWith('nuke')) {
+      const anchors = id === 'nuke-lower' ? NUKE_LOWER_WORLD_ANCHORS : NUKE_UPPER_WORLD_ANCHORS;
+      snapshot.payload.players.forEach((player, index) => {
+        const anchor = anchors[index]!;
+        player.position = { ...anchor, z: id === 'nuke-lower' ? -600 : 0 };
+      });
+    } else {
+      snapshot.payload.players.forEach((player, index) => {
+        player.position = {
+          x: -1600 + index * 180,
+          y: 400 + (index % 3) * 220,
+          z: 11600,
+        };
+      });
+    }
   }
   if (id === 'stale') {
     synthetic('Fresh-to-stale safety surface');

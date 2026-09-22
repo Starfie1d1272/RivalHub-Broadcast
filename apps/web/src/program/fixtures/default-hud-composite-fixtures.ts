@@ -1,7 +1,11 @@
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import type { RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
 import { getProgramFixture } from './program-fixtures';
-import { radarVisualFixture } from './radar-fixtures';
+import {
+  NUKE_LOWER_WORLD_ANCHORS,
+  NUKE_UPPER_WORLD_ANCHORS,
+  radarVisualFixture,
+} from './radar-fixtures';
 import {
   DEFAULT_HUD_COMPOSITE_FIXTURES,
   type DefaultHudCompositeFixture,
@@ -54,6 +58,14 @@ function deterministicAvatar(index: number): string {
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;
 }
 
+function deterministicFixtureLogo(entrant: 'a' | 'b'): string {
+  const mark =
+    entrant === 'a'
+      ? '<path d="M5 39 15 8l9 14 9-11 10 28-12-9-7 11-8-11z" fill="#f3f6fa"/><path d="m24 22 7 10-6 7-6-8z" fill="#0b1119"/>'
+      : '<path d="m6 12 13-7 8 9 8-9 11 7-8 31-11-9-12 9z" fill="#f3f6fa"/><path d="m19 19 8 9 8-9-5 17-6-6-6 6z" fill="#0b1119"/>';
+  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">${mark}</svg>`)}`;
+}
+
 function sourceSnapshot(id: DefaultHudCompositeFixture): ProgramSnapshot {
   const snapshot = getProgramFixture(SOURCES[id]);
   if (snapshot === null) throw new Error(`Default HUD source fixture is missing: ${SOURCES[id]}`);
@@ -61,6 +73,10 @@ function sourceSnapshot(id: DefaultHudCompositeFixture): ProgramSnapshot {
 }
 
 function mutateProgram(id: DefaultHudCompositeFixture, snapshot: ProgramSnapshot): void {
+  if (id !== 'default-missing-logo' && snapshot.payload.series !== null) {
+    snapshot.payload.series.entrants.a.logoUrl = deterministicFixtureLogo('a');
+    snapshot.payload.series.entrants.b.logoUrl = deterministicFixtureLogo('b');
+  }
   if (id === 'default-avatar-present') {
     snapshot.payload.players.forEach((player, index) => {
       player.avatarUrl = deterministicAvatar(index);
@@ -100,7 +116,12 @@ export function getDefaultHudCompositeFixture(id: string): DefaultHudCompositeSn
   const radarSnapshot = structuredClone(radarVisualFixture(radarId).snapshot);
   if (fixtureId === 'default-nuke-multifloor') {
     radarSnapshot.payload.players.forEach((player, index) => {
-      if (player.position !== null) player.position.z = index % 2 === 0 ? 0 : -600;
+      const lower = index >= 5;
+      const anchorIndex = lower ? (index - 5) * 2 + 1 : index * 2;
+      const anchor = lower
+        ? NUKE_LOWER_WORLD_ANCHORS[anchorIndex]!
+        : NUKE_UPPER_WORLD_ANCHORS[anchorIndex]!;
+      player.position = { ...anchor, z: lower ? -600 : 0 };
     });
   }
   return {

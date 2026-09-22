@@ -60,6 +60,22 @@ test.describe('Match Header HUD', () => {
     );
   });
 
+  test('series cells use bundled in-game scenes and the CT/T mark instead of side text', async ({
+    page,
+  }) => {
+    await openFixture(page, 'series-bo3-map1');
+    await expect(page.locator('.match-header__series-map-art-image').first()).not.toHaveCSS(
+      'background-image',
+      'none',
+    );
+    const sideMark = page.locator('.match-header__series-map-start-side').first();
+    await expect(sideMark).toHaveAttribute('data-side', 'CT');
+    await expect(sideMark).toHaveText('');
+    expect(
+      await sideMark.evaluate((node) => getComputedStyle(node, '::before').maskImage),
+    ).toContain('/assets/cs2/sides/ct.');
+  });
+
   test('tactical timeout identifies the entrant only when side mapping resolves', async ({
     page,
   }) => {

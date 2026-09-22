@@ -220,7 +220,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #f06f6f;
+  color: #0b1119;
 }
 
 .objective-center__bomb {
@@ -236,11 +236,19 @@
   display: block;
   width: 36px;
   height: 44px;
-  background: #f06f6f;
+  background: #0b1119;
   mask-image: var(--objective-icon);
   mask-position: center;
   mask-repeat: no-repeat;
   mask-size: contain;
+}
+
+.objective-center[data-objective-mode='planted'] .objective-center__icon {
+  background: #f06f6f;
+}
+
+.objective-center[data-objective-mode='defusing'] .objective-center__icon {
+  background: #83d8e8;
 }
 
 .objective-center__led {
@@ -249,10 +257,11 @@
   right: 4px;
   width: 4px;
   height: 4px;
-  background: #f06f6f;
+  background: #aab4c0;
 }
 
-.objective-center[data-danger='true'] .objective-center__led {
+.objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led {
+  background: #f06f6f;
   animation: c4-led-pulse 720ms ease-in-out infinite alternate;
 }
 
@@ -273,22 +282,21 @@
   white-space: nowrap;
 }
 
-.objective-center__code {
+.objective-center__plant-progress {
   position: absolute;
-  right: 9px;
-  bottom: 8px;
-  display: flex;
-  gap: 2px;
+  right: 5px;
+  bottom: 4px;
+  left: 5px;
+  height: 3px;
+  overflow: hidden;
+  background: rgba(11, 17, 25, 0.18);
 }
 
-.objective-center__code i {
-  width: 3px;
-  height: 6px;
-  background: rgba(11, 17, 25, 0.24);
-}
-
-.objective-center__code i[data-filled='true'] {
-  background: #0b1119;
+.objective-center__plant-progress span {
+  display: block;
+  height: 100%;
+  background: #aab4c0;
+  transform-origin: left center;
 }
 
 .objective-center__ring {
@@ -303,7 +311,6 @@
 .objective-center__ring .objective-center__icon {
   width: 30px;
   height: 38px;
-  background: #83d8e8;
 }
 
 .objective-center__ring svg {
@@ -548,11 +555,7 @@
   display: block;
   width: 18px;
   height: 18px;
-  color: #0b1119;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 18px;
-  text-align: center;
+  clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%);
 }
 
 .match-header__series-map-start-side--CT {
@@ -561,6 +564,21 @@
 
 .match-header__series-map-start-side--T {
   background: #f2bd4f;
+}
+
+.match-header__series-map-start-side::before {
+  position: absolute;
+  inset: 3px;
+  background: #0b1119;
+  content: '';
+  mask-image: var(--match-header-side-logo);
+  mask-position: center;
+  mask-repeat: no-repeat;
+  mask-size: contain;
+  -webkit-mask-image: var(--match-header-side-logo);
+  -webkit-mask-position: center;
+  -webkit-mask-repeat: no-repeat;
+  -webkit-mask-size: contain;
 }
 
 .match-header__series-map--decider .match-header__series-map-status {

@@ -163,6 +163,20 @@ export function validateOutputPath(outputPath) {
   return relativePath;
 }
 
+export function validateBroadcastOutputPath(outputPath) {
+  assert(
+    typeof outputPath === 'string' && outputPath.startsWith(ASSET_PATH_PREFIX),
+    `broadcast outputPath 必须位于 ${ASSET_PATH_PREFIX}`,
+  );
+  const relativePath = outputPath.slice(1);
+  assert(isRelativePath(relativePath), `broadcast outputPath 含无效路径：${outputPath}`);
+  assert(
+    /^assets\/cs2\/(?:thumbnails|sides)\/[^/]+\.[a-f0-9]{12,64}\.(?:jpg|svg)$/.test(relativePath),
+    `broadcast outputPath 必须是带内容 hash 的缩图或阵营 SVG：${outputPath}`,
+  );
+  return relativePath;
+}
+
 export async function sha256(data) {
   return createHash('sha256').update(data).digest('hex');
 }

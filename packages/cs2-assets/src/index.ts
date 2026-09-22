@@ -16,3 +16,10 @@ export {
 } from './types.js';
 export { RADAR_MAP_ASSETS, getRadarMapAsset } from './radar-maps.js';
 export type { RadarMapAsset, RadarMapAssetSet } from './radar-maps.js';
+export {
+  BROADCAST_ASSETS,
+  getBroadcastAsset,
+  getMapThumbnail,
+  getSideLogo,
+} from './broadcast-assets.js';
+export type { BroadcastAsset } from './broadcast-assets.js';

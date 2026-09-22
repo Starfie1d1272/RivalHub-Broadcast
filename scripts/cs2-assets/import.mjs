@@ -1,5 +1,5 @@
 import { Buffer } from 'node:buffer';
-import { access, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
+import { access, cp, mkdir, mkdtemp, readFile, rename, rm, writeFile } from 'node:fs/promises';
 import { dirname, join, relative, resolve } from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
@@ -11,6 +11,7 @@ import {
   TOOLCHAIN_PATH,
   assert,
   listFiles,
+  validateBroadcastOutputPath,
   readCatalog,
   readJson,
   sha256,
@@ -426,6 +427,29 @@ export async function importCs2Assets({
       `${JSON.stringify(manifest, null, 2)}\n`,
       'utf8',
     );
+    const broadcastManifestPath = join(packageRoot, 'generated', 'broadcast-assets.json');
+    let hasBroadcastAssets = true;
+    try {
+      await access(broadcastManifestPath);
+    } catch (error) {
+      if (error?.code !== 'ENOENT') throw error;
+      hasBroadcastAssets = false;
+    }
+    if (hasBroadcastAssets) {
+      const broadcastManifest = await readJson(broadcastManifestPath);
+      await writeFile(
+        join(outputStagingRoot, 'broadcast-assets.json'),
+        `${JSON.stringify(broadcastManifest, null, 2)}\n`,
+        'utf8',
+      );
+      for (const record of Object.values(broadcastManifest.assets ?? {})) {
+        const relativePath = validateBroadcastOutputPath(record.outputPath);
+        const source = join(packageRoot, 'generated', 'public', relativePath);
+        const destination = outputRecordPath(outputPublicRoot, record.outputPath);
+        await mkdir(dirname(destination), { recursive: true });
+        await cp(source, destination);
+      }
+    }
     // Verify the complete generated staging tree before atomic replacement
     await verifyCs2Assets({
       rootDir: repositoryRoot,

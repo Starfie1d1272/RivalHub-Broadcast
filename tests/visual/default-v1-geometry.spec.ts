@@ -139,7 +139,7 @@ async function assertHudGeometry(page: Page) {
       }),
     );
     expect(cardBoxes.map(({ height }) => height)).toEqual([78, 78, 78, 78, 78]);
-    expect(cardBoxes.map(({ y }) => y)).toEqual([552, 630, 708, 786, 864]);
+    expect(cardBoxes.map(({ y }) => y)).toEqual([600, 681, 762, 843, 924]);
   }
 
   const liveBody = page
@@ -231,6 +231,12 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
     await expect(page.locator('canvas.radar')).toHaveAttribute('data-radar-artwork', 'ready');
     await assertHudGeometry(page);
 
+    if (fixtureId === 'default-missing-logo') {
+      await expect(page.locator('[data-team-logo-slot] img')).toHaveCount(0);
+    } else {
+      await expect(page.locator('[data-team-logo-slot] img')).toHaveCount(2);
+    }
+
     if (fixtureId === 'default-avatar-present') {
       await expect(page.locator('[data-player-card][data-avatar="true"]')).toHaveCount(10);
       await expect(page.locator('.player-rail__avatar img')).toHaveCount(10);
@@ -238,37 +244,37 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       const right = page.locator('[data-hud-widget="team-t-rail"] [data-player-card]').first();
       await assertBox(left.locator('[data-card-part="avatar"]'), {
         x: 0,
-        y: 552,
+        y: 600,
         width: 78,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="body"]'), {
         x: 78,
-        y: 552,
+        y: 600,
         width: 334,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="observer-endcap"]'), {
         x: 412,
-        y: 552,
+        y: 600,
         width: 28,
         height: 78,
       });
       await assertBox(right.locator('[data-card-part="observer-endcap"]'), {
         x: 1480,
-        y: 552,
+        y: 600,
         width: 28,
         height: 78,
       });
       await assertBox(right.locator('[data-card-part="body"]'), {
         x: 1508,
-        y: 552,
+        y: 600,
         width: 334,
         height: 78,
       });
       await assertBox(right.locator('[data-card-part="avatar"]'), {
         x: 1842,
-        y: 552,
+        y: 600,
         width: 78,
         height: 78,
       });
@@ -282,28 +288,28 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
           .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="body"]'),
-        { x: 0, y: 552, width: 412, height: 78 },
+        { x: 0, y: 600, width: 412, height: 78 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="observer-endcap"]'),
-        { x: 412, y: 552, width: 28, height: 78 },
+        { x: 412, y: 600, width: 28, height: 78 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="observer-endcap"]'),
-        { x: 1480, y: 552, width: 28, height: 78 },
+        { x: 1480, y: 600, width: 28, height: 78 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="body"]'),
-        { x: 1508, y: 552, width: 412, height: 78 },
+        { x: 1508, y: 600, width: 412, height: 78 },
       );
     }
     if (fixtureId === 'default-freezetime') {
@@ -314,15 +320,17 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
           .evaluateAll((nodes) => nodes.map((node) => getComputedStyle(node).height)),
       ).toEqual(['48px', '48px']);
       const summaries = page.locator('.player-rail__summary');
-      await assertBox(summaries.first(), { x: 0, y: 954, width: 440, height: 48 });
-      await assertBox(summaries.nth(1), { x: 1480, y: 954, width: 440, height: 48 });
+      await assertBox(summaries.first(), { x: 0, y: 524, width: 440, height: 48 });
+      await assertBox(summaries.nth(1), { x: 1480, y: 524, width: 440, height: 48 });
     }
     if (fixtureId === 'default-observed') {
       await expect(page.locator('[data-player-card][data-observed="true"]')).toHaveCount(1);
-      await expect(page.locator('.player-rail__card.is-observed .player-rail__endcap')).toHaveCSS(
-        'background-color',
-        'rgb(243, 246, 250)',
-      );
+      expect(
+        await page
+          .locator('.player-rail__card.is-observed .player-rail__endcap')
+          .first()
+          .evaluate((node) => getComputedStyle(node, '::before').backgroundColor),
+      ).toBe('rgb(243, 246, 250)');
     }
     if (fixtureId === 'default-dead') {
       const dead = page.locator('[data-player-card][data-life-state="dead"]');
@@ -378,7 +386,11 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
     if (fixtureId === 'default-nuke-multifloor') {
       await expect(page.locator('canvas.radar')).toHaveAttribute(
         'data-radar-compositor',
-        'multi-floor',
+        'shared-calibration',
+      );
+      await expect(page.locator('canvas.radar')).toHaveAttribute(
+        'data-radar-coordinate-space',
+        'overview-1024',
       );
       await expect(page.locator('canvas.radar')).toHaveAttribute(
         'data-radar-layers',

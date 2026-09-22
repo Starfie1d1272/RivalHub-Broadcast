@@ -20,3 +20,13 @@
 ammo semantic 的官方 game-data 证据与提取 hash 记录在
 `provenance/ammo-evidence.md`。下载工具、VPK、raw compiled resource 和
 VRF binary 均只存在于维护者本地导入工作目录，未进入仓库。
+
+## Broadcast thumbnails and side marks
+
+Series-strip scene thumbnails and CT/T one-color marks are packaged separately
+from the VPK-imported item catalog. Their pinned extraction source, source and
+output hashes, media type, and thumbnail transformation are recorded in
+`generated/broadcast-assets.json`. The originals are Valve / Counter-Strike 2
+artwork; the public extraction repositories do not grant ownership of that
+artwork. These downloaded presentation assets do not change the production
+import workflow or become runtime sources of telemetry facts.

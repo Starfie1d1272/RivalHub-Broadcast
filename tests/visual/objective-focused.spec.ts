@@ -46,10 +46,19 @@ for (const id of cases)
       if (id === 'real-defusing' || id === 'objective-dual-progress-edge')
         await expect(page.locator('[data-objective-track]')).toHaveCount(2);
       await expect(page.locator('[data-team="a"] [data-series-win-slot]')).toHaveCount(2);
-      if (id === 'real-planting')
-        await expect(page.locator('.objective-center__code [data-filled="true"]')).toHaveCount(0);
-      if (id === 'real-planting-late')
-        await expect(page.locator('.objective-center__code [data-filled="true"]')).toHaveCount(3);
+      if (id === 'real-planting' || id === 'real-planting-late') {
+        const progress = page.locator('.objective-center__plant-progress');
+        const bomb = page.locator('.objective-center__icon');
+        const progressBox = await progress.boundingBox();
+        const bombBox = await bomb.boundingBox();
+        expect(progressBox!.x + progressBox!.width / 2).toBeCloseTo(
+          bombBox!.x + bombBox!.width / 2,
+          0,
+        );
+        await expect(
+          page.locator('.objective-center[data-objective-mode="planting"] .objective-center__icon'),
+        ).toHaveCSS('background-color', 'rgb(11, 17, 25)');
+      }
       if (id === 'objective-dual-progress-edge') {
         await expect(page.locator('.objective-center__ring-fill')).toHaveAttribute(
           'transform',
