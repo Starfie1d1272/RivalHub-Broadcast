@@ -328,11 +328,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
   return <canvas aria-label="比赛雷达" className="radar" ref={canvas} />;
 }
 
-export function RadarWidget({
-  radarClient,
-  radarSnapshot,
-  settings,
-}: RadarHudWidgetRendererProps) {
+export function RadarWidget({ radarClient, radarSnapshot, settings }: RadarHudWidgetRendererProps) {
   return (
     <Radar
       client={radarClient}

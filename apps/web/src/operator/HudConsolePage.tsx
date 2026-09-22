@@ -724,7 +724,9 @@ export function HudConsolePage() {
             <span
               className="hud-console__source-status"
               data-connection-state={program.state}
-              data-radar-diagnostic={unsupportedRadarMap === null ? undefined : 'unsupported-map'}
+              data-radar-diagnostic={
+                unsupportedRadarMap === null ? undefined : 'unsupported-map'
+              }
               data-radar-unsupported-map={unsupportedRadarMap ?? undefined}
             >
               {connectionLabel(program.state)}

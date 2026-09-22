@@ -102,23 +102,25 @@ async function commandOutput(command, args, cwd = rootDir) {
   return (await runCommand(command, args, { cwd, capture: true })).stdout.trim();
 }
 
-async function hasOnlyCrAtEolDiff(path) {
-  try {
-    await runCommand('git', ['diff', '--ignore-cr-at-eol', '--quiet', '--', path], {
-      capture: true,
-    });
-    return true;
-  } catch {
-    return false;
-  }
+function normalizeLineEndings(value) {
+  return value.replaceAll('\r\n', '\n').replaceAll('\r', '\n');
+}
+
+async function lockfileDiffIsOnlyLineEndings() {
+  const [workingTree, committed] = await Promise.all([
+    readFile(join(rootDir, 'pnpm-lock.yaml'), 'utf8'),
+    runCommand('git', ['show', 'HEAD:pnpm-lock.yaml'], { capture: true }).then(
+      ({ stdout }) => stdout,
+    ),
+  ]);
+  return normalizeLineEndings(workingTree) === normalizeLineEndings(committed);
 }
 
 async function ensureCleanCheckout(allowDirty) {
   if (allowDirty) return;
   const rawStatus = await commandOutput('git', ['status', '--porcelain']);
-  if (rawStatus.includes('pnpm-lock.yaml') && (await hasOnlyCrAtEolDiff('pnpm-lock.yaml'))) {
-    // Windows tooling can rewrite only CR-at-EOL despite the LF repository contract.
-    // Restore only that proven normalization case; never discard semantic lockfile edits.
+  if (rawStatus.includes('pnpm-lock.yaml') && (await lockfileDiffIsOnlyLineEndings())) {
+    // Restore only the proven line-ending normalization case; semantic edits still fail closed.
     await runCommand('git', ['checkout', '--', 'pnpm-lock.yaml'], { capture: true });
   }
   const status = await commandOutput('git', ['status', '--porcelain']);

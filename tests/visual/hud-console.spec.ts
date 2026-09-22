@@ -194,10 +194,8 @@ test.describe('HUD 编辑器', () => {
           __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets
-        .filter((s) => s.url.includes('/local/v1/radar'))
-        .at(-1)
-        ?.emit(JSON.stringify(snapshot));
+      const radarSocket = sockets.filter((s) => s.url.includes('/local/v1/radar')).at(-1);
+      radarSocket?.emit(JSON.stringify(snapshot));
     }, CURRENT_LIVE_RADAR);
     await sourceSelect.selectOption('current-live');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
@@ -264,10 +262,8 @@ test.describe('HUD 编辑器', () => {
           __rhProgramSockets: Array<{ readonly url: string; emit(data: string): void }>;
         }
       ).__rhProgramSockets;
-      sockets
-        .filter((s) => s.url.includes('/local/v1/radar'))
-        .at(-1)
-        ?.emit(JSON.stringify(snapshot));
+      const radarSocket = sockets.filter((s) => s.url.includes('/local/v1/radar')).at(-1);
+      radarSocket?.emit(JSON.stringify(snapshot));
     }, UNSUPPORTED_LIVE_RADAR);
     await expect(page.locator('.hud-console__source-status')).toContainText(
       '雷达不可用：不支持地图 de_unsupported_test_map',
