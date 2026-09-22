@@ -47,7 +47,7 @@
 
 | 来源                      | 固定版本与改写参考文件                                                                                                                                    | 许可证                              |
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
-| Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx`、`Player.tsx`、`TeamBox.tsx`、`players.scss` | MIT                                 |
+| Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx`、`Player.tsx`、`TeamBox.tsx`、`players.scss`、`src/HUD/Timers/BombTimer.tsx`、`src/HUD/Timers/PlantDefuse.tsx`、`src/HUD/Players/Observed.tsx`、`src/HUD/Players/observed.scss` | MIT                                 |
 | Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | 固定版本 `package.json` 声明 ISC；该 revision 无独立 `LICENSE` 文件 |
 
 Lexogrine MIT notice（固定版本 `LICENSE`）：

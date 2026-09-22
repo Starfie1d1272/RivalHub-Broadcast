@@ -394,3 +394,92 @@ describe('objective timing normalization', () => {
     });
   });
 });
+
+describe('witnessed objective progress denominators', () => {
+  function planted() {
+    let s = createInitialRuntimeState('duration');
+    s = accept(s, observation(1, 0, { bombState: 'carried' }));
+    s = accept(s, observation(2, 100, { bombState: 'planting', countdownSeconds: 3.1 }));
+    expect(project(s, 100).bomb?.action?.durationSeconds).toBe(3.1);
+    s = accept(s, observation(3, 200, { bombState: 'planting', countdownSeconds: 3 }));
+    expect(project(s, 200).bomb?.action?.durationSeconds).toBe(3.1);
+    return accept(s, observation(4, 3300, { bombState: 'planted', countdownSeconds: 39.8 }));
+  }
+  it('captures once, calibrates upwards and preserves explosion across defuse/abort', () => {
+    let s = planted();
+    expect(project(s, 3300).bomb?.explosion?.durationSeconds).toBe(39.8);
+    expect(s.objectiveTiming.plantActionDurationSeconds).toBeNull();
+    s = accept(s, observation(5, 3400, { bombState: 'planted', countdownSeconds: 39.9 }));
+    s = accept(s, observation(6, 3500, { bombState: 'defusing', countdownSeconds: 4 }));
+    expect(project(s, 3500).bomb).toMatchObject({
+      explosion: { durationSeconds: 39.9 },
+      action: { durationSeconds: null },
+    });
+    s = accept(s, observation(7, 3600, { bombState: 'planted', countdownSeconds: 39.6 }));
+    expect(project(s, 3600).bomb?.explosion?.durationSeconds).toBe(39.9);
+  });
+  it.each(['planting', 'planted', 'defusing'] as const)(
+    'does not invent %s baseline duration',
+    (bombState) => {
+      const s = accept(
+        createInitialRuntimeState('late'),
+        observation(1, 0, { bombState, countdownSeconds: 2 }),
+      );
+      expect(s.objectiveTiming.explosionDurationSeconds).toBeNull();
+      expect(s.objectiveTiming.plantActionDurationSeconds).toBeNull();
+    },
+  );
+  it.each(['defused', 'exploded', 'carried', 'dropped', 'unknown'] as const)(
+    'clears on %s',
+    (bombState) => {
+      const s = accept(planted(), observation(5, 3400, { bombState }));
+      expect(s.objectiveTiming.explosionDurationSeconds).toBeNull();
+    },
+  );
+  it('clears on gap, stale recovery, generation and map reset', () => {
+    for (const [sequence, ms, generation] of [
+      [6, 3400, 0],
+      [5, 30000, 0],
+    ] as const) {
+      const s = accept(
+        planted(),
+        observation(sequence, ms, { bombState: 'planted', countdownSeconds: 25 }),
+        generation,
+      );
+      expect(s.objectiveTiming.explosionDurationSeconds).toBeNull();
+    }
+  });
+  it('map reset and generation advance clear denominator authority', () => {
+    const at = { monotonicMs: 3400, utc: '2026-09-21T00:00:03.400Z' };
+    for (const command of [
+      { kind: 'reset-map-execution', reason: 'operator-correction', at },
+      { kind: 'advance-program-source-generation', nextGeneration: 1, at },
+    ] as const) {
+      const s = reduceRuntime(planted(), command, POLICY).state;
+      expect(s.objectiveTiming.explosionDurationSeconds).toBeNull();
+      expect(s.objectiveTiming.plantActionDurationSeconds).toBeNull();
+    }
+  });
+  it('plant abort clears action and invalid countdown cannot establish duration', () => {
+    let s = accept(createInitialRuntimeState('abort'), observation(1, 0, { bombState: 'dropped' }));
+    s = accept(s, observation(2, 100, { bombState: 'planting', countdownSeconds: -1 }));
+    expect(s.objectiveTiming.plantActionDurationSeconds).toBeNull();
+    s = accept(s, observation(3, 200, { bombState: 'carried' }));
+    expect(project(s, 200).bomb?.action).toBeNull();
+    s = accept(s, observation(4, 300, { bombState: 'planting', countdownSeconds: 3 }));
+    expect(s.objectiveTiming.plantActionDurationSeconds).toBe(3);
+  });
+  it('round over clears duration and expired lease hides progress remaining', () => {
+    const s = planted();
+    expect(project(s, 4401).bomb?.explosion).toEqual({
+      remainingSeconds: null,
+      durationSeconds: 39.8,
+    });
+    expect(
+      accept(
+        s,
+        observation(5, 3400, { bombState: 'planted', countdownSeconds: 39, roundPhase: 'over' }),
+      ).objectiveTiming.explosionDurationSeconds,
+    ).toBeNull();
+  });
+});

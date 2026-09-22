@@ -35,6 +35,9 @@ describe('RuntimeState reducer', () => {
         mapEpoch: 0,
         lastAcceptedReceiveSequence: null,
         explosionAnchor: null,
+        lastBombState: null,
+        explosionDurationSeconds: null,
+        plantActionDurationSeconds: null,
       },
       playerStats: {
         mapEpoch: 0,
@@ -215,6 +218,9 @@ describe('RuntimeState reducer', () => {
         mapEpoch: 0,
         lastAcceptedReceiveSequence: null,
         explosionAnchor: null,
+        lastBombState: null,
+        explosionDurationSeconds: null,
+        plantActionDurationSeconds: null,
       },
       playerStats: {
         mapEpoch: 0,

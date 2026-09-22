@@ -112,7 +112,7 @@ export function lossBonusForConsecutiveRoundLosses(
   return 1_400 + value * 500;
 }
 
-function assetForCanonicalKey(canonicalKey: string): PlayerRailAsset | null {
+export function assetForCanonicalKey(canonicalKey: string): PlayerRailAsset | null {
   const item = getCs2Item(canonicalKey);
   if (item === undefined) return null;
   const asset = getCs2Asset(item.assetId);
@@ -142,7 +142,7 @@ export function teamUtilityAsset(
   return assetForCanonicalKey(utilityCanonicalKey(side, family));
 }
 
-function weaponPresentation(
+export function weaponPresentation(
   weapon: ProgramPayload['players'][number]['weapons'][number],
 ): PlayerRailWeapon {
   const resolution = weapon.name === null ? null : resolveCs2ItemByGsiName(weapon.name);
@@ -202,7 +202,9 @@ function utilityFamily(item: Cs2ItemMetadata | null): PlayerRailUtility['family'
   }
 }
 
-function utilityPresentation(weapons: readonly PlayerRailWeapon[]): readonly PlayerRailUtility[] {
+export function utilityPresentation(
+  weapons: readonly PlayerRailWeapon[],
+): readonly PlayerRailUtility[] {
   return weapons.flatMap((weapon) => {
     const family = utilityFamily(weapon.item);
     if (family === null) return [];

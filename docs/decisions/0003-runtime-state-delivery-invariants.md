@@ -13,6 +13,8 @@
 
 > 2026-09-21 clarification：Issue #56 的 HUD presentation control-plane 继续属于 Runtime 之外的 presentation owner。custom activation snapshot 是最后一次 Activate 生成的独立版本化 on-air 内容，加载时做自身 semantic safety validation，不通过当前 Theme recipe 重算来判断兼容；built-in reference 才随代码版本解析。framework-neutral widget descriptor 负责完整 settings envelope 与 variant 校验，Web React renderer registry 负责具体 renderer，未实现 widget 不得以 placeholder 泄漏到 Program。Program 与 Current Live preview 共用 stable cursor identity + fail-closed presentation boundary；producer/session/source-generation/map-epoch 变化或 accepted↔fail-closed 才 remount，不把一次性 reset flags 叠加为第二次 remount。该 clarification 不新增 RuntimeState、gameplay truth 或 normal Operator credential。
 
+> 2026-09-22 clarification：objective progress denominator 由既有 Core objectiveTiming owner 在同一 source generation/mapEpoch 的连续安装边沿捕获；这是 witnessed presentation denominator，不是服务器配置。断流和重置清除其证明，Renderer 只对当前投影的 progress width 做短 transition，不缓存或递减 gameplay clocks。Program schema 不变。
+
 ## 背景
 
 ADR-0002 已冻结 Runtime / Workspace 技术栈，但在正式实现 Core 前，还需要把实时系统最容易走偏的语义边界固定下来：

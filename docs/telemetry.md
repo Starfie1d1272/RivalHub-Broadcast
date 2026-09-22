@@ -187,6 +187,8 @@ degraded、map epoch 变化和 Program source generation 变化都会清除/失�
 同一 generation / map epoch 内一旦发生 `gap-resync` 或 `stale-recovery`，也不得跨断点继承旧
 explosion anchor；恢复帧只有携带新的 authoritative planted countdown 才能重新建立它。
 
+Core 同时记录 previous accepted bomb state 与 witnessed presentation denominator：连续 carried/dropped → planting 捕获 plant duration，连续 planting → planted 捕获 explosion duration。相同 planting action 保留分母，abort 清除；explosion 分母在 contiguous defusing/abort 中保留，后续 planted sample 只可向上校准。baseline、gap/stale recovery、generation/mapEpoch、terminal 不继承 duration；不得把分母称为 canonical mp_c4timer。
+
 plant/defuse action 由当前 observation 即时派生。actor 缺失不清除 action time；defuse kit
 只从当前 matching player 的 `hasDefuser` evidence 读取，未知就是 `null`，不做 heuristic。
 所有 duration / interpolation / lease 使用 monotonic clock；UTC 只用于 capture、报告和审计。

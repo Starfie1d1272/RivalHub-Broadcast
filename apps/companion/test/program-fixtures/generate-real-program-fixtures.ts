@@ -10,6 +10,7 @@ export const REAL_PROGRAM_MATRIX = [
   ['real-live-rich', 'observer/rich-live-state', 727],
   ['real-bomb-dropped', 'bomb/dropped', 260],
   ['real-planting', 'bomb/plant', 1016],
+  ['real-planting-late', 'bomb/plant', 1027],
   ['real-planted', 'bomb/plant', 1029],
   ['real-defusing', 'bomb/defuse', 5523],
   ['real-defused', 'bomb/defuse', 5544],

@@ -5,6 +5,11 @@ import {
   SYNTHETIC_FIXTURE_PROVENANCE,
 } from './synthetic-program-fixtures';
 
+import {
+  objectiveFocusedFixtures,
+  OBJECTIVE_FOCUSED_PROVENANCE,
+} from './objective-focused-fixtures';
+
 const aliases = {
   'live-canonical': 'real-live-rich',
   'bomb-planted': 'real-planted',
@@ -16,6 +21,7 @@ const aliases = {
   'series-paused': 'real-paused',
 } as const;
 export const programFixtures = {
+  ...objectiveFocusedFixtures,
   ...syntheticProgramFixtures,
   ...(Object.fromEntries(
     Object.entries(realProgramFixtures).map(([id, record]) => [id, record.snapshot]),
@@ -33,6 +39,7 @@ export const PROGRAM_FIXTURE_PROVENANCE: Readonly<
   Record<ProgramFixtureId, ProgramFixtureProvenance>
 > = {
   ...SYNTHETIC_FIXTURE_PROVENANCE,
+  ...OBJECTIVE_FOCUSED_PROVENANCE,
   ...(Object.fromEntries(
     Object.entries(realProgramFixtures).map(([id, record]) => [id, record.provenance]),
   ) as { readonly [K in keyof typeof realProgramFixtures]: RealProgramProvenance }),
@@ -41,6 +48,21 @@ export const PROGRAM_FIXTURE_PROVENANCE: Readonly<
   ) as { readonly [K in keyof typeof aliases]: RealProgramProvenance }),
 };
 export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> = {
+  'focused-avatar': '观察选手 · 显示头像',
+  'focused-long-name': '观察选手 · 长名称与队徽',
+  'focused-low-health-edge': '观察选手 · 低生命边界',
+  'focused-shells-edge': '观察选手 · 霰弹弹药边界',
+  'focused-grenade-edge': '观察选手 · 当前手雷边界',
+  'focused-unavailable-edge': '观察选手 · 统计与弹药缺失',
+  'objective-live-4v5-edge': '存活人数 · 4 对 5',
+  'objective-late-plant-edge': '安装 · 中途接入',
+  'objective-late-planted-edge': 'C4 · 中途接入',
+  'objective-unavailable-edge': 'C4 · 时间证据缺失',
+  'objective-no-kit-edge': '拆弹 · 无拆弹器',
+  'objective-dual-progress-edge': '拆弹 · 双进度轨道',
+  'objective-paused-edge': 'C4 · 比赛暂停',
+  'objective-long-defuser': '拆弹 · 长选手名称',
+  'objective-stale-edge': 'C4 · 数据过期',
   ...(Object.fromEntries(
     Object.keys(realProgramFixtures).map((id) => [id, `真实回放 · ${id.slice(5)}`]),
   ) as Record<keyof typeof realProgramFixtures, string>),
