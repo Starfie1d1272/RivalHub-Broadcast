@@ -173,6 +173,9 @@ test.describe('HUD 编辑器', () => {
     await page.goto('/operator/hud');
     const sourceSelect = page.getByLabel('预览来源');
     const liveOption = page.locator('option[value="current-live"]');
+    const programOnlyWidgets = page.locator(
+      '[data-gameplay-hud="true"] [data-hud-widget]:not([data-hud-widget="radar"])',
+    );
     await expect(liveOption).toHaveAttribute('disabled', '');
     await expect(page.locator('.hud-console__source-status')).toContainText('等待实时数据');
 
@@ -218,11 +221,7 @@ test.describe('HUD 编辑器', () => {
     await expect(liveOption).toHaveAttribute('disabled', '');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
-    await expect(
-      page.locator(
-        '[data-gameplay-hud="true"] [data-hud-widget]:not([data-hud-widget="radar"])',
-      ),
-    ).toHaveCount(0);
+    await expect(programOnlyWidgets).toHaveCount(0);
 
     await page.evaluate(() => {
       const sockets = (
@@ -239,11 +238,7 @@ test.describe('HUD 编辑器', () => {
     await expect(page.getByText('实时数据不可用')).toBeVisible();
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
-    await expect(
-      page.locator(
-        '[data-gameplay-hud="true"] [data-hud-widget]:not([data-hud-widget="radar"])',
-      ),
-    ).toHaveCount(0);
+    await expect(programOnlyWidgets).toHaveCount(0);
 
     await page.waitForTimeout(350);
     await page.evaluate((snapshot) => {
@@ -296,11 +291,7 @@ test.describe('HUD 编辑器', () => {
     await expect(page.getByText('实时数据不可用')).toBeVisible();
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('[data-hud-widget="radar"]')).toHaveCount(1);
-    await expect(
-      page.locator(
-        '[data-gameplay-hud="true"] [data-hud-widget]:not([data-hud-widget="radar"])',
-      ),
-    ).toHaveCount(0);
+    await expect(programOnlyWidgets).toHaveCount(0);
   });
 
   test('覆盖测试场景、拖动、尺寸调整与网格吸附开关', async ({ page }) => {

@@ -123,9 +123,10 @@ describe('GameplayHud shared renderer boundary', () => {
       childrenOf(program) as Array<ReactElement<{ readonly 'data-hud-widget': string }>>
     ).find((child) => child?.props?.['data-hud-widget'] === 'radar');
     expect(wrapper).toBeDefined();
-    const radarRenderer = (wrapper?.props as { readonly children?: ReactElement })
-      .children as ReactElement<RadarHudWidgetRendererProps> | undefined;
-    expect(radarRenderer?.props.radarSnapshot).toMatchObject({ channel: 'radar' });
+    const radarRenderer = (wrapper?.props as { readonly children?: ReactElement }).children;
+    expect(radarRenderer).toMatchObject({
+      props: { radarSnapshot: { channel: 'radar' } },
+    });
   });
 
   it('adapts every resolved semantic field into theme-owned variables', () => {
