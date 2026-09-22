@@ -33,6 +33,7 @@ import {
   type ProgramFixtureId,
 } from '../program/fixtures';
 import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
+import { realRadarSnapshot } from '../program/fixtures/radar-fixtures';
 import { HudCanvasPreview } from './HudCanvasPreview';
 import { HudConsoleWorkspaces } from './HudConsoleWorkspaces';
 import { clientPointToHudLogicalPoint } from './hud-canvas-geometry';
@@ -104,6 +105,8 @@ export function HudConsolePage() {
   const visualFixtureMode = import.meta.env.VITE_VISUAL_FIXTURES === '1';
   const hudEditor = useHudConfigEditorClient(!visualFixtureMode);
   const program = useProgramConnection();
+  const radarClient = useLocalChannelClient('radar');
+  const radarFixture = useMemo(() => realRadarSnapshot(), []);
   const fixtureDocument = useMemo(() => createDefaultHudConfigDocument(), []);
   const authoritativeDocument = hudEditor.document ?? (visualFixtureMode ? fixtureDocument : null);
   const configDocument = authoritativeDocument ?? fixtureDocument;
@@ -713,6 +716,8 @@ export function HudConsolePage() {
           </section>
 
           <HudCanvasPreview
+            radarSnapshot={activePreviewSource === 'current-live' ? null : radarFixture}
+            radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
             editorMode={workspace === 'layout' ? 'layout' : 'preview'}

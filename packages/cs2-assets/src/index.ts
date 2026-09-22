@@ -14,3 +14,5 @@ export {
   type Cs2ItemKind,
   type Cs2ItemMetadata,
 } from './types.js';
+export { RADAR_MAP_ASSETS, getRadarMapAsset } from './radar-maps.js';
+export type { RadarMapAsset, RadarMapAssetSet } from './radar-maps.js';

@@ -528,12 +528,17 @@ export function parseHudConfigDocument(value: unknown): HudConfigDocument {
   };
 }
 
+export const radarWidgetSettingsSchema = z.strictObject({
+  zoomMode: z.enum(['full-map', 'auto']).default('full-map'),
+});
+
 export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
   HUD_WIDGET_IDS.map((id) => ({
     ...defineHudWidgetDescriptor({
       id,
       label: HUD_WIDGET_LABELS[id],
       rendererAvailability:
+        id === 'radar' ||
         id === 'focused-player' ||
         id === 'top-score-bar' ||
         id === 'team-ct-rail' ||
@@ -547,7 +552,10 @@ export const HUD_WIDGET_REGISTRY: readonly HudWidgetDescriptor[] = deepFreeze(
       resizePolicy: id === 'radar' ? ('square' as const) : ('none' as const),
       defaultPlacement: cloneJson(DEFAULT_PLACEMENTS[id]),
       settingsSchemaByVariant: {
-        default: (value: unknown) => emptyWidgetSettingsSchema.parse(value),
+        default: (value: unknown) =>
+          id === 'radar'
+            ? radarWidgetSettingsSchema.parse(value)
+            : emptyWidgetSettingsSchema.parse(value),
       },
     }),
   })),
@@ -597,7 +605,10 @@ const BUILTIN_PRESET: HudPreset = deepFreeze({
   name: 'RivalHub 默认预设',
   layoutId: BUILTIN_LAYOUT_ID,
   themeId: BUILTIN_THEME_ID,
-  widgets: completeWidgetRecord(() => ({ variant: 'default', settings: {} })),
+  widgets: completeWidgetRecord((id) => ({
+    variant: 'default',
+    settings: id === 'radar' ? { zoomMode: 'full-map' } : {},
+  })),
 });
 
 export function createDefaultHudConfigDocument(): HudConfigDocument {

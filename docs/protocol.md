@@ -371,9 +371,15 @@ Program 的 `series` 是 Core `SeriesProgress` 的 entrant-oriented 只读 proje
 
 `roundHistory` 的 item 只表达已证明的 `roundNumber`、source `winnerSide`、可冻结的 `winnerEntryId` 和 normalized `winCondition`。历史恢复不完整时暴露 `partial`，不填补无法证明的回合。
 
-### 4.5 Radar schema v1
+### 4.5 Radar schema v2
 
 Radar 快照包含当前雷达领域所需的比赛游标、新鲜度、身份状态、地图、选手、C4 和手雷等信息。雷达 schema 表达 domain frame，不承诺 React / SVG / Canvas 等具体渲染实现。
+
+v2 显式增加了以下字段以支持端侧轻量动效与战术标记渲染，同时保持严格 schema 校验：
+
+- `RadarPlayer` 补充 `health: number | null`、`flashAmount: number | null` 与 `activeWeapon: { name: string | null, ammoClip: number | null, state: 'active' | 'holstered' | 'reloading' | 'unknown' | null } | null`；
+- `RadarGrenade` 补充从 GSI raw payload 归一化提取的 `effectTimeSeconds: number | null`（缺失/异常为 `null`）；
+- 全部 payload 与 nested 对象采用 strict schema，未知字段 fail closed。
 
 ### 4.6 Operator schema v3
 

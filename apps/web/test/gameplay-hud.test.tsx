@@ -60,7 +60,7 @@ describe('GameplayHud shared renderer boundary', () => {
 
     expect(program).toMatchObject({ props: { 'data-gameplay-hud': 'true' } });
     expect(childrenOf(program)).toHaveLength(9);
-    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(6);
+    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(7);
     expect(editor).toMatchObject({ props: { 'data-hud-editor-overlay': 'true' } });
     expect(childrenOf(editor)).toHaveLength(9);
     const preview = HudEditorOverlay({
@@ -98,7 +98,7 @@ describe('GameplayHud shared renderer boundary', () => {
     expect(() => assertHudRendererRegistryConsistency()).not.toThrow();
     expect(
       Object.values(HUD_RENDERER_REGISTRY).filter((entry) => entry.renderer !== null),
-    ).toHaveLength(6);
+    ).toHaveLength(7);
   });
 
   it('renders hook-based components through the same registry and resets only at the boundary key', () => {
@@ -196,5 +196,66 @@ describe('GameplayHud shared renderer boundary', () => {
         'live',
       ),
     ).toBe('fail-closed');
+  });
+
+  it('keeps ProgramSnapshot isolated and never copies or merges Radar payload into Program widget props', () => {
+    function ProbeRenderer() {
+      return <div data-probe="true" />;
+    }
+
+    const registry: HudRendererRegistry = {
+      ...HUD_RENDERER_REGISTRY,
+      'top-score-bar': { availability: 'implemented', renderer: ProbeRenderer },
+    };
+    const resolvedPreset = getBuiltinResolvedPreset();
+    const snapshot = getProgramFixture('live-canonical');
+    if (snapshot === null) throw new Error('fixture missing');
+
+    const fakeRadarSnapshot = {
+      type: 'snapshot' as const,
+      protocolVersion: 1 as const,
+      channel: 'radar' as const,
+      schemaVersion: 2 as const,
+      channelSeq: 1,
+      cursor: snapshot.cursor,
+      payload: {
+        telemetryFreshness: 'fresh' as const,
+        identityState: 'matched' as const,
+        mapName: 'de_mirage',
+        observedPlayerSourceId: null,
+        coverage: {
+          allPlayers: 'present' as const,
+          bomb: 'present' as const,
+          grenades: 'present' as const,
+        },
+        players: [],
+        bomb: null,
+        grenades: [],
+      },
+    };
+
+    const program = GameplayHud({
+      rendererRegistry: registry,
+      resolvedPreset,
+      snapshot,
+      radarSnapshot: fakeRadarSnapshot,
+    });
+
+    expect(program).not.toBeNull();
+    const children = childrenOf(program) as Array<
+      ReactElement<{
+        readonly 'data-hud-widget': string;
+        readonly children: ReactElement<HudWidgetRendererProps>;
+      }>
+    >;
+    const scoreBarWrapper = children.find(
+      (child) => child?.props?.['data-hud-widget'] === 'top-score-bar',
+    );
+    const childWidget = scoreBarWrapper?.props?.children;
+    expect(childWidget).toBeDefined();
+    // Verify child widgets receive exact unpolluted ProgramSnapshot
+    expect(childWidget?.props.snapshot).toBe(snapshot);
+    expect(childWidget?.props.snapshot).not.toHaveProperty('payload.coverage.grenades');
+    expect(childWidget?.props.snapshot).not.toHaveProperty('payload.grenades');
   });
 });

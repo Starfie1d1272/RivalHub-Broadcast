@@ -37,7 +37,7 @@
 | 工具/来源                               |                              当前版本或来源 | 用途                                                            | 许可证/说明                                                                              |
 | --------------------------------------- | ------------------------------------------: | --------------------------------------------------------------- | ---------------------------------------------------------------------------------------- |
 | ValveResourceFormat / Source2Viewer-CLI | 20.0.6980+a06886f7d06049052d32a7381ec05523064a2ca0 | 从维护者提供的 CS2 VPK allowlist 提取并 decompile `vsvg_c` | MIT（工具）；reverse-engineered tooling，不是 Valve 官方 SDK |
-| Counter-Strike 2 game resources         | Steam App ID 730；每次导入记录具体 build ID | `@rivalhub-broadcast/cs2-assets` 的 SVG presentation asset 来源 | Valve / Counter-Strike 2 origin；本条只记录工程 provenance，不作所有权、商标或再许可判断 |
+| Counter-Strike 2 game resources         | Steam App ID 730；每次导入记录具体 build ID | `@rivalhub-broadcast/cs2-assets` 的 SVG presentation asset 与 10+3 官方 Radar overview 底图来源 | Valve / Counter-Strike 2 origin；本条只记录工程 provenance，不作所有权、商标或再许可判断 |
 
 `cs2parser` 只通过 `packages/telemetry-cstv` 内部 binding 使用；其第三方类型不成为 Broadcast 公共 contract。本仓库未因研究参考而复制 HOT、Boltobserv、Lexogrine HUD Manager、Obserview、Zhenhai HUD Manager 等应用的代码或图片资产。
 
@@ -49,6 +49,7 @@
 | ------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------- | ----------------------------------- |
 | Lexogrine `cs2-react-hud` | `7874750c97fcecd8f72eb3fad382917e035ec651`；`MatchBar.tsx`、`TeamScore.tsx`、`TeamLogo.tsx`、`SeriesBox.tsx`、`matchbar.scss`、`Pause.tsx`、`Timeout.tsx`、`Player.tsx`、`TeamBox.tsx`、`players.scss`、`src/HUD/Timers/BombTimer.tsx`、`src/HUD/Timers/PlantDefuse.tsx`、`src/HUD/Players/Observed.tsx`、`src/HUD/Players/observed.scss` | MIT                                 |
 | Eon `mortenlein/eon`      | `a37326cd59d37dc6c157832ba06b01c232d878e1`；`maps-sleek` 的 HTML/CSS/JS                                                                                   | 固定版本 `package.json` 声明 ISC；该 revision 无独立 `LICENSE` 文件 |
+| M3MONs `CS2-HUD`          | `4eb84e4f553f1ad685ec437e49aa2bf411606990`；Radar React + rAF loop 与 player angle / smoothing seam 参考                                            | MIT                                 |
 
 Lexogrine MIT notice（固定版本 `LICENSE`）：
 
@@ -90,6 +91,32 @@ ANY SPECIAL, DIRECT, INDIRECT, OR CONSEQUENTIAL DAMAGES OR ANY DAMAGES
 WHATSOEVER RESULTING FROM LOSS OF USE, DATA OR PROFITS, WHETHER IN AN ACTION
 OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
+```
+
+M3MONs CS2-HUD MIT notice（固定版本 `LICENSE`）：
+
+```text
+MIT License
+
+Copyright (c) 2023 M3MONs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all
+copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+SOFTWARE.
 ```
 
 许可证参考：

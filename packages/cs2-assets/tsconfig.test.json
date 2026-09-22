@@ -4,5 +4,11 @@
     "noEmit": true,
     "rootDir": "."
   },
-  "include": ["src", "catalog/items.json", "generated/manifest.json", "test"]
+  "include": [
+    "src",
+    "catalog/items.json",
+    "generated/manifest.json",
+    "generated/radar-maps.json",
+    "test"
+  ]
 }

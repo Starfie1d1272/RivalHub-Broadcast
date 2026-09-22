@@ -1,3 +1,5 @@
+import { presentationBoundaryKey } from './presentation-boundary';
+import { Radar, type RadarProps } from './widgets/radar/Radar';
 import type { CSSProperties } from 'react';
 
 import {
@@ -18,6 +20,8 @@ import './widgets/match-header/match-header.css';
 import './widgets/player-rails/player-rails.css';
 
 export interface GameplayHudProps {
+  readonly radarClient?: RadarProps['client'];
+  readonly radarSnapshot?: RadarProps['snapshot'];
   readonly snapshot: ProgramSnapshot | null;
   readonly resolvedPreset: HudResolvedPreset;
   /** Test-only injection keeps the production registry closed while exercising the React seam. */
@@ -50,10 +54,13 @@ export function themeStyle(theme: HudResolvedPreset['theme']): CSSProperties {
 
 export function GameplayHud({
   snapshot,
+  radarClient,
+  radarSnapshot,
   resolvedPreset,
   rendererRegistry = HUD_RENDERER_REGISTRY,
 }: GameplayHudProps) {
-  if (snapshot === null || snapshot.payload.status.telemetry !== 'fresh') return null;
+  const programFresh = snapshot !== null && snapshot.payload.status.telemetry === 'fresh';
+  if (!programFresh && radarClient === undefined && radarSnapshot == null) return null;
 
   return (
     <div
@@ -68,13 +75,18 @@ export function GameplayHud({
         const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
         if (rendererEntry.renderer === null) return null;
         const Renderer = rendererEntry.renderer;
+        if (descriptor.id !== 'radar' && !programFresh) return null;
         const box = placementToBox(descriptor.id, placement);
         return (
           <div
             className="gameplay-hud__widget"
             data-hud-widget={descriptor.id}
             data-renderer-availability={descriptor.rendererAvailability}
-            key={descriptor.id}
+            key={
+              descriptor.id === 'radar'
+                ? 'radar'
+                : `${descriptor.id}:${presentationBoundaryKey(snapshot, undefined)}`
+            }
             style={{
               height: `${box.height}px`,
               left: `${box.left}px`,
@@ -82,14 +94,26 @@ export function GameplayHud({
               width: `${box.width}px`,
             }}
           >
-            <Renderer
-              box={box}
-              placement={placement}
-              resolvedPreset={resolvedPreset}
-              settings={resolvedPreset.widgets[descriptor.id]}
-              snapshot={snapshot}
-              widgetId={descriptor.id}
-            />
+            {descriptor.id === 'radar' && rendererRegistry === HUD_RENDERER_REGISTRY ? (
+              <Radar
+                client={radarClient}
+                snapshot={radarSnapshot}
+                zoomMode={
+                  resolvedPreset.widgets.radar.settings.zoomMode === 'auto' ? 'auto' : 'full-map'
+                }
+              />
+            ) : (
+              snapshot && (
+                <Renderer
+                  box={box}
+                  placement={placement}
+                  resolvedPreset={resolvedPreset}
+                  settings={resolvedPreset.widgets[descriptor.id]}
+                  snapshot={snapshot}
+                  widgetId={descriptor.id}
+                />
+              )
+            )}
           </div>
         );
       })}

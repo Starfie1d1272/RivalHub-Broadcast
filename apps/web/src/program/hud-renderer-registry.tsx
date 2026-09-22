@@ -13,10 +13,15 @@ import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 
 import { RoundHistory, SeriesStrip, TopScoreBar } from './widgets/match-header';
 import { FocusedPlayer } from './widgets/focused-player/FocusedPlayer';
+import type { RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
+import type { LocalChannelClient } from '../realtime';
+import { RadarWidget } from './widgets/radar/Radar';
 import { PlayerRail } from './widgets/player-rails';
 
 export interface HudWidgetRendererProps {
   readonly snapshot: ProgramSnapshot;
+  readonly radarSnapshot?: RadarSnapshot | null | undefined;
+  readonly radarClient?: LocalChannelClient<'radar'> | undefined;
   readonly resolvedPreset: HudResolvedPreset;
   readonly widgetId: HudWidgetId;
   readonly placement: HudWidgetPlacement;
@@ -39,6 +44,7 @@ const UNIMPLEMENTED_RENDERER_ENTRY: HudRendererEntry = Object.freeze({
 });
 
 const IMPLEMENTED_RENDERERS: Partial<Record<HudWidgetId, HudWidgetRenderer>> = {
+  radar: RadarWidget,
   'focused-player': FocusedPlayer,
   'top-score-bar': TopScoreBar,
   'team-ct-rail': PlayerRail,

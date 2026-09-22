@@ -8,11 +8,11 @@ import {
 import { RADAR_SCHEMA_VERSION } from './version.js';
 
 const nullableString = z.string().nullable();
-const nullableVector = z.object({ x: z.number(), y: z.number(), z: z.number() }).nullable();
+const nullableVector = z.strictObject({ x: z.number(), y: z.number(), z: z.number() }).nullable();
 const coverageSchema = z.enum(['present', 'absent', 'degraded']);
 const sideSchema = z.enum(['CT', 'T', 'unknown']);
 
-const radarPlayerSchema = z.object({
+const radarPlayerSchema = z.strictObject({
   sourcePlayerId: z.string(),
   canonicalPlayerId: nullableString,
   displayName: nullableString,
@@ -21,9 +21,18 @@ const radarPlayerSchema = z.object({
   lifeState: z.enum(['alive', 'dead', 'unknown']),
   position: nullableVector,
   forward: nullableVector,
+  health: z.number().nullable(),
+  flashAmount: z.number().nullable(),
+  activeWeapon: z
+    .strictObject({
+      name: nullableString,
+      ammoClip: z.number().nullable(),
+      state: z.enum(['active', 'holstered', 'reloading', 'unknown']).nullable(),
+    })
+    .nullable(),
 });
 
-const radarBombSchema = z.object({
+const radarBombSchema = z.strictObject({
   state: z
     .enum([
       'carried',
@@ -40,27 +49,28 @@ const radarBombSchema = z.object({
   sourcePlayerId: nullableString,
 });
 
-const radarGrenadeSchema = z.object({
+const radarGrenadeSchema = z.strictObject({
   sourceEntityId: z.string(),
   kind: nullableString,
   ownerSourceId: nullableString,
   position: nullableVector,
   velocity: nullableVector,
   lifetimeSeconds: z.number().nullable(),
+  effectTimeSeconds: z.number().nullable(),
   flames: z.array(
-    z.object({
+    z.strictObject({
       sourceFlameId: z.string(),
-      position: z.object({ x: z.number(), y: z.number(), z: z.number() }),
+      position: z.strictObject({ x: z.number(), y: z.number(), z: z.number() }),
     }),
   ),
 });
 
-export const radarPayloadSchema = z.object({
+export const radarPayloadSchema = z.strictObject({
   telemetryFreshness: z.enum(['awaiting', 'fresh', 'stale']),
   identityState: z.enum(['unbound', 'resolving', 'matched', 'degraded', 'mismatch']),
   mapName: nullableString,
   observedPlayerSourceId: nullableString,
-  coverage: z.object({
+  coverage: z.strictObject({
     allPlayers: coverageSchema,
     bomb: coverageSchema,
     grenades: coverageSchema,

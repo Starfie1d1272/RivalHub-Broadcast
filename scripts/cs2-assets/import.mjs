@@ -39,6 +39,10 @@ export function parseArgs(argv) {
     const argument = argv[index];
     const value = argv[index + 1];
     if (argument === '--') continue;
+    if (argument === '--radar-only') {
+      options.radarOnly = true;
+      continue;
+    }
     if (argument === '--help' || argument === '-h') {
       console.log(usage());
       process.exit(0);
@@ -436,6 +440,30 @@ export async function importCs2Assets({
 
 async function main() {
   const options = parseArgs(process.argv.slice(2));
+  if (options.radarOnly) {
+    const { importRadarAssets } = await import('./radar.mjs');
+    const input = await resolveInput(options);
+    const cli = options.cli ?? process.env.SOURCE2VIEWER_CLI;
+    assert(cli, '必须提供 --cli');
+    const launcher = { command: cli, prefixArgs: [] };
+    const toolchain = await readJson(TOOLCHAIN_PATH);
+    const version = toolchain.valveResourceFormat.version;
+    assert(
+      versionMatches(await commandVersion(launcher), version),
+      'Radar extractor version mismatch',
+    );
+    const result = await importRadarAssets({
+      input,
+      launcher,
+      runCommand,
+      version,
+      target: options.output ?? join(PACKAGE_ROOT, 'generated'),
+      replaceDirectoryTransactionally,
+    });
+    await verifyCs2Assets();
+    console.log(`RADAR_ASSETS_IMPORT_PASS ${JSON.stringify(result)}`);
+    return;
+  }
   const result = await importCs2Assets({ options });
   await verifyCs2Assets({ generatedRoot: result.outputRoot });
   console.log(`CS2_ASSETS_IMPORT_PASS ${JSON.stringify(result)}`);

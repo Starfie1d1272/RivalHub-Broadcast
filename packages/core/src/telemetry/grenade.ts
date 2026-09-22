@@ -12,5 +12,6 @@ export interface ObservedGrenade {
   readonly position?: ObservedVector3;
   readonly velocity?: ObservedVector3;
   readonly lifetimeSeconds?: number;
+  readonly effectTimeSeconds?: number;
   readonly flames?: readonly ObservedGrenadeFlame[];
 }

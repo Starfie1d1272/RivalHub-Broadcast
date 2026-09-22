@@ -267,6 +267,25 @@ export function HudConsoleWorkspaces({
             </select>
           </label>
         </div>
+        <label className="hud-console__field">
+          雷达视野
+          <select
+            disabled={!editorReady}
+            value={presetDraft.widgets.radar.settings.zoomMode === 'auto' ? 'auto' : 'full-map'}
+            onChange={(event) =>
+              onPresetDraftChange({
+                ...presetDraft,
+                widgets: {
+                  ...presetDraft.widgets,
+                  radar: { variant: 'default', settings: { zoomMode: event.target.value } },
+                },
+              })
+            }
+          >
+            <option value="full-map">完整地图</option>
+            <option value="auto">自动聚焦存活选手</option>
+          </select>
+        </label>
         {renderResourceActions('preset', presetDirty, selectedPresetId)}
         <button
           className="hud-console__primary-action"

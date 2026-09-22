@@ -121,3 +121,10 @@ export function projectWorldDirection(forward: ObservedVector3 | null): RadarDir
     y: -forward.y / planarLength,
   };
 }
+
+/** Presentation distances share the same calibration owner as positions. */
+export function projectWorldRadius(worldRadius: number, geometry: MapGeometry): number | null {
+  if (!Number.isFinite(worldRadius) || worldRadius < 0 || !hasUsableCalibration(geometry))
+    return null;
+  return worldRadius / (geometry.scaleWorldUnitsPerPixel * geometry.referenceSize.width);
+}
