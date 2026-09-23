@@ -316,6 +316,20 @@
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
   grid-template-areas: 'utility equipment weapon stats';
+  grid-template-columns: minmax(0, 1fr) 72px 108px 58px;
+}
+
+.player-rail__card[data-avatar='true'][data-physical-side='right'] .player-rail__combat {
+  grid-template-columns: 72px 28px 92px 64px;
+  justify-content: end;
+}
+
+.player-rail__card[data-physical-side='left'] .player-rail__identity {
+  padding-right: 38px;
+}
+
+.player-rail__card[data-physical-side='right'] .player-rail__identity {
+  padding-left: 38px;
 }
 
 .player-rail__weapons {
