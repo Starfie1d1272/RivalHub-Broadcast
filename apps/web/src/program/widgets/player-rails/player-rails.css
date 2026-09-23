@@ -311,7 +311,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 36px 92px 36px 92px;
+  grid-template-columns: 64px 92px 28px 72px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
@@ -375,7 +375,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-icons {
-  gap: 2px;
+  gap: 1px;
 }
 
 .player-rail__icon {
@@ -429,8 +429,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item {
-  width: 16px;
-  flex-basis: 16px;
+  width: 13px;
+  flex-basis: 13px;
 }
 
 .player-rail__utility-item .player-rail__icon {
@@ -439,8 +439,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item .player-rail__icon {
-  width: 14px;
-  height: 14px;
+  width: 12px;
+  height: 12px;
 }
 
 .player-rail__utility-item b {
@@ -559,7 +559,7 @@
   gap: 3px;
   margin-left: auto;
   color: #f3f6fa;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 800;
   line-height: 16px;
   opacity: 0.86;
@@ -603,11 +603,11 @@
   justify-content: center;
   overflow: hidden;
   background: #6aa8ff;
-  clip-path: polygon(0 0, 66% 0, 100% 50%, 66% 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 0, 100% 100%, 0 100%, 48% 50%);
 }
 
 .player-rail__endcap--right {
-  clip-path: polygon(34% 0, 100% 0, 100% 100%, 34% 100%, 0 50%);
+  clip-path: polygon(0 0, 100% 0, 52% 50%, 100% 100%, 0 100%);
 }
 
 .player-rail__endcap[data-side='T'] {
@@ -628,12 +628,9 @@
   text-align: center;
 }
 
-.player-rail__card[data-physical-side='left'] .player-rail__body {
-  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 22px, 100% 56px, calc(100% - 18px) 78px, 0 78px);
-}
-
+.player-rail__card[data-physical-side='left'] .player-rail__body,
 .player-rail__card[data-physical-side='right'] .player-rail__body {
-  clip-path: polygon(18px 0, 100% 0, 100% 78px, 18px 78px, 0 56px, 0 22px);
+  clip-path: none;
 }
 
 .player-rail__card--dead .player-rail__endcap {
