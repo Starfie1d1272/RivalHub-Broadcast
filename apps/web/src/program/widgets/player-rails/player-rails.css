@@ -99,16 +99,16 @@
 
 .player-rail__avatar {
   position: relative;
-  width: 112px;
+  width: 140px;
   height: 78px;
-  flex: 0 0 112px;
+  flex: 0 0 140px;
   overflow: hidden;
   background: #0b1119;
 }
 
 .player-rail__avatar img {
   display: block;
-  width: 112px;
+  width: 140px;
   height: 78px;
   object-fit: cover;
   object-position: center 36%;
@@ -195,8 +195,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
-  width: 300px;
-  flex-basis: 300px;
+  width: 272px;
+  flex-basis: 272px;
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
@@ -225,9 +225,9 @@
   flex: 1 1 auto;
   overflow: hidden;
   color: #f3f6fa;
-  font-size: 15px;
+  font-size: 16px;
   font-weight: 800;
-  line-height: 19px;
+  line-height: 20px;
   text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   white-space: nowrap;
@@ -236,9 +236,9 @@
 .player-rail__health-value {
   flex: 0 0 auto;
   color: #f3f6fa;
-  font-size: 28px;
+  font-size: 30px;
   font-weight: 800;
-  line-height: 28px;
+  line-height: 30px;
   letter-spacing: -0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
@@ -307,7 +307,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 44px 96px 48px minmax(0, 1fr);
+  grid-template-columns: 40px 92px 36px 88px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
@@ -350,9 +350,9 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__equipment-slot {
-  width: 12px;
+  width: 9px;
   height: 16px;
-  flex-basis: 12px;
+  flex-basis: 9px;
 }
 
 .player-rail__utility-icons {
@@ -371,7 +371,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-icons {
-  gap: 1px;
+  gap: 2px;
 }
 
 .player-rail__icon {
@@ -397,8 +397,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__icon.is-primary {
-  width: 92px;
-  max-width: 92px;
+  width: 88px;
+  max-width: 88px;
   height: 24px;
 }
 
@@ -425,8 +425,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item {
-  width: 18px;
-  flex-basis: 18px;
+  width: 16px;
+  flex-basis: 16px;
 }
 
 .player-rail__utility-item .player-rail__icon {
@@ -435,8 +435,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item .player-rail__icon {
-  width: 15px;
-  height: 15px;
+  width: 14px;
+  height: 14px;
 }
 
 .player-rail__utility-item b {
@@ -519,10 +519,10 @@
 .player-rail__money,
 .player-rail__spent {
   color: #c8ef78;
-  font-size: 11px;
+  font-size: 15px;
   font-weight: 800;
-  line-height: 14px;
-  opacity: 0.82;
+  line-height: 17px;
+  opacity: 0.94;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
 }
@@ -537,10 +537,10 @@
   gap: 3px;
   margin-left: auto;
   color: #f3f6fa;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 14px;
-  opacity: 0.82;
+  line-height: 15px;
+  opacity: 0.86;
   white-space: nowrap;
 }
 
