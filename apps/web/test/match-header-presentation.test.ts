@@ -118,6 +118,29 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER' });
   });
 
+  it('marks a completed picked-map loss from the picker perspective', () => {
+    const snapshot = getProgramFixture('series-bo5');
+    if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');
+    const series = snapshot.payload.series;
+    const first = series.maps[0];
+    if (first === undefined || first.selection.kind !== 'pick') throw new Error('picked map missing');
+    const opposingWinner =
+      first.selection.entryId === series.entrants.a.entryId
+        ? series.entrants.b.entryId
+        : series.entrants.a.entryId;
+    const value = buildMatchHeaderPresentation({
+      ...snapshot.payload,
+      series: {
+        ...series,
+        maps: series.maps.map((map, index) =>
+          index === 0 ? { ...map, winnerEntryId: opposingWinner } : map,
+        ),
+      },
+    });
+
+    expect(value.seriesMaps?.[0]?.pickOutcome).toBe('loss');
+  });
+
   it('fails closed when a completed map has no known winner', () => {
     const snapshot = getProgramFixture('series-bo5');
     if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');
