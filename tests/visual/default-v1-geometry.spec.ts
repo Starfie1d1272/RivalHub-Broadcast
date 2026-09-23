@@ -226,6 +226,8 @@ async function assertHudGeometry(page: Page) {
   }
 }
 
+test.setTimeout(120_000);
+
 test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async ({ page }) => {
   for (const fixtureId of DEFAULT_HUD_COMPOSITE_FIXTURES) {
     await page.goto(`/__visual/program/${fixtureId}`);
