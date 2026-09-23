@@ -335,6 +335,10 @@
   grid-area: utility;
 }
 
+.player-rail__card[data-avatar='true'] .player-rail__utility-icons {
+  gap: 1px;
+}
+
 .player-rail__combat-gap {
   display: block;
   width: 4px;
