@@ -46,7 +46,7 @@ async function assertDeadCardGeometry(page: Page, side: 'CT' | 'T' = 'CT') {
   }));
   expect(geometry.cardHeight).toBe(78);
   expect(geometry.spacerHeight).toBe(3);
-  expect(geometry.deadStatsHeight).toBe(29);
+  expect(geometry.deadStatsHeight).toBe(25);
   expect(geometry.deadStatsColumns).toHaveLength(2);
   expect(
     Math.max(...geometry.deadStatsColumns.map(({ top, height }) => top + height / 2)) -
