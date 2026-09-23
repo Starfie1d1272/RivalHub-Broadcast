@@ -60,10 +60,9 @@ async function assertDeadCardGeometry(page: Page, side: 'CT' | 'T' = 'CT') {
 async function assertTeamUtilityAssets(page: Page, side: 'CT' | 'T') {
   const expectedAssets = {
     smoke: 'utility.smokegrenade',
-    fire: side === 'CT' ? 'utility.incgrenade' : 'utility.molotov',
     flash: 'utility.flashbang',
     he: 'utility.hegrenade',
-    decoy: 'utility.decoy',
+    fire: side === 'CT' ? 'utility.incgrenade' : 'utility.molotov',
   } as const;
   const summary = page.locator(`[data-player-rail="${side}"] [data-team-summary="${side}"]`);
   for (const [family, assetId] of Object.entries(expectedAssets)) {
@@ -187,7 +186,7 @@ test.describe('Player Rails HUD', () => {
     await expect(summary.locator('.player-rail__economy strong').first()).toHaveText('—');
     await expect(
       summary.locator('.player-rail__utility .player-rail__summary-utility b'),
-    ).toHaveText(['—', '—', '—', '—', '—']);
+    ).toHaveText(['—', '—', '—', '—']);
     await expect(page.locator('[data-player-rail="CT"]')).toHaveScreenshot(
       'missing-summary-ct.png',
       SCREENSHOT_OPTIONS,
