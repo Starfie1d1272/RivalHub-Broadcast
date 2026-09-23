@@ -34,7 +34,7 @@ export interface RadarCanvasPlacement {
  * still use the same Valve 1024 overview calibration; only presentation changes.
  */
 const ANCIENT_PLACEMENT: RadarCanvasPlacement = Object.freeze({
-  viewport: Object.freeze({ x: 0.08, y: 0.04, width: 0.78, height: 0.86 }),
+  viewport: Object.freeze({ x: 0.1, y: 0.06, width: 0.78, height: 0.86 }),
   rect: Object.freeze({ x: 56, y: 10, width: 888, height: 980 }),
 });
 
