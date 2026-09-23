@@ -137,28 +137,48 @@
 }
 
 .player-rail__card[data-side='CT'] .player-rail__body {
-  background:
-    linear-gradient(112deg, rgba(106, 168, 255, 0.24) 0%, rgba(31, 70, 112, 0.9) 48%, #111923 100%);
+  background: linear-gradient(
+    112deg,
+    rgba(106, 168, 255, 0.24) 0%,
+    rgba(31, 70, 112, 0.9) 48%,
+    #111923 100%
+  );
 }
 
 .player-rail__card[data-side='T'] .player-rail__body {
-  background:
-    linear-gradient(112deg, rgba(242, 189, 79, 0.24) 0%, rgba(108, 82, 27, 0.92) 48%, #111923 100%);
+  background: linear-gradient(
+    112deg,
+    rgba(242, 189, 79, 0.24) 0%,
+    rgba(108, 82, 27, 0.92) 48%,
+    #111923 100%
+  );
 }
 
 .player-rail--right .player-rail__card[data-side='CT'] .player-rail__body {
-  background:
-    linear-gradient(248deg, rgba(106, 168, 255, 0.24) 0%, rgba(31, 70, 112, 0.9) 48%, #111923 100%);
+  background: linear-gradient(
+    248deg,
+    rgba(106, 168, 255, 0.24) 0%,
+    rgba(31, 70, 112, 0.9) 48%,
+    #111923 100%
+  );
 }
 
 .player-rail--right .player-rail__card[data-side='T'] .player-rail__body {
-  background:
-    linear-gradient(248deg, rgba(242, 189, 79, 0.24) 0%, rgba(108, 82, 27, 0.92) 48%, #111923 100%);
+  background: linear-gradient(
+    248deg,
+    rgba(242, 189, 79, 0.24) 0%,
+    rgba(108, 82, 27, 0.92) 48%,
+    #111923 100%
+  );
 }
 
 .player-rail__card--dead .player-rail__body,
 .player-rail--right .player-rail__card--dead .player-rail__body {
-  background: linear-gradient(90deg, rgba(67, 74, 82, 0.88), rgba(21, 28, 36, 0.96));
+  background: linear-gradient(
+    90deg,
+    rgba(67, 74, 82, 0.88),
+    rgba(21, 28, 36, 0.96)
+  );
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
