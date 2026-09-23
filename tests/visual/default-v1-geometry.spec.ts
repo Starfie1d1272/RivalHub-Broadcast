@@ -261,13 +261,13 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       await assertBox(left.locator('[data-card-part="avatar"]'), {
         x: 0,
         y: 600,
-        width: 140,
+        width: 78,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="body"]'), {
-        x: 140,
+        x: 78,
         y: 600,
-        width: 300,
+        width: 362,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="observer-endcap"]'), {
@@ -285,26 +285,34 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       await assertBox(right.locator('[data-card-part="body"]'), {
         x: 1480,
         y: 600,
-        width: 300,
+        width: 362,
         height: 78,
       });
       await assertBox(right.locator('[data-card-part="avatar"]'), {
-        x: 1780,
+        x: 1842,
         y: 600,
-        width: 140,
+        width: 78,
         height: 78,
       });
     }
     if (fixtureId === 'default-avatar-missing') {
       await expect(page.locator('[data-player-card][data-avatar="false"]')).toHaveCount(10);
-      await expect(page.locator('.player-rail__avatar')).toHaveCount(0);
+      await expect(page.locator('.player-rail__avatar')).toHaveCount(10);
+      await expect(page.locator('.player-rail__avatar img')).toHaveCount(0);
       await expect(page.locator('.player-rail__avatar-placeholder')).toHaveCount(0);
       await assertBox(
         page
           .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
           .first()
+          .locator('[data-card-part="avatar"]'),
+        { x: 0, y: 600, width: 78, height: 78 },
+      );
+      await assertBox(
+        page
+          .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
+          .first()
           .locator('[data-card-part="body"]'),
-        { x: 0, y: 600, width: 440, height: 78 },
+        { x: 78, y: 600, width: 362, height: 78 },
       );
       await assertBox(
         page
@@ -325,7 +333,14 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
           .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="body"]'),
-        { x: 1480, y: 600, width: 440, height: 78 },
+        { x: 1480, y: 600, width: 362, height: 78 },
+      );
+      await assertBox(
+        page
+          .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
+          .first()
+          .locator('[data-card-part="avatar"]'),
+        { x: 1842, y: 600, width: 78, height: 78 },
       );
     }
     if (fixtureId === 'default-freezetime') {
