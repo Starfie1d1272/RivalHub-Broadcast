@@ -59,17 +59,23 @@ function Avatar({
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
 }) {
-  if (player.avatarUrl === null) return null;
   return (
-    <div aria-hidden="true" className="player-rail__avatar" data-card-part="avatar">
-      <img
-        alt=""
-        onError={(event) => {
-          event.currentTarget.style.display = 'none';
-        }}
-        src={player.avatarUrl}
-        data-dead={dead}
-      />
+    <div
+      aria-hidden="true"
+      className="player-rail__avatar"
+      data-avatar-present={player.avatarUrl !== null}
+      data-card-part="avatar"
+    >
+      {player.avatarUrl === null ? null : (
+        <img
+          alt=""
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+          }}
+          src={player.avatarUrl}
+          data-dead={dead}
+        />
+      )}
     </div>
   );
 }
@@ -180,20 +186,12 @@ function PlayerBody({
     <div
       className="player-rail__body"
       data-card-part="body"
-      data-avatar={player.avatarUrl !== null}
       data-dead={dead}
     >
       <div className="player-rail__identity">
         <span className="player-rail__name" title={player.displayName ?? undefined}>
           {player.displayName ?? 'PLAYER'}
         </span>
-        {dead ? (
-          <strong className="player-rail__dead-label">DEAD</strong>
-        ) : (
-          <strong className="player-rail__health-value" data-health-value="true">
-            {displayNumber(player.health)}
-          </strong>
-        )}
         <span
           aria-label={
             player.roundKills === null
@@ -210,6 +208,11 @@ function PlayerBody({
             </>
           ) : null}
         </span>
+        {dead ? null : (
+          <strong className="player-rail__health-value" data-health-value="true">
+            {displayNumber(player.health)}
+          </strong>
+        )}
       </div>
 
       {dead ? (
