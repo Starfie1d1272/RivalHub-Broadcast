@@ -109,14 +109,14 @@
   height: 82px;
   align-items: center;
   padding: 0 12px;
-  grid-template-columns: 64px 8px 148px 8px 108px;
+  grid-template-columns: 96px 8px 130px 8px 94px;
 }
 
 .focused-player__media {
   position: relative;
   display: flex;
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 82px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -127,9 +127,10 @@
 
 .focused-player__media img {
   display: block;
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 82px;
   object-fit: cover;
+  object-position: center 34%;
 }
 
 .focused-player__media.is-observer-tile[data-side='CT'] {
@@ -141,12 +142,12 @@
 }
 
 .focused-player__observer-tile-number {
-  width: 64px;
-  height: 64px;
+  width: 96px;
+  height: 82px;
   color: #0b1119;
-  font-size: 16px;
+  font-size: 20px;
   font-weight: 800;
-  line-height: 64px;
+  line-height: 82px;
   text-align: center;
 }
 
@@ -176,8 +177,8 @@
 
 .focused-player__active {
   display: flex;
-  width: 148px;
-  height: 64px;
+  width: 130px;
+  height: 82px;
   align-items: center;
   justify-content: center;
   grid-column: 3;
@@ -199,9 +200,9 @@
 }
 
 .focused-player__active .focused-player__icon {
-  width: 148px;
-  max-height: 64px;
-  height: 64px;
+  width: 126px;
+  max-height: 58px;
+  height: 58px;
 }
 
 .focused-player__action-gap--b {
@@ -211,8 +212,8 @@
 
 .focused-player__ammo {
   display: flex;
-  width: 108px;
-  height: 64px;
+  width: 94px;
+  height: 82px;
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
