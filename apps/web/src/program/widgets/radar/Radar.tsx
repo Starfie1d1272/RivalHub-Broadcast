@@ -215,7 +215,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const image = floor === 'upper' ? upperImage : lowerImage;
           if (!image) continue;
           ctx.globalAlpha = floor === model.layer ? 0.86 : model.layer === 'unknown' ? 0.72 : 0.5;
-          drawArtwork(image, detachedFloors ? placementFor(floor) : null);
+          drawArtwork(image, placementFor(floor));
         }
         ctx.globalAlpha = 1;
       }
