@@ -92,6 +92,10 @@
   align-items: stretch;
 }
 
+.player-rail--right .player-rail__card {
+  flex-direction: row-reverse;
+}
+
 .player-rail__empty-card {
   background: transparent;
   border-bottom: 1px solid rgba(243, 246, 250, 0.08);
@@ -301,35 +305,63 @@
 }
 
 .player-rail__combat {
-  display: grid;
+  display: flex;
   width: 100%;
   height: 25px;
   align-items: center;
   padding: 0 8px;
-  grid-template-areas: 'stats weapon equipment utility';
-  grid-template-columns: 58px 108px 72px minmax(0, 1fr);
 }
 
-.player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 64px 92px 28px 72px;
+.player-rail--right .player-rail__combat {
+  flex-direction: row-reverse;
 }
 
-.player-rail__card[data-physical-side='right'] .player-rail__combat {
-  grid-template-areas: 'utility equipment weapon stats';
-  grid-template-columns: minmax(0, 1fr) 72px 108px 58px;
+.player-rail__combat .player-rail__kd {
+  width: 58px;
+  flex: 0 0 58px;
 }
 
-.player-rail__card[data-avatar='true'][data-physical-side='right'] .player-rail__combat {
-  grid-template-columns: 72px 28px 92px 64px;
-  justify-content: end;
+.player-rail__weapons {
+  width: 108px;
+  flex: 0 0 108px;
+}
+
+.player-rail__equipment {
+  width: 72px;
+  flex: 0 0 72px;
+}
+
+.player-rail__utility-icons {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.player-rail__card[data-avatar='true'] .player-rail__combat .player-rail__kd {
+  width: 64px;
+  flex-basis: 64px;
+}
+
+.player-rail__card[data-avatar='true'] .player-rail__weapons {
+  width: 92px;
+  flex-basis: 92px;
+}
+
+.player-rail__card[data-avatar='true'] .player-rail__equipment {
+  width: 28px;
+  flex-basis: 28px;
+}
+
+.player-rail__card[data-avatar='true'] .player-rail__utility-icons {
+  width: 72px;
+  flex: 0 0 72px;
 }
 
 .player-rail__card[data-physical-side='left'] .player-rail__identity {
-  padding-right: 38px;
+  padding-right: 34px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__identity {
-  padding-left: 38px;
+  padding-left: 34px;
 }
 
 .player-rail__weapons {
@@ -339,7 +371,6 @@
   align-items: center;
   justify-content: center;
   gap: 4px;
-  grid-area: weapon;
   overflow: hidden;
 }
 
@@ -350,7 +381,6 @@
   align-items: center;
   justify-content: center;
   gap: 2px;
-  grid-area: equipment;
   overflow: hidden;
 }
 
@@ -380,7 +410,6 @@
   align-items: center;
   justify-content: flex-end;
   gap: 4px;
-  grid-area: utility;
   overflow: hidden;
 }
 
@@ -568,7 +597,6 @@
 }
 
 .player-rail__combat .player-rail__kd {
-  grid-area: stats;
   justify-content: flex-start;
   margin-left: 0;
 }
@@ -597,22 +625,21 @@
 .player-rail__endcap {
   position: absolute;
   z-index: 4;
-  top: 0;
-  right: 0;
+  top: 4px;
+  right: 4px;
   display: flex;
-  width: 34px;
-  height: 30px;
+  width: 24px;
+  height: 24px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   background: #6aa8ff;
-  clip-path: polygon(30% 0, 100% 0, 100% 100%, 0 100%);
+  border: 1px solid rgba(11, 17, 25, 0.5);
 }
 
 .player-rail__endcap--right {
   right: auto;
-  left: 0;
-  clip-path: polygon(0 0, 70% 0, 100% 100%, 0 100%);
+  left: 4px;
 }
 
 .player-rail__endcap[data-side='T'] {
@@ -633,12 +660,9 @@
   text-align: center;
 }
 
-.player-rail__card[data-physical-side='left'] .player-rail__body {
-  clip-path: polygon(0 0, calc(100% - 14px) 0, 100% 14px, 100% 64px, calc(100% - 14px) 100%, 0 100%);
-}
-
+.player-rail__card[data-physical-side='left'] .player-rail__body,
 .player-rail__card[data-physical-side='right'] .player-rail__body {
-  clip-path: polygon(14px 0, 100% 0, 100% 100%, 14px 100%, 0 64px, 0 14px);
+  clip-path: none;
 }
 
 .player-rail__card--dead .player-rail__endcap {
