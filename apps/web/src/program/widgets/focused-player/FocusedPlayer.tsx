@@ -105,7 +105,34 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
                   <span style={{ width: `${p.clipFill * 100}%` }} />
                 </div>
               )}
-              {p.reserveText === null ? null : <span>{p.reserveText}</span>}
+              {p.reserveMagazine === null ? null : (
+                <span
+                  aria-label={`Magazines in reserve: ${p.reserveMagazine.count}`}
+                  className="focused-player__reserve-magazines"
+                  data-ammo-presentation="magazine"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="focused-player__reserve-magazine-icon"
+                    data-asset-id={p.reserveMagazine.asset.canonicalKey}
+                    style={
+                      {
+                        '--focused-icon': `url("${p.reserveMagazine.asset.outputPath}")`,
+                      } as CSSProperties
+                    }
+                  />
+                  <span>{p.reserveMagazine.count}</span>
+                </span>
+              )}
+              {p.reserveText === null ? null : (
+                <span
+                  data-ammo-presentation={
+                    p.reserveText.startsWith('SHELL ') ? 'shells' : 'reserve-rounds'
+                  }
+                >
+                  {p.reserveText}
+                </span>
+              )}
             </div>
           </>
         )}

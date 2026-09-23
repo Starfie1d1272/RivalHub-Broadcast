@@ -112,6 +112,29 @@ export async function verifyCs2Assets({ rootDir = REPOSITORY_ROOT, generatedRoot
   const catalogIndexes = validateCatalog(catalog);
   validateManifestShape(manifest, toolchain);
 
+  const magazineItem = catalog.items.find((item) => item.canonicalKey === 'ammo.magazine');
+  if (magazineItem !== undefined) {
+    const magazineAsset = manifest.assets[magazineItem.assetId];
+    assert(
+      magazineItem.assetId === 'ammo.magazine' &&
+        magazineItem.sourcePath === 'panorama/images/hud/ammo_reserve_magazine.vsvg_c' &&
+        magazineItem.ammoPresentation === 'magazine' &&
+        magazineItem.gsiWeaponNames.length === 0,
+      'ammo.magazine 必须映射 Valve 的 reserve-magazine HUD 图形且不得成为 GSI weapon identity',
+    );
+    assert(
+      manifest.source.steamBuildId === '25218825',
+      'ammo.magazine 必须来自 pinned Steam build 25218825',
+    );
+    assert(
+      magazineAsset !== undefined &&
+        magazineAsset.sourcePath === magazineItem.sourcePath &&
+        SHA256_PATTERN.test(magazineAsset.sourceSha256) &&
+        SHA256_PATTERN.test(magazineAsset.outputSha256),
+      'ammo.magazine 必须在 manifest 记录 sourcePath 与 source/output SHA-256',
+    );
+  }
+
   const manifestAssetIds = new Set(Object.keys(manifest.assets));
   assert(
     JSON.stringify([...catalogIndexes.assetIds].sort()) ===

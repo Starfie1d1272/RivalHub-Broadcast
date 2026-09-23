@@ -2,6 +2,24 @@
   "schemaVersion": 1,
   "items": [
     {
+      "canonicalKey": "ammo.magazine",
+      "gsiWeaponNames": [],
+      "sourcePath": "panorama/images/hud/ammo_reserve_magazine.vsvg_c",
+      "kind": "equipment",
+      "family": "ammunition",
+      "displayCategory": "hud",
+      "assetId": "ammo.magazine",
+      "ammoPresentation": "magazine",
+      "tintMode": "mask",
+      "aliases": [],
+      "evidence": [
+        {
+          "kind": "official-game-data",
+          "reference": "Steam build 25218825, depot 2347770 manifest 2053759441494650084: Valve HUD resource panorama/images/hud/ammo_reserve_magazine.vsvg_c; extracted with pinned Source2Viewer-CLI 20.0."
+        }
+      ]
+    },
+    {
       "canonicalKey": "equipment.armor",
       "gsiWeaponNames": [],
       "sourcePath": "panorama/images/hud/teamcounter/armor.vsvg_c",

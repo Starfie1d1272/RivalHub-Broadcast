@@ -11,7 +11,7 @@ interface ManifestPayload {
 }
 
 test.describe('CS2 official asset mask rendering gallery', () => {
-  test('renders all 71 official CS2 assets via Chromium CSS mask with zero failed requests', async ({
+  test('renders all 72 official CS2 assets via Chromium CSS mask with zero failed requests', async ({
     page,
   }) => {
     const failedRequests: string[] = [];
@@ -38,7 +38,7 @@ test.describe('CS2 official asset mask rendering gallery', () => {
     const manifest = (await manifestResponse.json()) as ManifestPayload;
 
     const assetEntries: [string, ManifestAssetEntry][] = Object.entries(manifest.assets);
-    expect(assetEntries).toHaveLength(71);
+    expect(assetEntries).toHaveLength(72);
 
     // 2. Build deterministic gallery HTML page
     const tilesHtml = assetEntries
@@ -117,7 +117,7 @@ test.describe('CS2 official asset mask rendering gallery', () => {
       </head>
       <body>
         <div id="gallery-container">
-          <h1>CS2 Official Assets Mask Gallery (71 Assets)</h1>
+          <h1>CS2 Official Assets Mask Gallery (72 Assets)</h1>
           <div class="grid">
             ${tilesHtml}
           </div>
@@ -132,12 +132,12 @@ test.describe('CS2 official asset mask rendering gallery', () => {
 
     // 3. Assertions
     expect(failedRequests).toEqual([]);
-    expect(successfulSvgRequests.size).toBe(71);
+    expect(successfulSvgRequests.size).toBe(72);
 
     // Verify computed style for each tile mask
     const tileMasks = page.locator('.asset-mask');
     const maskCount = await tileMasks.count();
-    expect(maskCount).toBe(71);
+    expect(maskCount).toBe(72);
 
     for (let i = 0; i < maskCount; i++) {
       const maskImage = await tileMasks.nth(i).evaluate((el) => {

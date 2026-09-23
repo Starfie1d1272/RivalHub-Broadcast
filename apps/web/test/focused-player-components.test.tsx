@@ -3,7 +3,10 @@ import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it } from 'vitest';
 import { getProgramFixture } from '../src/program/fixtures';
-import { buildFocusedPlayerPresentation } from '../src/program/widgets/focused-player/presentation';
+import {
+  buildFocusedPlayerPresentation,
+  buildReserveAmmoPresentation,
+} from '../src/program/widgets/focused-player/presentation';
 import { FocusedPlayerCard } from '../src/program/widgets/focused-player/FocusedPlayer';
 import { TopScoreBar } from '../src/program/widgets/match-header/TopScoreBar';
 import { getBuiltinResolvedPreset, placementToBox } from '@rivalhub-broadcast/hud-config';
@@ -69,15 +72,29 @@ describe('Focused media and combat presentation lifecycle', () => {
     const container = host();
     const player = buildFocusedPlayerPresentation(getProgramFixture('real-live-rich')!.payload)!;
     act(() => root!.render(<FocusedPlayerCard player={player} />));
-    expect(container.textContent).toContain('MAG ×3');
+    expect(player.reserveMagazine).toMatchObject({
+      count: 3,
+      asset: { canonicalKey: 'ammo.magazine' },
+    });
+    expect(container.querySelector('[data-ammo-presentation="magazine"]')?.textContent).toBe('3');
+    expect(container.querySelector('.focused-player__reserve-magazine-icon')).not.toBeNull();
+    expect(container.textContent).not.toContain('MAG');
     act(() =>
       root!.render(
         <FocusedPlayerCard
-          player={{ ...player, activeItem: null, clip: null, clipFill: null, reserveText: null }}
+          player={{
+            ...player,
+            activeItem: null,
+            clip: null,
+            clipFill: null,
+            reserveText: null,
+            reserveMagazine: null,
+          }}
         />,
       ),
     );
     expect(container.querySelector('.focused-player__active [data-asset-id]')).toBeNull();
+    expect(container.querySelector('.focused-player__reserve-magazine-icon')).toBeNull();
     expect(container.textContent).not.toContain('MAG');
     act(() => root!.render(<FocusedPlayerCard player={{ ...player, dead: true }} />));
     expect(container.textContent).not.toContain('DEAD');
@@ -86,6 +103,25 @@ describe('Focused media and combat presentation lifecycle', () => {
     expect(container.querySelector('.focused-player__ammo')).toBeNull();
     expect(container.querySelector('.focused-player__utility')).toBeNull();
     expect(container.querySelector('.focused-player__vitals')?.textContent).toBe('');
+  });
+  it('keeps shell and reserve-round counts textual and fails closed without the magazine icon', () => {
+    const magazineAsset = { canonicalKey: 'ammo.magazine', outputPath: '/unused.svg' };
+    expect(buildReserveAmmoPresentation('shells', 12, magazineAsset)).toEqual({
+      reserveText: 'SHELL 12',
+      reserveMagazine: null,
+    });
+    expect(buildReserveAmmoPresentation('reserve-rounds', 42, magazineAsset)).toEqual({
+      reserveText: 'RDS 42',
+      reserveMagazine: null,
+    });
+    expect(buildReserveAmmoPresentation('magazine', 3, null)).toEqual({
+      reserveText: null,
+      reserveMagazine: null,
+    });
+    expect(buildReserveAmmoPresentation('charge', 1, magazineAsset)).toEqual({
+      reserveText: null,
+      reserveMagazine: null,
+    });
   });
   it('renders completed ADR and partial KAD independently', () => {
     const container = host();

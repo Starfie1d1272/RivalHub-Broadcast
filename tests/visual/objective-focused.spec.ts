@@ -71,10 +71,16 @@ for (const id of cases)
         expect(fill!.width).toBeGreaterThan(0);
         expect(fill!.width).toBeLessThan(track!.width);
       }
-      if (id === 'real-live-rich')
-        await expect(page.locator('[data-focused-player]')).toContainText('MAG ×3');
-      if (id === 'focused-shells-edge')
+      if (id === 'real-live-rich') {
+        const magazines = page.locator('[data-ammo-presentation="magazine"]');
+        await expect(magazines).toContainText('3');
+        await expect(magazines.locator('[data-asset-id="ammo.magazine"]')).toHaveCount(1);
+        await expect(page.locator('[data-focused-player]')).not.toContainText('MAG');
+      }
+      if (id === 'focused-shells-edge') {
         await expect(page.locator('[data-focused-player]')).toContainText('SHELL 12');
+        await expect(page.locator('[data-ammo-presentation="magazine"]')).toHaveCount(0);
+      }
       if (id === 'real-planted') {
         await expect(page.locator('.focused-player__dead-state')).toHaveCount(1);
         await expect(page.locator('[data-focused-player]')).not.toContainText('DEAD');

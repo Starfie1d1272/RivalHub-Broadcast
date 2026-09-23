@@ -249,6 +249,20 @@
   line-height: 13px;
 }
 
+.focused-player__reserve-magazines {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.focused-player__reserve-magazine-icon {
+  display: block;
+  width: 14px;
+  height: 14px;
+  background-color: currentColor;
+  mask: var(--focused-icon) center / contain no-repeat;
+}
+
 .focused-player__dead-state {
   height: 134px;
   background:

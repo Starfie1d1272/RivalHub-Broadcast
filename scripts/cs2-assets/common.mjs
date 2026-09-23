@@ -13,6 +13,7 @@ export const ASSET_PATH_PREFIX = '/assets/cs2/';
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 export const ALLOWED_SOURCE_PREFIXES = Object.freeze([
   'panorama/images/icons/equipment/',
+  'panorama/images/hud/ammo_',
   'panorama/images/hud/teamcounter/',
 ]);
 
