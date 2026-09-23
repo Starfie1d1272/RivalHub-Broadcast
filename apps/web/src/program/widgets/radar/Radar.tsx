@@ -262,9 +262,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             .map((point) => pointAt(point))
             .filter((point): point is NonNullable<typeof point> => point !== null);
           if (trail.length < 2) return;
-          ctx.globalAlpha = alpha * 0.6;
+          ctx.globalAlpha = alpha * 0.5;
           ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 2;
           ctx.beginPath();
           trail.forEach((point, index) =>
             index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
