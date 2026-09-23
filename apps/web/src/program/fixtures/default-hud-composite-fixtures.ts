@@ -112,7 +112,12 @@ export function getDefaultHudCompositeFixture(id: string): DefaultHudCompositeSn
   const fixtureId = id as DefaultHudCompositeFixture;
   const snapshot = sourceSnapshot(fixtureId);
   mutateProgram(fixtureId, snapshot);
-  const radarId = fixtureId === 'default-nuke-multifloor' ? 'nuke-upper' : 'focused';
+  const radarId =
+    fixtureId === 'default-nuke-multifloor'
+      ? 'nuke-upper'
+      : snapshot.payload.map.name === 'de_vertigo'
+        ? 'vertigo-lower'
+        : 'focused';
   const radarSnapshot = structuredClone(radarVisualFixture(radarId).snapshot);
   if (fixtureId === 'default-nuke-multifloor') {
     radarSnapshot.payload.players.forEach((player, index) => {
