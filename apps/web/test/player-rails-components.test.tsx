@@ -222,10 +222,9 @@ describe('Player Rails card presentation', () => {
       ]),
     ).toEqual([
       ['smoke', 'utility.smokegrenade'],
-      ['fire', 'utility.incgrenade'],
       ['flash', 'utility.flashbang'],
       ['he', 'utility.hegrenade'],
-      ['decoy', 'utility.decoy'],
+      ['fire', 'utility.incgrenade'],
     ]);
   });
 });
