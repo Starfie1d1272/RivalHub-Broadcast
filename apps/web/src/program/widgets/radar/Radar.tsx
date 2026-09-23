@@ -124,17 +124,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
       const placementFor = (layer: string): RadarCanvasPlacement | null =>
         geometry === null ? null : radarBroadcastPlacement(geometry.mapKey, layer);
-      const pointAt = (
-        point: { x: number; y: number; layer?: string },
-        layerHint?: string,
-      ) => {
+      const pointAt = (point: { x: number; y: number; layer?: string }, layerHint?: string) => {
         const placement = placementFor(layerHint ?? point.layer ?? model.layer);
         if (placement !== null && !radarPointInsideViewport(point, placement.viewport)) return null;
-        return radarCanvasPoint(
-          point,
-          placement?.viewport ?? null,
-          placement?.rect ?? null,
-        );
+        return radarCanvasPoint(point, placement?.viewport ?? null, placement?.rect ?? null);
       };
       const radiusAt = (normalizedRadius: number, layer: string) => {
         const placement = placementFor(layer);
@@ -248,10 +241,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = radiusAt(
-            projectWorldRadius(144, geometry) ?? 0,
-            marker.target.layer,
-          );
+          const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
           fill.addColorStop(0, '#c5cbd07a');
           fill.addColorStop(0.75, '#a8afb460');
