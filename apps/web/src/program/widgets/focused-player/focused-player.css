@@ -66,9 +66,9 @@
   min-width: 0;
   overflow: hidden;
   color: #f3f6fa;
-  font-size: 18px;
+  font-size: 21px;
   font-weight: 800;
-  line-height: 22px;
+  line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
@@ -85,22 +85,22 @@
   display: flex;
   align-items: baseline;
   gap: 2px;
-  font-size: 10px;
-  line-height: 14px;
+  font-size: 12px;
+  line-height: 15px;
 }
 
 .focused-player__metrics small {
   color: #aab4c0;
-  font-size: 8px;
+  font-size: 10px;
   font-weight: 800;
   line-height: 12px;
 }
 
 .focused-player__metrics b {
   color: #f3f6fa;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 700;
-  line-height: 14px;
+  line-height: 15px;
 }
 
 .focused-player__action {
@@ -224,9 +224,9 @@
 
 .focused-player__ammo > strong {
   color: #f3f6fa;
-  font-size: 34px;
+  font-size: 40px;
   font-weight: 800;
-  line-height: 34px;
+  line-height: 40px;
 }
 
 .focused-player__clip-track {
@@ -244,9 +244,9 @@
 
 .focused-player__ammo > span {
   color: #aab4c0;
-  font-size: 9px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 12px;
+  line-height: 13px;
 }
 
 .focused-player__dead {
@@ -285,9 +285,9 @@
 
 .focused-player__hp {
   color: #f3f6fa;
-  font-size: 30px;
+  font-size: 38px;
   font-weight: 800;
-  line-height: 32px;
+  line-height: 38px;
 }
 
 .focused-player__hp small {
@@ -317,7 +317,7 @@
 
 .focused-player__armor b {
   color: #f3f6fa;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 700;
   line-height: 16px;
 }
