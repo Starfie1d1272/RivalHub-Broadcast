@@ -29,13 +29,19 @@
 }
 
 .focused-player[data-side='CT'] {
-  background:
-    linear-gradient(108deg, rgba(106, 168, 255, 0.2), rgba(17, 25, 35, 0.96) 46%);
+  background: linear-gradient(
+    108deg,
+    rgba(106, 168, 255, 0.2),
+    rgba(17, 25, 35, 0.96) 46%
+  );
 }
 
 .focused-player[data-side='T'] {
-  background:
-    linear-gradient(108deg, rgba(242, 189, 79, 0.2), rgba(17, 25, 35, 0.96) 46%);
+  background: linear-gradient(
+    108deg,
+    rgba(242, 189, 79, 0.2),
+    rgba(17, 25, 35, 0.96) 46%
+  );
 }
 
 .focused-player::before {
