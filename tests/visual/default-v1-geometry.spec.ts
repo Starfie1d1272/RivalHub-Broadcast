@@ -402,7 +402,7 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
     if (fixtureId === 'default-nuke-multifloor') {
       await expect(page.locator('canvas.radar')).toHaveAttribute(
         'data-radar-compositor',
-        'shared-calibration',
+        'ewc-detached-floor-shared-calibration',
       );
       await expect(page.locator('canvas.radar')).toHaveAttribute(
         'data-radar-coordinate-space',
