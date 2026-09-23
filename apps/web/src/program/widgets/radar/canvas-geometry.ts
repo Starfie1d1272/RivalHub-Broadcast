@@ -44,13 +44,13 @@ const VERTIGO_PLACEMENT: RadarCanvasPlacement = Object.freeze({
 });
 
 const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
-  viewport: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
-  rect: Object.freeze({ x: 0, y: 0, width: 980, height: 575 }),
+  viewport: Object.freeze({ x: 0.04, y: 0.22, width: 0.94, height: 0.56 }),
+  rect: Object.freeze({ x: 0, y: 0, width: 980, height: 595 }),
 });
 
 const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
-  viewport: Object.freeze({ x: 0.48, y: 0.28, width: 0.28, height: 0.51 }),
-  rect: Object.freeze({ x: 112, y: 482, width: 230, height: 590 }),
+  viewport: Object.freeze({ x: 0.5, y: 0.28, width: 0.2, height: 0.52 }),
+  rect: Object.freeze({ x: 90, y: 410, width: 280, height: 585 }),
 });
 
 export function radarBroadcastPlacement(
