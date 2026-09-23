@@ -198,7 +198,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.translate(logicalSize / 2, logicalSize / 2);
       ctx.scale(z.scale, z.scale);
       ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
-      ctx.filter = 'saturate(0.34) brightness(0.88) contrast(1.2)';
+      ctx.filter = 'grayscale(0.78) saturate(0.12) brightness(0.94) contrast(1.16)';
       if (singleImage) {
         ctx.globalAlpha = 1;
         drawArtwork(singleImage, placementFor('single'));
@@ -209,7 +209,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         for (const floor of floors) {
           const image = floor === 'upper' ? upperImage : lowerImage;
           if (!image) continue;
-          ctx.globalAlpha = floor === model.layer ? 0.96 : model.layer === 'unknown' ? 0.84 : 0.78;
+          ctx.globalAlpha = floor === model.layer ? 0.98 : model.layer === 'unknown' ? 0.86 : 0.72;
           drawArtwork(image, detachedFloors ? placementFor(floor) : null);
         }
         ctx.globalAlpha = 1;
@@ -278,7 +278,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             .map((point) => pointAt(point, marker.target.layer))
             .filter((point): point is NonNullable<typeof point> => point !== null);
           if (trail.length < 2) return;
-          ctx.globalAlpha = alpha * 0.42;
+          ctx.globalAlpha = alpha * 0.34;
           ctx.strokeStyle = sideColor(marker.side);
           ctx.lineWidth = 2;
           ctx.beginPath();
