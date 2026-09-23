@@ -83,11 +83,13 @@ function Equipment({ player }: { readonly player: PlayerCardPresentation }) {
   ] as const;
   return (
     <div className="player-rail__equipment" data-player-equipment="true">
-      {slots.map((slot) => (
-        <span className="player-rail__equipment-slot" data-equipment={slot.key} key={slot.key}>
-          <MaskIcon asset={slot.asset} label={slot.label} />
-        </span>
-      ))}
+      {slots
+        .filter((slot) => slot.asset !== null)
+        .map((slot) => (
+          <span className="player-rail__equipment-slot" data-equipment={slot.key} key={slot.key}>
+            <MaskIcon asset={slot.asset} label={slot.label} />
+          </span>
+        ))}
     </div>
   );
 }
@@ -110,15 +112,16 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
     <div className="player-rail__utility-icons">
       {UTILITY_FAMILIES.map((family) => {
         const utility = counts.get(family);
+        if (utility === undefined) return null;
         return (
           <span
             className="player-rail__utility-item"
             data-utility-family={family}
             key={family}
-            aria-label={`${family}${utility === undefined ? '' : ` ${utility.count}`}`}
+            aria-label={`${family} ${utility.count}`}
           >
-            <MaskIcon asset={utility?.asset ?? null} label={family} />
-            {utility === undefined ? null : <b>{utility.count}</b>}
+            <MaskIcon asset={utility.asset} label={family} />
+            <b>{utility.count}</b>
           </span>
         );
       })}
@@ -225,15 +228,14 @@ function PlayerBody({
           data-phase={player.mode}
           data-secondary={secondaryVisible}
         >
+          <Kd player={player} />
           <div className="player-rail__weapons">
             <WeaponIcon weapon={player.primaryWeapon} className="is-primary" />
             {secondaryVisible ? (
               <WeaponIcon weapon={player.secondaryWeapon} className="is-secondary" />
             ) : null}
           </div>
-          <span aria-hidden="true" className="player-rail__combat-gap player-rail__combat-gap--a" />
           <Equipment player={player} />
-          <span aria-hidden="true" className="player-rail__combat-gap player-rail__combat-gap--b" />
           <UtilityIcons player={player} />
         </div>
       )}
@@ -243,7 +245,7 @@ function PlayerBody({
         {player.mode === 'freezetime' && !dead ? (
           <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
         ) : null}
-        <Kd player={player} />
+        {dead ? <Kd player={player} /> : null}
       </div>
     </div>
   );
