@@ -221,33 +221,34 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       }
       ctx.filter = 'none';
 
-      const drawSpawnZone = (x: number, y: number, width: number, height: number) => {
-        ctx.fillStyle = 'rgba(47, 160, 96, 0.82)';
-        ctx.fillRect(x, y, width, height);
-        ctx.strokeStyle = 'rgba(243, 246, 250, 0.82)';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(x, y, width, height);
-      };
-      const drawSiteBadge = (label: 'A' | 'B', x: number, y: number) => {
-        const size = 72;
+      const drawSiteBadge = (
+        label: 'A' | 'B',
+        normalized: { readonly x: number; readonly y: number },
+        layer: string,
+      ) => {
+        const placement = placementFor(layer);
+        const point = radarCanvasPoint(
+          normalized,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+        const size = 56;
         ctx.fillStyle = '#f3ce22';
-        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.fillRect(point.x - size / 2, point.y - size / 2, size, size);
         ctx.fillStyle = '#0b1119';
-        ctx.font = '900 40px Inter, sans-serif';
+        ctx.font = '900 32px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
-        ctx.fillText(label, x, y + 1);
+        ctx.fillText(label, point.x, point.y + 1);
       };
       if (geometry?.mapKey === 'de_ancient') {
-        drawSpawnZone(395, 0, 155, 205);
-        drawSpawnZone(385, 855, 150, 125);
-        drawSiteBadge('A', 190, 210);
-        drawSiteBadge('B', 705, 485);
+        // Valve overview artwork already owns spawn-zone geometry. Only add
+        // calibrated broadcast labels at the centers of the source bombsites.
+        drawSiteBadge('A', { x: 0.302, y: 0.26 }, 'single');
+        drawSiteBadge('B', { x: 0.749, y: 0.41 }, 'single');
       } else if (geometry?.mapKey === 'de_nuke') {
-        drawSpawnZone(122, 310, 104, 82);
-        drawSpawnZone(790, 230, 105, 75);
-        drawSiteBadge('A', 530, 255);
-        drawSiteBadge('B', 175, 725);
+        drawSiteBadge('A', { x: 0.572, y: 0.506 }, 'upper');
+        drawSiteBadge('B', { x: 0.568, y: 0.544 }, 'lower');
       }
 
       if (geometry && payload) {
