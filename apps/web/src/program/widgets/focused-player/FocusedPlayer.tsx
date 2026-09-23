@@ -88,7 +88,7 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
           className="focused-player__action-gap focused-player__action-gap--a"
         />
         {p.dead ? (
-          <strong className="focused-player__dead">DEAD</strong>
+          <div aria-label="Dead" className="focused-player__dead-state" />
         ) : (
           <>
             <div className="focused-player__active" aria-label="Active item">
@@ -115,12 +115,9 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
         {p.dead ? null : (
           <>
             <div className="focused-player__vitals-values">
-              <strong className="focused-player__hp">
-                {p.health ?? '—'} <small>HP</small>
-              </strong>
+              <strong className="focused-player__hp">{p.health ?? '—'}</strong>
               <span className="focused-player__armor">
                 <Icon asset={p.armorAsset} />
-                <small>ARMOR</small>
                 <b>{p.armor ?? '—'}</b>
               </span>
             </div>
