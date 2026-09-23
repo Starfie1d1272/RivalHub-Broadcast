@@ -106,9 +106,14 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps?.[0]).toMatchObject({
       selectionText: 'PICK',
       winner: 'a',
+      pickOutcome: 'win',
       winnerName: 'Northstar',
     });
-    expect(value.seriesMaps?.[1]).toMatchObject({ winner: 'b', winnerName: 'Southpoint' });
+    expect(value.seriesMaps?.[1]).toMatchObject({
+      winner: 'b',
+      pickOutcome: 'win',
+      winnerName: 'Southpoint',
+    });
     expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
     expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER' });
   });
@@ -130,6 +135,7 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps?.[0]).toMatchObject({
       statusText: '13–11',
       winner: null,
+      pickOutcome: null,
       winnerName: null,
     });
   });
