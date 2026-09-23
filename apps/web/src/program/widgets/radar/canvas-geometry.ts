@@ -35,17 +35,17 @@ export interface RadarCanvasPlacement {
  */
 const ANCIENT_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.15, y: 0.14, width: 0.62, height: 0.7 }),
-  rect: Object.freeze({ x: 30, y: 10, width: 940, height: 980 }),
+  rect: Object.freeze({ x: 70, y: 10, width: 860, height: 980 }),
 });
 
 const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
-  rect: Object.freeze({ x: 20, y: 2, width: 960, height: 560 }),
+  rect: Object.freeze({ x: 0, y: 0, width: 980, height: 575 }),
 });
 
 const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.48, y: 0.28, width: 0.28, height: 0.51 }),
-  rect: Object.freeze({ x: 165, y: 455, width: 250, height: 590 }),
+  rect: Object.freeze({ x: 112, y: 482, width: 230, height: 590 }),
 });
 
 export function radarBroadcastPlacement(
