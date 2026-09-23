@@ -171,45 +171,59 @@ async function assertHudGeometry(page: Page) {
     width: 360,
     height: 42,
   });
-  await assertBox(page.locator('.focused-player__action'), {
-    x: 780,
-    y: 918,
-    width: 360,
-    height: 82,
-  });
-  await assertBox(page.locator('.focused-player__media'), {
-    x: 792,
-    y: 927,
-    width: 64,
-    height: 64,
-  });
-  if ((await page.locator('.focused-player').getAttribute('data-dead')) === 'false') {
+  const focusedDead = (await page.locator('.focused-player').getAttribute('data-dead')) === 'true';
+  if (!focusedDead) {
+    await assertBox(page.locator('.focused-player__action'), {
+      x: 780,
+      y: 918,
+      width: 360,
+      height: 82,
+    });
+    await assertBox(page.locator('.focused-player__media'), {
+      x: 792,
+      y: 918,
+      width: 104,
+      height: 82,
+    });
     await assertBox(page.locator('.focused-player__active'), {
-      x: 864,
-      y: 927,
-      width: 148,
-      height: 64,
+      x: 904,
+      y: 918,
+      width: 126,
+      height: 82,
     });
     await assertBox(page.locator('.focused-player__ammo'), {
-      x: 1020,
-      y: 927,
-      width: 108,
-      height: 64,
+      x: 1038,
+      y: 918,
+      width: 90,
+      height: 82,
+    });
+    await assertBox(page.locator('.focused-player__vitals'), {
+      x: 780,
+      y: 1000,
+      width: 360,
+      height: 52,
     });
   } else {
-    await assertBox(page.locator('.focused-player__dead'), {
-      x: 864,
-      y: 947,
-      width: 264,
-      height: 24,
+    await assertBox(page.locator('.focused-player__action'), {
+      x: 780,
+      y: 918,
+      width: 360,
+      height: 134,
     });
+    await assertBox(page.locator('.focused-player__media'), {
+      x: 792,
+      y: 918,
+      width: 104,
+      height: 134,
+    });
+    await assertBox(page.locator('.focused-player__dead'), {
+      x: 904,
+      y: 918,
+      width: 224,
+      height: 134,
+    });
+    await expect(page.locator('.focused-player__vitals')).toBeHidden();
   }
-  await assertBox(page.locator('.focused-player__vitals'), {
-    x: 780,
-    y: 1000,
-    width: 360,
-    height: 52,
-  });
 }
 
 test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async ({ page }) => {
