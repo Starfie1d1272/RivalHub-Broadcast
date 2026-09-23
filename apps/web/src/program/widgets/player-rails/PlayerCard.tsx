@@ -183,11 +183,7 @@ function PlayerBody({
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
   const secondaryVisible = player.mode === 'freezetime' && player.secondaryWeapon !== null;
   return (
-    <div
-      className="player-rail__body"
-      data-card-part="body"
-      data-dead={dead}
-    >
+    <div className="player-rail__body" data-card-part="body" data-dead={dead}>
       <div className="player-rail__identity">
         <span className="player-rail__name" title={player.displayName ?? undefined}>
           {player.displayName ?? 'PLAYER'}
