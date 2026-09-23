@@ -221,6 +221,13 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       }
       ctx.filter = 'none';
 
+      const drawSpawnZone = (x: number, y: number, width: number, height: number) => {
+        ctx.fillStyle = 'rgba(47, 160, 96, 0.82)';
+        ctx.fillRect(x, y, width, height);
+        ctx.strokeStyle = 'rgba(243, 246, 250, 0.82)';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(x, y, width, height);
+      };
       const drawSiteBadge = (label: 'A' | 'B', x: number, y: number) => {
         const size = 56;
         ctx.fillStyle = '#f3ce22';
@@ -232,9 +239,13 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         ctx.fillText(label, x, y + 1);
       };
       if (geometry?.mapKey === 'de_ancient') {
+        drawSpawnZone(340, 8, 150, 142);
+        drawSpawnZone(330, 872, 138, 108);
         drawSiteBadge('A', 190, 210);
         drawSiteBadge('B', 705, 485);
       } else if (geometry?.mapKey === 'de_nuke') {
+        drawSpawnZone(122, 310, 104, 82);
+        drawSpawnZone(770, 225, 152, 106);
         drawSiteBadge('A', 530, 255);
         drawSiteBadge('B', 175, 725);
       }
@@ -253,7 +264,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
               const point = pointAt(p);
               if (point) {
                 ctx.globalAlpha = layerOpacity(p, model.layer);
-                circle(point.x, point.y, 9, '#e99b4680', sideColor(side), 2);
+                circle(point.x, point.y, 18, '#ef9e3f70', sideColor(side), 1.5);
                 ctx.globalAlpha = 1;
               }
             }
@@ -269,9 +280,15 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           // Approximate broadcast footprint, scaled through the domain calibration.
           const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
-          fill.addColorStop(0, '#c5cbd07a');
-          fill.addColorStop(0.75, '#a8afb460');
-          fill.addColorStop(1, '#a8afb410');
+          const smokeFill =
+            marker.side === 'CT'
+              ? ['#6aa8ff70', '#6aa8ff42', '#6aa8ff08']
+              : marker.side === 'T'
+                ? ['#f2bd4f70', '#f2bd4f42', '#f2bd4f08']
+                : ['#c5cbd070', '#a8afb442', '#a8afb408'];
+          fill.addColorStop(0, smokeFill[0]!);
+          fill.addColorStop(0.75, smokeFill[1]!);
+          fill.addColorStop(1, smokeFill[2]!);
           ctx.fillStyle = fill;
           ctx.beginPath();
           ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -390,11 +407,23 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const x = point.x;
           const y = point.y;
           const alive = p.lifeState === 'alive';
-          ctx.globalAlpha = (alive ? 1 : 0.4) * layerOpacity(marker.target, model.layer);
           const color = sideColor(p.side);
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          if (!alive) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(x - 19, y - 19);
+            ctx.lineTo(x + 19, y + 19);
+            ctx.moveTo(x - 19, y + 19);
+            ctx.lineTo(x + 19, y - 19);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+          }
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
             circle(x, y, 37, '#00000000', '#ffffff', 5);
-          if (alive && p.forward) {
+          if (p.forward) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((marker.angle * Math.PI) / 180);
@@ -412,22 +441,11 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.restore();
           }
           circle(x, y, 30, color, '#0b1119', 3);
-          if (p.lifeState === 'dead') {
-            ctx.strokeStyle = '#0b1119';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.moveTo(x - 8, y - 8);
-            ctx.lineTo(x + 8, y + 8);
-            ctx.moveTo(x - 8, y + 8);
-            ctx.lineTo(x + 8, y - 8);
-            ctx.stroke();
-          } else {
-            ctx.fillStyle = '#0b1119';
-            ctx.font = '800 32px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
-          }
+          ctx.fillStyle = '#0b1119';
+          ctx.font = '800 32px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
           if (alive && p.flashAmount !== null && p.flashAmount > 0) {
             ctx.globalAlpha = Math.min(1, p.flashAmount / 255);
             circle(x, y, 24, '#ffffff55', '#ffffff', 4);
