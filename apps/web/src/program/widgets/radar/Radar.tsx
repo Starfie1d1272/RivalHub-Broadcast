@@ -199,7 +199,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.scale(z.scale, z.scale);
       ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
       ctx.filter =
-        'grayscale(0.78) saturate(0.12) brightness(1.03) contrast(1.18) ' +
+        'grayscale(0.82) saturate(0.1) brightness(0.72) contrast(1.16) ' +
         'drop-shadow(3px 0 0 rgba(243,246,250,.72)) ' +
         'drop-shadow(-3px 0 0 rgba(243,246,250,.72)) ' +
         'drop-shadow(0 3px 0 rgba(243,246,250,.72)) ' +
