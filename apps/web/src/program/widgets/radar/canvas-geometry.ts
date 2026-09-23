@@ -50,7 +50,7 @@ const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
 
 const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.5, y: 0.28, width: 0.2, height: 0.52 }),
-  rect: Object.freeze({ x: 90, y: 445, width: 280, height: 550 }),
+  rect: Object.freeze({ x: 90, y: 460, width: 280, height: 550 }),
 });
 
 export function radarBroadcastPlacement(
