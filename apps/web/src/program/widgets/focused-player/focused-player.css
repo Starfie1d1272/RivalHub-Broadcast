@@ -253,11 +253,7 @@
   height: 134px;
   background:
     linear-gradient(90deg, rgba(7, 10, 14, 0.18), rgba(7, 10, 14, 0.4)),
-    repeating-linear-gradient(
-      135deg,
-      transparent 0 18px,
-      rgba(243, 246, 250, 0.025) 18px 19px
-    );
+    repeating-linear-gradient(135deg, transparent 0 18px, rgba(243, 246, 250, 0.025) 18px 19px);
   border-left: 1px solid rgba(243, 246, 250, 0.08);
   grid-column: 3 / 6;
   grid-row: 1;
