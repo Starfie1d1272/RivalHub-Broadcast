@@ -18,6 +18,7 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
       <div
         className="match-header__series-maps"
         role="list"
+        data-series-map-count={maps.length}
         style={{ '--series-map-count': maps.length } as CSSProperties}
       >
         {maps.map((map) => {
