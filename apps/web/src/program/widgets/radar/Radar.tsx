@@ -198,9 +198,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.translate(logicalSize / 2, logicalSize / 2);
       ctx.scale(z.scale, z.scale);
       ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
+      ctx.filter = 'saturate(0.58) brightness(0.92) contrast(1.12)';
       if (singleImage) {
         ctx.globalAlpha = 1;
-        drawArtwork(singleImage);
+        drawArtwork(singleImage, placementFor('single'));
         ctx.globalAlpha = 1;
       } else if (geometry && multiLayer) {
         const floors =
@@ -213,6 +214,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         }
         ctx.globalAlpha = 1;
       }
+      ctx.filter = 'none';
       if (geometry && payload) {
         // Effects are behind every player. Flame z is projected independently.
         let flameCount = 0;
@@ -367,15 +369,15 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.globalAlpha = (alive ? 1 : 0.4) * layerOpacity(marker.target, model.layer);
           const color = sideColor(p.side);
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
-            circle(x, y, 34, '#00000000', '#ffffff', 5);
+            circle(x, y, 37, '#00000000', '#ffffff', 5);
           if (alive && p.forward) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((marker.angle * Math.PI) / 180);
             ctx.beginPath();
-            ctx.moveTo(33, 0);
-            ctx.lineTo(13, -12);
-            ctx.lineTo(13, 12);
+            ctx.moveTo(37, 0);
+            ctx.lineTo(14, -13);
+            ctx.lineTo(14, 13);
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
@@ -385,7 +387,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
-          circle(x, y, 26, color, '#0b1119', 3);
+          circle(x, y, 30, color, '#0b1119', 3);
           if (p.lifeState === 'dead') {
             ctx.strokeStyle = '#0b1119';
             ctx.lineWidth = 5;
@@ -397,17 +399,17 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.stroke();
           } else {
             ctx.fillStyle = '#0b1119';
-            ctx.font = '800 28px Inter, sans-serif';
+            ctx.font = '800 32px Inter, sans-serif';
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
           }
           if (alive && p.flashAmount !== null && p.flashAmount > 0) {
             ctx.globalAlpha = Math.min(1, p.flashAmount / 255);
-            circle(x, y, 21, '#ffffff55', '#ffffff', 4);
+            circle(x, y, 24, '#ffffff55', '#ffffff', 4);
             ctx.globalAlpha = 1;
           }
-          if (marker.damageUntil > now) circle(x, y, 23, '#00000000', '#ff6c69', 5);
+          if (marker.damageUntil > now) circle(x, y, 27, '#00000000', '#ff6c69', 5);
           if (
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
