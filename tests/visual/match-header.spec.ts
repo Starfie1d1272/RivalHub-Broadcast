@@ -133,12 +133,19 @@ test.describe('Match Header HUD', () => {
     await openFixture(page, 'series-bo3-map1');
     await expect(
       page.locator('[data-match-header-widget="series-strip"] [data-map-order="1"]'),
-    ).toContainText('CURRENT');
+    ).toHaveAttribute('data-map-status', 'current');
+    await expect(
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-status',
+      ),
+    ).toHaveText('');
 
     await page.goto('/__visual/program/series-not-played');
     await expect(
-      page.locator('[data-match-header-widget="series-strip"] [data-map-status="not_played"]'),
-    ).toContainText('PENDING');
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-status="not_played"] .match-header__series-map-status',
+      ),
+    ).toHaveText('');
 
     await page.goto('/__visual/program/series-logo-mixed');
     await expect(page.locator('[data-team-logo-slot="a"] .match-header__team-logo')).toHaveCount(1);
