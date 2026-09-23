@@ -38,6 +38,7 @@ export interface MatchHeaderSeriesMapPresentation {
   readonly statusText: string;
   readonly finalScore: { readonly a: number; readonly b: number } | null;
   readonly winner: MatchHeaderEntrantKey | null;
+  readonly pickOutcome: 'win' | 'loss' | null;
   readonly winnerName: string | null;
 }
 
@@ -233,6 +234,12 @@ function buildSeriesMaps(
       statusText: score,
       finalScore: map.finalScore,
       winner,
+      pickOutcome:
+        map.status === 'completed' && picker !== null && winner !== null
+          ? picker === winner
+            ? 'win'
+            : 'loss'
+          : null,
       winnerName:
         map.status === 'completed' && map.finalScore !== null && winner !== null
           ? series.entrants[winner].name
