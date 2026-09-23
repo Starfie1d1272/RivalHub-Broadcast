@@ -349,6 +349,95 @@ jobs:
       - name: Run offline qualification
         run: pnpm qualification:offline
 
+  pr73_golden_linux:
+    name: PR73 golden refresh / Linux
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 73 }}
+    needs: [plan]
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm visual:update
+
+      - name: Pack Linux goldens
+        shell: bash
+        run: tar -czf "$RUNNER_TEMP/pr73-linux-goldens.tar.gz" -C tests/visual/__screenshots__ linux
+
+      - name: Upload Linux goldens
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: pr73-linux-goldens-${{ github.event.pull_request.head.sha }}
+          path: ${{ runner.temp }}/pr73-linux-goldens.tar.gz
+          if-no-files-found: error
+
+  pr73_golden_commit:
+    name: PR73 golden refresh / Darwin + commit
+    if: ${{ github.event_name == 'pull_request' && github.event.pull_request.number == 73 }}
+    needs: [pr73_golden_linux]
+    runs-on: macos-15
+    permissions:
+      contents: write
+      actions: read
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: ${{ github.event.pull_request.head.ref }}
+          fetch-depth: 0
+
+      - name: Download Linux goldens from this run
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+          ARTIFACT_NAME: pr73-linux-goldens-${{ github.event.pull_request.head.sha }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pr73-linux-artifact"
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" -n "$ARTIFACT_NAME" -D "$RUNNER_TEMP/pr73-linux-artifact"
+          tar -xzf "$RUNNER_TEMP/pr73-linux-artifact/pr73-linux-goldens.tar.gz" -C tests/visual/__screenshots__
+
+      - name: Set up Node.js 24 and pnpm 12
+        uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - run: pnpm visual:update
+
+      - name: Commit refreshed goldens
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/visual/__screenshots__/linux tests/visual/__screenshots__/darwin
+          if git diff --cached --quiet; then
+            echo "Goldens already current."
+          else
+            git commit -m "test(visual): refresh approved HUD goldens"
+            git push origin HEAD:${{ github.event.pull_request.head.ref }}
+          fi
+
   ci-gate:
     name: ci-gate
     if: always()
