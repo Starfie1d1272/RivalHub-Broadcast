@@ -80,7 +80,8 @@ describe('Focused media and combat presentation lifecycle', () => {
     expect(container.querySelector('.focused-player__active [data-asset-id]')).toBeNull();
     expect(container.textContent).not.toContain('MAG');
     act(() => root!.render(<FocusedPlayerCard player={{ ...player, dead: true }} />));
-    expect(container.textContent).toContain('DEAD');
+    expect(container.textContent).not.toContain('DEAD');
+    expect(container.querySelector('.focused-player__dead-state')).not.toBeNull();
     expect(container.querySelector('.focused-player__active')).toBeNull();
     expect(container.querySelector('.focused-player__ammo')).toBeNull();
     expect(container.querySelector('.focused-player__utility')).toBeNull();
