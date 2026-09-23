@@ -440,7 +440,8 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
-          circle(x, y, 30, color, '#0b1119', 3);
+          circle(x, y, 33, '#f3f6fa');
+          circle(x, y, 29, color, '#0b1119', 2);
           ctx.fillStyle = '#0b1119';
           ctx.font = '800 32px Inter, sans-serif';
           ctx.textAlign = 'center';
