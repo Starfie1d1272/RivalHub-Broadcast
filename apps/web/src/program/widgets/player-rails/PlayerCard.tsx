@@ -59,17 +59,24 @@ function Avatar({
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
 }) {
-  if (player.avatarUrl === null) return null;
   return (
-    <div aria-hidden="true" className="player-rail__avatar" data-card-part="avatar">
-      <img
-        alt=""
-        onError={(event) => {
-          event.currentTarget.style.display = 'none';
-        }}
-        src={player.avatarUrl}
-        data-dead={dead}
-      />
+    <div
+      aria-hidden="true"
+      className={`player-rail__avatar${player.avatarUrl === null ? ' is-placeholder' : ''}`}
+      data-card-part="avatar"
+    >
+      {player.avatarUrl === null ? (
+        <span className="player-rail__avatar-placeholder" />
+      ) : (
+        <img
+          alt=""
+          onError={(event) => {
+            event.currentTarget.style.display = 'none';
+          }}
+          src={player.avatarUrl}
+          data-dead={dead}
+        />
+      )}
     </div>
   );
 }
@@ -187,7 +194,7 @@ function PlayerBody({
             {displayNumber(player.health)}
           </strong>
         )}
-        <b
+        <span
           aria-label={
             player.roundKills === null
               ? 'Round kills unavailable'
@@ -196,8 +203,13 @@ function PlayerBody({
           className="player-rail__round-kills"
           data-round-kills={player.roundKills ?? 0}
         >
-          {player.roundKills !== null && player.roundKills > 0 ? player.roundKills : null}
-        </b>
+          {player.roundKills !== null && player.roundKills > 0 ? (
+            <>
+              <StatGlyph kind="kills" />
+              <b>{player.roundKills}</b>
+            </>
+          ) : null}
+        </span>
       </div>
 
       {dead ? (
@@ -210,9 +222,6 @@ function PlayerBody({
 
       {dead ? (
         <div className="player-rail__dead-stats" data-dead-stats="true">
-          <span aria-hidden="true" className="player-rail__death-mark">
-            <StatGlyph kind="deaths" />
-          </span>
           <span className="player-rail__adr">
             <small>ADR</small>
             <b>{displayNumber(player.liveAdr)}</b>
