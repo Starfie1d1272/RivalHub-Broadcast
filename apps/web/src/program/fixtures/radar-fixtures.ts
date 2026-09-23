@@ -48,6 +48,19 @@ export const NUKE_LOWER_WORLD_ANCHORS = [
   { x: 1565, y: -2059 },
 ] as const;
 
+export const VERTIGO_LOWER_WORLD_ANCHORS = [
+  { x: -2431, y: 328 },
+  { x: -2144, y: -81 },
+  { x: -1734, y: 42 },
+  { x: -1284, y: -286 },
+  { x: -792, y: -204 },
+  { x: -424, y: -655 },
+  { x: -219, y: -1105 },
+  { x: -915, y: -1187 },
+  { x: -1734, y: -1105 },
+  { x: -2267, y: -982 },
+] as const;
+
 export function realRadarSnapshot(): RadarSnapshot {
   return radarSnapshotSchema.parse(artifact.fixtures['dense-utility'].samples[0]!.snapshot);
 }
@@ -104,11 +117,8 @@ export function radarVisualFixture(id: RadarVisualFixture) {
       });
     } else {
       snapshot.payload.players.forEach((player, index) => {
-        player.position = {
-          x: -1600 + index * 180,
-          y: 400 + (index % 3) * 220,
-          z: 11600,
-        };
+        const anchor = VERTIGO_LOWER_WORLD_ANCHORS[index]!;
+        player.position = { ...anchor, z: 11600 };
       });
     }
   }
