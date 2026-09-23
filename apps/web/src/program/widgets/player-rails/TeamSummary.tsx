@@ -19,10 +19,9 @@ function formatUtility(value: number | null): string {
 
 const UTILITY_SLOTS: readonly { readonly family: TeamUtilityFamily; readonly label: string }[] = [
   { family: 'smoke', label: 'SMOKE' },
-  { family: 'fire', label: 'FIRE' },
   { family: 'flash', label: 'FLASH' },
   { family: 'he', label: 'HE' },
-  { family: 'decoy', label: 'DECOY' },
+  { family: 'fire', label: 'FIRE' },
 ];
 
 function UtilityAsset({
