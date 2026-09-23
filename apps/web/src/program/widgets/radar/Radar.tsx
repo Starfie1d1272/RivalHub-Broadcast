@@ -198,7 +198,12 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.translate(logicalSize / 2, logicalSize / 2);
       ctx.scale(z.scale, z.scale);
       ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
-      ctx.filter = 'grayscale(0.78) saturate(0.12) brightness(0.94) contrast(1.16)';
+      ctx.filter =
+        'grayscale(0.78) saturate(0.12) brightness(1.03) contrast(1.18) ' +
+        'drop-shadow(3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(-3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 3px 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 -3px 0 rgba(243,246,250,.72))';
       if (singleImage) {
         ctx.globalAlpha = 1;
         drawArtwork(singleImage, placementFor('single'));
@@ -215,6 +220,25 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         ctx.globalAlpha = 1;
       }
       ctx.filter = 'none';
+
+      const drawSiteBadge = (label: 'A' | 'B', x: number, y: number) => {
+        const size = 56;
+        ctx.fillStyle = '#f3ce22';
+        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        ctx.fillStyle = '#0b1119';
+        ctx.font = '900 32px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, x, y + 1);
+      };
+      if (geometry?.mapKey === 'de_ancient') {
+        drawSiteBadge('A', 190, 210);
+        drawSiteBadge('B', 705, 485);
+      } else if (geometry?.mapKey === 'de_nuke') {
+        drawSiteBadge('A', 530, 255);
+        drawSiteBadge('B', 175, 725);
+      }
+
       if (geometry && payload) {
         // Effects are behind every player. Flame z is projected independently.
         let flameCount = 0;
