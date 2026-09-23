@@ -33,6 +33,11 @@ export interface RadarCanvasPlacement {
  * map while the lower/B-site view is detached underneath it. Both placements
  * still use the same Valve 1024 overview calibration; only presentation changes.
  */
+const ANCIENT_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.08, y: 0.04, width: 0.78, height: 0.86 }),
+  rect: Object.freeze({ x: 56, y: 10, width: 888, height: 980 }),
+});
+
 const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
   rect: Object.freeze({ x: 60, y: 15, width: 880, height: 497 }),
@@ -47,6 +52,7 @@ export function radarBroadcastPlacement(
   mapKey: string,
   layer: string,
 ): RadarCanvasPlacement | null {
+  if (mapKey === 'de_ancient') return ANCIENT_PLACEMENT;
   if (mapKey !== 'de_nuke') return null;
   return layer === 'lower' ? NUKE_LOWER_PLACEMENT : NUKE_UPPER_PLACEMENT;
 }
