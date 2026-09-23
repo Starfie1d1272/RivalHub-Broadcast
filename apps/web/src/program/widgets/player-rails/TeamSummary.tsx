@@ -108,7 +108,6 @@ export function TeamSummary({
             key={family}
           >
             <UtilityAsset family={family} label={label} side={side} />
-            <small>{label}</small>
             <b>{formatUtility(utility?.[family] ?? null)}</b>
           </span>
         ))}
