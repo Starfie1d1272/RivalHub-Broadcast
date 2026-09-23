@@ -245,10 +245,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         // Valve overview artwork already owns spawn-zone geometry. Only add
         // calibrated broadcast labels at the centers of the source bombsites.
         drawSiteBadge('A', { x: 0.302, y: 0.26 }, 'single');
-        drawSiteBadge('B', { x: 0.749, y: 0.41 }, 'single');
+        drawSiteBadge('B', { x: 0.8, y: 0.4 }, 'single');
       } else if (geometry?.mapKey === 'de_nuke') {
-        drawSiteBadge('A', { x: 0.572, y: 0.506 }, 'upper');
-        drawSiteBadge('B', { x: 0.568, y: 0.544 }, 'lower');
+        drawSiteBadge('A', { x: 0.58, y: 0.48 }, 'upper');
+        drawSiteBadge('B', { x: 0.58, y: 0.58 }, 'lower');
       }
 
       if (geometry && payload) {
@@ -355,10 +355,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          circle(x, y, 24, '#0b1119', sideColor(marker.side), 3);
+          circle(x, y, 21, '#00000000', sideColor(marker.side), 2);
           const url = grenadeIcon(marker.source.kind);
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 20, y - 20, 40, 40);
+          if (icon) ctx.drawImage(icon, x - 16, y - 16, 32, 32);
           else {
             ctx.fillStyle = '#ecedef';
             ctx.fillRect(x - 6, y - 6, 12, 12);
@@ -385,8 +385,8 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
               circle(
                 x,
                 y,
-                34,
-                '#0b1119',
+                27,
+                '#00000000',
                 bomb.state === 'defusing' || bomb.state === 'defused'
                   ? '#83d8e8'
                   : bomb.state === 'planting'
@@ -394,9 +394,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
                     : bomb.state === 'planted'
                       ? '#f06f6f'
                       : '#f3f6fa',
-                5,
+                3,
               );
-              if (bombIcon) ctx.drawImage(bombIcon, x - 25, y - 25, 50, 50);
+              if (bombIcon) ctx.drawImage(bombIcon, x - 20, y - 20, 40, 40);
               ctx.globalAlpha = 1;
             }
           }
@@ -458,9 +458,8 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
           ) {
-            ctx.fillStyle = '#0b1119';
-            ctx.fillRect(x + 12, y + 12, 54, 54);
-            if (bombIcon) ctx.drawImage(bombIcon, x + 14, y + 14, 50, 50);
+            circle(x + 32, y + 32, 18, '#00000000', '#f3f6fa', 2);
+            if (bombIcon) ctx.drawImage(bombIcon, x + 16, y + 16, 32, 32);
           }
           ctx.globalAlpha = 1;
         }
