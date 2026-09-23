@@ -24,9 +24,9 @@
   height: 28px;
   flex: 0 0 28px;
   align-items: center;
-  padding: 0 10px;
-  background: rgba(11, 17, 25, 0.9);
-  border-bottom: 1px solid rgba(243, 246, 250, 0.1);
+  padding: 0 8px;
+  background: linear-gradient(90deg, rgba(11, 17, 25, 0.72), rgba(11, 17, 25, 0.16));
+  border-bottom: 0;
 }
 
 .player-rail__header::before {
@@ -46,16 +46,20 @@
 .player-rail__header strong {
   min-width: 0;
   overflow: hidden;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 18px;
+  color: rgba(243, 246, 250, 0.86);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 16px;
   text-overflow: ellipsis;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
 }
 
 .player-rail--right .player-rail__header {
   justify-content: flex-end;
-  padding-right: 10px;
+  padding-right: 8px;
+  background: linear-gradient(270deg, rgba(11, 17, 25, 0.72), rgba(11, 17, 25, 0.16));
   text-align: right;
 }
 
@@ -137,39 +141,67 @@
 }
 
 .player-rail__card[data-side='CT'] .player-rail__body {
-  background: linear-gradient(
-    112deg,
-    rgba(106, 168, 255, 0.24) 0%,
-    rgba(31, 70, 112, 0.9) 48%,
-    #111923 100%
-  );
+  background:
+    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
+    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      112deg,
+      rgba(106, 168, 255, 0.28) 0%,
+      rgba(31, 70, 112, 0.92) 50%,
+      #111923 100%
+    );
+  background-size:
+    32px 28px,
+    32px 28px,
+    auto;
 }
 
 .player-rail__card[data-side='T'] .player-rail__body {
-  background: linear-gradient(
-    112deg,
-    rgba(242, 189, 79, 0.24) 0%,
-    rgba(108, 82, 27, 0.92) 48%,
-    #111923 100%
-  );
+  background:
+    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
+    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      112deg,
+      rgba(242, 189, 79, 0.3) 0%,
+      rgba(108, 82, 27, 0.94) 50%,
+      #111923 100%
+    );
+  background-size:
+    32px 28px,
+    32px 28px,
+    auto;
 }
 
 .player-rail--right .player-rail__card[data-side='CT'] .player-rail__body {
-  background: linear-gradient(
-    248deg,
-    rgba(106, 168, 255, 0.24) 0%,
-    rgba(31, 70, 112, 0.9) 48%,
-    #111923 100%
-  );
+  background:
+    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
+    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      248deg,
+      rgba(106, 168, 255, 0.28) 0%,
+      rgba(31, 70, 112, 0.92) 50%,
+      #111923 100%
+    );
+  background-size:
+    32px 28px,
+    32px 28px,
+    auto;
 }
 
 .player-rail--right .player-rail__card[data-side='T'] .player-rail__body {
-  background: linear-gradient(
-    248deg,
-    rgba(242, 189, 79, 0.24) 0%,
-    rgba(108, 82, 27, 0.92) 48%,
-    #111923 100%
-  );
+  background:
+    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
+    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      248deg,
+      rgba(242, 189, 79, 0.3) 0%,
+      rgba(108, 82, 27, 0.94) 50%,
+      #111923 100%
+    );
+  background-size:
+    32px 28px,
+    32px 28px,
+    auto;
 }
 
 .player-rail__card--dead .player-rail__body,
@@ -183,11 +215,15 @@
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
-  box-shadow: inset -2px 0 0 #f3f6fa;
+  box-shadow:
+    inset -3px 0 0 #f3f6fa,
+    inset 0 0 0 1px rgba(243, 246, 250, 0.22);
 }
 
 .player-rail__card[data-physical-side='right'][data-observed='true'] .player-rail__body {
-  box-shadow: inset 2px 0 0 #f3f6fa;
+  box-shadow:
+    inset 3px 0 0 #f3f6fa,
+    inset 0 0 0 1px rgba(243, 246, 250, 0.22);
 }
 
 .player-rail__identity {
