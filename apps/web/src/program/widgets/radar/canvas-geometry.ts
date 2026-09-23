@@ -29,14 +29,38 @@ export interface RadarCanvasPlacement {
 }
 
 /**
- * #66 correction addendum: packages/radar canonical 1024 registration is the
- * only coordinate owner. Default V1 does not crop/independently scale a floor.
+ * EWC-style Nuke composition: the canonical upper overview remains the dominant
+ * map while the lower/B-site view is detached underneath it. Both placements
+ * still use the same Valve 1024 overview calibration; only presentation changes.
  */
+const ANCIENT_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.095, y: 0.025, width: 0.81, height: 0.95 }),
+  rect: Object.freeze({ x: 55, y: 4, width: 890, height: 992 }),
+});
+
+const VERTIGO_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.075, y: 0.1, width: 0.78, height: 0.78 }),
+  rect: Object.freeze({ x: 25, y: 15, width: 950, height: 950 }),
+});
+
+const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.04, y: 0.22, width: 0.94, height: 0.56 }),
+  rect: Object.freeze({ x: 0, y: 0, width: 980, height: 595 }),
+});
+
+const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.5, y: 0.28, width: 0.2, height: 0.52 }),
+  rect: Object.freeze({ x: 90, y: 410, width: 280, height: 585 }),
+});
+
 export function radarBroadcastPlacement(
-  _mapKey: string,
-  _layer: string,
+  mapKey: string,
+  layer: string,
 ): RadarCanvasPlacement | null {
-  return null;
+  if (mapKey === 'de_ancient') return ANCIENT_PLACEMENT;
+  if (mapKey === 'de_vertigo') return VERTIGO_PLACEMENT;
+  if (mapKey !== 'de_nuke') return null;
+  return layer === 'lower' ? NUKE_LOWER_PLACEMENT : NUKE_UPPER_PLACEMENT;
 }
 
 export function radarCanvasArtworkRect(viewport: RadarCanvasViewport | null): RadarCanvasRect {
@@ -73,6 +97,7 @@ export function radarPointInsideViewport(
   );
 }
 
+/** Map pixels and projected entities share the same normalized 1024 overview. */
 export function radarCanvasPoint(
   point: NormalizedRadarPoint,
   viewport: RadarCanvasViewport | null = null,
@@ -91,6 +116,7 @@ export function radarCanvasPoint(
   };
 }
 
+/** Radius projections are normalized to the same display transform as points. */
 export function radarCanvasRadius(
   normalizedRadius: number,
   viewport: RadarCanvasViewport | null = null,
