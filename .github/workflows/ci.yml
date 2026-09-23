@@ -73,7 +73,17 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check formatting
-        run: pnpm format:check
+        shell: bash
+        run: |
+          pnpm exec prettier --write \
+            apps/web/src/program/widgets/focused-player/focused-player.css \
+            apps/web/src/program/widgets/player-rails/player-rails.css \
+            apps/web/src/program/widgets/radar/canvas-geometry.ts
+          git diff -- \
+            apps/web/src/program/widgets/focused-player/focused-player.css \
+            apps/web/src/program/widgets/player-rails/player-rails.css \
+            apps/web/src/program/widgets/radar/canvas-geometry.ts
+          exit 1
 
       - name: Lint
         run: pnpm lint
