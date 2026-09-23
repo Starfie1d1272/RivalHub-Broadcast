@@ -59,24 +59,17 @@ function Avatar({
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
 }) {
+  if (player.avatarUrl === null) return null;
   return (
-    <div
-      aria-hidden="true"
-      className={`player-rail__avatar${player.avatarUrl === null ? ' is-placeholder' : ''}`}
-      data-card-part="avatar"
-    >
-      {player.avatarUrl === null ? (
-        <span className="player-rail__avatar-placeholder" />
-      ) : (
-        <img
-          alt=""
-          onError={(event) => {
-            event.currentTarget.style.display = 'none';
-          }}
-          src={player.avatarUrl}
-          data-dead={dead}
-        />
-      )}
+    <div aria-hidden="true" className="player-rail__avatar" data-card-part="avatar">
+      <img
+        alt=""
+        onError={(event) => {
+          event.currentTarget.style.display = 'none';
+        }}
+        src={player.avatarUrl}
+        data-dead={dead}
+      />
     </div>
   );
 }
@@ -222,6 +215,9 @@ function PlayerBody({
 
       {dead ? (
         <div className="player-rail__dead-stats" data-dead-stats="true">
+          <span aria-hidden="true" className="player-rail__death-mark">
+            <StatGlyph kind="deaths" />
+          </span>
           <span className="player-rail__adr">
             <small>ADR</small>
             <b>{displayNumber(player.liveAdr)}</b>
