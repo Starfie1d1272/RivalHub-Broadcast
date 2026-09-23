@@ -142,8 +142,18 @@
 
 .player-rail__card[data-side='CT'] .player-rail__body {
   background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      60deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.035) 48% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.025) 48% 49%,
+      transparent 50%
+    ),
     linear-gradient(
       112deg,
       rgba(106, 168, 255, 0.28) 0%,
@@ -158,8 +168,18 @@
 
 .player-rail__card[data-side='T'] .player-rail__body {
   background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      60deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.035) 48% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.025) 48% 49%,
+      transparent 50%
+    ),
     linear-gradient(
       112deg,
       rgba(242, 189, 79, 0.3) 0%,
@@ -174,8 +194,18 @@
 
 .player-rail--right .player-rail__card[data-side='CT'] .player-rail__body {
   background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      60deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.035) 48% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.025) 48% 49%,
+      transparent 50%
+    ),
     linear-gradient(
       248deg,
       rgba(106, 168, 255, 0.28) 0%,
@@ -190,8 +220,18 @@
 
 .player-rail--right .player-rail__card[data-side='T'] .player-rail__body {
   background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.035) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.025) 48% 49%, transparent 50%),
+    linear-gradient(
+      60deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.035) 48% 49%,
+      transparent 50%
+    ),
+    linear-gradient(
+      120deg,
+      transparent 0 47%,
+      rgba(255, 255, 255, 0.025) 48% 49%,
+      transparent 50%
+    ),
     linear-gradient(
       248deg,
       rgba(242, 189, 79, 0.3) 0%,
