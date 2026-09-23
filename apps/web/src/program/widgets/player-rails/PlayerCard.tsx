@@ -94,7 +94,7 @@ function Equipment({ player }: { readonly player: PlayerCardPresentation }) {
   );
 }
 
-const UTILITY_FAMILIES = ['smoke', 'fire', 'flash', 'he', 'decoy'] as const;
+const UTILITY_FAMILIES = ['smoke', 'flash', 'he', 'fire'] as const;
 
 function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
   const counts = new Map<
@@ -102,29 +102,36 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
     { count: number; asset: PlayerRailAsset | null }
   >();
   for (const utility of player.utility) {
+    if (!UTILITY_FAMILIES.includes(utility.family as (typeof UTILITY_FAMILIES)[number])) continue;
     const current = counts.get(utility.family);
     counts.set(utility.family, {
       count: (current?.count ?? 0) + utility.count,
       asset: current?.asset ?? utility.asset,
     });
   }
+
+  const icons = UTILITY_FAMILIES.flatMap((family) => {
+    const utility = counts.get(family);
+    if (utility === undefined || utility.asset === null) return [];
+    return Array.from({ length: utility.count }, (_, index) => ({
+      asset: utility.asset,
+      family,
+      key: `${family}-${index}`,
+    }));
+  }).slice(0, 4);
+
   return (
-    <div className="player-rail__utility-icons">
-      {UTILITY_FAMILIES.map((family) => {
-        const utility = counts.get(family);
-        if (utility === undefined) return null;
-        return (
-          <span
-            className="player-rail__utility-item"
-            data-utility-family={family}
-            key={family}
-            aria-label={`${family} ${utility.count}`}
-          >
-            <MaskIcon asset={utility.asset} label={family} />
-            <b>{utility.count}</b>
-          </span>
-        );
-      })}
+    <div className="player-rail__utility-icons" data-utility-count={icons.length}>
+      {icons.map((utility) => (
+        <span
+          aria-label={utility.family}
+          className="player-rail__utility-item"
+          data-utility-family={utility.family}
+          key={utility.key}
+        >
+          <MaskIcon asset={utility.asset} label={utility.family} />
+        </span>
+      ))}
     </div>
   );
 }
