@@ -132,9 +132,9 @@
 .player-rail__body {
   position: relative;
   display: grid;
-  width: 404px;
+  width: 408px;
   height: 78px;
-  flex: 0 0 404px;
+  flex: 0 0 408px;
   grid-template-rows: 26px 3px 29px 20px;
   overflow: hidden;
   background: #111923;
@@ -195,8 +195,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
-  width: 264px;
-  flex-basis: 264px;
+  width: 268px;
+  flex-basis: 268px;
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
@@ -307,7 +307,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 40px 88px 36px 84px;
+  grid-template-columns: 40px 90px 36px 86px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
@@ -574,18 +574,18 @@
 .player-rail__endcap {
   position: relative;
   display: flex;
-  width: 36px;
+  width: 32px;
   height: 78px;
-  flex: 0 0 36px;
+  flex: 0 0 32px;
   align-items: center;
   justify-content: center;
-  overflow: visible;
+  overflow: hidden;
   background: #6aa8ff;
-  clip-path: polygon(0 0, 68% 0, 100% 50%, 68% 100%, 0 100%);
+  clip-path: polygon(0 0, 100% 10px, 100% 68px, 0 78px);
 }
 
 .player-rail__endcap--right {
-  clip-path: polygon(32% 0, 100% 0, 100% 100%, 32% 100%, 0 50%);
+  clip-path: polygon(0 10px, 100% 0, 100% 78px, 0 68px);
 }
 
 .player-rail__endcap[data-side='T'] {
