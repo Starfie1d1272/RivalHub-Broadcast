@@ -457,14 +457,15 @@
   display: grid;
   min-width: 0;
   height: 72px;
-  grid-template-rows: 40px 16px 16px;
+  grid-template-rows: 50px 22px;
   overflow: hidden;
   background: #111923;
   color: #f3f6fa;
 }
 
-.match-header__series-map--pending {
-  opacity: 0.58;
+.match-header__series-map--pending,
+.match-header__series-map--not_played {
+  opacity: 0.76;
 }
 
 .match-header__series-map-art {
@@ -479,13 +480,14 @@
   inset: 0;
   background-position: center;
   background-size: cover;
-  opacity: 0.55;
+  opacity: 0.84;
+  transform: scale(1.02);
 }
 
 .match-header__series-map-art::after {
   position: absolute;
   inset: 0;
-  background: rgba(11, 17, 25, 0.42);
+  background: linear-gradient(180deg, rgba(11, 17, 25, 0.12), rgba(11, 17, 25, 0.34));
   content: '';
 }
 
@@ -501,25 +503,35 @@
 
 .match-header__series-map-name {
   grid-row: 2;
-  padding: 0 4px;
+  padding: 0 6px;
   color: #f3f6fa;
-  font-size: 11px;
-  font-weight: 700;
-  line-height: 16px;
+  font-size: 12px;
+  font-weight: 800;
+  line-height: 22px;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
 }
 
 .match-header__series-map-status {
-  grid-row: 3;
-  padding: 0 3px;
-  color: #aab4c0;
+  position: absolute;
+  z-index: 3;
+  right: 5px;
+  bottom: 3px;
+  display: none;
+  color: #f3f6fa;
   font-size: 10px;
   font-weight: 800;
   line-height: 16px;
 }
 
-.match-header__series-map--completed .match-header__series-map-status {
-  color: #f3f6fa;
-  font-size: 13px;
+.match-header__series-map--completed .match-header__series-map-status,
+.match-header__series-map--decider .match-header__series-map-status {
+  display: block;
+}
+
+.match-header__series-map--completed .match-header__series-map-name,
+.match-header__series-map--decider .match-header__series-map-name {
+  padding-right: 42px;
+  text-align: left;
 }
 
 .match-header__series-map--current {
@@ -532,7 +544,7 @@
   right: 0;
   bottom: 0;
   left: 0;
-  height: 2px;
+  height: 3px;
   background: #c8ef78;
   content: '';
 }
@@ -540,36 +552,40 @@
 .match-header__series-map-picker {
   position: absolute;
   z-index: 1;
-  top: 9px;
+  top: 7px;
   left: 6px;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   object-fit: contain;
+  filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
 
 .match-header__series-map-start-side {
   position: absolute;
-  z-index: 1;
-  top: 9px;
+  z-index: 2;
+  top: 7px;
   right: 6px;
   display: block;
-  width: 18px;
-  height: 18px;
-  clip-path: polygon(0 0, 100% 0, 100% 78%, 78% 100%, 0 100%);
+  width: 20px;
+  height: 20px;
+  border: 1px solid currentColor;
+  border-radius: 50%;
+  background: rgba(11, 17, 25, 0.82);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.55);
 }
 
 .match-header__series-map-start-side--CT {
-  background: #6aa8ff;
+  color: #6aa8ff;
 }
 
 .match-header__series-map-start-side--T {
-  background: #f2bd4f;
+  color: #f2bd4f;
 }
 
 .match-header__series-map-start-side::before {
   position: absolute;
   inset: 3px;
-  background: #0b1119;
+  background: currentColor;
   content: '';
   mask-image: var(--match-header-side-logo);
   mask-position: center;
@@ -583,10 +599,6 @@
 
 .match-header__series-map--decider .match-header__series-map-status {
   color: #c8ef78;
-}
-
-.match-header__series-map--not_played {
-  opacity: 0.58;
 }
 
 @keyframes planted-pop {
