@@ -16,21 +16,42 @@ export interface RadarCanvasViewport {
   readonly height: number;
 }
 
-/**
- * Broadcast viewports trim transparent source padding without changing the
- * canonical 1024 overview calibration. Nuke's Valve artwork only occupies
- * roughly half of the source texture vertically; fitting the whole texture
- * makes the on-air map materially smaller than the EWC reference.
- */
-const BROADCAST_VIEWPORTS: Readonly<Record<string, RadarCanvasViewport>> = Object.freeze({
-  de_nuke: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
-});
-
-export function radarBroadcastViewport(mapKey: string): RadarCanvasViewport | null {
-  return BROADCAST_VIEWPORTS[mapKey] ?? null;
+export interface RadarCanvasRect {
+  readonly x: number;
+  readonly y: number;
+  readonly width: number;
+  readonly height: number;
 }
 
-export function radarCanvasArtworkRect(viewport: RadarCanvasViewport | null) {
+export interface RadarCanvasPlacement {
+  readonly viewport: RadarCanvasViewport;
+  readonly rect: RadarCanvasRect;
+}
+
+/**
+ * EWC-style Nuke composition: the canonical upper overview remains the dominant
+ * map while the lower/B-site view is detached underneath it. Both placements
+ * still use the same Valve 1024 overview calibration; only presentation changes.
+ */
+const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
+  rect: Object.freeze({ x: 10, y: 35, width: 980, height: 554 }),
+});
+
+const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
+  viewport: Object.freeze({ x: 0.43, y: 0.28, width: 0.38, height: 0.5 }),
+  rect: Object.freeze({ x: 145, y: 590, width: 304, height: 400 }),
+});
+
+export function radarBroadcastPlacement(
+  mapKey: string,
+  layer: string,
+): RadarCanvasPlacement | null {
+  if (mapKey !== 'de_nuke') return null;
+  return layer === 'lower' ? NUKE_LOWER_PLACEMENT : NUKE_UPPER_PLACEMENT;
+}
+
+export function radarCanvasArtworkRect(viewport: RadarCanvasViewport | null): RadarCanvasRect {
   if (viewport === null) {
     return {
       x: RADAR_CANVAS_GEOMETRY.inset,
@@ -52,10 +73,23 @@ export function radarCanvasArtworkRect(viewport: RadarCanvasViewport | null) {
   };
 }
 
+export function radarPointInsideViewport(
+  point: NormalizedRadarPoint,
+  viewport: RadarCanvasViewport,
+): boolean {
+  return (
+    point.x >= viewport.x &&
+    point.x <= viewport.x + viewport.width &&
+    point.y >= viewport.y &&
+    point.y <= viewport.y + viewport.height
+  );
+}
+
 /** Map pixels and projected entities share the same normalized 1024 overview. */
 export function radarCanvasPoint(
   point: NormalizedRadarPoint,
   viewport: RadarCanvasViewport | null = null,
+  rectOverride: RadarCanvasRect | null = null,
 ) {
   if (viewport === null) {
     return {
@@ -63,7 +97,7 @@ export function radarCanvasPoint(
       y: RADAR_CANVAS_GEOMETRY.inset + point.y * RADAR_CANVAS_GEOMETRY.artworkSize,
     };
   }
-  const rect = radarCanvasArtworkRect(viewport);
+  const rect = rectOverride ?? radarCanvasArtworkRect(viewport);
   return {
     x: rect.x + ((point.x - viewport.x) / viewport.width) * rect.width,
     y: rect.y + ((point.y - viewport.y) / viewport.height) * rect.height,
@@ -74,8 +108,9 @@ export function radarCanvasPoint(
 export function radarCanvasRadius(
   normalizedRadius: number,
   viewport: RadarCanvasViewport | null = null,
+  rectOverride: RadarCanvasRect | null = null,
 ): number {
   if (viewport === null) return normalizedRadius * RADAR_CANVAS_GEOMETRY.artworkSize;
-  const rect = radarCanvasArtworkRect(viewport);
+  const rect = rectOverride ?? radarCanvasArtworkRect(viewport);
   return normalizedRadius * (rect.width / viewport.width);
 }
