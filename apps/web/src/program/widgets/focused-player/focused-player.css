@@ -370,9 +370,24 @@
   opacity: 0.6;
 }
 
+.focused-player[data-dead='true'] .focused-player__media.is-observer-tile {
+  background: #252c34;
+}
+
 .focused-player[data-dead='true'] .focused-player__observer-tile-number {
-  height: 134px;
-  line-height: 134px;
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 34px;
+  height: 34px;
+  background: #6aa8ff;
+  color: #0b1119;
+  font-size: 13px;
+  line-height: 34px;
+}
+
+.focused-player[data-dead='true'][data-side='T'] .focused-player__observer-tile-number {
+  background: #f2bd4f;
 }
 
 .focused-player[data-dead='true'] .focused-player__vitals {
