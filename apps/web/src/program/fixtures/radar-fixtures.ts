@@ -36,16 +36,16 @@ export const NUKE_UPPER_WORLD_ANCHORS = [
 ] as const;
 
 export const NUKE_LOWER_WORLD_ANCHORS = [
-  { x: -2333, y: -998 },
-  { x: -1703, y: -1138 },
-  { x: -1003, y: -1313 },
-  { x: -478, y: -718 },
-  { x: 47, y: -2013 },
-  { x: 467, y: -1173 },
-  { x: 1712, y: -2013 },
-  { x: 1692, y: -893 },
-  { x: 2377, y: -683 },
-  { x: 3127, y: -858 },
+  { x: 131, y: -554 },
+  { x: 489, y: -697 },
+  { x: 848, y: -840 },
+  { x: 561, y: -1270 },
+  { x: 919, y: -1414 },
+  { x: 1206, y: -1199 },
+  { x: 776, y: -1772 },
+  { x: 1350, y: -1701 },
+  { x: 274, y: -1987 },
+  { x: 1565, y: -2059 },
 ] as const;
 
 export function realRadarSnapshot(): RadarSnapshot {
