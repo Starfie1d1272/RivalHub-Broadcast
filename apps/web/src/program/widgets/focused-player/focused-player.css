@@ -66,8 +66,8 @@
   min-width: 0;
   overflow: hidden;
   color: #f3f6fa;
-  font-size: 21px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 700;
   line-height: 24px;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -85,22 +85,22 @@
   display: flex;
   align-items: baseline;
   gap: 2px;
-  font-size: 12px;
-  line-height: 15px;
+  font-size: 10px;
+  line-height: 14px;
 }
 
 .focused-player__metrics small {
   color: #aab4c0;
-  font-size: 10px;
+  font-size: 8px;
   font-weight: 800;
   line-height: 12px;
 }
 
 .focused-player__metrics b {
   color: #f3f6fa;
-  font-size: 12px;
+  font-size: 10px;
   font-weight: 700;
-  line-height: 15px;
+  line-height: 14px;
 }
 
 .focused-player__action {
@@ -109,14 +109,14 @@
   height: 82px;
   align-items: center;
   padding: 0 12px;
-  grid-template-columns: 104px 8px 126px 8px 90px;
+  grid-template-columns: 64px 8px 148px 8px 108px;
 }
 
 .focused-player__media {
   position: relative;
   display: flex;
-  width: 104px;
-  height: 82px;
+  width: 64px;
+  height: 64px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
@@ -127,8 +127,8 @@
 
 .focused-player__media img {
   display: block;
-  width: 104px;
-  height: 82px;
+  width: 64px;
+  height: 64px;
   object-fit: cover;
   object-position: center 34%;
 }
@@ -142,8 +142,8 @@
 }
 
 .focused-player__observer-tile-number {
-  width: 104px;
-  height: 82px;
+  width: 64px;
+  height: 64px;
   color: #0b1119;
   font-size: 20px;
   font-weight: 800;
@@ -156,8 +156,8 @@
   right: 0;
   bottom: 0;
   display: block;
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   background: #6aa8ff;
   color: #0b1119;
   font-size: 10px;
@@ -177,8 +177,8 @@
 
 .focused-player__active {
   display: flex;
-  width: 126px;
-  height: 82px;
+  width: 148px;
+  height: 64px;
   align-items: center;
   justify-content: center;
   grid-column: 3;
@@ -200,9 +200,9 @@
 }
 
 .focused-player__active .focused-player__icon {
-  width: 122px;
-  max-height: 58px;
-  height: 58px;
+  width: 140px;
+  max-height: 34px;
+  height: 34px;
 }
 
 .focused-player__action-gap--b {
@@ -212,8 +212,8 @@
 
 .focused-player__ammo {
   display: flex;
-  width: 90px;
-  height: 82px;
+  width: 108px;
+  height: 64px;
   flex-direction: column;
   align-items: flex-end;
   justify-content: center;
@@ -224,9 +224,9 @@
 
 .focused-player__ammo > strong {
   color: #f3f6fa;
-  font-size: 40px;
+  font-size: 22px;
   font-weight: 800;
-  line-height: 40px;
+  line-height: 26px;
 }
 
 .focused-player__clip-track {
@@ -285,9 +285,9 @@
 
 .focused-player__hp {
   color: #f3f6fa;
-  font-size: 38px;
+  font-size: 24px;
   font-weight: 800;
-  line-height: 38px;
+  line-height: 28px;
 }
 
 .focused-player__hp small {
@@ -324,7 +324,7 @@
 
 .focused-player__health-track {
   width: 100%;
-  height: 5px;
+  height: 4px;
   overflow: hidden;
   background: rgba(243, 246, 250, 0.12);
 }
