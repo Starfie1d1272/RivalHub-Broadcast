@@ -73,7 +73,11 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Check formatting
-        run: pnpm format:check
+        shell: bash
+        run: |
+          pnpm exec prettier --write apps/web/src/program/widgets/radar/Radar.tsx
+          git diff -- apps/web/src/program/widgets/radar/Radar.tsx
+          exit 1
 
       - name: Lint
         run: pnpm lint
