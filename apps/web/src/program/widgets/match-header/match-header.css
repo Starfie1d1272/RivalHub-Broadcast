@@ -508,14 +508,13 @@
 
 .match-header__series-map-name,
 .match-header__series-map-status {
-  grid-row: 3;
-  position: static;
-  z-index: 3;
   display: block;
-  color: #aab4c0;
-  font-size: 10px;
-  font-weight: 800;
-  line-height: 14px;
+  min-width: 0;
+  overflow: hidden;
+  padding-inline: 4px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .match-header__series-map-name {
@@ -529,15 +528,13 @@
 }
 
 .match-header__series-map-status {
-  position: absolute;
+  grid-row: 3;
+  position: static;
   z-index: 3;
-  right: 5px;
-  bottom: 3px;
-  display: none;
-  color: #f3f6fa;
+  color: #aab4c0;
   font-size: 10px;
   font-weight: 800;
-  line-height: 16px;
+  line-height: 14px;
 }
 
 .match-header__series-map--completed .match-header__series-map-status {
@@ -545,7 +542,9 @@
   font-size: 11px;
 }
 
-
+.match-header__series-map--decider .match-header__series-map-status {
+  color: #c8ef78;
+}
 
 .match-header__series-map--current {
   position: relative;
