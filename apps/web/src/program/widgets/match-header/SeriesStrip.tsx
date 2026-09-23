@@ -33,8 +33,9 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
           return (
             <div
               aria-label={`${map.mapName} ${statusText}`}
-              className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}`}
+              className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}${map.pickOutcome === null ? '' : ` match-header__series-map--pick-${map.pickOutcome}`}`}
               data-map-order={map.mapOrder}
+              data-pick-outcome={map.pickOutcome ?? 'neutral'}
               data-map-status={map.status}
               key={map.mapOrder}
               role="listitem"
