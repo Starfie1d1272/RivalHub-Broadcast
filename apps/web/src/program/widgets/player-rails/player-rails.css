@@ -457,12 +457,19 @@
   height: 29px;
   align-items: center;
   padding: 0 8px;
+  grid-template-areas: 'mark adr damage';
   grid-template-columns: 28px minmax(0, 1fr) minmax(0, 1fr);
   column-gap: 8px;
 }
 
+.player-rail--right .player-rail__dead-stats {
+  grid-template-areas: 'damage adr mark';
+  text-align: right;
+}
+
 .player-rail__death-mark {
   display: flex;
+  grid-area: mark;
   width: 24px;
   height: 24px;
   align-items: center;
@@ -484,6 +491,14 @@
   grid-template-columns: auto 1fr;
   align-items: baseline;
   gap: 5px;
+}
+
+.player-rail__adr {
+  grid-area: adr;
+}
+
+.player-rail__damage {
+  grid-area: damage;
 }
 
 .player-rail__dead-stats small {
