@@ -205,7 +205,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         'drop-shadow(0 3px 0 rgba(243,246,250,.72)) ' +
         'drop-shadow(0 -3px 0 rgba(243,246,250,.72))';
       if (singleImage) {
-        ctx.globalAlpha = 1;
+        ctx.globalAlpha = 0.84;
         drawArtwork(singleImage, placementFor('single'));
         ctx.globalAlpha = 1;
       } else if (geometry && multiLayer) {
@@ -214,7 +214,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         for (const floor of floors) {
           const image = floor === 'upper' ? upperImage : lowerImage;
           if (!image) continue;
-          ctx.globalAlpha = floor === model.layer ? 0.98 : model.layer === 'unknown' ? 0.86 : 0.72;
+          ctx.globalAlpha = floor === model.layer ? 0.86 : model.layer === 'unknown' ? 0.72 : 0.5;
           drawArtwork(image, detachedFloors ? placementFor(floor) : null);
         }
         ctx.globalAlpha = 1;
