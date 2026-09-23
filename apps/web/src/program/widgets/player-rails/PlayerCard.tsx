@@ -212,6 +212,9 @@ function PlayerBody({
 
       {dead ? (
         <div className="player-rail__dead-stats" data-dead-stats="true">
+          <span aria-hidden="true" className="player-rail__death-watermark">
+            <StatGlyph kind="deaths" />
+          </span>
           <span className="player-rail__adr">
             <small>ADR</small>
             <b>{displayNumber(player.liveAdr)}</b>
