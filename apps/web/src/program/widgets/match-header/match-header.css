@@ -68,8 +68,8 @@
 
 .match-header__team-logo {
   display: block;
-  width: 44px;
-  height: 44px;
+  width: 48px;
+  height: 48px;
   object-fit: contain;
 }
 
@@ -100,9 +100,9 @@
 
 .match-header__map-score {
   color: #0b1119;
-  font-size: 48px;
+  font-size: 56px;
   font-weight: 800;
-  line-height: 50px;
+  line-height: 56px;
   font-variant-numeric: tabular-nums;
 }
 
@@ -148,7 +148,7 @@
   align-items: center;
   justify-content: center;
   margin-top: 6px;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 800;
   line-height: 14px;
 }
@@ -164,9 +164,9 @@
 .match-header__clock-value {
   max-width: 124px;
   overflow: hidden;
-  font-size: 30px;
+  font-size: 36px;
   font-weight: 800;
-  line-height: 34px;
+  line-height: 38px;
   text-overflow: ellipsis;
   white-space: nowrap;
   font-variant-numeric: tabular-nums;
@@ -187,9 +187,9 @@
 }
 
 .match-header__round-over strong {
-  font-size: 22px;
+  font-size: 25px;
   font-weight: 800;
-  line-height: 23px;
+  line-height: 26px;
 }
 
 .match-header__tech-pause {
@@ -373,7 +373,7 @@
   height: 48px;
   background: rgba(11, 17, 25, 0.92);
   border-bottom: 3px solid #aab4c0;
-  font-size: 22px;
+  font-size: 28px;
   font-weight: 800;
   line-height: 45px;
   font-variant-numeric: tabular-nums;
@@ -390,7 +390,7 @@
 .match-header__alive-matchup span {
   background: rgba(11, 17, 25, 0.82);
   color: #f3f6fa;
-  font-size: 10px;
+  font-size: 12px;
   font-weight: 900;
   line-height: 48px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.7);
@@ -522,7 +522,7 @@
   grid-row: 2;
   padding: 0 6px;
   color: #f3f6fa;
-  font-size: 14px;
+  font-size: 16px;
   font-weight: 800;
   line-height: 22px;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.55);
@@ -572,8 +572,8 @@
   z-index: 1;
   top: 4px;
   left: 7px;
-  width: 30px;
-  height: 30px;
+  width: 32px;
+  height: 32px;
   object-fit: contain;
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.5));
 }
@@ -584,8 +584,8 @@
   top: 5px;
   right: 6px;
   display: block;
-  width: 22px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   border: 1px solid currentColor;
   border-radius: 50%;
   background: rgba(11, 17, 25, 0.82);
