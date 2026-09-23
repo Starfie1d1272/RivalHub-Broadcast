@@ -529,7 +529,7 @@
 
 .player-rail__money,
 .player-rail__spent {
-  color: #f3f6fa;
+  color: #c8ef78;
   font-size: 12px;
   font-weight: 800;
   line-height: 16px;
@@ -553,9 +553,20 @@
   white-space: nowrap;
 }
 
-.player-rail__kd i {
-  color: #aab4c0;
-  font-style: normal;
+.player-rail__stat-glyph {
+  width: 11px;
+  height: 11px;
+  flex: 0 0 11px;
+  fill: none;
+  stroke: #f3f6fa;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+}
+
+.player-rail__stat-glyph + span {
+  min-width: 10px;
+  text-align: left;
 }
 
 .player-rail__endcap {
