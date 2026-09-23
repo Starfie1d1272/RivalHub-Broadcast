@@ -123,9 +123,9 @@ async function assertHudGeometry(page: Page) {
   expect(mapRows.length).toBeGreaterThan(0);
   for (const map of mapRows) {
     expect(map.height).toBe(72);
-    expect(map.art).toEqual({ x: map.x, y: map.y, width: map.width, height: 40 });
-    expect(map.name).toEqual({ x: map.x, y: map.y + 40, height: 16 });
-    expect(map.status).toEqual({ x: map.x, y: map.y + 56, height: 16 });
+    expect(map.art).toEqual({ x: map.x, y: map.y, width: map.width, height: 44 });
+    expect(map.name).toEqual({ x: map.x, y: map.y + 44, height: 14 });
+    expect(map.status).toEqual({ x: map.x, y: map.y + 58, height: 14 });
   }
 
   for (const side of ['CT', 'T'] as const) {
@@ -157,12 +157,12 @@ async function assertHudGeometry(page: Page) {
       return { top: rect.top, height: rect.height };
     });
   });
-  expect(bodyRows.map(({ height }) => height)).toEqual([26, 3, 29, 20]);
+  expect(bodyRows.map(({ height }) => height)).toEqual([32, 3, 25, 18]);
   expect(bodyRows.map(({ top }) => top)).toEqual([
     bodyRows[0]!.top,
-    bodyRows[0]!.top + 26,
-    bodyRows[0]!.top + 29,
-    bodyRows[0]!.top + 58,
+    bodyRows[0]!.top + 32,
+    bodyRows[0]!.top + 35,
+    bodyRows[0]!.top + 60,
   ]);
 
   await assertBox(page.locator('.focused-player__identity'), {
@@ -245,37 +245,37 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       await assertBox(left.locator('[data-card-part="avatar"]'), {
         x: 0,
         y: 600,
-        width: 78,
+        width: 140,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="body"]'), {
-        x: 78,
+        x: 140,
         y: 600,
-        width: 334,
+        width: 300,
         height: 78,
       });
       await assertBox(left.locator('[data-card-part="observer-endcap"]'), {
         x: 412,
-        y: 600,
-        width: 28,
-        height: 78,
+        y: 604,
+        width: 24,
+        height: 24,
       });
       await assertBox(right.locator('[data-card-part="observer-endcap"]'), {
-        x: 1480,
-        y: 600,
-        width: 28,
-        height: 78,
+        x: 1484,
+        y: 604,
+        width: 24,
+        height: 24,
       });
       await assertBox(right.locator('[data-card-part="body"]'), {
-        x: 1508,
+        x: 1480,
         y: 600,
-        width: 334,
+        width: 300,
         height: 78,
       });
       await assertBox(right.locator('[data-card-part="avatar"]'), {
-        x: 1842,
+        x: 1780,
         y: 600,
-        width: 78,
+        width: 140,
         height: 78,
       });
     }
@@ -288,28 +288,28 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
           .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="body"]'),
-        { x: 0, y: 600, width: 412, height: 78 },
+        { x: 0, y: 600, width: 440, height: 78 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-ct-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="observer-endcap"]'),
-        { x: 412, y: 600, width: 28, height: 78 },
+        { x: 412, y: 604, width: 24, height: 24 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="observer-endcap"]'),
-        { x: 1480, y: 600, width: 28, height: 78 },
+        { x: 1484, y: 604, width: 24, height: 24 },
       );
       await assertBox(
         page
           .locator('[data-hud-widget="team-t-rail"] [data-player-card]')
           .first()
           .locator('[data-card-part="body"]'),
-        { x: 1508, y: 600, width: 412, height: 78 },
+        { x: 1480, y: 600, width: 440, height: 78 },
       );
     }
     if (fixtureId === 'default-freezetime') {
@@ -329,7 +329,7 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
         await page
           .locator('.player-rail__card.is-observed .player-rail__endcap')
           .first()
-          .evaluate((node) => getComputedStyle(node, '::before').backgroundColor),
+          .evaluate((node) => getComputedStyle(node).backgroundColor),
       ).toBe('rgb(243, 246, 250)');
     }
     if (fixtureId === 'default-dead') {
