@@ -182,13 +182,13 @@ async function assertHudGeometry(page: Page) {
     await assertBox(page.locator('.focused-player__media'), {
       x: 792,
       y: 918,
-      width: 104,
+      width: 82,
       height: 82,
     });
     await assertBox(page.locator('.focused-player__active'), {
-      x: 904,
+      x: 882,
       y: 918,
-      width: 126,
+      width: 148,
       height: 82,
     });
     await assertBox(page.locator('.focused-player__ammo'), {
@@ -212,14 +212,14 @@ async function assertHudGeometry(page: Page) {
     });
     await assertBox(page.locator('.focused-player__media'), {
       x: 792,
-      y: 918,
-      width: 104,
-      height: 134,
+      y: 944,
+      width: 82,
+      height: 82,
     });
-    await assertBox(page.locator('.focused-player__dead'), {
-      x: 904,
+    await assertBox(page.locator('.focused-player__dead-state'), {
+      x: 882,
       y: 918,
-      width: 224,
+      width: 246,
       height: 134,
     });
     await expect(page.locator('.focused-player__vitals')).toBeHidden();
