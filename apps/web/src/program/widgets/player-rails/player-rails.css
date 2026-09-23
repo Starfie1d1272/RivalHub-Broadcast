@@ -99,16 +99,16 @@
 
 .player-rail__avatar {
   position: relative;
-  width: 140px;
+  width: 112px;
   height: 78px;
-  flex: 0 0 140px;
+  flex: 0 0 112px;
   overflow: hidden;
   background: #0b1119;
 }
 
 .player-rail__avatar img {
   display: block;
-  width: 140px;
+  width: 112px;
   height: 78px;
   object-fit: cover;
   object-position: center 36%;
@@ -195,8 +195,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
-  width: 272px;
-  flex-basis: 272px;
+  width: 300px;
+  flex-basis: 300px;
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
@@ -307,7 +307,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 54px 86px 50px minmax(0, 1fr);
+  grid-template-columns: 44px 96px 48px minmax(0, 1fr);
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
@@ -350,9 +350,9 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__equipment-slot {
-  width: 14px;
+  width: 12px;
   height: 16px;
-  flex-basis: 14px;
+  flex-basis: 12px;
 }
 
 .player-rail__utility-icons {
@@ -397,8 +397,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__icon.is-primary {
-  width: 84px;
-  max-width: 84px;
+  width: 92px;
+  max-width: 92px;
   height: 24px;
 }
 
@@ -425,8 +425,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item {
-  width: 20px;
-  flex-basis: 20px;
+  width: 18px;
+  flex-basis: 18px;
 }
 
 .player-rail__utility-item .player-rail__icon {
@@ -435,7 +435,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__utility-item .player-rail__icon {
-  width: 16px;
+  width: 15px;
   height: 15px;
 }
 
