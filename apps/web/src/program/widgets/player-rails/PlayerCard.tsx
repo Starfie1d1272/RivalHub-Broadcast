@@ -210,7 +210,7 @@ function PlayerBody({
 
       {dead ? (
         <div className="player-rail__dead-stats" data-dead-stats="true">
-          <span aria-hidden="true" className="player-rail__death-watermark">
+          <span aria-hidden="true" className="player-rail__death-mark">
             <StatGlyph kind="deaths" />
           </span>
           <span className="player-rail__adr">
