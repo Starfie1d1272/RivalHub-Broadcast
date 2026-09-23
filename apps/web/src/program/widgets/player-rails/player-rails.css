@@ -24,7 +24,7 @@
   height: 28px;
   flex: 0 0 28px;
   align-items: center;
-  padding: 0 10px;
+  padding: 0 8px;
   background: linear-gradient(90deg, rgba(11, 17, 25, 0.72), rgba(11, 17, 25, 0.16));
   border-bottom: 0;
 }
@@ -47,10 +47,10 @@
   min-width: 0;
   overflow: hidden;
   color: rgba(243, 246, 250, 0.86);
-  font-size: 15px;
-  font-weight: 700;
-  letter-spacing: 0;
-  line-height: 18px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: 0.005em;
+  line-height: 20px;
   text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
@@ -99,16 +99,16 @@
 
 .player-rail__avatar {
   position: relative;
-  width: 78px;
+  width: 140px;
   height: 78px;
-  flex: 0 0 78px;
+  flex: 0 0 140px;
   overflow: hidden;
   background: #0b1119;
 }
 
 .player-rail__avatar img {
   display: block;
-  width: 78px;
+  width: 140px;
   height: 78px;
   object-fit: cover;
   object-position: center 36%;
@@ -132,10 +132,10 @@
 .player-rail__body {
   position: relative;
   display: grid;
-  width: 334px;
+  width: 412px;
   height: 78px;
-  flex: 0 0 334px;
-  grid-template-rows: 26px 3px 29px 20px;
+  flex: 0 0 412px;
+  grid-template-rows: 32px 3px 25px 18px;
   overflow: hidden;
   background: #111923;
 }
@@ -194,7 +194,10 @@
   background: linear-gradient(90deg, rgba(67, 74, 82, 0.88), rgba(21, 28, 36, 0.96));
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__body {
+  width: 272px;
+  flex-basis: 272px;
+}
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
   box-shadow:
@@ -211,7 +214,7 @@
 .player-rail__identity {
   display: flex;
   min-width: 0;
-  height: 26px;
+  height: 32px;
   align-items: center;
   gap: 7px;
   padding: 0 8px;
@@ -222,9 +225,9 @@
   flex: 1 1 auto;
   overflow: hidden;
   color: #f3f6fa;
-  font-size: 15px;
-  font-weight: 700;
-  line-height: 18px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 21px;
   text-overflow: ellipsis;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
   white-space: nowrap;
@@ -233,9 +236,9 @@
 .player-rail__health-value {
   flex: 0 0 auto;
   color: #f3f6fa;
-  font-size: 22px;
+  font-size: 32px;
   font-weight: 800;
-  line-height: 22px;
+  line-height: 32px;
   letter-spacing: -0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
@@ -247,24 +250,24 @@
 .player-rail__dead-label {
   flex: 0 0 auto;
   color: #aab4c0;
-  font-size: 11px;
+  font-size: 14px;
   font-weight: 800;
-  letter-spacing: 0.06em;
-  line-height: 14px;
+  letter-spacing: 0.05em;
+  line-height: 16px;
 }
 
 .player-rail__round-kills {
   display: inline-flex;
   width: 40px;
-  height: 18px;
+  height: 20px;
   flex: 0 0 40px;
   align-items: center;
   justify-content: center;
   gap: 3px;
   color: #f3f6fa;
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 800;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 
@@ -300,23 +303,25 @@
 .player-rail__combat {
   display: grid;
   width: 100%;
-  height: 29px;
+  height: 25px;
   align-items: center;
   padding: 0 8px;
-  grid-template-areas: 'weapon gap-a equipment gap-b utility';
-  grid-template-columns: 88px 4px 82px 4px 140px;
+  grid-template-areas: 'stats weapon equipment utility';
+  grid-template-columns: 58px 108px 72px minmax(0, 1fr);
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__combat {
+  grid-template-columns: 36px 92px 36px 92px;
+}
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
-  grid-template-areas: 'utility gap-b equipment gap-a weapon';
+  grid-template-areas: 'utility equipment weapon stats';
 }
 
 .player-rail__weapons {
   display: flex;
   width: 100%;
-  height: 29px;
+  height: 25px;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -327,15 +332,17 @@
 .player-rail__equipment {
   display: flex;
   width: 100%;
-  height: 29px;
+  height: 25px;
   align-items: center;
-  justify-content: space-between;
-  gap: 5px;
+  justify-content: center;
+  gap: 2px;
   grid-area: equipment;
   overflow: hidden;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__equipment {
+  gap: 0;
+}
 
 .player-rail__equipment-slot {
   display: flex;
@@ -346,12 +353,16 @@
   justify-content: center;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__equipment-slot {
+  width: 9px;
+  height: 15px;
+  flex-basis: 9px;
+}
 
 .player-rail__utility-icons {
   display: flex;
   width: 100%;
-  height: 29px;
+  height: 25px;
   align-items: center;
   justify-content: flex-start;
   gap: 3px;
@@ -363,7 +374,9 @@
   justify-content: flex-end;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__utility-icons {
+  gap: 2px;
+}
 
 .player-rail__icon {
   display: block;
@@ -384,10 +397,14 @@
 .player-rail__icon.is-primary {
   width: 108px;
   max-width: 108px;
-  height: 29px;
+  height: 25px;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__icon.is-primary {
+  width: 88px;
+  max-width: 88px;
+  height: 24px;
+}
 
 .player-rail__combat[data-phase='freezetime'][data-secondary='true'] .player-rail__icon.is-primary {
   width: 58px;
@@ -411,14 +428,20 @@
   justify-content: center;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__utility-item {
+  width: 16px;
+  flex-basis: 16px;
+}
 
 .player-rail__utility-item .player-rail__icon {
   width: 20px;
   height: 18px;
 }
 
-
+.player-rail__card[data-avatar='true'] .player-rail__utility-item .player-rail__icon {
+  width: 14px;
+  height: 14px;
+}
 
 .player-rail__utility-item b {
   position: absolute;
@@ -433,26 +456,48 @@
 }
 
 .player-rail__dead-stats {
+  position: relative;
   display: flex;
   width: 100%;
-  height: 29px;
+  height: 25px;
   align-items: center;
   justify-content: center;
-  gap: 20px;
+  gap: 22px;
   padding: 0 8px;
 }
 
+.player-rail--right .player-rail__dead-stats {
+  text-align: right;
+}
 
+.player-rail__death-mark {
+  position: absolute;
+  top: 50%;
+  right: 14px;
+  display: flex;
+  width: 46px;
+  height: 46px;
+  align-items: center;
+  justify-content: center;
+  opacity: 0.1;
+  transform: translateY(-50%);
+}
 
-
+.player-rail__death-mark .player-rail__stat-glyph {
+  width: 46px;
+  height: 46px;
+  stroke: #f3f6fa;
+  stroke-width: 1.2;
+}
 
 .player-rail__adr,
 .player-rail__damage {
   display: grid;
-  min-width: 0;
-  grid-template-columns: auto 1fr;
+  min-width: 64px;
+  grid-template-columns: auto auto;
   align-items: baseline;
-  gap: 5px;
+  justify-content: center;
+  gap: 4px;
 }
 
 .player-rail__adr {
@@ -465,29 +510,29 @@
 
 .player-rail__dead-stats small {
   color: #aab4c0;
-  font-size: 9px;
+  font-size: 10px;
   font-weight: 800;
-  line-height: 11px;
+  line-height: 12px;
 }
 
 .player-rail__adr b {
   color: #d4dae1;
-  font-size: 13px;
+  font-size: 15px;
   font-weight: 800;
-  line-height: 15px;
+  line-height: 16px;
 }
 
 .player-rail__damage b {
   color: #f3f6fa;
-  font-size: 16px;
+  font-size: 19px;
   font-weight: 900;
-  line-height: 18px;
+  line-height: 20px;
 }
 
 .player-rail__bottom {
   display: flex;
   width: 100%;
-  height: 20px;
+  height: 18px;
   align-items: center;
   gap: 6px;
   padding: 0 8px;
@@ -496,9 +541,9 @@
 .player-rail__money,
 .player-rail__spent {
   color: #c8ef78;
-  font-size: 12px;
-  font-weight: 700;
-  line-height: 16px;
+  font-size: 18px;
+  font-weight: 800;
+  line-height: 18px;
   opacity: 0.94;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
@@ -514,8 +559,8 @@
   gap: 3px;
   margin-left: auto;
   color: #f3f6fa;
-  font-size: 11px;
-  font-weight: 700;
+  font-size: 15px;
+  font-weight: 800;
   line-height: 16px;
   opacity: 0.86;
   white-space: nowrap;
@@ -558,11 +603,11 @@
   justify-content: center;
   overflow: hidden;
   background: #6aa8ff;
-  clip-path: polygon(0 0, 68% 0, 100% 50%, 68% 100%, 0 100%);
+  clip-path: polygon(0 0, 66% 0, 100% 50%, 66% 100%, 0 100%);
 }
 
 .player-rail__endcap--right {
-  clip-path: polygon(32% 0, 100% 0, 100% 100%, 32% 100%, 0 50%);
+  clip-path: polygon(34% 0, 100% 0, 100% 100%, 34% 100%, 0 50%);
 }
 
 .player-rail__endcap[data-side='T'] {
@@ -583,7 +628,13 @@
   text-align: center;
 }
 
+.player-rail__card[data-physical-side='left'] .player-rail__body {
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 22px, 100% 56px, calc(100% - 18px) 78px, 0 78px);
+}
 
+.player-rail__card[data-physical-side='right'] .player-rail__body {
+  clip-path: polygon(18px 0, 100% 0, 100% 78px, 18px 78px, 0 56px, 0 22px);
+}
 
 .player-rail__card--dead .player-rail__endcap {
   opacity: 0.18;
@@ -695,18 +746,4 @@
 .player-rail--right .player-rail__kd {
   margin-right: auto;
   margin-left: 0;
-}
-
-
-.player-rail__avatar.is-placeholder {
-  background:
-    radial-gradient(circle at 50% 31%, rgba(170, 180, 192, 0.34) 0 12px, transparent 13px),
-    radial-gradient(ellipse at 50% 88%, rgba(170, 180, 192, 0.26) 0 28px, transparent 29px),
-    #0b1119;
-}
-
-.player-rail__avatar-placeholder {
-  display: block;
-  width: 100%;
-  height: 100%;
 }
