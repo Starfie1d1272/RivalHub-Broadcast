@@ -25,16 +25,13 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
           const decider = map.selectionText === 'DECIDER';
           const mapAsset = getMapThumbnail(map.mapKey);
           const sideLogo = map.startSide === null ? null : getSideLogo(map.startSide);
-          const statusText = decider
-            ? 'DECIDER'
-            : map.status === 'completed'
-              ? map.statusText
-              : map.statusText || 'PENDING';
+          const statusText =
+            decider ? 'DECIDER' : map.status === 'completed' ? map.statusText : '';
           const outcomeClass =
             map.pickOutcome === null ? '' : ` match-header__series-map--pick-${map.pickOutcome}`;
           return (
             <div
-              aria-label={`${map.mapName} ${statusText}`}
+              aria-label={statusText ? `${map.mapName} ${statusText}` : map.mapName}
               className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}${outcomeClass}`}
               data-map-order={map.mapOrder}
               data-pick-outcome={map.pickOutcome ?? 'neutral'}
