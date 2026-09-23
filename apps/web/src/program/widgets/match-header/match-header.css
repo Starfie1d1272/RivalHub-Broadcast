@@ -542,6 +542,16 @@
   font-size: 11px;
 }
 
+.match-header__series-map--completed.match-header__series-map--pick-win
+  .match-header__series-map-status {
+  color: #c8ef78;
+}
+
+.match-header__series-map--completed.match-header__series-map--pick-loss
+  .match-header__series-map-status {
+  color: #f06f6f;
+}
+
 .match-header__series-map--decider .match-header__series-map-status {
   color: #c8ef78;
 }
@@ -634,7 +644,6 @@
     opacity: 1;
   }
 }
-
 
 .match-header__series-maps[data-series-map-count='5'] .match-header__series-map-name {
   padding-inline: 2px;
