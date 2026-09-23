@@ -17,10 +17,11 @@ import {
 } from './presentation';
 import {
   RADAR_CANVAS_GEOMETRY,
-  radarBroadcastViewport,
-  radarCanvasArtworkRect,
+  radarBroadcastPlacement,
   radarCanvasPoint,
   radarCanvasRadius,
+  radarPointInsideViewport,
+  type RadarCanvasPlacement,
 } from './canvas-geometry';
 import './radar.css';
 
@@ -121,35 +122,64 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'lower') : null;
       const upperImage = upperAsset ? imageFor(upperAsset.outputPath) : null;
       const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
-      const broadcastViewport = geometry === null ? null : radarBroadcastViewport(geometry.mapKey);
-      const artworkRect = radarCanvasArtworkRect(broadcastViewport);
-      const pointAt = (point: { x: number; y: number }) =>
-        radarCanvasPoint(point, broadcastViewport);
-      const drawArtwork = (image: HTMLImageElement) => {
-        if (broadcastViewport === null) {
-          drawArtwork(image);
-          return;
-        }
-        ctx.drawImage(
-          image,
-          broadcastViewport.x * image.naturalWidth,
-          broadcastViewport.y * image.naturalHeight,
-          broadcastViewport.width * image.naturalWidth,
-          broadcastViewport.height * image.naturalHeight,
-          artworkRect.x,
-          artworkRect.y,
-          artworkRect.width,
-          artworkRect.height,
+      const placementFor = (layer: string): RadarCanvasPlacement | null =>
+        geometry === null ? null : radarBroadcastPlacement(geometry.mapKey, layer);
+      const pointAt = (
+        point: { x: number; y: number; layer?: string },
+        layerHint?: string,
+      ) => {
+        const placement = placementFor(layerHint ?? point.layer ?? model.layer);
+        if (placement !== null && !radarPointInsideViewport(point, placement.viewport)) return null;
+        return radarCanvasPoint(
+          point,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
         );
       };
+      const radiusAt = (normalizedRadius: number, layer: string) => {
+        const placement = placementFor(layer);
+        return radarCanvasRadius(
+          normalizedRadius,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+      };
+      const drawArtwork = (
+        image: HTMLImageElement,
+        placement: RadarCanvasPlacement | null = null,
+      ) => {
+        if (placement === null) {
+          ctx.drawImage(
+            image,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+          );
+          return;
+        }
+        const { viewport, rect } = placement;
+        ctx.drawImage(
+          image,
+          viewport.x * image.naturalWidth,
+          viewport.y * image.naturalHeight,
+          viewport.width * image.naturalWidth,
+          viewport.height * image.naturalHeight,
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+        );
+      };
+      const detachedFloors = geometry?.mapKey === 'de_nuke' && multiLayer;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
       element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
-      element.dataset.radarCompositor = broadcastViewport
-        ? 'broadcast-viewport-shared-calibration'
+      element.dataset.radarCompositor = detachedFloors
+        ? 'ewc-detached-floor-shared-calibration'
         : multiLayer
           ? 'shared-calibration'
           : 'single-calibration';
@@ -185,14 +215,8 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         for (const floor of floors) {
           const image = floor === 'upper' ? upperImage : lowerImage;
           if (!image) continue;
-          ctx.globalAlpha = floor === model.layer ? 0.88 : model.layer === 'unknown' ? 0.76 : 0.62;
-          ctx.drawImage(
-            image,
-            RADAR_CANVAS_GEOMETRY.inset,
-            RADAR_CANVAS_GEOMETRY.inset,
-            RADAR_CANVAS_GEOMETRY.artworkSize,
-            RADAR_CANVAS_GEOMETRY.artworkSize,
-          );
+          ctx.globalAlpha = floor === model.layer ? 0.92 : model.layer === 'unknown' ? 0.78 : 0.66;
+          drawArtwork(image, detachedFloors ? placementFor(floor) : null);
         }
         ctx.globalAlpha = 1;
       }
@@ -224,9 +248,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = radarCanvasRadius(
+          const radius = radiusAt(
             projectWorldRadius(144, geometry) ?? 0,
-            broadcastViewport,
+            marker.target.layer,
           );
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
           fill.addColorStop(0, '#c5cbd07a');
@@ -259,7 +283,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           alpha: number,
         ) => {
           const trail = marker.trail
-            .map((point) => pointAt(point))
+            .map((point) => pointAt(point, marker.target.layer))
             .filter((point): point is NonNullable<typeof point> => point !== null);
           if (trail.length < 2) return;
           ctx.globalAlpha = alpha * 0.5;
