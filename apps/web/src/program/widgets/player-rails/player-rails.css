@@ -132,9 +132,9 @@
 .player-rail__body {
   position: relative;
   display: grid;
-  width: 408px;
+  width: 440px;
   height: 78px;
-  flex: 0 0 408px;
+  flex: 0 0 440px;
   grid-template-rows: 26px 3px 29px 20px;
   overflow: hidden;
   background: #111923;
@@ -195,8 +195,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
-  width: 268px;
-  flex-basis: 268px;
+  width: 300px;
+  flex-basis: 300px;
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
@@ -307,7 +307,7 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__combat {
-  grid-template-columns: 40px 90px 36px 86px;
+  grid-template-columns: 42px 104px 42px 96px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__combat {
@@ -397,8 +397,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__icon.is-primary {
-  width: 84px;
-  max-width: 84px;
+  width: 98px;
+  max-width: 98px;
   height: 24px;
 }
 
@@ -587,20 +587,24 @@
 }
 
 .player-rail__endcap {
-  position: relative;
+  position: absolute;
+  z-index: 4;
+  top: 0;
+  right: 0;
   display: flex;
-  width: 32px;
-  height: 78px;
-  flex: 0 0 32px;
+  width: 30px;
+  height: 28px;
   align-items: center;
   justify-content: center;
   overflow: hidden;
   background: #6aa8ff;
-  clip-path: polygon(0 0, 100% 10px, 100% 68px, 0 78px);
+  clip-path: polygon(8px 0, 100% 0, 100% 100%, 0 100%);
 }
 
 .player-rail__endcap--right {
-  clip-path: polygon(0 10px, 100% 0, 100% 78px, 0 68px);
+  right: auto;
+  left: 0;
+  clip-path: polygon(0 0, calc(100% - 8px) 0, 100% 100%, 0 100%);
 }
 
 .player-rail__endcap[data-side='T'] {
@@ -612,13 +616,25 @@
 }
 
 .player-rail__endcap strong {
-  width: 18px;
-  height: 18px;
+  width: 20px;
+  height: 20px;
   color: #0b1119;
-  font-size: 10px;
+  font-size: 11px;
   font-weight: 900;
-  line-height: 18px;
+  line-height: 20px;
   text-align: center;
+}
+
+.player-rail__card[data-physical-side='left'] .player-rail__body {
+  clip-path: polygon(0 0, calc(100% - 18px) 0, 100% 22px, 100% 56px, calc(100% - 18px) 78px, 0 78px);
+}
+
+.player-rail__card[data-physical-side='right'] .player-rail__body {
+  clip-path: polygon(18px 0, 100% 0, 100% 78px, 18px 78px, 0 56px, 0 22px);
+}
+
+.player-rail__card--dead .player-rail__endcap {
+  opacity: 0.18;
 }
 
 .player-rail__summary {
