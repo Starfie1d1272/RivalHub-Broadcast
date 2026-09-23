@@ -1,0 +1,75 @@
+name: PR73 Golden Refresh
+
+on:
+  push:
+    branches:
+      - starfie1d/issue-66-default-v1-hud
+
+permissions:
+  contents: write
+
+jobs:
+  linux:
+    if: ${{ !startsWith(github.event.head_commit.message, 'test(visual): refresh') }}
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: starfie1d/issue-66-default-v1-hud
+          fetch-depth: 0
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm visual:update
+      - name: Commit Linux goldens
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/visual/__screenshots__/linux
+          if git diff --cached --quiet; then
+            echo "Linux goldens already current."
+          else
+            git commit -m "test(visual): refresh linux goldens"
+            git push origin HEAD:starfie1d/issue-66-default-v1-hud
+          fi
+
+  darwin:
+    if: ${{ !startsWith(github.event.head_commit.message, 'test(visual): refresh') }}
+    needs: linux
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1
+        with:
+          ref: starfie1d/issue-66-default-v1-hud
+          fetch-depth: 0
+      - uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b
+        with:
+          version: 12.3.4
+          runtime: node@24
+          cache: true
+          cache-dependency-path: pnpm-lock.yaml
+          require-lockfile: true
+          install: false
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec playwright install chromium
+      - run: pnpm visual:update
+      - name: Commit Darwin goldens
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add tests/visual/__screenshots__/darwin
+          if git diff --cached --quiet; then
+            echo "Darwin goldens already current."
+          else
+            git commit -m "test(visual): refresh darwin goldens"
+            git push origin HEAD:starfie1d/issue-66-default-v1-hud
+          fi
