@@ -15,7 +15,13 @@ import {
   smokeRemaining,
   type RadarSide,
 } from './presentation';
-import { RADAR_CANVAS_GEOMETRY, radarCanvasPoint, radarCanvasRadius } from './canvas-geometry';
+import {
+  RADAR_CANVAS_GEOMETRY,
+  radarBroadcastViewport,
+  radarCanvasArtworkRect,
+  radarCanvasPoint,
+  radarCanvasRadius,
+} from './canvas-geometry';
 import './radar.css';
 
 export interface RadarProps {
@@ -115,14 +121,38 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'lower') : null;
       const upperImage = upperAsset ? imageFor(upperAsset.outputPath) : null;
       const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
-      const pointAt = (point: { x: number; y: number }) => radarCanvasPoint(point);
+      const broadcastViewport = geometry === null ? null : radarBroadcastViewport(geometry.mapKey);
+      const artworkRect = radarCanvasArtworkRect(broadcastViewport);
+      const pointAt = (point: { x: number; y: number }) =>
+        radarCanvasPoint(point, broadcastViewport);
+      const drawArtwork = (image: HTMLImageElement) => {
+        if (broadcastViewport === null) {
+          drawArtwork(image);
+          return;
+        }
+        ctx.drawImage(
+          image,
+          broadcastViewport.x * image.naturalWidth,
+          broadcastViewport.y * image.naturalHeight,
+          broadcastViewport.width * image.naturalWidth,
+          broadcastViewport.height * image.naturalHeight,
+          artworkRect.x,
+          artworkRect.y,
+          artworkRect.width,
+          artworkRect.height,
+        );
+      };
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
       element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
-      element.dataset.radarCompositor = multiLayer ? 'shared-calibration' : 'single-calibration';
+      element.dataset.radarCompositor = broadcastViewport
+        ? 'broadcast-viewport-shared-calibration'
+        : multiLayer
+          ? 'shared-calibration'
+          : 'single-calibration';
       element.dataset.radarCoordinateSpace = 'overview-1024';
       element.dataset.radarArtwork = (multiLayer ? upperImage && lowerImage : singleImage)
         ? 'ready'
@@ -147,13 +177,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
       if (singleImage) {
         ctx.globalAlpha = 1;
-        ctx.drawImage(
-          singleImage,
-          RADAR_CANVAS_GEOMETRY.inset,
-          RADAR_CANVAS_GEOMETRY.inset,
-          RADAR_CANVAS_GEOMETRY.artworkSize,
-          RADAR_CANVAS_GEOMETRY.artworkSize,
-        );
+        drawArtwork(singleImage);
         ctx.globalAlpha = 1;
       } else if (geometry && multiLayer) {
         const floors =
@@ -200,7 +224,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = radarCanvasRadius(projectWorldRadius(144, geometry) ?? 0);
+          const radius = radarCanvasRadius(
+            projectWorldRadius(144, geometry) ?? 0,
+            broadcastViewport,
+          );
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
           fill.addColorStop(0, '#c5cbd07a');
           fill.addColorStop(0.75, '#a8afb460');
