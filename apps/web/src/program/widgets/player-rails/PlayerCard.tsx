@@ -300,19 +300,9 @@ export function PlayerCard({
       data-side={player.side}
       data-physical-side={physicalSide}
     >
-      {physicalSide === 'left' ? (
-        <>
-          {avatar}
-          {body}
-          {endcap}
-        </>
-      ) : (
-        <>
-          {endcap}
-          {body}
-          {avatar}
-        </>
-      )}
+      {avatar}
+      {body}
+      {endcap}
     </article>
   );
 }
