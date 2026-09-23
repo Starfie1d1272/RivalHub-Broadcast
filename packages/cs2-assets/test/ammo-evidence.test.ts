@@ -170,14 +170,13 @@ describe('@rivalhub-broadcast/cs2-assets ammo evidence matrix', () => {
       gsiWeaponNames: [],
       aliases: [],
     });
-    expect(magazine?.evidence).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          kind: 'official-game-data',
-          reference: expect.stringContaining('2053759441494650084'),
-        }),
-      ]),
-    );
+    expect(
+      magazine?.evidence.some(
+        (evidence) =>
+          evidence.kind === 'official-game-data' &&
+          evidence.reference.includes('2053759441494650084'),
+      ),
+    ).toBe(true);
   });
 
   it('strictly validates every HUD item against the official ammo evidence matrix (table-driven)', () => {
