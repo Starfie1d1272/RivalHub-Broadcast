@@ -184,6 +184,11 @@
     auto;
 }
 
+.player-rail__card--dead {
+  filter: grayscale(0.88);
+  opacity: 0.9;
+}
+
 .player-rail__card--dead .player-rail__body,
 .player-rail--right .player-rail__card--dead .player-rail__body {
   background: linear-gradient(90deg, rgba(67, 74, 82, 0.88), rgba(21, 28, 36, 0.96));
@@ -231,9 +236,10 @@
 .player-rail__health-value {
   flex: 0 0 auto;
   color: #f3f6fa;
-  font-size: 26px;
+  font-size: 28px;
   font-weight: 800;
-  line-height: 26px;
+  line-height: 28px;
+  letter-spacing: -0.02em;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.45);
 }
 
@@ -387,12 +393,13 @@
 .player-rail__icon.is-primary {
   width: 108px;
   max-width: 108px;
-  height: 22px;
+  height: 24px;
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__icon.is-primary {
   width: 84px;
   max-width: 84px;
+  height: 24px;
 }
 
 .player-rail__combat[data-phase='freezetime'][data-secondary='true'] .player-rail__icon.is-primary {
@@ -512,9 +519,10 @@
 .player-rail__money,
 .player-rail__spent {
   color: #c8ef78;
-  font-size: 13px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 17px;
+  line-height: 14px;
+  opacity: 0.82;
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
   white-space: nowrap;
 }
@@ -529,9 +537,10 @@
   gap: 3px;
   margin-left: auto;
   color: #f3f6fa;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 800;
-  line-height: 16px;
+  line-height: 14px;
+  opacity: 0.82;
   white-space: nowrap;
 }
 
