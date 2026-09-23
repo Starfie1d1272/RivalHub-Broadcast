@@ -128,11 +128,7 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
 
 function StatGlyph({ kind }: { readonly kind: 'kills' | 'deaths' }) {
   return (
-    <svg
-      aria-hidden="true"
-      className="player-rail__stat-glyph"
-      viewBox="0 0 16 16"
-    >
+    <svg aria-hidden="true" className="player-rail__stat-glyph" viewBox="0 0 16 16">
       {kind === 'kills' ? (
         <>
           <circle cx="8" cy="8" r="3.25" />
