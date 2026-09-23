@@ -229,23 +229,23 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         ctx.strokeRect(x, y, width, height);
       };
       const drawSiteBadge = (label: 'A' | 'B', x: number, y: number) => {
-        const size = 56;
+        const size = 72;
         ctx.fillStyle = '#f3ce22';
         ctx.fillRect(x - size / 2, y - size / 2, size, size);
         ctx.fillStyle = '#0b1119';
-        ctx.font = '900 32px Inter, sans-serif';
+        ctx.font = '900 40px Inter, sans-serif';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'middle';
         ctx.fillText(label, x, y + 1);
       };
       if (geometry?.mapKey === 'de_ancient') {
-        drawSpawnZone(340, 8, 150, 142);
-        drawSpawnZone(330, 872, 138, 108);
+        drawSpawnZone(395, 0, 155, 205);
+        drawSpawnZone(385, 855, 150, 125);
         drawSiteBadge('A', 190, 210);
         drawSiteBadge('B', 705, 485);
       } else if (geometry?.mapKey === 'de_nuke') {
         drawSpawnZone(122, 310, 104, 82);
-        drawSpawnZone(770, 225, 152, 106);
+        drawSpawnZone(790, 230, 105, 75);
         drawSiteBadge('A', 530, 255);
         drawSiteBadge('B', 175, 725);
       }
