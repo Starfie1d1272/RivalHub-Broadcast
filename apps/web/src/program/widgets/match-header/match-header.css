@@ -32,7 +32,7 @@
   z-index: 0;
   inset: 0;
   background: #f3f6fa;
-  clip-path: polygon(74px 0, 374px 0, 356px 74px, 92px 74px);
+  clip-path: polygon(46px 0, 402px 0, 384px 74px, 64px 74px);
   content: '';
 }
 
@@ -48,22 +48,22 @@
 
 .match-header__score-zone--logo-a {
   left: 0;
-  width: 92px;
+  width: 64px;
 }
 
 .match-header__score-zone--score-a {
-  left: 92px;
-  width: 68px;
+  left: 64px;
+  width: 96px;
 }
 
 .match-header__score-zone--score-b {
   left: 288px;
-  width: 68px;
+  width: 96px;
 }
 
 .match-header__score-zone--logo-b {
-  left: 356px;
-  width: 92px;
+  left: 384px;
+  width: 64px;
 }
 
 .match-header__team-logo {
@@ -100,9 +100,9 @@
 
 .match-header__map-score {
   color: #0b1119;
-  font-size: 56px;
+  font-size: 44px;
   font-weight: 800;
-  line-height: 56px;
+  line-height: 46px;
   font-variant-numeric: tabular-nums;
 }
 
