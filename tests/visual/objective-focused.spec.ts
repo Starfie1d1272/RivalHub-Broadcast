@@ -75,8 +75,10 @@ for (const id of cases)
         await expect(page.locator('[data-focused-player]')).toContainText('MAG ×3');
       if (id === 'focused-shells-edge')
         await expect(page.locator('[data-focused-player]')).toContainText('SHELL 12');
-      if (id === 'real-planted')
-        await expect(page.locator('[data-focused-player]')).toContainText('DEAD');
+      if (id === 'real-planted') {
+        await expect(page.locator('.focused-player__dead-state')).toHaveCount(1);
+        await expect(page.locator('[data-focused-player]')).not.toContainText('DEAD');
+      }
     }
     await expect(canvas).toHaveScreenshot(`${id}.png`, {
       omitBackground: true,
