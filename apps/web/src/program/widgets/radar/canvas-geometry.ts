@@ -40,12 +40,12 @@ const ANCIENT_PLACEMENT: RadarCanvasPlacement = Object.freeze({
 
 const NUKE_UPPER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
-  rect: Object.freeze({ x: 32, y: 14, width: 936, height: 520 }),
+  rect: Object.freeze({ x: 20, y: 10, width: 960, height: 530 }),
 });
 
 const NUKE_LOWER_PLACEMENT: RadarCanvasPlacement = Object.freeze({
   viewport: Object.freeze({ x: 0.48, y: 0.28, width: 0.28, height: 0.51 }),
-  rect: Object.freeze({ x: 86, y: 414, width: 292, height: 566 }),
+  rect: Object.freeze({ x: 86, y: 445, width: 260, height: 535 }),
 });
 
 export function radarBroadcastPlacement(
