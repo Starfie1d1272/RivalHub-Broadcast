@@ -99,16 +99,16 @@
 
 .player-rail__avatar {
   position: relative;
-  width: 140px;
+  width: 124px;
   height: 78px;
-  flex: 0 0 140px;
+  flex: 0 0 124px;
   overflow: hidden;
   background: #0b1119;
 }
 
 .player-rail__avatar img {
   display: block;
-  width: 140px;
+  width: 124px;
   height: 78px;
   object-fit: cover;
   object-position: center 36%;
@@ -195,8 +195,8 @@
 }
 
 .player-rail__card[data-avatar='true'] .player-rail__body {
-  width: 272px;
-  flex-basis: 272px;
+  width: 288px;
+  flex-basis: 288px;
 }
 
 .player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
