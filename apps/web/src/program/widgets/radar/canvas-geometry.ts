@@ -22,10 +22,9 @@ export interface RadarCanvasViewport {
  * roughly half of the source texture vertically; fitting the whole texture
  * makes the on-air map materially smaller than the EWC reference.
  */
-const BROADCAST_VIEWPORTS: Readonly<Record<string, RadarCanvasViewport>> =
-  Object.freeze({
-    de_nuke: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
-  });
+const BROADCAST_VIEWPORTS: Readonly<Record<string, RadarCanvasViewport>> = Object.freeze({
+  de_nuke: Object.freeze({ x: 0.055, y: 0.27, width: 0.92, height: 0.52 }),
+});
 
 export function radarBroadcastViewport(mapKey: string): RadarCanvasViewport | null {
   return BROADCAST_VIEWPORTS[mapKey] ?? null;
@@ -42,13 +41,9 @@ export function radarCanvasArtworkRect(viewport: RadarCanvasViewport | null) {
   }
   const aspect = viewport.width / viewport.height;
   const width =
-    aspect >= 1
-      ? RADAR_CANVAS_GEOMETRY.artworkSize
-      : RADAR_CANVAS_GEOMETRY.artworkSize * aspect;
+    aspect >= 1 ? RADAR_CANVAS_GEOMETRY.artworkSize : RADAR_CANVAS_GEOMETRY.artworkSize * aspect;
   const height =
-    aspect >= 1
-      ? RADAR_CANVAS_GEOMETRY.artworkSize / aspect
-      : RADAR_CANVAS_GEOMETRY.artworkSize;
+    aspect >= 1 ? RADAR_CANVAS_GEOMETRY.artworkSize / aspect : RADAR_CANVAS_GEOMETRY.artworkSize;
   return {
     x: (RADAR_CANVAS_GEOMETRY.logicalSize - width) / 2,
     y: (RADAR_CANVAS_GEOMETRY.logicalSize - height) / 2,
@@ -80,8 +75,7 @@ export function radarCanvasRadius(
   normalizedRadius: number,
   viewport: RadarCanvasViewport | null = null,
 ): number {
-  if (viewport === null)
-    return normalizedRadius * RADAR_CANVAS_GEOMETRY.artworkSize;
+  if (viewport === null) return normalizedRadius * RADAR_CANVAS_GEOMETRY.artworkSize;
   const rect = radarCanvasArtworkRect(viewport);
   return normalizedRadius * (rect.width / viewport.width);
 }
