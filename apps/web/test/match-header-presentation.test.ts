@@ -123,7 +123,9 @@ describe('Match Header presentation selector', () => {
     if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');
     const series = snapshot.payload.series;
     const first = series.maps[0];
-    if (first === undefined || first.selection.kind !== 'pick') throw new Error('picked map missing');
+    if (first === undefined || first.selection.kind !== 'pick') {
+      throw new Error('picked map missing');
+    }
     const opposingWinner =
       first.selection.entryId === series.entrants.a.entryId
         ? series.entrants.b.entryId
