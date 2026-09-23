@@ -283,7 +283,6 @@
   line-height: 20px;
 }
 
-
 .player-rail__health-bar,
 .player-rail__health-spacer {
   width: calc(100% - 16px);
