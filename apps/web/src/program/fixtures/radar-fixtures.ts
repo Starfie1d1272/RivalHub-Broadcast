@@ -66,11 +66,7 @@ export function realRadarSnapshot(): RadarSnapshot {
 }
 
 export type RadarEditorPreviewScene =
-  | 'dense-utility'
-  | 'warmup'
-  | 'bomb-dropped'
-  | 'bomb-planted'
-  | 'bomb-defusing';
+  'dense-utility' | 'warmup' | 'bomb-dropped' | 'bomb-planted' | 'bomb-defusing';
 
 export function radarEditorPreviewSnapshot(scene: RadarEditorPreviewScene): RadarSnapshot {
   const fixture =
