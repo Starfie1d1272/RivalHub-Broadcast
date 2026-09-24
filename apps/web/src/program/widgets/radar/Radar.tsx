@@ -551,19 +551,37 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
+          const flashRatio =
+            alive && p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
           circle(x, y, 29, '#f3f6fa');
           circle(x, y, 25, color, '#0b1119', 2);
-          ctx.fillStyle = '#0b1119';
+          if (flashRatio > 0) {
+            ctx.globalAlpha = flashRatio * 0.9;
+            circle(x, y, 24, '#ffffff');
+            ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          }
+          ctx.fillStyle = flashRatio > 0.72 ? '#5d6670' : '#0b1119';
           ctx.font = '800 28px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
-          if (alive && p.flashAmount !== null && p.flashAmount > 0) {
-            ctx.globalAlpha = Math.min(1, p.flashAmount / 255);
-            circle(x, y, 24, '#ffffff55', '#ffffff', 4);
-            ctx.globalAlpha = 1;
+          if (marker.damageUntil > now) {
+            const damageAlpha = Math.max(
+              0,
+              Math.min(1, (marker.damageUntil - now) / RADAR_PRESENTATION.damageMs),
+            );
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate((marker.angle * Math.PI) / 180);
+            ctx.globalAlpha = damageAlpha * 0.95;
+            ctx.strokeStyle = '#ff6c69';
+            ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
+            ctx.beginPath();
+            ctx.arc(0, 0, 31, Math.PI * 0.72, Math.PI * 1.28);
+            ctx.stroke();
+            ctx.restore();
           }
-          if (marker.damageUntil > now) circle(x, y, 27, '#00000000', '#ff6c69', 5);
           if (
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
