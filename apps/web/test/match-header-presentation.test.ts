@@ -143,6 +143,16 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps?.[0]?.pickOutcome).toBe('loss');
   });
 
+  it('keeps the picker score on the left in the picker-loss preview', () => {
+    const value = presentation('series-bo5-pick-loss');
+    expect(value.seriesMaps?.[0]).toMatchObject({ statusText: '13–11', pickOutcome: 'win' });
+    expect(value.seriesMaps?.[1]).toMatchObject({
+      statusText: '8–13',
+      pickOutcome: 'loss',
+      winner: 'a',
+    });
+  });
+
   it('fails closed when a completed map has no known winner', () => {
     const snapshot = getProgramFixture('series-bo5');
     if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');

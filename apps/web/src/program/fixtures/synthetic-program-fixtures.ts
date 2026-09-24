@@ -391,6 +391,21 @@ const BO5_SERIES = makeSeries({
   ],
 });
 
+const BO5_PICK_LOSS_SERIES = makeSeries({
+  format: 'bo5',
+  score: { a: 2, b: 0 },
+  currentMapOrder: 3,
+  maps: BO5_SERIES.maps.map((map) =>
+    map.mapOrder === 2
+      ? {
+          ...map,
+          finalScore: { a: 13, b: 8 },
+          winnerEntryId: SERIES_ENTRANTS.a.entryId,
+        }
+      : map,
+  ),
+});
+
 const NOT_PLAYED_SERIES = makeSeries({
   format: 'bo5',
   score: { a: 1, b: 0 },
@@ -990,6 +1005,7 @@ export const syntheticProgramFixtures = {
   'series-bo1': presentationFixture('real-post-explosion-freezetime', BO1_SERIES),
   'series-bo3-map1': presentationFixture('real-live-rich', BO3_MAP1_SERIES),
   'series-bo5': presentationFixture('real-live-rich', BO5_SERIES),
+  'series-bo5-pick-loss': presentationFixture('real-live-rich', BO5_PICK_LOSS_SERIES),
   'series-not-played': presentationFixture('real-live-rich', NOT_PLAYED_SERIES),
   'series-logo-mixed': presentationFixture('real-live-rich', MIXED_LOGO_SERIES),
   'series-decider': presentationFixture('real-live-rich', DECIDER_SERIES),
@@ -1133,6 +1149,10 @@ export const SYNTHETIC_FIXTURE_PROVENANCE = {
     kind: 'synthetic-presentation',
     reason:
       '以真实 Program snapshot 为底，仅施加系列赛计划、品牌或名称展示压力；计划不是 GSI evidence。',
+  },
+  'series-bo5-pick-loss': {
+    kind: 'synthetic-presentation',
+    reason: '以真实 Program snapshot 为底，合成选图方失利的比分与赢家，用于视觉预览。',
   },
   'series-not-played': {
     kind: 'synthetic-presentation',

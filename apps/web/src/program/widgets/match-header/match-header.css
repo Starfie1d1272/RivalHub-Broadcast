@@ -545,15 +545,17 @@
 .match-header__series-map--completed.match-header__series-map--pick-win
   .match-header__series-map-status {
   color: #c8ef78;
+  background: rgba(73, 103, 47, 0.28);
 }
 
 .match-header__series-map--completed.match-header__series-map--pick-loss
   .match-header__series-map-status {
   color: #f06f6f;
+  background: rgba(112, 48, 51, 0.3);
 }
 
 .match-header__series-map--decider .match-header__series-map-status {
-  color: #c8ef78;
+  color: #aab4c0;
 }
 
 .match-header__series-map--current {
@@ -620,7 +622,7 @@
 }
 
 .match-header__series-map--decider .match-header__series-map-status {
-  color: #c8ef78;
+  color: #aab4c0;
 }
 
 @keyframes planted-pop {
@@ -652,5 +654,5 @@
 
 .match-header__series-maps[data-series-map-count='5'] .match-header__series-map-status {
   padding-inline: 1px;
-  font-size: 9px;
+  font-size: 11px;
 }

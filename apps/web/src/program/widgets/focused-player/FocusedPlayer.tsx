@@ -88,7 +88,14 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
           className="focused-player__action-gap focused-player__action-gap--a"
         />
         {p.dead ? (
-          <div aria-label="Dead" className="focused-player__dead-state" />
+          <div aria-label="Dead" className="focused-player__dead-state">
+            <svg aria-hidden="true" className="focused-player__death-mark" viewBox="0 0 16 16">
+              <path d="M4 7.25a4 4 0 1 1 8 0v2.1c0 .8-.42 1.55-1.1 1.97V14H5.1v-2.68A2.3 2.3 0 0 1 4 9.35z" />
+              <circle cx="6.45" cy="7.55" r="0.8" />
+              <circle cx="9.55" cy="7.55" r="0.8" />
+              <path d="M7 11.1h2M6.25 14v-1.8M8 14v-1.8M9.75 14v-1.8" />
+            </svg>
+          </div>
         ) : (
           <>
             <div className="focused-player__active" aria-label="Active item">

@@ -719,7 +719,19 @@
 
 .player-rail__card--dead .player-rail__body,
 .player-rail--right .player-rail__card--dead .player-rail__body {
-  background: #242b32;
+  background: #383d40;
+}
+
+.player-rail__card--dead[data-side] .player-rail__avatar {
+  background: #4a4e50;
+}
+
+.player-rail__card--dead .player-rail__body::before {
+  opacity: 0.08;
+}
+
+.player-rail__card--dead .player-rail__name {
+  color: #f0f1ef;
 }
 
 .player-rail__name {
@@ -888,7 +900,60 @@
 }
 
 .player-rail__death-mark {
-  opacity: 0.09;
+  right: 66px;
+  width: 66px;
+  height: 66px;
+  opacity: 0.2;
+}
+
+.player-rail--right .player-rail__death-mark {
+  right: auto;
+  left: 66px;
+}
+
+.player-rail__death-mark .player-rail__stat-glyph {
+  width: 66px;
+  height: 66px;
+  flex: 0 0 66px;
+  fill: none;
+  stroke: none;
+}
+
+.player-rail__death-mark .player-rail__stat-glyph path:first-child {
+  fill: #e0e2df;
+}
+
+.player-rail__death-mark .player-rail__stat-glyph circle {
+  fill: #383d40;
+}
+
+.player-rail__death-mark .player-rail__stat-glyph path:not(:first-child) {
+  stroke: #e0e2df;
+  stroke-width: 1.2;
+}
+
+.player-rail__dead-stats {
+  justify-content: flex-start;
+  gap: 18px;
+  padding: 0 16px;
+}
+
+.player-rail__dead-stats .player-rail__adr,
+.player-rail__dead-stats .player-rail__damage {
+  position: relative;
+  z-index: 1;
+}
+
+.player-rail__dead-stats small {
+  color: #b7bec2;
+}
+
+.player-rail__adr b {
+  color: #e3e5e4;
+}
+
+.player-rail__damage b {
+  font-size: 20px;
 }
 
 .player-rail__endcap {
@@ -956,11 +1021,11 @@
 }
 
 .player-rail__utility {
-  grid-template-columns: repeat(5, 88px);
+  grid-template-columns: repeat(4, 110px);
 }
 
 .player-rail__summary-utility {
-  width: 88px;
+  width: 110px;
   gap: 5px;
 }
 

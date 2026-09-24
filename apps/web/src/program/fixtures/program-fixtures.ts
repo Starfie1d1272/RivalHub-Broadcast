@@ -84,6 +84,7 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'series-bo1': 'BO1 系列赛',
   'series-bo3-map1': 'BO3 · Map 1',
   'series-bo5': 'BO5 中盘',
+  'series-bo5-pick-loss': 'BO5 · 选图方失利（合成）',
   'series-not-played': '系列赛未进行地图',
   'series-logo-mixed': '队伍 Logo 有/无',
   'series-halftime-swap': '半场换边',
