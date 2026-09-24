@@ -87,7 +87,9 @@ test.describe('Match Header HUD', () => {
       'CT',
     );
     await expect(
-      page.locator('[data-match-header-widget="series-strip"] [data-map-order="5"] .match-header__series-map-start-side'),
+      page.locator(
+        '[data-match-header-widget="series-strip"] [data-map-order="5"] .match-header__series-map-start-side',
+      ),
     ).toHaveCount(0);
   });
 
