@@ -1,0 +1,91 @@
+# ADR-0007：Gameplay HUD presentation invariants
+
+- 状态：**Accepted**
+- 日期：2026-09-23
+- 关联：Issue #66、PR #73、ADR-0003、ADR-0004
+
+## 背景
+
+Default V1 的视觉收敛经历了多轮布局、Radar、多楼层、Player Rails、Focused Player 与 Objective 方案试验。大量中间方案只用于寻找合适的视觉结构，不应成为长期设计规范；但其中暴露出的若干失败模式会直接破坏数据 ownership、状态稳定性或后续可维护性。
+
+本 ADR 只冻结这些长期 presentation invariant 与已验证的反模式。颜色、字体、材质、装饰、具体品牌语言和其它纯美术选择仍可继续演进。
+
+## 决策
+
+### 1. 物理位置按 entrant 稳定，side 只改变状态
+
+Default gameplay 中 entrant A 保持左侧物理位置，entrant B 保持右侧物理位置。半场换边只改变 CT/T accent 与 side-bound facts，不让两支队伍在画面上交换位置。
+
+不得再用“左边固定 CT、右边固定 T”的 presentation ownership。
+
+### 2. 状态变化优先替换内容，不改变外框几何
+
+alive / dead、avatar present / missing、freezetime / live、objective / pause 等状态应在固定 component envelope 内切换内容。
+
+不得因为头像缺失、summary 隐藏、死亡态或 objective 状态改变外框尺寸，亦不得让上游 transient block 推动下游 player card baseline。
+
+### 3. 镜像只属于 layout，不复制组件结构
+
+左右 Player Rail 使用同一套 presentation model 与同一套 PlayerCard 结构，通过 physical-side layout 镜像。
+
+不得维护 left/right 两套不同 DOM 或业务逻辑；视觉差异不能演化为两套 semantic implementation。
+
+### 4. 一项事实只有一个主要视觉 owner
+
+Top Score、Series Strip、Player Rails、Focused Player 与 Radar 可以共享同一 Program truth，但不应为了“信息更满”重复显示同一事实。
+
+alive 时优先显示仍能影响当前回合的战术信息；dead state 可以把稳定统计提升为主要信息。Focused Player 只强化当前 POV 的独有信息，不复制完整 team/inventory 面板。
+
+### 5. Transient presentation 使用预留 slot，不参与重排
+
+Team Summary、timeout、objective progress、alive XvY 等 transient presentation 必须使用已经预算的稳定区域，显示/隐藏不能导致其它核心组件跳位。
+
+### 6. Radar 只有一套坐标 owner
+
+`packages/radar` 的 canonical world-to-overview calibration 是唯一坐标真值。Web Renderer 可以做 presentation viewport / composition，但 map artwork、player、C4、utility 与 transient 必须共享同一 transform。
+
+明确不采用：
+
+- alpha-bound 扫描后把地图裁紧再重新标定；
+- upper/lower floor 各自独立缩放；
+- 为视觉拼接建立第二套 entity 坐标；
+- 地图 artwork 与 marker 使用不同 crop/scale。
+
+多楼层的具体美术编排可以继续调整，但不能破坏上述 invariant。
+
+### 7. Motion 不拥有 gameplay time，urgency 必须局部化
+
+动画只消费已经存在的 semantic state / progress。Browser 不重新推算 objective countdown，也不因为视觉效果建立第二个 timer owner。
+
+明确不采用整张卡片、整条比分条或整颗 C4 长时间高幅 pulse / blink。Planting 使用中性 presentation；planted / critical urgency 只在有证据的状态下通过局部颜色、轨道或小面积 motion 表达。Reduced-motion 必须可以稳定关闭这些 motion。
+
+### 8. 官方素材进入受控 asset pipeline
+
+能够从 CS2 官方资源获得的 map、side、weapon、equipment、ammo presentation asset 优先进入 `@rivalhub-broadcast/cs2-assets`，保留 source/hash/provenance。
+
+不得为了短期视觉方便把来源不明的手工近似素材直接变成长期 canonical asset。
+
+### 9. 正常验收场景优先来自真实 capture replay
+
+正常 Program/HUD acceptance fixture 应尽量从 committed capture 经 production adapter → Runtime → Projection 生成。Synthetic fixture 只用于真实 capture 难以稳定覆盖的 edge / presentation stress，并显式记录 reason。
+
+不得用手工构造的“看起来合理”正常比赛状态替代已有真实 evidence。
+
+## 已验证但不冻结为美术规范的探索
+
+以下内容曾用于 Default V1 探索，但不形成长期 invariant：
+
+- EWC 的具体颜色、材质、切角、字体比例与装饰；
+- 某一次 Nuke lower-floor 的具体偏移或 footprint；
+- dead watermark 的具体造型；
+- observer endcap 的具体轮廓；
+- 某一轮 avatar/body 百分比；
+- 某一版 map tone、outline、trail weight。
+
+这些可以在后续美术设计中直接重做，只要不破坏上面的 ownership、geometry stability 与 truth boundary。
+
+## 后果
+
+后续美术设计可以大幅调整视觉语言，而不需要重新讨论 Runtime、Program truth、entrant mapping、Radar calibration 或 fixture provenance。
+
+如果未来确实需要改变上述 invariant，应先说明新的产品或技术证据，并通过新的 ADR supersede 对应范围，而不是在 CSS 调整中隐式改变。
