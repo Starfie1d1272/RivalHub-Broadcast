@@ -35,7 +35,7 @@ export interface MatchHeaderSeriesMapPresentation {
   readonly picker: MatchHeaderEntrantKey | null;
   readonly pickerName: string | null;
   readonly pickerLogoUrl: string | null;
-  readonly startSide: MatchHeaderSide | null;
+  readonly pickerStartSide: MatchHeaderSide | null;
   readonly status: 'pending' | 'current' | 'completed' | 'not_played';
   readonly statusText: string;
   readonly finalScore: { readonly a: number; readonly b: number } | null;
@@ -78,13 +78,17 @@ export interface MatchHeaderPresentation {
 
 const MAP_STATUS_LABELS = {
   pending: 'PENDING',
-  current: 'CURRENT',
+  current: 'PLAYING',
   completed: '',
   not_played: 'PENDING',
 } as const;
 
 function nullableNumber(value: number | null | undefined): number | null {
   return value ?? null;
+}
+
+function oppositeSide(side: MatchHeaderSide): MatchHeaderSide {
+  return side === 'CT' ? 'T' : 'CT';
 }
 
 function displayMapName(value: string | null | undefined): string | null {
@@ -233,7 +237,12 @@ function buildSeriesMaps(
       picker,
       pickerName: picker === null ? null : series.entrants[picker].name,
       pickerLogoUrl: picker === null ? null : series.entrants[picker].logoUrl,
-      startSide: map.teamAStartSide,
+      pickerStartSide:
+        picker === null || map.teamAStartSide === null
+          ? null
+          : picker === 'a'
+            ? map.teamAStartSide
+            : oppositeSide(map.teamAStartSide),
       status: map.status,
       statusText: score,
       finalScore: map.finalScore,
