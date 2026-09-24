@@ -831,10 +831,12 @@
 
 .player-rail__card[data-physical-side='left'] .player-rail__utility-icons {
   right: 34px;
+  justify-content: flex-end;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
   left: 34px;
+  justify-content: flex-start;
 }
 
 .player-rail__equipment-slot,
