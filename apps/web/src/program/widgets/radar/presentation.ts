@@ -173,17 +173,23 @@ function isShooting(before: Player, after: Player): boolean {
   const item = resolveCs2ItemByGsiName(a.name);
   return item.kind === 'known' && item.item.kind === 'firearm';
 }
-export function grenadeIcon(kind: string | null): string | null {
-  // GSI firebomb is deliberately generic; owner equipment cannot prove subtype.
-  const name = (
-    {
-      smoke: 'weapon_smokegrenade',
-      flashbang: 'weapon_flashbang',
-      frag: 'weapon_hegrenade',
-      hegrenade: 'weapon_hegrenade',
-      decoy: 'weapon_decoy',
-    } as Record<string, string>
-  )[kind ?? ''];
+export function grenadeIcon(kind: string | null, side: RadarSide = 'unknown'): string | null {
+  const name =
+    kind === 'firebomb'
+      ? side === 'CT'
+        ? 'weapon_incgrenade'
+        : side === 'T'
+          ? 'weapon_molotov'
+          : null
+      : (
+          {
+            smoke: 'weapon_smokegrenade',
+            flashbang: 'weapon_flashbang',
+            frag: 'weapon_hegrenade',
+            hegrenade: 'weapon_hegrenade',
+            decoy: 'weapon_decoy',
+          } as Record<string, string>
+        )[kind ?? ''];
   if (!name) return null;
   const item = resolveCs2ItemByGsiName(name);
   return item.kind === 'known' ? item.asset.outputPath : null;
