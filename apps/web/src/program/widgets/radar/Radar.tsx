@@ -352,42 +352,43 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.save();
           ctx.globalAlpha = opacity;
           smoothClosedPath(contour);
-          ctx.fillStyle = '#aab2ba24';
+          ctx.fillStyle = '#eef1f23d';
           ctx.fill();
 
           for (const lobe of smokeLobes(marker.source.sourceEntityId, radius)) {
             const lx = x + lobe.dx;
             const ly = y + lobe.dy;
             const fill = ctx.createRadialGradient(lx, ly, 0, lx, ly, lobe.radius);
-            fill.addColorStop(0, '#eef1f270');
-            fill.addColorStop(0.48, '#c7cdd152');
-            fill.addColorStop(0.82, '#9ca5ad30');
-            fill.addColorStop(1, '#7f899200');
+            fill.addColorStop(0, '#ffffffb8');
+            fill.addColorStop(0.48, '#f4f6f69a');
+            fill.addColorStop(0.82, '#e2e6e76e');
+            fill.addColorStop(1, '#d5dadd12');
             ctx.fillStyle = fill;
             ctx.beginPath();
             ctx.arc(lx, ly, lobe.radius, 0, Math.PI * 2);
             ctx.fill();
           }
 
-          ctx.globalAlpha = opacity * 0.58;
+          ctx.globalAlpha = opacity * 0.78;
           smoothClosedPath(contour);
-          ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 1.75;
+          ctx.strokeStyle = '#f7f8f8';
+          ctx.lineWidth = 2;
           ctx.stroke();
 
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
-            ctx.globalAlpha = opacity * 0.7;
+            const timerRadius = radius * 0.7;
+            ctx.globalAlpha = opacity * 0.96;
             ctx.beginPath();
             ctx.arc(
               x,
               y,
-              radius + 7,
+              timerRadius,
               -Math.PI / 2,
               -Math.PI / 2 + (Math.PI * 2 * remaining) / SMOKE_PRESENTATION_DURATION_SECONDS,
             );
-            ctx.strokeStyle = '#f3f6fa';
-            ctx.lineWidth = 2.5;
+            ctx.strokeStyle = sideColor(marker.side);
+            ctx.lineWidth = 4;
             ctx.stroke();
           }
           ctx.restore();
