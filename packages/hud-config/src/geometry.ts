@@ -9,7 +9,7 @@ import type {
 
 const WIDGET_DIMENSIONS: Record<HudWidgetId, { readonly width: number; readonly height: number }> =
   {
-    'top-score-bar': { width: 448, height: 152 },
+    'top-score-bar': { width: 480, height: 152 },
     'team-ct-rail': { width: 440, height: 478 },
     'team-t-rail': { width: 440, height: 478 },
     radar: { width: 400, height: 400 },

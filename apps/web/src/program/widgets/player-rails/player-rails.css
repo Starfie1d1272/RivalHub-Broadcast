@@ -455,13 +455,6 @@
   left: 14px;
 }
 
-.player-rail__death-mark .player-rail__stat-glyph {
-  width: 46px;
-  height: 46px;
-  stroke: #f3f6fa;
-  stroke-width: 1.2;
-}
-
 .player-rail__adr,
 .player-rail__damage {
   display: grid;
@@ -780,6 +773,10 @@
   column-gap: 4px;
 }
 
+.player-rail__combat > * {
+  grid-row: 1;
+}
+
 .player-rail--right .player-rail__combat {
   grid-template-columns: minmax(0, 1fr) 62px 118px 59px;
 }
@@ -911,25 +908,18 @@
   left: 66px;
 }
 
-.player-rail__death-mark .player-rail__stat-glyph {
+.player-rail__death-mark .player-rail__death-watermark {
   width: 66px;
   height: 66px;
   flex: 0 0 66px;
-  fill: none;
-  stroke: none;
 }
 
-.player-rail__death-mark .player-rail__stat-glyph path:first-child {
+.player-rail__death-watermark .death-watermark__body {
   fill: #e0e2df;
 }
 
-.player-rail__death-mark .player-rail__stat-glyph circle {
+.player-rail__death-watermark .death-watermark__cutout {
   fill: #383d40;
-}
-
-.player-rail__death-mark .player-rail__stat-glyph path:not(:first-child) {
-  stroke: #e0e2df;
-  stroke-width: 1.2;
 }
 
 .player-rail__dead-stats {

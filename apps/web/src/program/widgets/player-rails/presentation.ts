@@ -23,7 +23,7 @@ export interface PlayerRailWeapon {
 }
 
 export interface PlayerRailUtility extends PlayerRailWeapon {
-  readonly family: 'smoke' | 'fire' | 'flash' | 'he' | 'decoy';
+  readonly family: 'smoke' | 'fire' | 'flash' | 'he';
   readonly count: number;
 }
 
@@ -67,7 +67,6 @@ export interface TeamUtilitySummary {
   readonly fire: number;
   readonly flash: number;
   readonly he: number;
-  readonly decoy: number;
 }
 
 export type TeamUtilityFamily = keyof TeamUtilitySummary;
@@ -103,7 +102,6 @@ const EMPTY_UTILITY: TeamUtilitySummary = Object.freeze({
   fire: 0,
   flash: 0,
   he: 0,
-  decoy: 0,
 });
 
 export function lossBonusForConsecutiveRoundLosses(
@@ -135,8 +133,6 @@ function utilityCanonicalKey(side: PlayerRailSide, family: TeamUtilityFamily): s
       return 'utility.flashbang';
     case 'he':
       return 'utility.hegrenade';
-    case 'decoy':
-      return 'utility.decoy';
   }
 }
 
@@ -200,8 +196,6 @@ function utilityFamily(item: Cs2ItemMetadata | null): PlayerRailUtility['family'
       return 'flash';
     case 'utility.hegrenade':
       return 'he';
-    case 'utility.decoy':
-      return 'decoy';
     default:
       return null;
   }

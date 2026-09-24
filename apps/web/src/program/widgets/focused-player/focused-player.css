@@ -253,22 +253,15 @@
 .focused-player__death-mark {
   width: 78px;
   height: 78px;
-  fill: none;
-  stroke: none;
   opacity: 0.18;
 }
 
-.focused-player__death-mark path:first-child {
+.focused-player__death-mark .death-watermark__body {
   fill: #e0e2df;
 }
 
-.focused-player__death-mark circle {
+.focused-player__death-mark .death-watermark__cutout {
   fill: #303538;
-}
-
-.focused-player__death-mark path:last-child {
-  stroke: #e0e2df;
-  stroke-width: 1.2;
 }
 
 .focused-player__vitals {

@@ -18,7 +18,7 @@ export interface DefaultHudCompositeSnapshot {
   readonly id: DefaultHudCompositeFixture;
   readonly snapshot: ProgramSnapshot;
   readonly radarSnapshot: RadarSnapshot;
-  readonly provenance: 'real-derived' | 'synthetic-edge';
+  readonly provenance: 'synthetic-presentation' | 'synthetic-edge';
 }
 
 const SOURCES: Record<DefaultHudCompositeFixture, string> = {
@@ -135,11 +135,14 @@ export function getDefaultHudCompositeFixture(id: string): DefaultHudCompositeSn
     radarSnapshot,
     provenance:
       fixtureId === 'default-avatar-present' ||
+      fixtureId === 'default-freezetime' ||
+      fixtureId === 'default-observed' ||
+      fixtureId === 'default-dead' ||
       fixtureId === 'default-low-hp' ||
       fixtureId === 'default-critical' ||
       fixtureId === 'default-nuke-multifloor' ||
       fixtureId === 'default-missing-logo'
         ? 'synthetic-edge'
-        : 'real-derived',
+        : 'synthetic-presentation',
   };
 }

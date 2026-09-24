@@ -10,6 +10,7 @@ import {
   derivePresentationStressFixture,
   type PresentationStressPatch,
 } from './presentation-stress';
+import { RIVALS_BP_RECORDS, rivalsSeriesCut } from './rivals-bp-records';
 
 type ProgramPlayer = ProgramPayload['players'][number];
 type PlayerState = NonNullable<ProgramPlayer['state']>;
@@ -294,6 +295,7 @@ const BO3_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
   ],
@@ -316,6 +318,7 @@ const BO3_MAP1_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_mirage',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'pending',
     }),
     seriesMap({
@@ -323,6 +326,7 @@ const BO3_MAP1_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
   ],
@@ -354,6 +358,7 @@ const BO5_SERIES = makeSeries({
       mapOrder: 1,
       mapName: 'de_ancient',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
       status: 'completed',
       finalScore: { a: 13, b: 11 },
       winnerEntryId: SERIES_ENTRANTS.a.entryId,
@@ -363,6 +368,7 @@ const BO5_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_anubis',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'completed',
       finalScore: { a: 8, b: 13 },
       winnerEntryId: SERIES_ENTRANTS.b.entryId,
@@ -371,14 +377,16 @@ const BO5_SERIES = makeSeries({
       mapId: 'fixture-bo5-map-3',
       mapOrder: 3,
       mapName: 'de_inferno',
-      selection: { kind: 'unknown' },
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'T',
       status: 'current',
     }),
     seriesMap({
       mapId: 'fixture-bo5-map-4',
       mapOrder: 4,
       mapName: 'de_mirage',
-      selection: { kind: 'unknown' },
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
     seriesMap({
@@ -386,6 +394,7 @@ const BO5_SERIES = makeSeries({
       mapOrder: 5,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'T',
       status: 'pending',
     }),
   ],
@@ -441,6 +450,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 1,
       mapName: 'de_ancient',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
       status: 'completed',
       finalScore: { a: 13, b: 6 },
       winnerEntryId: SERIES_ENTRANTS.a.entryId,
@@ -450,6 +460,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_anubis',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'completed',
       finalScore: { a: 10, b: 13 },
       winnerEntryId: SERIES_ENTRANTS.b.entryId,
@@ -459,6 +470,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'current',
     }),
   ],
@@ -879,7 +891,7 @@ function presentationFixture(
             ? { ...map.selection, entryId: entryId(map.selection.entryId)! }
             : map.selection,
       })),
-      veto: series.veto,
+      veto: series.veto.map((step) => ({ ...step, entryId: entryId(step.entryId) })),
     },
   });
 }
@@ -1006,6 +1018,22 @@ export const syntheticProgramFixtures = {
   'series-bo3-map1': presentationFixture('real-live-rich', BO3_MAP1_SERIES),
   'series-bo5': presentationFixture('real-live-rich', BO5_SERIES),
   'series-bo5-pick-loss': presentationFixture('real-live-rich', BO5_PICK_LOSS_SERIES),
+  'bp-rivals-final-map4': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'bp-rivals-final-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, null),
+  ),
+  'bp-rivals-semi-a-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'bp-rivals-semi-b-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
   'series-not-played': presentationFixture('real-live-rich', NOT_PLAYED_SERIES),
   'series-logo-mixed': presentationFixture('real-live-rich', MIXED_LOGO_SERIES),
   'series-decider': presentationFixture('real-live-rich', DECIDER_SERIES),
@@ -1153,6 +1181,24 @@ export const SYNTHETIC_FIXTURE_PROVENANCE = {
   'series-bo5-pick-loss': {
     kind: 'synthetic-presentation',
     reason: '以真实 Program snapshot 为底，合成选图方失利的比分与赢家，用于视觉预览。',
+  },
+  'bp-rivals-final-map4': {
+    kind: 'synthetic-presentation',
+    reason:
+      '2026 NJU Rivals 总决赛官方 BP/赛果，在第 4 图开打前截取；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-final-result': {
+    kind: 'synthetic-presentation',
+    reason:
+      '2026 NJU Rivals 总决赛官方 BP/赛果的赛后切面；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-semi-a-result': {
+    kind: 'synthetic-presentation',
+    reason: '2026 NJU Rivals 胜者组半决赛官方 BP/赛果；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-semi-b-result': {
+    kind: 'synthetic-presentation',
+    reason: '2026 NJU Rivals 胜者组半决赛官方 BP/赛果；背景 GSI 来自独立真实回放，只验收系列图条。',
   },
   'series-not-played': {
     kind: 'synthetic-presentation',

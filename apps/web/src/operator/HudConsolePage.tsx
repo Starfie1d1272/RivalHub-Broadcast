@@ -29,7 +29,7 @@ import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
   getProgramFixture,
-  PROGRAM_FIXTURE_IDS,
+  HUD_EDITOR_FIXTURE_GROUPS,
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
@@ -141,7 +141,7 @@ export function HudConsolePage() {
   const [lastValidTheme, setLastValidTheme] = useState<HudTheme>(themeDraft);
   const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId | null>(null);
   const [previewSource, setPreviewSource] = useState<'fixture' | 'current-live'>('fixture');
-  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>('live-canonical');
+  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>('real-live-rich');
   const [showGrid, setShowGrid] = useState(true);
   const [showCenter, setShowCenter] = useState(true);
   const [showSafeArea, setShowSafeArea] = useState(false);
@@ -722,13 +722,22 @@ export function HudConsolePage() {
                   value={fixtureId}
                   onChange={(event) => setFixtureId(event.target.value as ProgramFixtureId)}
                 >
-                  {PROGRAM_FIXTURE_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {fixtureLabel(id)}
-                    </option>
+                  {HUD_EDITOR_FIXTURE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.ids.map((id) => (
+                        <option key={id} value={id}>
+                          {fixtureLabel(id)}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </label>
+            ) : null}
+            {activePreviewSource === 'fixture' && fixtureId.startsWith('bp-rivals-') ? (
+              <p className="hud-console__fixture-note">
+                BP 与赛果来自 2026 NJU Rivals；其余游戏画面属于独立回放，仅用于检查系列图条。
+              </p>
             ) : null}
             <span
               className="hud-console__source-status"

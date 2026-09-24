@@ -12,7 +12,7 @@
 
 .match-header__top-score {
   position: relative;
-  width: 448px;
+  width: 480px;
   height: 152px;
   overflow: visible;
   background: transparent;
@@ -21,19 +21,10 @@
 .match-header__score-shell {
   position: absolute;
   inset: 0 auto auto 0;
-  width: 448px;
+  width: 480px;
   height: 74px;
   overflow: hidden;
-  background: #0b1119;
-}
-
-.match-header__score-shell::before {
-  position: absolute;
-  z-index: 0;
-  inset: 0;
-  background: #f3f6fa;
-  clip-path: polygon(46px 0, 402px 0, 384px 74px, 64px 74px);
-  content: '';
+  background: #111923;
 }
 
 .match-header__score-zone {
@@ -48,28 +39,34 @@
 
 .match-header__score-zone--logo-a {
   left: 0;
-  width: 64px;
+  width: 72px;
+}
+
+.match-header__score-zone--logo {
+  overflow: hidden;
+  background: #0b1119;
 }
 
 .match-header__score-zone--score-a {
-  left: 64px;
-  width: 96px;
+  left: 72px;
+  width: 104px;
 }
 
 .match-header__score-zone--score-b {
-  left: 288px;
-  width: 96px;
+  left: 304px;
+  width: 104px;
 }
 
 .match-header__score-zone--logo-b {
-  left: 384px;
-  width: 64px;
+  left: 408px;
+  width: 72px;
 }
 
 .match-header__team-logo {
   display: block;
-  width: 48px;
-  height: 48px;
+  width: 56px;
+  height: 56px;
+  flex: 0 0 56px;
   object-fit: contain;
 }
 
@@ -99,7 +96,7 @@
 }
 
 .match-header__map-score {
-  color: #0b1119;
+  color: #f3f6fa;
   font-size: 44px;
   font-weight: 800;
   line-height: 46px;
@@ -120,25 +117,25 @@
   display: block;
   width: 18px;
   height: 5px;
-  background: rgba(11, 17, 25, 0.22);
+  background: rgba(243, 246, 250, 0.2);
 }
 
 .match-header__win-slots span[data-series-win-slot='won'] {
-  background: #0b1119;
+  background: #f3f6fa;
 }
 
 .match-header__center {
   position: absolute;
   z-index: 1;
   top: 0;
-  left: 160px;
+  left: 176px;
   display: flex;
   width: 128px;
   height: 74px;
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  color: #0b1119;
+  color: #f3f6fa;
   text-align: center;
 }
 
@@ -205,7 +202,7 @@
   display: block;
   width: 18px;
   height: 18px;
-  fill: #0b1119;
+  fill: #f3f6fa;
 }
 
 .match-header__tech-pause strong {
@@ -220,7 +217,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #0b1119;
+  color: #f3f6fa;
 }
 
 .objective-center__bomb {
@@ -236,7 +233,7 @@
   display: block;
   width: 36px;
   height: 44px;
-  background: #0b1119;
+  background: #f3f6fa;
   mask-image: var(--objective-icon);
   mask-position: center;
   mask-repeat: no-repeat;
@@ -274,7 +271,7 @@
   bottom: 2px;
   max-width: 120px;
   overflow: hidden;
-  color: #0b1119;
+  color: #aab4c0;
   font-size: 9px;
   font-weight: 800;
   line-height: 11px;
@@ -289,7 +286,7 @@
   left: 5px;
   height: 3px;
   overflow: hidden;
-  background: rgba(11, 17, 25, 0.18);
+  background: rgba(243, 246, 250, 0.18);
 }
 
 .objective-center__plant-progress span {
@@ -327,7 +324,7 @@
 }
 
 .objective-center__ring-track {
-  stroke: rgba(11, 17, 25, 0.2);
+  stroke: rgba(243, 246, 250, 0.2);
 }
 
 .objective-center__ring-fill {
@@ -339,7 +336,7 @@
   z-index: 2;
   top: 80px;
   left: 8px;
-  width: 432px;
+  width: 464px;
   height: 6px;
   overflow: hidden;
   background: rgba(243, 246, 250, 0.14);
@@ -360,7 +357,7 @@
   position: absolute;
   z-index: 3;
   top: 104px;
-  left: 158px;
+  left: 174px;
   display: grid;
   width: 132px;
   height: 48px;
@@ -423,7 +420,7 @@
 }
 
 .match-header__timeout-panel--b {
-  left: 292px;
+  left: 324px;
 }
 
 .match-header__timeout-label {

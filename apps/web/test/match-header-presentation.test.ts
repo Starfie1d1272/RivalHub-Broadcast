@@ -114,8 +114,12 @@ describe('Match Header presentation selector', () => {
       pickOutcome: 'win',
       winnerName: 'Southpoint',
     });
-    expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
-    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER' });
+    expect(value.seriesMaps?.[2]).toMatchObject({
+      selectionText: 'PICK',
+      picker: 'a',
+      startSide: 'T',
+    });
+    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER', startSide: 'T' });
   });
 
   it('marks a completed picked-map loss from the picker perspective', () => {

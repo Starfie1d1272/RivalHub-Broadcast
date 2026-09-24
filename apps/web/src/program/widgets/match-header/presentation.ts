@@ -32,6 +32,8 @@ export interface MatchHeaderSeriesMapPresentation {
   readonly mapName: string;
   readonly mapKey: string;
   readonly selectionText: string;
+  readonly picker: MatchHeaderEntrantKey | null;
+  readonly pickerName: string | null;
   readonly pickerLogoUrl: string | null;
   readonly startSide: MatchHeaderSide | null;
   readonly status: 'pending' | 'current' | 'completed' | 'not_played';
@@ -228,8 +230,10 @@ function buildSeriesMaps(
       mapName: displayMapName(map.mapName) ?? map.mapName,
       mapKey: radarMapKey(map.mapName),
       selectionText: selectionText(map.selection, series.entrants),
+      picker,
+      pickerName: picker === null ? null : series.entrants[picker].name,
       pickerLogoUrl: picker === null ? null : series.entrants[picker].logoUrl,
-      startSide: map.selection.kind === 'decider' ? null : map.teamAStartSide,
+      startSide: map.teamAStartSide,
       status: map.status,
       statusText: score,
       finalScore: map.finalScore,

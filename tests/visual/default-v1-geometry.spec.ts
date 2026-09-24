@@ -50,9 +50,9 @@ async function assertHudGeometry(page: Page) {
     height: 478,
   });
   await assertBox(page.locator('[data-hud-widget="top-score-bar"]'), {
-    x: 736,
+    x: 720,
     y: 36,
-    width: 448,
+    width: 480,
     height: 152,
   });
   await assertBox(page.locator('[data-hud-widget="focused-player"]'), {
@@ -64,21 +64,21 @@ async function assertHudGeometry(page: Page) {
 
   const scoreWidget = page.locator('[data-match-header-widget="top-score-bar"]');
   await assertBox(scoreWidget.locator('.match-header__score-shell'), {
-    x: 736,
+    x: 720,
     y: 36,
-    width: 448,
+    width: 480,
     height: 74,
   });
   await assertBox(scoreWidget.locator('.match-header__score-zone--logo-a'), {
-    x: 736,
+    x: 720,
     y: 36,
-    width: 64,
+    width: 72,
     height: 74,
   });
   await assertBox(scoreWidget.locator('.match-header__score-zone--score-a'), {
-    x: 800,
+    x: 792,
     y: 36,
-    width: 96,
+    width: 104,
     height: 74,
   });
   await assertBox(scoreWidget.locator('.match-header__center'), {
@@ -90,13 +90,13 @@ async function assertHudGeometry(page: Page) {
   await assertBox(scoreWidget.locator('.match-header__score-zone--score-b'), {
     x: 1024,
     y: 36,
-    width: 96,
+    width: 104,
     height: 74,
   });
   await assertBox(scoreWidget.locator('.match-header__score-zone--logo-b'), {
-    x: 1120,
+    x: 1128,
     y: 36,
-    width: 64,
+    width: 72,
     height: 74,
   });
 
@@ -382,9 +382,9 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       await expect(page.locator('[data-objective-mode="planted"]')).toHaveCount(1);
       await expect(page.locator('[data-objective-track="fuse"]')).toHaveCount(1);
       await assertBox(page.locator('[data-objective-track="fuse"]'), {
-        x: 744,
+        x: 728,
         y: 116,
-        width: 432,
+        width: 464,
         height: 6,
       });
     }

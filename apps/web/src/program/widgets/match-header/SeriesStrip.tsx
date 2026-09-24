@@ -30,10 +30,12 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
             map.pickOutcome === null ? '' : ` match-header__series-map--pick-${map.pickOutcome}`;
           return (
             <div
-              aria-label={statusText ? `${map.mapName} ${statusText}` : map.mapName}
+              aria-label={`${map.mapName}${map.pickerName === null ? '' : ` picked by ${map.pickerName}`}${statusText ? ` ${statusText}` : ''}`}
               className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}${outcomeClass}`}
               data-map-order={map.mapOrder}
+              data-picker={map.picker ?? 'none'}
               data-pick-outcome={map.pickOutcome ?? 'neutral'}
+              data-start-side={map.startSide ?? 'unknown'}
               data-map-status={map.status}
               key={map.mapOrder}
               role="listitem"
@@ -48,9 +50,9 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
                       : { backgroundImage: `url("${mapAsset.outputPath}")` }
                   }
                 />
-                {map.pickerLogoUrl === null || decider ? null : (
+                {map.pickerLogoUrl === null ? null : (
                   <img
-                    alt=""
+                    alt={`${map.pickerName} picked this map`}
                     className="match-header__series-map-picker"
                     onError={(event) => {
                       event.currentTarget.style.display = 'none';
@@ -58,9 +60,9 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
                     src={map.pickerLogoUrl}
                   />
                 )}
-                {map.startSide === null || decider ? null : (
+                {map.startSide === null ? null : (
                   <span
-                    aria-label={`Start side ${map.startSide}`}
+                    aria-label={`Team A start side ${map.startSide}`}
                     className={`match-header__series-map-start-side match-header__series-map-start-side--${map.startSide}`}
                     data-side={map.startSide}
                     style={

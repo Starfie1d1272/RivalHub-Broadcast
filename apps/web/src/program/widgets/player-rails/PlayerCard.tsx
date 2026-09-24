@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import type { PlayerCardPresentation, PlayerRailAsset, PlayerRailWeapon } from './presentation';
+import { DeathWatermark } from './DeathWatermark';
 
 function displayNumber(value: number | null): string {
   return value === null ? '—' : String(Math.round(value));
@@ -108,7 +109,6 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
     { count: number; asset: PlayerRailAsset | null }
   >();
   for (const utility of player.utility) {
-    if (!UTILITY_FAMILIES.includes(utility.family as (typeof UTILITY_FAMILIES)[number])) continue;
     const current = counts.get(utility.family);
     counts.set(utility.family, {
       count: (current?.count ?? 0) + utility.count,
@@ -206,16 +206,20 @@ function PlayerBody({
       {dead ? (
         <div className="player-rail__dead-stats" data-dead-stats="true">
           <span aria-hidden="true" className="player-rail__death-mark">
-            <StatGlyph kind="deaths" />
+            <DeathWatermark className="player-rail__death-watermark" />
           </span>
-          <span className="player-rail__adr">
-            <small>ADR</small>
-            <b>{displayNumber(player.liveAdr)}</b>
-          </span>
-          <span className="player-rail__damage">
-            <small>DMG</small>
-            <b>{displayNumber(player.currentRoundDamage)}</b>
-          </span>
+          {player.liveAdr === null ? null : (
+            <span className="player-rail__adr">
+              <small>ADR</small>
+              <b>{displayNumber(player.liveAdr)}</b>
+            </span>
+          )}
+          {player.currentRoundDamage === null ? null : (
+            <span className="player-rail__damage">
+              <small>DMG</small>
+              <b>{displayNumber(player.currentRoundDamage)}</b>
+            </span>
+          )}
         </div>
       ) : (
         <div

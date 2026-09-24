@@ -159,6 +159,13 @@
   min-width: min(100%, 17rem);
 }
 
+.hud-console__fixture-note {
+  width: 100%;
+  margin: 0;
+  color: var(--hud-muted);
+  font-size: 0.75rem;
+}
+
 .hud-console__field input,
 .hud-console__field select,
 .hud-console__preview-toolbar select {

@@ -42,9 +42,9 @@ describe('hud-config schema and framework contract', () => {
     expect(Object.keys(layout.widgets).sort()).toEqual([...HUD_WIDGET_IDS].sort());
     expect(layout.widgets.radar.size).toEqual({ width: 400, height: 400 });
     expect(placementToBox('top-score-bar', layout.widgets['top-score-bar'])).toMatchObject({
-      left: 736,
+      left: 720,
       top: 36,
-      width: 448,
+      width: 480,
       height: 152,
     });
     expect(placementToBox('series-strip', layout.widgets['series-strip'])).toMatchObject({

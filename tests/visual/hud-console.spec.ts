@@ -110,7 +110,7 @@ test.describe('HUD 编辑器', () => {
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
-    await expect(fixtureSelect).toHaveValue('live-canonical');
+    await expect(fixtureSelect).toHaveValue('real-live-rich');
     await expect(page.locator('option[value="current-live"]')).toHaveAttribute('disabled', '');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('.hud-console')).toHaveScreenshot(
@@ -300,8 +300,8 @@ test.describe('HUD 编辑器', () => {
 
     await expect(page.getByText('选择组件', { exact: true })).toBeVisible();
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
-    await fixtureSelect.selectOption('stress-long-labels');
-    await expect(fixtureSelect).toHaveValue('stress-long-labels');
+    await fixtureSelect.selectOption('focused-avatar');
+    await expect(fixtureSelect).toHaveValue('focused-avatar');
     await page.getByRole('button', { name: '选择雷达' }).click();
     await expect(page.getByRole('button', { name: '调整雷达大小' })).toBeVisible();
     await page.getByRole('checkbox', { name: '吸附到网格' }).uncheck();

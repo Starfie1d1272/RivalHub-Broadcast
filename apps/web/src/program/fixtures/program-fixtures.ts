@@ -32,6 +32,35 @@ export const programFixtures = {
 };
 export type ProgramFixtureId = keyof typeof programFixtures;
 export const PROGRAM_FIXTURE_IDS = Object.keys(programFixtures) as ProgramFixtureId[];
+// The operator preview stays small; the full registry remains available to visual/unit tests.
+export const HUD_EDITOR_FIXTURE_GROUPS = [
+  {
+    label: '真实遥测回放 · 赛前资料为测试样例',
+    ids: [
+      'real-live-rich',
+      'real-bomb-dropped',
+      'real-planted',
+      'real-defusing',
+      'real-post-explosion-freezetime',
+      'real-timeout-ct',
+      'real-halftime-after',
+      'real-gameover',
+    ],
+  },
+  {
+    label: '真实 Rivals BP/赛果 · 游戏回放为独立样本',
+    ids: [
+      'bp-rivals-final-map4',
+      'bp-rivals-final-result',
+      'bp-rivals-semi-a-result',
+      'bp-rivals-semi-b-result',
+    ],
+  },
+  { label: '必要边界', ids: ['focused-avatar', 'awaiting-neutral'] },
+] as const satisfies readonly {
+  readonly label: string;
+  readonly ids: readonly ProgramFixtureId[];
+}[];
 export type ProgramFixtureProvenance =
   | RealProgramProvenance
   | { readonly kind: 'synthetic-edge' | 'synthetic-presentation'; readonly reason: string };
@@ -66,6 +95,14 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   ...(Object.fromEntries(
     Object.keys(realProgramFixtures).map((id) => [id, `真实回放 · ${id.slice(5)}`]),
   ) as Record<keyof typeof realProgramFixtures, string>),
+  'real-live-rich': '实战 · 完整 5v5',
+  'real-bomb-dropped': '实战 · C4 掉落与阵亡',
+  'real-planted': '实战 · C4 已安装',
+  'real-defusing': '实战 · 拆弹与阵亡',
+  'real-post-explosion-freezetime': '实战 · 回合切换',
+  'real-timeout-ct': '实战 · CT 暂停',
+  'real-halftime-after': '实战 · 半场换边',
+  'real-gameover': '实战 · 地图结束',
   'player-rails-freezetime': '选手栏 · 回合切换前置边界',
   'awaiting-neutral': '等待初始状态',
   'live-neutral': '实时中 · 未绑定队伍',
@@ -85,6 +122,10 @@ export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> 
   'series-bo3-map1': 'BO3 · Map 1',
   'series-bo5': 'BO5 中盘',
   'series-bo5-pick-loss': 'BO5 · 选图方失利（合成）',
+  'bp-rivals-final-map4': 'Rivals 总决赛 · 第 4 图前',
+  'bp-rivals-final-result': 'Rivals 总决赛 · 完赛',
+  'bp-rivals-semi-a-result': 'Rivals 半决赛 · 大猛男队对 D’avenir',
+  'bp-rivals-semi-b-result': 'Rivals 半决赛 · Clarys 对 Plasma',
   'series-not-played': '系列赛未进行地图',
   'series-logo-mixed': '队伍 Logo 有/无',
   'series-halftime-swap': '半场换边',
