@@ -29,9 +29,7 @@ export function smokeLobes(seed: string, radius: number): readonly SmokeLobe[] {
 
   for (let index = 0; index < 8; index += 1) {
     const angle =
-      rotation +
-      (index / 8) * Math.PI * 2 +
-      (unit(seed, 10 + index) - 0.5) * 0.34;
+      rotation + (index / 8) * Math.PI * 2 + (unit(seed, 10 + index) - 0.5) * 0.34;
     const distance = radius * (0.24 + unit(seed, 30 + index) * 0.2);
     lobes.push({
       dx: Math.cos(angle) * distance,
