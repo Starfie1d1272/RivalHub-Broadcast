@@ -551,7 +551,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.restore();
           }
           const flashRatio =
-            alive && p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
+            alive && p.flashAmount !== null
+              ? Math.min(1, Math.max(0, p.flashAmount / 255))
+              : 0;
           circle(x, y, 29, '#f3f6fa');
           circle(x, y, 25, color, '#0b1119', 2);
           if (flashRatio > 0) {
