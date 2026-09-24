@@ -1,70 +1,85 @@
+import { getMapThumbnail, getSideLogo } from '@rivalhub-broadcast/cs2-assets';
+import type { CSSProperties } from 'react';
+
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
-
 import { buildMatchHeaderPresentation } from './presentation';
-
-/**
- * Presentation adaptation based on Eon maps-sleek at
- * a37326cd59d37dc6c157832ba06b01c232d878e1 (ISC), using the compact per-map
- * cell and current/finished/pending hierarchy from maps-sleek.html/css/js.
- * The Vue option tree, raw match state, map-image assumptions, and name-based
- * current-map inference are intentionally omitted.
- */
 
 export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
   const presentation = buildMatchHeaderPresentation(snapshot.payload);
-  if (presentation.seriesMaps === null) return null;
+  const maps = presentation.seriesMaps;
+  if (maps === null) return null;
 
   return (
     <section
-      aria-label="系列赛地图"
+      aria-label="Series maps"
       className="match-header match-header__series-strip"
       data-match-header-widget="series-strip"
     >
-      <div className="match-header__series-strip-heading">
-        <span>系列赛</span>
-        <span>
-          {presentation.bestOfLabel ?? 'BO —'} {presentation.seriesScoreText ?? '—'}
-        </span>
-      </div>
-      <div className="match-header__series-maps" role="list">
-        {presentation.seriesMaps.map((map) => (
-          <div
-            aria-label={`${map.mapName}，${map.winnerName === null ? map.statusText : `${map.winnerName} ${map.statusText} ✓`}`}
-            className={`match-header__series-map match-header__series-map--${map.status}${
-              map.winner === null ? '' : ` match-header__series-map--winner-${map.winner}`
-            }`}
-            data-map-order={map.mapOrder}
-            data-map-status={map.status}
-            key={map.mapOrder}
-            role="listitem"
-          >
-            <span className="match-header__series-map-name" title={map.mapName}>
-              {map.mapName}
-            </span>
-            <span className="match-header__series-map-selection" title={map.selectionText}>
-              {map.selectionText}
-            </span>
-            <strong
-              className={`match-header__series-map-status${
-                map.winnerName === null ? '' : ' match-header__series-map-status--winner'
-              }`}
+      <div
+        className="match-header__series-maps"
+        role="list"
+        data-series-map-count={maps.length}
+        style={{ '--series-map-count': maps.length } as CSSProperties}
+      >
+        {maps.map((map) => {
+          const decider = map.selectionText === 'DECIDER';
+          const mapAsset = getMapThumbnail(map.mapKey);
+          const sideLogo = map.startSide === null ? null : getSideLogo(map.startSide);
+          const statusText = decider ? 'DECIDER' : map.status === 'completed' ? map.statusText : '';
+          const outcomeClass =
+            map.pickOutcome === null ? '' : ` match-header__series-map--pick-${map.pickOutcome}`;
+          return (
+            <div
+              aria-label={statusText ? `${map.mapName} ${statusText}` : map.mapName}
+              className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}${outcomeClass}`}
+              data-map-order={map.mapOrder}
+              data-pick-outcome={map.pickOutcome ?? 'neutral'}
+              data-map-status={map.status}
+              key={map.mapOrder}
+              role="listitem"
             >
-              {map.winnerName === null ? (
-                map.statusText
-              ) : (
-                <>
-                  <span className="match-header__series-map-winner-name" title={map.winnerName}>
-                    {map.winnerName}
-                  </span>
-                  <span className="match-header__series-map-winner-score">{map.statusText}</span>
-                  <span aria-label="获胜" className="match-header__series-map-winner-mark">
-                    ✓
-                  </span>
-                </>
-              )}
-            </strong>
-          </div>
-        ))}
+              <div className="match-header__series-map-art">
+                <div
+                  aria-hidden="true"
+                  className="match-header__series-map-art-image"
+                  style={
+                    mapAsset === null
+                      ? undefined
+                      : { backgroundImage: `url("${mapAsset.outputPath}")` }
+                  }
+                />
+                {map.pickerLogoUrl === null || decider ? null : (
+                  <img
+                    alt=""
+                    className="match-header__series-map-picker"
+                    onError={(event) => {
+                      event.currentTarget.style.display = 'none';
+                    }}
+                    src={map.pickerLogoUrl}
+                  />
+                )}
+                {map.startSide === null || decider ? null : (
+                  <span
+                    aria-label={`Start side ${map.startSide}`}
+                    className={`match-header__series-map-start-side match-header__series-map-start-side--${map.startSide}`}
+                    data-side={map.startSide}
+                    style={
+                      sideLogo === null
+                        ? undefined
+                        : ({
+                            '--match-header-side-logo': `url("${sideLogo.outputPath}")`,
+                          } as CSSProperties)
+                    }
+                  ></span>
+                )}
+              </div>
+              <span className="match-header__series-map-name" title={map.mapName}>
+                {map.mapName}
+              </span>
+              <strong className="match-header__series-map-status">{statusText}</strong>
+            </div>
+          );
+        })}
       </div>
     </section>
   );

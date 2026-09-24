@@ -2,6 +2,7 @@
  * (MIT). Angular shell, series pips and objective choreography follow the user-provided reference.
  * Team binding and all gameplay progress remain owned by the existing presentation join/Core. */
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
+import { useState } from 'react';
 import { ObjectiveCenter, ObjectiveFuse } from './ObjectiveCenter';
 import {
   buildMatchHeaderPresentation,
@@ -9,42 +10,64 @@ import {
   type MatchHeaderTeamPresentation,
 } from './presentation';
 
+function TeamLogo({ team }: { readonly team: MatchHeaderTeamPresentation }) {
+  const [failed, setFailed] = useState(false);
+  if (team.logoUrl === null || failed) return null;
+  return (
+    <img
+      alt=""
+      className="match-header__team-logo"
+      onError={() => setFailed(true)}
+      src={team.logoUrl}
+    />
+  );
+}
+
 function Team({ team }: { readonly team: MatchHeaderTeamPresentation }) {
   return (
-    <div
-      className={`match-header__team match-header__team--${team.key}`}
-      data-team={team.key}
-      data-side={team.side}
-    >
-      <div className="match-header__team-identity">
-        {team.logoUrl ? (
-          <img alt={`${team.name} 标志`} className="match-header__team-logo" src={team.logoUrl} />
-        ) : null}
-        <span className="match-header__team-name" title={team.name}>
-          {team.name}
-        </span>
-        <span className="match-header__side-badge">{team.side ?? '—'}</span>
+    <>
+      <div
+        aria-label={`${team.name} logo`}
+        className={`match-header__score-zone match-header__score-zone--logo match-header__score-zone--logo-${team.key}`}
+        data-team-logo-slot={team.key}
+        data-side={team.side ?? 'unknown'}
+      >
+        <TeamLogo key={`${team.key}:${team.logoUrl ?? ''}`} team={team} />
       </div>
-      <div className="match-header__score-stack">
+      <div
+        aria-label={`${team.name} score`}
+        className={`match-header__score-zone match-header__score-zone--score match-header__score-zone--score-${team.key}`}
+        data-team={team.key}
+        data-side={team.side ?? 'unknown'}
+      >
         <strong className="match-header__map-score" data-score={team.key}>
           {formatMatchHeaderScore(team.mapScore)}
         </strong>
         <div
           className="match-header__win-slots"
-          aria-label={`系列赛已赢 ${team.seriesScore ?? '未知'} 图`}
+          aria-label={`Series maps won ${team.seriesScore ?? 'unknown'}`}
         >
           {team.winSlots.map((won, index) => (
             <span key={index} data-series-win-slot={won ? 'won' : 'pending'} />
           ))}
         </div>
       </div>
-    </div>
+      <span
+        aria-hidden="true"
+        className={`match-header__side-accent match-header__side-accent--${team.key}`}
+        data-side={team.side ?? 'unknown'}
+      />
+    </>
   );
 }
 export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
   const p = buildMatchHeaderPresentation(snapshot.payload);
   const timeout = p.timeoutPanel;
-  const objective = p.objective.mode !== 'normal' && p.objective.mode !== 'paused';
+  const objective =
+    p.objective.mode !== 'normal' &&
+    p.objective.mode !== 'paused' &&
+    p.clockTone !== 'timeout' &&
+    p.clockTone !== 'paused';
   return (
     <section
       aria-label="比赛头部"
@@ -58,27 +81,19 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
           className={`match-header__center match-header__center--${p.clockTone}`}
           data-clock-tone={p.clockTone}
         >
-          {objective ? (
+          {p.clockTone === 'paused' ? (
+            <div className="match-header__tech-pause" data-tech-pause="true">
+              <svg aria-hidden="true" viewBox="0 0 18 18">
+                <path d="M4 3h3v12H4zM11 3h3v12h-3z" />
+              </svg>
+              <strong>TECH PAUSE</strong>
+            </div>
+          ) : objective ? (
             <ObjectiveCenter presentation={p} />
-          ) : timeout !== null ? (
-            <div
-              className="match-header__timeout-panel"
-              data-timeout-owner={timeout.owner ?? 'unknown'}
-              data-timeout-panel="true"
-              aria-label="战术暂停"
-            >
-              <strong className="match-header__timeout-label">战术暂停</strong>
-              {timeout.ownerName === null ? null : (
-                <span className="match-header__timeout-owner">{timeout.ownerName}</span>
-              )}
-              <div className="match-header__timeout-facts">
-                {timeout.remaining === null ? null : (
-                  <span data-timeout-remaining>剩余 {timeout.remaining} 次</span>
-                )}
-                {timeout.clockText === null ? null : (
-                  <strong data-timeout-countdown>{timeout.clockText}</strong>
-                )}
-              </div>
+          ) : p.phaseLabel === 'ROUND OVER' ? (
+            <div className="match-header__round-over" data-round-over="true">
+              <span>ROUND</span>
+              <strong>OVER</strong>
             </div>
           ) : (
             <>
@@ -92,22 +107,55 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
           )}
         </div>
         <Team team={p.teamB} />
-        {objective &&
-        (p.objective.mode === 'planted' || p.objective.mode === 'defusing') &&
-        !p.objective.stateOnly ? (
-          <ObjectiveFuse center={p.objective} />
-        ) : null}
       </div>
+      {objective &&
+      (p.objective.mode === 'planted' || p.objective.mode === 'defusing') &&
+      !p.objective.stateOnly ? (
+        <ObjectiveFuse center={p.objective} />
+      ) : null}
+      {timeout?.owner === 'a' ? (
+        <TimeoutPanel timeout={timeout} side="a" ownerSide={p.teamA.side} />
+      ) : null}
+      {timeout?.owner === 'b' ? (
+        <TimeoutPanel timeout={timeout} side="b" ownerSide={p.teamB.side} />
+      ) : null}
       {p.objective.aliveCount === null ? null : (
         <div
           className="match-header__alive-matchup"
           aria-label={`存活人数 ${p.objective.aliveCount}`}
         >
-          <strong data-side={p.teamA.side}>{p.objective.aliveCount.split('v')[0]}</strong>
+          <strong data-side={p.teamA.side ?? 'unknown'}>
+            {p.objective.aliveCount.split('v')[0]}
+          </strong>
           <span>VS</span>
-          <strong data-side={p.teamB.side}>{p.objective.aliveCount.split('v')[1]}</strong>
+          <strong data-side={p.teamB.side ?? 'unknown'}>
+            {p.objective.aliveCount.split('v')[1]}
+          </strong>
         </div>
       )}
     </section>
+  );
+}
+
+function TimeoutPanel({
+  timeout,
+  side,
+  ownerSide,
+}: {
+  readonly timeout: NonNullable<ReturnType<typeof buildMatchHeaderPresentation>['timeoutPanel']>;
+  readonly side: 'a' | 'b';
+  readonly ownerSide: MatchHeaderTeamPresentation['side'];
+}) {
+  return (
+    <div
+      className={`match-header__timeout-panel match-header__timeout-panel--${side}`}
+      data-timeout-owner={side}
+      data-side={ownerSide ?? 'unknown'}
+      data-timeout-panel="true"
+      aria-label="TACTICAL TIMEOUT"
+    >
+      <strong className="match-header__timeout-label">TACTICAL TIMEOUT</strong>
+      <span className="match-header__timeout-count">{timeout.remaining ?? '—'} LEFT</span>
+    </div>
   );
 }

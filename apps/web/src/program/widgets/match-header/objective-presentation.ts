@@ -35,7 +35,7 @@ export function buildObjectiveCenterPresentation(
 ): ObjectiveCenterPresentation {
   const phase = payload.clock?.phase;
   const bomb = payload.bomb;
-  const paused = phase === 'paused' || phase === 'timeout_ct' || phase === 'timeout_t';
+  const paused = phase === 'paused';
   const terminal =
     payload.round?.phase === 'over' ||
     phase === 'over' ||
@@ -75,6 +75,8 @@ export function buildObjectiveCenterPresentation(
     complete &&
     !paused &&
     !terminal &&
+    phase !== 'timeout_ct' &&
+    phase !== 'timeout_t' &&
     phase !== 'freezetime' &&
     payload.round?.phase !== 'freezetime' &&
     (mode !== 'normal' || phase === 'live' || payload.round?.phase === 'live') &&

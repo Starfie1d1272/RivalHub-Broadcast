@@ -5,6 +5,31 @@ import {
   utilityPresentation,
 } from '../player-rails/presentation';
 
+export function buildReserveAmmoPresentation(
+  ammoPresentation: string | undefined,
+  reserve: number | null | undefined,
+  magazineAsset: ReturnType<typeof assetForCanonicalKey>,
+) {
+  if (reserve == null || !Number.isSafeInteger(reserve) || reserve < 0) {
+    return { reserveText: null, reserveMagazine: null };
+  }
+
+  if (ammoPresentation === 'magazine') {
+    return magazineAsset === null
+      ? { reserveText: null, reserveMagazine: null }
+      : { reserveText: null, reserveMagazine: { asset: magazineAsset, count: reserve } };
+  }
+
+  if (ammoPresentation === 'shells') {
+    return { reserveText: `SHELL ${reserve}`, reserveMagazine: null };
+  }
+  if (ammoPresentation === 'reserve-rounds') {
+    return { reserveText: `RDS ${reserve}`, reserveMagazine: null };
+  }
+
+  return { reserveText: null, reserveMagazine: null };
+}
+
 export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
   if (payload.observedPlayerSourceId === null) return null;
   const matches = payload.players.filter(
@@ -38,16 +63,11 @@ export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
   const firearm = activeItem?.item?.kind === 'firearm';
   const reserve = active?.ammoReserve;
   const ammoPresentation = activeItem?.item?.ammoPresentation;
-  const reserveText =
-    !firearm || reserve == null
-      ? null
-      : ammoPresentation === 'magazine'
-        ? `MAG ×${reserve}`
-        : ammoPresentation === 'shells'
-          ? `SHELL ${reserve}`
-          : ammoPresentation === 'reserve-rounds'
-            ? `RDS ${reserve}`
-            : null;
+  const reserveAmmo = buildReserveAmmoPresentation(
+    firearm ? ammoPresentation : undefined,
+    firearm ? reserve : undefined,
+    assetForCanonicalKey('ammo.magazine'),
+  );
   return {
     sourcePlayerId: player.sourcePlayerId,
     avatarUrl: player.avatarUrl,
@@ -93,7 +113,7 @@ export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
       active.ammoClipMax > 0
         ? Math.max(0, Math.min(1, active.ammoClip / active.ammoClipMax))
         : null,
-    reserveText,
+    ...reserveAmmo,
   };
 }
 export type FocusedPlayerPresentation = NonNullable<

@@ -37,7 +37,7 @@ const DEFAULT_THEME_RECIPE: HudThemeRecipe = deepFreeze({
   } satisfies HudSemanticColors,
   surfaces: {
     solid: { primary: '#10151d', strong: '#080c12', opacity: 0.98, borderOpacity: 0.28 },
-    standard: { primary: '#111923', strong: '#0b1119', opacity: 0.88, borderOpacity: 0.18 },
+    standard: { primary: '#111923', strong: '#0b1119', opacity: 0.88, borderOpacity: 0.16 },
     light: { primary: '#17222d', strong: '#111a22', opacity: 0.7, borderOpacity: 0.14 },
   } satisfies Record<HudPanelStyle, HudSemanticSurface>,
   radii: {

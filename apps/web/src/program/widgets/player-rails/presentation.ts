@@ -35,6 +35,7 @@ export interface PlayerRailStats {
 
 export interface PlayerCardPresentation {
   readonly sourcePlayerId: string;
+  readonly avatarUrl: string | null;
   readonly side: PlayerRailSide;
   readonly displayName: string | null;
   readonly observerSlot: number | null;
@@ -83,6 +84,8 @@ export interface TeamSummaryPresentation {
 
 export interface PlayerRailPresentation {
   readonly side: PlayerRailSide;
+  readonly entrantKey: 'a' | 'b' | null;
+  readonly entrantName: string | null;
   readonly players: readonly PlayerCardPresentation[];
   readonly summary: TeamSummaryPresentation;
 }
@@ -91,6 +94,8 @@ export interface PlayerRailsPresentation {
   readonly phase: PlayerRailsPhase;
   readonly ct: PlayerRailPresentation;
   readonly t: PlayerRailPresentation;
+  readonly left: PlayerRailPresentation;
+  readonly right: PlayerRailPresentation;
 }
 
 const EMPTY_UTILITY: TeamUtilitySummary = Object.freeze({
@@ -253,6 +258,7 @@ function playerPresentation(
 
   return {
     sourcePlayerId: player.sourcePlayerId,
+    avatarUrl: player.avatarUrl,
     side: player.side === 'T' ? 'T' : 'CT',
     displayName: player.displayName,
     observerSlot: player.observerSlot,
@@ -344,27 +350,77 @@ function phaseForPayload(payload: ProgramPayload): PlayerRailsPhase {
   return 'unknown';
 }
 
-export function buildPlayerRailsPresentation(payload: ProgramPayload): PlayerRailsPresentation {
-  const phase = phaseForPayload(payload);
-  const ct = payload.players
-    .filter((player) => player.side === 'CT')
-    .sort(comparePlayers)
-    .slice(0, 5);
-  const t = payload.players
-    .filter((player) => player.side === 'T')
+function entrantSideMapping(payload: ProgramPayload): {
+  readonly a: PlayerRailSide | null;
+  readonly b: PlayerRailSide | null;
+} {
+  const series = payload.series;
+  if (series === null) return { a: null, b: null };
+  const ct = payload.teams.ct.mode === 'canonical' ? payload.teams.ct.entryId : null;
+  const t = payload.teams.t.mode === 'canonical' ? payload.teams.t.entryId : null;
+  if (ct === null || t === null || ct === t) return { a: null, b: null };
+  if (ct === series.entrants.a.entryId && t === series.entrants.b.entryId)
+    return { a: 'CT', b: 'T' };
+  if (ct === series.entrants.b.entryId && t === series.entrants.a.entryId)
+    return { a: 'T', b: 'CT' };
+  return { a: null, b: null };
+}
+
+function buildRail(
+  side: PlayerRailSide,
+  entrantKey: 'a' | 'b' | null,
+  players: readonly ProgramPayload['players'][number][],
+  phase: PlayerRailsPhase,
+  payload: ProgramPayload,
+): PlayerRailPresentation {
+  const sorted = players
+    .filter((player) => player.side === side)
     .sort(comparePlayers)
     .slice(0, 5);
   return {
+    side,
+    entrantKey,
+    entrantName: null,
+    players: sorted.map((player) => playerPresentation(player, phase, payload)),
+    summary: teamSummary(side, sorted, payload),
+  };
+}
+
+export function buildPlayerRailsPresentation(payload: ProgramPayload): PlayerRailsPresentation {
+  const phase = phaseForPayload(payload);
+  const mapping = entrantSideMapping(payload);
+  const ct = buildRail(
+    'CT',
+    mapping.a === 'CT' ? 'a' : mapping.b === 'CT' ? 'b' : null,
+    payload.players,
     phase,
-    ct: {
-      side: 'CT',
-      players: ct.map((player) => playerPresentation(player, phase, payload)),
-      summary: teamSummary('CT', ct, payload),
-    },
-    t: {
-      side: 'T',
-      players: t.map((player) => playerPresentation(player, phase, payload)),
-      summary: teamSummary('T', t, payload),
-    },
+    payload,
+  );
+  const t = buildRail(
+    'T',
+    mapping.a === 'T' ? 'a' : mapping.b === 'T' ? 'b' : null,
+    payload.players,
+    phase,
+    payload,
+  );
+  const leftSide = mapping.a ?? 'CT';
+  const rightSide = mapping.b ?? 'T';
+  const left = leftSide === 'CT' ? ct : t;
+  const right = rightSide === 'CT' ? ct : t;
+  const series = payload.series;
+  const entrantName = (key: 'a' | 'b' | null): string | null =>
+    key === null || series === null ? null : series.entrants[key].name;
+  return {
+    phase,
+    ct,
+    t,
+    left:
+      mapping.a === null
+        ? { ...left, entrantKey: null, entrantName: null }
+        : { ...left, entrantKey: 'a', entrantName: entrantName('a') },
+    right:
+      mapping.b === null
+        ? { ...right, entrantKey: null, entrantName: null }
+        : { ...right, entrantKey: 'b', entrantName: entrantName('b') },
   };
 }
