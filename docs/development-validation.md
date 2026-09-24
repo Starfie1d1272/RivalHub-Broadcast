@@ -52,11 +52,18 @@
 - Program 视觉回归；
 - production web smoke。
 
-Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromium + `ubuntu-24.04`。其它本地平台运行视觉测试只用于冒烟，不更新正式基准。
+Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromium + `ubuntu-24.04`。仓库只提交 `tests/visual/__screenshots__/linux/`；Darwin / Windows 本地截图属于临时预览，不是正式 baseline，也不应提交。
+
+视觉验证区分两个生命周期：
+
+- **Draft PR = 设计探索。** visual job 使用 `pnpm visual:update` 在 Ubuntu / Chromium 上实际渲染全部视觉场景，并上传 `visual-candidates-<SHA>` artifact。截图与旧 baseline 不同本身不是失败；渲染错误、非截图断言失败仍会使 job 失败。
+- **Ready PR / main = 验收。** visual job 使用 `pnpm visual:test` 严格比较 canonical Linux baseline。准备定稿时，不要求开发者在 macOS 或虚拟机生成 Linux 截图；直接在目标分支手工运行 **Approve visual baseline** workflow，由 Ubuntu runner 生成并提交新的 canonical baseline，然后 Ready PR 再接受严格回归。
+
+因此 visual baseline 表达“已经批准的设计”，不是设计探索期间的工作草稿。只有准备把视觉状态作为可回归产品事实时才更新 baseline；普通 CSS / composition 探索无需先制造一次预期失败再上传截图。
 
 Gameplay visual acceptance is real-first. Normal Program/HUD states must use generated real-derived Program fixtures whenever committed capture evidence exists. Synthetic fixtures are reserved for explicit edge/fail-closed or presentation stress and must declare provenance/reason.
 
-真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。更新流程为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff → 在正式基准环境运行 `pnpm visual:update` → `pnpm visual:test`。展示压力测试只覆盖文案、logo、选手 avatarUrl 与赛制展示；头像验收使用确定性本地/data-URI 图片，加载失败由组件测试验证；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
+真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。视觉探索在 Draft PR 直接审查 CI candidate artifact；视觉定稿时运行 **Approve visual baseline**，再由 `pnpm visual:test` 验证。展示压力测试只覆盖文案、logo、选手 avatarUrl 与赛制展示；头像验收使用确定性本地/data-URI 图片，加载失败由组件测试验证；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
 
 ### C. 真实 CS2 / CSTV
 
@@ -158,7 +165,7 @@ pnpm qualification:verify <evidence-dir-or-zip>
 
 具体 PR 由 planner 选择子集；手工排查时可直接运行需要的完整命令。
 
-HUD 控制台的视觉回归必须同时检查测试场景选择、Current Live 在没有已接收初始状态时 disabled、已选 Current Live 在 stale/重连/协议错误时保持选择但 fail-closed、新初始状态恢复后继续 live、编辑层拖动/尺寸控件、品牌色十六进制输入、三套草稿跨工作区保留，以及正式节目路由不包含编辑辅助层；还要验证 preset/appearance 只为未实现组件显示占位，layout 工作区才提供选择/拖动/resize chrome。截图断言使用仓库已有的 Darwin/Linux 平台基线。视觉测试中的 fixture 不是生产 telemetry，也不能作为当前实时来源失效时的 fallback。
+HUD 控制台的视觉验证必须同时检查测试场景选择、Current Live 在没有已接收初始状态时 disabled、已选 Current Live 在 stale/重连/协议错误时保持选择但 fail-closed、新初始状态恢复后继续 live、编辑层拖动/尺寸控件、品牌色十六进制输入、三套草稿跨工作区保留，以及正式节目路由不包含编辑辅助层；还要验证 preset/appearance 只为未实现组件显示占位，layout 工作区才提供选择/拖动/resize chrome。严格截图断言只使用 canonical Linux / Chromium baseline；其它平台只做本地预览或浏览器冒烟。视觉测试中的 fixture 不是生产 telemetry，也不能作为当前实时来源失效时的 fallback。
 
 ## 5. Windows + CS2 现场验收包
 
