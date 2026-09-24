@@ -415,19 +415,46 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         for (const exit of model.exits.values()) {
           const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
           drawTrail(exit.marker, alpha);
-          ctx.globalAlpha = alpha;
           const exitPoint = pointAt(exit.marker.target);
-          if (exitPoint) {
-            circle(
-              exitPoint.x,
-              exitPoint.y,
-              15 + (1 - alpha) * 18,
-              '#ffffff10',
-              sideColor(exit.marker.side),
-              2,
-            );
+          if (exitPoint === null) continue;
+
+          const kind = exit.marker.source.kind;
+          if (kind === 'frag' || kind === 'hegrenade') {
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.strokeStyle = '#f3f6fa';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(exitPoint.x, exitPoint.y, 10 + (1 - alpha) * 26, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = alpha * 0.36;
+            ctx.beginPath();
+            ctx.arc(exitPoint.x, exitPoint.y, 5 + (1 - alpha) * 14, 0, Math.PI * 2);
+            ctx.fillStyle = '#f0b45e';
+            ctx.fill();
+            ctx.restore();
+            continue;
           }
-          ctx.globalAlpha = 1;
+
+          if (kind === 'flashbang') {
+            ctx.save();
+            ctx.translate(exitPoint.x, exitPoint.y);
+            ctx.globalAlpha = alpha * 0.88;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            for (let ray = 0; ray < 8; ray += 1) {
+              const angle = (ray / 8) * Math.PI * 2;
+              const inner = 5 + (1 - alpha) * 3;
+              const outer = 14 + (1 - alpha) * 16;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+              ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = alpha * 0.7;
+            circle(0, 0, 6 + (1 - alpha) * 4, '#ffffff');
+            ctx.restore();
+          }
         }
         for (const marker of model.grenades.values()) {
           if (!marker.airborne) continue;
