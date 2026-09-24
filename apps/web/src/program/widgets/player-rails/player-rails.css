@@ -836,7 +836,7 @@
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
-  left: 34px;
+  left: 26px;
   justify-content: flex-start;
 }
 

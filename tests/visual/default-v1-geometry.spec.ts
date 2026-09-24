@@ -18,7 +18,7 @@ async function assertBox(
   expect(actual!.height).toBe(expected.height);
 }
 
-async function assertHudGeometry(page: Page) {
+async function assertHudGeometry(page: Page, requireBothUtilitySides = false) {
   await assertBox(page.locator('[data-program-canvas="true"]'), {
     x: 0,
     y: 0,
@@ -142,6 +142,40 @@ async function assertHudGeometry(page: Page) {
     expect(cardBoxes.map(({ y }) => y)).toEqual([600, 681, 762, 843, 924]);
   }
 
+  const utilityEdges = await page.locator('[data-player-card]').evaluateAll((cards) =>
+    cards.flatMap((card) => {
+      const utility = card.querySelector('.player-rail__utility-icons');
+      const health = card.querySelector('.player-rail__health-bar');
+      const icons = Array.from(
+        card.querySelectorAll('.player-rail__utility-item .player-rail__icon'),
+      ).filter((icon) => {
+        const style = getComputedStyle(icon);
+        return (
+          icon.getClientRects().length > 0 && style.visibility !== 'hidden' && style.opacity !== '0'
+        );
+      });
+      if (utility === null || health === null || icons.length === 0) return [];
+      const side = card.getAttribute('data-physical-side');
+      const healthRect = health.getBoundingClientRect();
+      const iconRects = icons.map((icon) => icon.getBoundingClientRect());
+      const edge =
+        side === 'left'
+          ? Math.max(...iconRects.map((rect) => rect.right))
+          : Math.min(...iconRects.map((rect) => rect.left));
+      const target = side === 'left' ? healthRect.right : healthRect.left;
+      return [{ side, edge, target, delta: edge - target }];
+    }),
+  );
+  for (const measured of utilityEdges) {
+    expect(
+      Math.abs(measured.delta),
+      `${measured.side} utility edge ${measured.edge} should align with HP track ${measured.target}`,
+    ).toBeLessThanOrEqual(1);
+  }
+  if (requireBothUtilitySides) {
+    expect(new Set(utilityEdges.map(({ side }) => side))).toEqual(new Set(['left', 'right']));
+  }
+
   const liveBody = page
     .locator('[data-hud-widget="team-ct-rail"] [data-life-state="alive"] .player-rail__body')
     .first();
@@ -226,7 +260,7 @@ async function assertHudGeometry(page: Page) {
   }
 }
 
-test.setTimeout(120_000);
+test.setTimeout(180_000);
 
 test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async ({ page }) => {
   for (const fixtureId of DEFAULT_HUD_COMPOSITE_FIXTURES) {
@@ -245,7 +279,7 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
     }
     await expect(page.locator('canvas.radar')).toHaveAttribute('data-radar-state', 'live');
     await expect(page.locator('canvas.radar')).toHaveAttribute('data-radar-artwork', 'ready');
-    await assertHudGeometry(page);
+    await assertHudGeometry(page, fixtureId === 'default-live-5v5');
 
     if (fixtureId === 'default-missing-logo') {
       await expect(page.locator('[data-team-logo-slot] img')).toHaveCount(0);
