@@ -821,6 +821,15 @@
   grid-column: 1;
 }
 
+/* Keep a full four-grenade loadout on the same outer edge as the 64px HP bar. */
+.player-rail__card[data-physical-side='left'] .player-rail__utility-icons {
+  margin-right: 26px;
+}
+
+.player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
+  margin-left: 26px;
+}
+
 .player-rail__equipment-slot,
 .player-rail__equipment-slot .player-rail__icon {
   width: 16px;
