@@ -188,22 +188,6 @@ function PlayerBody({
         <span className="player-rail__name" title={player.displayName ?? undefined}>
           {player.displayName ?? 'PLAYER'}
         </span>
-        <span
-          aria-label={
-            player.roundKills === null
-              ? 'Round kills unavailable'
-              : `Round kills ${player.roundKills}`
-          }
-          className="player-rail__round-kills"
-          data-round-kills={player.roundKills ?? 0}
-        >
-          {player.roundKills !== null && player.roundKills > 0 ? (
-            <>
-              <StatGlyph kind="kills" />
-              <b>{player.roundKills}</b>
-            </>
-          ) : null}
-        </span>
         {dead ? null : (
           <strong className="player-rail__health-value" data-health-value="true">
             {displayNumber(player.health)}
@@ -256,6 +240,16 @@ function PlayerBody({
         <span className="player-rail__money">{displayMoney(player.money)}</span>
         {player.mode === 'freezetime' && !dead ? (
           <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
+        ) : null}
+        {!dead && player.roundKills !== null && player.roundKills > 0 ? (
+          <span
+            aria-label={`Round kills ${player.roundKills}`}
+            className="player-rail__round-kills"
+            data-round-kills={player.roundKills}
+          >
+            <StatGlyph kind="kills" />
+            <b>{player.roundKills}</b>
+          </span>
         ) : null}
         {dead ? <Kd player={player} /> : null}
       </div>

@@ -24,8 +24,8 @@
   height: 28px;
   flex: 0 0 28px;
   align-items: center;
-  padding: 0 8px;
-  background: linear-gradient(90deg, rgba(11, 17, 25, 0.72), rgba(11, 17, 25, 0.16));
+  padding: 0 10px;
+  background: rgba(12, 17, 24, 0.9);
   border-bottom: 0;
 }
 
@@ -47,19 +47,18 @@
   min-width: 0;
   overflow: hidden;
   color: rgba(243, 246, 250, 0.86);
-  font-size: 18px;
-  font-weight: 800;
+  font-size: 16px;
+  font-weight: 750;
   letter-spacing: 0.005em;
   line-height: 20px;
   text-overflow: ellipsis;
-  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.5);
   white-space: nowrap;
 }
 
 .player-rail--right .player-rail__header {
   justify-content: flex-end;
-  padding-right: 8px;
-  background: linear-gradient(270deg, rgba(11, 17, 25, 0.72), rgba(11, 17, 25, 0.16));
+  padding-right: 10px;
+  background: rgba(12, 17, 24, 0.9);
   text-align: right;
 }
 
@@ -111,11 +110,11 @@
 }
 
 .player-rail__card[data-side='CT'] .player-rail__avatar {
-  background: linear-gradient(135deg, rgba(106, 168, 255, 0.2), #0b1119 72%);
+  background: #26384a;
 }
 
 .player-rail__card[data-side='T'] .player-rail__avatar {
-  background: linear-gradient(135deg, rgba(242, 189, 79, 0.2), #0b1119 72%);
+  background: #403624;
 }
 
 .player-rail__avatar img {
@@ -129,17 +128,13 @@
 .player-rail__avatar::after {
   position: absolute;
   inset: 0;
-  background:
-    linear-gradient(90deg, transparent 58%, rgba(11, 17, 25, 0.28)),
-    linear-gradient(180deg, transparent 48%, rgba(11, 17, 25, 0.42));
+  background: linear-gradient(90deg, transparent 65%, rgba(11, 17, 25, 0.22));
   content: '';
   pointer-events: none;
 }
 
 .player-rail--right .player-rail__avatar::after {
-  background:
-    linear-gradient(270deg, transparent 58%, rgba(11, 17, 25, 0.28)),
-    linear-gradient(180deg, transparent 48%, rgba(11, 17, 25, 0.42));
+  background: linear-gradient(270deg, transparent 65%, rgba(11, 17, 25, 0.22));
 }
 
 .player-rail__avatar img[data-dead='true'] {
@@ -158,73 +153,53 @@
   background: #111923;
 }
 
-.player-rail__card[data-side='CT'] .player-rail__body {
-  background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.02) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.016) 48% 49%, transparent 50%),
-    linear-gradient(112deg, rgba(106, 168, 255, 0.12) 0%, rgba(19, 37, 57, 0.96) 50%, #111923 100%);
-  background-size:
-    32px 28px,
-    32px 28px,
-    auto;
+.player-rail__body::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 72px;
+  background: linear-gradient(90deg, rgba(106, 168, 255, 0.11), transparent);
+  content: '';
+  pointer-events: none;
 }
 
-.player-rail__card[data-side='T'] .player-rail__body {
-  background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.02) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.016) 48% 49%, transparent 50%),
-    linear-gradient(112deg, rgba(242, 189, 79, 0.13) 0%, rgba(55, 43, 22, 0.96) 50%, #111923 100%);
-  background-size:
-    32px 28px,
-    32px 28px,
-    auto;
+.player-rail__card[data-side='T'] .player-rail__body::before {
+  background: linear-gradient(90deg, rgba(242, 189, 79, 0.11), transparent);
 }
 
-.player-rail--right .player-rail__card[data-side='CT'] .player-rail__body {
-  background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.02) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.016) 48% 49%, transparent 50%),
-    linear-gradient(248deg, rgba(106, 168, 255, 0.12) 0%, rgba(19, 37, 57, 0.96) 50%, #111923 100%);
-  background-size:
-    32px 28px,
-    32px 28px,
-    auto;
+.player-rail--right .player-rail__body::before {
+  right: 0;
+  left: auto;
+  transform: scaleX(-1);
 }
 
-.player-rail--right .player-rail__card[data-side='T'] .player-rail__body {
-  background:
-    linear-gradient(60deg, transparent 0 47%, rgba(255, 255, 255, 0.02) 48% 49%, transparent 50%),
-    linear-gradient(120deg, transparent 0 47%, rgba(255, 255, 255, 0.016) 48% 49%, transparent 50%),
-    linear-gradient(248deg, rgba(242, 189, 79, 0.13) 0%, rgba(55, 43, 22, 0.96) 50%, #111923 100%);
-  background-size:
-    32px 28px,
-    32px 28px,
-    auto;
-}
-
-.player-rail__card--dead {
-  filter: grayscale(0.88);
-  opacity: 0.9;
+.player-rail__card--dead .player-rail__avatar {
+  background: #30363d;
 }
 
 .player-rail__card--dead .player-rail__body {
-  background: linear-gradient(90deg, rgba(67, 74, 82, 0.88), rgba(21, 28, 36, 0.96));
+  background: #242b32;
 }
 
 .player-rail--right .player-rail__card--dead .player-rail__body {
-  background: linear-gradient(270deg, rgba(67, 74, 82, 0.88), rgba(21, 28, 36, 0.96));
+  background: #242b32;
 }
 
-.player-rail__card[data-physical-side='left'][data-observed='true'] .player-rail__body {
-  box-shadow:
-    inset -3px 0 0 #f3f6fa,
-    inset 0 0 0 1px rgba(243, 246, 250, 0.22);
+.player-rail__card[data-observed='true']::after {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: #f3f6fa;
+  content: '';
+  pointer-events: none;
 }
 
-.player-rail__card[data-physical-side='right'][data-observed='true'] .player-rail__body {
-  box-shadow:
-    inset 3px 0 0 #f3f6fa,
-    inset 0 0 0 1px rgba(243, 246, 250, 0.22);
+.player-rail__card[data-physical-side='left'][data-observed='true']::after {
+  right: 0;
+}
+
+.player-rail__card[data-physical-side='right'][data-observed='true']::after {
+  left: 0;
 }
 
 .player-rail__identity {
@@ -735,4 +710,269 @@
 .player-rail--right .player-rail__kd {
   margin-right: auto;
   margin-left: 0;
+}
+
+/* Broadcast card hierarchy. The outer card and four body rows keep their fixed boxes. */
+.player-rail__body {
+  background: #141c26;
+}
+
+.player-rail__card--dead .player-rail__body,
+.player-rail--right .player-rail__card--dead .player-rail__body {
+  background: #242b32;
+}
+
+.player-rail__name {
+  font-size: 17px;
+  font-weight: 780;
+  text-shadow: none;
+}
+
+.player-rail__health-value {
+  min-width: 36px;
+  font-weight: 850;
+  letter-spacing: -0.035em;
+  text-shadow: none;
+}
+
+.player-rail__health-bar,
+.player-rail__health-spacer {
+  width: 64px;
+  margin-right: 34px;
+  margin-left: auto;
+  background: rgba(243, 246, 250, 0.2);
+}
+
+.player-rail--right .player-rail__health-bar,
+.player-rail--right .player-rail__health-spacer {
+  margin-right: auto;
+  margin-left: 34px;
+}
+
+.player-rail__health-bar span,
+.player-rail__card[data-side='T'] .player-rail__health-bar span {
+  background: #e5eaf0;
+}
+
+.player-rail__card.is-low-health .player-rail__health-bar span {
+  background: #f06f6f;
+}
+
+.player-rail__card--dead .player-rail__health-spacer {
+  background: transparent;
+}
+
+.player-rail__combat {
+  display: grid;
+  grid-template-columns: 59px 118px 62px minmax(0, 1fr);
+  column-gap: 4px;
+}
+
+.player-rail--right .player-rail__combat {
+  grid-template-columns: minmax(0, 1fr) 62px 118px 59px;
+}
+
+.player-rail__combat .player-rail__kd {
+  width: auto;
+  grid-column: 1;
+}
+
+.player-rail__weapons {
+  width: 118px;
+  flex: none;
+  grid-column: 2;
+}
+
+.player-rail__equipment {
+  width: 62px;
+  flex: none;
+  grid-column: 3;
+}
+
+.player-rail__utility-icons {
+  width: auto;
+  flex: none;
+  gap: 2px;
+  grid-column: 4;
+}
+
+.player-rail--right .player-rail__combat .player-rail__kd {
+  grid-column: 4;
+}
+
+.player-rail--right .player-rail__weapons {
+  grid-column: 3;
+}
+
+.player-rail--right .player-rail__equipment {
+  grid-column: 2;
+}
+
+.player-rail--right .player-rail__utility-icons {
+  grid-column: 1;
+}
+
+.player-rail__equipment-slot,
+.player-rail__equipment-slot .player-rail__icon {
+  width: 16px;
+  height: 16px;
+  flex-basis: 16px;
+}
+
+.player-rail__icon.is-primary {
+  width: 116px;
+  max-width: 116px;
+  height: 24px;
+}
+
+.player-rail__combat[data-phase='freezetime'][data-secondary='true'] .player-rail__icon.is-primary {
+  width: 80px;
+  max-width: 80px;
+  height: 22px;
+}
+
+.player-rail__icon.is-secondary {
+  width: 28px;
+  max-width: 28px;
+  background-color: #b6c0cc;
+}
+
+.player-rail__utility-item {
+  width: 18px;
+  flex-basis: 18px;
+}
+
+.player-rail__utility-item .player-rail__icon {
+  width: 18px;
+}
+
+.player-rail__kd {
+  gap: 3px;
+  color: #c7cfd8;
+  font-size: 14px;
+  font-weight: 740;
+}
+
+.player-rail__stat-glyph {
+  width: 11px;
+  height: 11px;
+  flex-basis: 11px;
+  stroke: currentColor;
+}
+
+.player-rail__round-kills {
+  width: auto;
+  height: 18px;
+  flex: none;
+  margin-left: auto;
+  color: #d7dee6;
+  font-size: 12px;
+}
+
+.player-rail--right .player-rail__round-kills {
+  margin-right: auto;
+  margin-left: 0;
+}
+
+.player-rail__money {
+  font-size: 15px;
+  font-weight: 760;
+  text-shadow: none;
+}
+
+.player-rail__spent {
+  color: #9ca7b3;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: none;
+}
+
+.player-rail__death-mark {
+  opacity: 0.09;
+}
+
+.player-rail__endcap {
+  background: transparent;
+  border: 0;
+}
+
+.player-rail__endcap[data-side='T'] {
+  background: transparent;
+}
+
+.player-rail__endcap strong {
+  color: #6aa8ff;
+}
+
+.player-rail__endcap[data-side='T'] strong {
+  color: #f2bd4f;
+}
+
+.player-rail__endcap[data-observed='true'],
+.player-rail__endcap[data-side='T'][data-observed='true'] {
+  background: #f3f6fa;
+}
+
+.player-rail__endcap[data-observed='true'] strong {
+  color: #101722;
+}
+
+.player-rail__card--dead .player-rail__endcap {
+  background: transparent;
+  opacity: 1;
+}
+
+.player-rail__card--dead .player-rail__endcap strong {
+  color: #737d86;
+}
+
+.player-rail__card--dead .player-rail__endcap[data-observed='true'] {
+  background: #f3f6fa;
+}
+
+.player-rail__card--dead .player-rail__endcap[data-observed='true'] strong {
+  color: #101722;
+}
+
+.player-rail__summary {
+  background: rgba(12, 17, 24, 0.9);
+  border: 0;
+}
+
+.player-rail__economy div {
+  justify-content: center;
+  gap: 7px;
+  border: 0;
+}
+
+.player-rail__economy span {
+  color: #9ca7b3;
+  font-weight: 700;
+}
+
+.player-rail__economy strong {
+  font-size: 14px;
+  font-weight: 760;
+}
+
+.player-rail__utility {
+  grid-template-columns: repeat(5, 88px);
+}
+
+.player-rail__summary-utility {
+  width: 88px;
+  gap: 5px;
+}
+
+.player-rail__summary-utility .player-rail__icon {
+  width: 16px;
+  height: 16px;
+}
+
+.player-rail__summary-utility b {
+  font-size: 11px;
+}
+
+.player-rail__summary-utility[aria-label$=' 0'] {
+  opacity: 0.45;
 }

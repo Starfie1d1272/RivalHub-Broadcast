@@ -225,6 +225,7 @@ describe('Player Rails card presentation', () => {
       ['flash', 'utility.flashbang'],
       ['he', 'utility.hegrenade'],
       ['fire', 'utility.incgrenade'],
+      ['decoy', 'utility.decoy'],
     ]);
   });
 });

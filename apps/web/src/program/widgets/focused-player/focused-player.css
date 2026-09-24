@@ -13,27 +13,17 @@
   grid-template-rows: 42px 82px 52px;
   overflow: hidden;
   background: #111923;
-  clip-path: polygon(
-    5px 0,
-    355px 0,
-    360px 5px,
-    360px 171px,
-    355px 176px,
-    5px 176px,
-    0 171px,
-    0 5px
-  );
   color: #f3f6fa;
   font-family: var(--rh-hud-font-family, Inter), sans-serif;
   font-variant-numeric: tabular-nums;
 }
 
 .focused-player[data-side='CT'] {
-  background: linear-gradient(108deg, rgba(106, 168, 255, 0.2), rgba(17, 25, 35, 0.96) 46%);
+  background: #141c26;
 }
 
 .focused-player[data-side='T'] {
-  background: linear-gradient(108deg, rgba(242, 189, 79, 0.2), rgba(17, 25, 35, 0.96) 46%);
+  background: #181c22;
 }
 
 .focused-player::before {
@@ -66,7 +56,7 @@
   min-width: 0;
   overflow: hidden;
   color: #f3f6fa;
-  font-size: 21px;
+  font-size: 20px;
   font-weight: 800;
   line-height: 24px;
   text-overflow: ellipsis;
@@ -77,7 +67,7 @@
   display: flex;
   flex: 0 0 auto;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
   color: #aab4c0;
 }
 
@@ -134,17 +124,17 @@
 }
 
 .focused-player__media.is-observer-tile[data-side='CT'] {
-  background: #6aa8ff;
+  background: #26384a;
 }
 
 .focused-player__media.is-observer-tile[data-side='T'] {
-  background: #f2bd4f;
+  background: #403624;
 }
 
 .focused-player__observer-tile-number {
   width: 82px;
   height: 82px;
-  color: #0b1119;
+  color: #e8edf3;
   font-size: 20px;
   font-weight: 800;
   line-height: 82px;
@@ -200,9 +190,9 @@
 }
 
 .focused-player__active .focused-player__icon {
-  width: 140px;
-  max-height: 52px;
-  height: 52px;
+  width: 136px;
+  max-height: 44px;
+  height: 44px;
 }
 
 .focused-player__action-gap--b {
@@ -224,22 +214,9 @@
 
 .focused-player__ammo > strong {
   color: #f3f6fa;
-  font-size: 40px;
+  font-size: 30px;
   font-weight: 800;
-  line-height: 40px;
-}
-
-.focused-player__clip-track {
-  width: 100%;
-  height: 3px;
-  overflow: hidden;
-  background: rgba(243, 246, 250, 0.12);
-}
-
-.focused-player__clip-track span {
-  display: block;
-  height: 3px;
-  background: #c8ef78;
+  line-height: 34px;
 }
 
 .focused-player__ammo > span {
@@ -265,29 +242,35 @@
 
 .focused-player__dead-state {
   height: 134px;
-  background:
-    linear-gradient(90deg, rgba(7, 10, 14, 0.18), rgba(7, 10, 14, 0.4)),
-    repeating-linear-gradient(135deg, transparent 0 18px, rgba(243, 246, 250, 0.025) 18px 19px);
-  border-left: 1px solid rgba(243, 246, 250, 0.08);
+  background: #1e252d;
   grid-column: 3 / 6;
   grid-row: 1;
 }
 
 .focused-player__vitals {
-  display: grid;
+  display: flex;
   width: 360px;
   height: 52px;
-  grid-template-rows: 34px 4px;
-  gap: 4px;
+  align-items: center;
   padding: 5px 12px;
 }
 
 .focused-player__vitals-values {
   display: flex;
   min-width: 0;
-  height: 34px;
+  width: 100%;
+  height: 42px;
   align-items: center;
   justify-content: space-between;
+}
+
+.focused-player__health-cluster {
+  display: flex;
+  width: 70px;
+  height: 42px;
+  flex-direction: column;
+  justify-content: center;
+  gap: 3px;
 }
 
 .focused-player__hp {
@@ -317,20 +300,17 @@
 }
 
 .focused-player__health-track {
-  width: 100%;
-  height: 5px;
+  display: block;
+  width: 68px;
+  height: 4px;
   overflow: hidden;
   background: rgba(243, 246, 250, 0.12);
 }
 
 .focused-player__health-track span {
   display: block;
-  height: 5px;
-  background: #6aa8ff;
-}
-
-.focused-player[data-side='T'] .focused-player__health-track span {
-  background: #f2bd4f;
+  height: 4px;
+  background: #e5eaf0;
 }
 
 .focused-player__vitals[data-danger='true'] .focused-player__hp {
@@ -343,7 +323,7 @@
 
 .focused-player[data-dead='true'] {
   grid-template-rows: 42px 134px 0;
-  background: linear-gradient(108deg, rgba(63, 69, 77, 0.32), rgba(17, 25, 35, 0.98) 48%);
+  background: #242b32;
 }
 
 .focused-player[data-dead='true']::before {

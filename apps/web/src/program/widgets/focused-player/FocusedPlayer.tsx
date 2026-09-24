@@ -100,11 +100,6 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
             />
             <div className="focused-player__ammo">
               {p.clip === null ? null : <strong>{p.clip}</strong>}
-              {p.clipFill === null ? null : (
-                <div className="focused-player__clip-track">
-                  <span style={{ width: `${p.clipFill * 100}%` }} />
-                </div>
-              )}
               {p.reserveMagazine === null ? null : (
                 <span
                   aria-label={`Magazines in reserve: ${p.reserveMagazine.count}`}
@@ -142,14 +137,16 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
         {p.dead ? null : (
           <>
             <div className="focused-player__vitals-values">
-              <strong className="focused-player__hp">{p.health ?? '—'}</strong>
+              <span className="focused-player__health-cluster">
+                <strong className="focused-player__hp">{p.health ?? '—'}</strong>
+                <span className="focused-player__health-track">
+                  {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
+                </span>
+              </span>
               <span className="focused-player__armor">
                 <Icon asset={p.armorAsset} />
                 <b>{p.armor ?? '—'}</b>
               </span>
-            </div>
-            <div className="focused-player__health-track">
-              {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
             </div>
           </>
         )}

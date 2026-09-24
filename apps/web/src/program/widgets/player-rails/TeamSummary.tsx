@@ -22,6 +22,7 @@ const UTILITY_SLOTS: readonly { readonly family: TeamUtilityFamily; readonly lab
   { family: 'flash', label: 'FLASH' },
   { family: 'he', label: 'HE' },
   { family: 'fire', label: 'FIRE' },
+  { family: 'decoy', label: 'DECOY' },
 ];
 
 function UtilityAsset({
