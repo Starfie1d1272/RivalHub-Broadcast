@@ -92,6 +92,7 @@ export function radarEditorPreviewSnapshot(scene: RadarEditorPreviewScene): Rada
   }
   return radarSnapshotSchema.parse(structuredClone(sample.snapshot));
 }
+
 export function radarVisualFixture(id: RadarVisualFixture) {
   let snapshot = realRadarSnapshot();
   let kind: 'real-derived' | 'synthetic-edge' = 'real-derived';
