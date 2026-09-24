@@ -80,15 +80,15 @@ describe('Match Header presentation selector', () => {
 
   it('keeps objective phases free of donor countdown reconstruction', () => {
     const planted = presentation('bomb-planted');
-    expect(planted.phaseLabel).toBe('C4 已安装');
+    expect(planted.phaseLabel).toBe('PLANTED');
     expect(planted.clockText).toBeNull();
 
     const defusing = presentation('bomb-defusing');
-    expect(defusing.phaseLabel).toBe('正在拆弹');
+    expect(defusing.phaseLabel).toBe('DEFUSING');
     expect(defusing.clockText).toBeNull();
 
     const paused = presentation('series-paused');
-    expect(paused.phaseLabel).toBe('比赛暂停');
+    expect(paused.phaseLabel).toBe('TECH PAUSE');
     expect(paused.clockText).toBeNull();
   });
 
@@ -98,19 +98,49 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps).toHaveLength(5);
     expect(value.seriesMaps?.map((map) => map.statusText)).toEqual([
       '13–11',
-      '8–13',
-      '当前',
-      '未开始',
-      '未开始',
+      '13–8',
+      'CURRENT',
+      'PENDING',
+      'PENDING',
     ]);
     expect(value.seriesMaps?.[0]).toMatchObject({
-      selectionText: 'Northstar 选择',
+      selectionText: 'PICK',
       winner: 'a',
+      pickOutcome: 'win',
       winnerName: 'Northstar',
     });
-    expect(value.seriesMaps?.[1]).toMatchObject({ winner: 'b', winnerName: 'Southpoint' });
+    expect(value.seriesMaps?.[1]).toMatchObject({
+      winner: 'b',
+      pickOutcome: 'win',
+      winnerName: 'Southpoint',
+    });
     expect(value.seriesMaps?.[2]).toMatchObject({ selectionText: '' });
-    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: '决胜图' });
+    expect(value.seriesMaps?.[4]).toMatchObject({ selectionText: 'DECIDER' });
+  });
+
+  it('marks a completed picked-map loss from the picker perspective', () => {
+    const snapshot = getProgramFixture('series-bo5');
+    if (snapshot === null || snapshot.payload.series === null) throw new Error('fixture missing');
+    const series = snapshot.payload.series;
+    const first = series.maps[0];
+    if (first === undefined || first.selection.kind !== 'pick') {
+      throw new Error('picked map missing');
+    }
+    const opposingWinner =
+      first.selection.entryId === series.entrants.a.entryId
+        ? series.entrants.b.entryId
+        : series.entrants.a.entryId;
+    const value = buildMatchHeaderPresentation({
+      ...snapshot.payload,
+      series: {
+        ...series,
+        maps: series.maps.map((map, index) =>
+          index === 0 ? { ...map, winnerEntryId: opposingWinner } : map,
+        ),
+      },
+    });
+
+    expect(value.seriesMaps?.[0]?.pickOutcome).toBe('loss');
   });
 
   it('fails closed when a completed map has no known winner', () => {
@@ -130,6 +160,7 @@ describe('Match Header presentation selector', () => {
     expect(value.seriesMaps?.[0]).toMatchObject({
       statusText: '13–11',
       winner: null,
+      pickOutcome: null,
       winnerName: null,
     });
   });
@@ -138,7 +169,7 @@ describe('Match Header presentation selector', () => {
     expect(presentation('series-bo3-map1').seriesMaps?.[0]).toMatchObject({
       mapName: 'Ancient',
       status: 'current',
-      selectionText: 'Northstar 选择',
+      selectionText: 'PICK',
     });
     expect(
       presentation('series-not-played').seriesMaps?.some((map) => map.status === 'not_played'),

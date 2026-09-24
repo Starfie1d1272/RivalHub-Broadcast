@@ -35,21 +35,30 @@ for (const id of cases)
     if (id === 'objective-stale-edge')
       await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(0);
     else {
-      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('width', '620px');
-      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('height', '132px');
+      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('width', '360px');
+      await expect(page.locator('[data-hud-widget="focused-player"]')).toHaveCSS('height', '176px');
       if (id === 'focused-avatar') {
         await expect(page.locator('[data-focused-player]')).toHaveAttribute('data-avatar', 'true');
-        await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '620px');
-      } else await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '516px');
+        await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '360px');
+      } else await expect(page.locator('[data-focused-player]')).toHaveCSS('width', '360px');
       if (await page.locator('[data-objective-mode]').count())
         await expect(page.locator('[data-objective-mode]')).not.toContainText(/\d+\.\d/);
       if (id === 'real-defusing' || id === 'objective-dual-progress-edge')
         await expect(page.locator('[data-objective-track]')).toHaveCount(2);
       await expect(page.locator('[data-team="a"] [data-series-win-slot]')).toHaveCount(2);
-      if (id === 'real-planting')
-        await expect(page.locator('.objective-center__code [data-filled="true"]')).toHaveCount(0);
-      if (id === 'real-planting-late')
-        await expect(page.locator('.objective-center__code [data-filled="true"]')).toHaveCount(3);
+      if (id === 'real-planting' || id === 'real-planting-late') {
+        const progress = page.locator('.objective-center__plant-progress');
+        const bomb = page.locator('.objective-center__icon');
+        const progressBox = await progress.boundingBox();
+        const bombBox = await bomb.boundingBox();
+        expect(progressBox!.x + progressBox!.width / 2).toBeCloseTo(
+          bombBox!.x + bombBox!.width / 2,
+          0,
+        );
+        await expect(
+          page.locator('.objective-center[data-objective-mode="planting"] .objective-center__icon'),
+        ).toHaveCSS('background-color', 'rgb(11, 17, 25)');
+      }
       if (id === 'objective-dual-progress-edge') {
         await expect(page.locator('.objective-center__ring-fill')).toHaveAttribute(
           'transform',
@@ -58,14 +67,24 @@ for (const id of cases)
         const fuse = page.locator('.objective-center__fuse');
         const track = await fuse.boundingBox();
         const fill = await fuse.locator('span').boundingBox();
-        expect(Math.abs(track!.x + track!.width / 2 - (fill!.x + fill!.width / 2))).toBeLessThan(1);
+        expect(fill!.x).toBeCloseTo(track!.x, 1);
+        expect(fill!.width).toBeGreaterThan(0);
+        expect(fill!.width).toBeLessThan(track!.width);
       }
-      if (id === 'real-live-rich')
-        await expect(page.locator('[data-focused-player]')).toContainText('MAG ×3');
-      if (id === 'focused-shells-edge')
+      if (id === 'real-live-rich') {
+        const magazines = page.locator('[data-ammo-presentation="magazine"]');
+        await expect(magazines).toContainText('3');
+        await expect(magazines.locator('[data-asset-id="ammo.magazine"]')).toHaveCount(1);
+        await expect(page.locator('[data-focused-player]')).not.toContainText('MAG');
+      }
+      if (id === 'focused-shells-edge') {
         await expect(page.locator('[data-focused-player]')).toContainText('SHELL 12');
-      if (id === 'real-planted')
-        await expect(page.locator('[data-focused-player]')).toContainText('DEAD');
+        await expect(page.locator('[data-ammo-presentation="magazine"]')).toHaveCount(0);
+      }
+      if (id === 'real-planted') {
+        await expect(page.locator('.focused-player__dead-state')).toHaveCount(1);
+        await expect(page.locator('[data-focused-player]')).not.toContainText('DEAD');
+      }
     }
     await expect(canvas).toHaveScreenshot(`${id}.png`, {
       omitBackground: true,

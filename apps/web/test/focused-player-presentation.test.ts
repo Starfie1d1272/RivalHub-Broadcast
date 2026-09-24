@@ -72,22 +72,34 @@ describe('Focused current POV contract (real base, explicit synthetic evidence e
     ).toBe('CT');
   });
   it.each([
-    ['weapon_m4a1_silencer', 'MAG ×3'],
-    ['weapon_mag7', 'MAG ×3'],
-    ['weapon_nova', 'SHELL 3'],
-  ] as const)('consumes metadata for %s', (name, reserve) => {
+    ['weapon_m4a1_silencer', 'magazine', null],
+    ['weapon_mag7', 'magazine', null],
+    ['weapon_nova', null, 'SHELL 3'],
+  ] as const)('consumes metadata for %s', (name, reserveMagazine, reserveText) => {
     const p = build(payload({ weapons: [weapon(name)] }))!;
-    expect(p.reserveText).toBe(reserve);
+    expect(p.reserveMagazine?.count ?? null).toBe(reserveMagazine === 'magazine' ? 3 : null);
+    expect(p.reserveMagazine?.asset.canonicalKey ?? null).toBe(
+      reserveMagazine === 'magazine' ? 'ammo.magazine' : null,
+    );
+    expect(p.reserveText).toBe(reserveText);
     expect(p.clip).toBe(5);
     expect(p.clipFill).toBe(0.5);
   });
   it('preserves real magazine reserve, does not synthesize missing ammo evidence', () => {
-    expect(build(base)?.reserveText).toBe('MAG ×3');
+    expect(build(base)?.reserveMagazine).toMatchObject({
+      count: 3,
+      asset: { canonicalKey: 'ammo.magazine' },
+    });
     expect(
       build(
         payload({ weapons: [weapon('weapon_ak47', { ammoClipMax: null, ammoReserve: null })] }),
       ),
-    ).toMatchObject({ clip: 5, clipFill: null, reserveText: null });
+    ).toMatchObject({
+      clip: 5,
+      clipFill: null,
+      reserveText: null,
+      reserveMagazine: null,
+    });
   });
   it.each(['weapon_knife', 'weapon_flashbang', 'weapon_taser'])(
     'shows %s without numeric ammo',

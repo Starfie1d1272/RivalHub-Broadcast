@@ -172,7 +172,7 @@ describe('Radar renderer local lifecycle', () => {
       if (kind === 'stale' || kind === 'unsupported') expect(m.players.size).toBe(0);
     },
   );
-  it('selects focused floors and resets buffers across floor changes', () => {
+  it('selects focused floors while retaining both floors across floor changes', () => {
     const m = new RadarPresentation();
     const a = single();
     a.payload.mapName = 'de_nuke';
@@ -185,7 +185,7 @@ describe('Radar renderer local lifecycle', () => {
     m.accept(b, 100);
     expect(m.layer).toBe('lower');
     expect([...m.players.values()][0]!.damageUntil).toBe(0);
-    expect(m.grenades.size).toBe(0);
+    expect(m.grenades.size).toBe(1);
   });
   it('uses only effecttime, clamps remaining, and verifies real replay monotonicity', () => {
     expect(smokeRemaining(null)).toBeNull();
