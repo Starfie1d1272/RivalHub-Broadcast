@@ -9,33 +9,33 @@ import type {
 
 const WIDGET_DIMENSIONS: Record<HudWidgetId, { readonly width: number; readonly height: number }> =
   {
-    'top-score-bar': { width: 720, height: 104 },
-    'team-ct-rail': { width: 300, height: 640 },
-    'team-t-rail': { width: 300, height: 640 },
-    radar: { width: 320, height: 320 },
-    'focused-player': { width: 620, height: 132 },
-    'series-strip': { width: 420, height: 112 },
+    'top-score-bar': { width: 480, height: 152 },
+    'team-ct-rail': { width: 440, height: 478 },
+    'team-t-rail': { width: 440, height: 478 },
+    radar: { width: 400, height: 400 },
+    'focused-player': { width: 360, height: 176 },
+    'series-strip': { width: 400, height: 72 },
     'round-history': { width: 560, height: 56 },
     objective: { width: 360, height: 160 },
     'round-result': { width: 500, height: 160 },
   };
 
 export const DEFAULT_PLACEMENTS: Record<HudWidgetId, HudWidgetPlacement> = {
-  'top-score-bar': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 24 },
-  'team-ct-rail': { visible: true, anchor: 'center-left', offsetX: 28, offsetY: 0 },
-  'team-t-rail': { visible: true, anchor: 'center-right', offsetX: -28, offsetY: 0 },
+  'top-score-bar': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 36 },
+  'team-ct-rail': { visible: true, anchor: 'top-left', offsetX: 0, offsetY: 524 },
+  'team-t-rail': { visible: true, anchor: 'top-right', offsetX: 0, offsetY: 524 },
   radar: {
     visible: true,
-    anchor: 'center',
-    offsetX: 0,
-    offsetY: 0,
-    size: { width: 320, height: 320 },
+    anchor: 'top-left',
+    offsetX: 44,
+    offsetY: 116,
+    size: { width: 400, height: 400 },
   },
   'focused-player': { visible: true, anchor: 'bottom-center', offsetX: 0, offsetY: -28 },
-  'series-strip': { visible: true, anchor: 'top-left', offsetX: 24, offsetY: 24 },
-  'round-history': { visible: true, anchor: 'top-center', offsetX: 0, offsetY: 136 },
-  objective: { visible: true, anchor: 'top-right', offsetX: -28, offsetY: 28 },
-  'round-result': { visible: true, anchor: 'center', offsetX: 0, offsetY: 210 },
+  'series-strip': { visible: true, anchor: 'top-left', offsetX: 44, offsetY: 36 },
+  'round-history': { visible: false, anchor: 'top-center', offsetX: 0, offsetY: 136 },
+  objective: { visible: false, anchor: 'top-right', offsetX: -28, offsetY: 28 },
+  'round-result': { visible: false, anchor: 'center', offsetX: 0, offsetY: 210 },
 };
 
 function cloneJson<T>(value: T): T {

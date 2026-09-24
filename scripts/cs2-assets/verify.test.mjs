@@ -1,3 +1,4 @@
+import { Buffer } from 'node:buffer';
 import { createHash } from 'node:crypto';
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -121,6 +122,42 @@ describe('cs2-assets verify', () => {
       catalogItems: 1,
       assets: 1,
     });
+  });
+
+  it('verifies pinned and content-hashed broadcast artwork separately from the item catalog', async () => {
+    const root = await writeFixture();
+    const generated = join(root, 'packages', 'cs2-assets', 'generated');
+    const publicRoot = join(generated, 'public');
+    const bytes = Buffer.from('fixture-map-thumbnail');
+    const outputSha256 = createHash('sha256').update(bytes).digest('hex');
+    const outputPath = `/assets/cs2/thumbnails/de_ancient.${outputSha256.slice(0, 12)}.jpg`;
+    const sourceCommit = '1'.repeat(40);
+    const manifest = {
+      schemaVersion: 1,
+      assets: {
+        'map.de_ancient': {
+          sourceRepository: 'MurkyYT/cs2-map-icons',
+          sourceCommit,
+          sourcePath: 'images/thumbs/de_ancient_1_png.png',
+          sourceUrl: `https://github.com/MurkyYT/cs2-map-icons/blob/${sourceCommit}/images/thumbs/de_ancient_1_png.png`,
+          sourceSha256: 'a'.repeat(64),
+          transformation: 'resize and encode fixture',
+          outputPath,
+          outputSha256,
+          mediaType: 'image/jpeg',
+          owner: 'Valve / Counter-Strike 2 game asset',
+        },
+      },
+    };
+    const filePath = join(publicRoot, outputPath.slice(1));
+    await mkdir(join(filePath, '..'), { recursive: true });
+    await writeFile(filePath, bytes);
+    await writeFile(
+      join(generated, 'broadcast-assets.json'),
+      `${JSON.stringify(manifest, null, 2)}\n`,
+    );
+
+    await expect(verifyCs2Assets({ rootDir: root })).resolves.toMatchObject({ broadcastAssets: 1 });
   });
 
   it('rejects an expanded output hash prefix that does not match outputSha256', async () => {

@@ -3,8 +3,8 @@ import {
   type ProgramPayload,
   type ProgramSnapshot,
 } from '@rivalhub-broadcast/protocol/program';
-import { realProgramFixtures } from './real-program-fixtures';
-import { derivePresentationStressFixture } from './presentation-stress';
+import { realProgramFixtures } from './real-program-fixtures.js';
+import { derivePresentationStressFixture } from './presentation-stress.js';
 
 type Player = ProgramPayload['players'][number];
 const live = realProgramFixtures['real-live-rich'].snapshot;

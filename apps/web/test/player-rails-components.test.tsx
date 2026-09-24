@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { act } from 'react';
+import { getCs2Item } from '@rivalhub-broadcast/cs2-assets';
 import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -9,6 +10,7 @@ import { PlayerCard } from '../src/program/widgets/player-rails/PlayerCard';
 import { SUMMARY_HOLD_MS, TeamSummary } from '../src/program/widgets/player-rails/TeamSummary';
 import {
   buildPlayerRailsPresentation,
+  utilityPresentation,
   type TeamSummaryPresentation,
 } from '../src/program/widgets/player-rails/presentation';
 
@@ -17,7 +19,7 @@ const summary = (money: number): TeamSummaryPresentation => ({
   money,
   equip: 10_000,
   lossBonus: 1_400,
-  utility: { smoke: 1, fire: 2, flash: 3, he: 4, decoy: 5 },
+  utility: { smoke: 1, fire: 2, flash: 3, he: 4 },
   lineupComplete: true,
   utilityAvailable: true,
 });
@@ -151,9 +153,9 @@ describe('Player Rails card presentation', () => {
     });
 
     expect(container.querySelector('[data-player-equipment="true"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="护甲"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="拆弹器"]')).not.toBeNull();
-    expect(container.querySelector('[aria-label="C4"]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="armor"] [data-asset-id]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="kit"] [data-asset-id]')).not.toBeNull();
+    expect(container.querySelector('[data-equipment="c4"] [data-asset-id]')).not.toBeNull();
   });
 
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
@@ -189,7 +191,7 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('[data-player-equipment="true"]')).toBeNull();
   });
 
-  it('renders unavailable dead ADR as a dash independently of the positive visual fixture', () => {
+  it('omits unavailable dead ADR while keeping known damage', () => {
     const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');
     const dead = buildPlayerRailsPresentation(snapshot.payload).ct.players.find(
@@ -204,7 +206,8 @@ describe('Player Rails card presentation', () => {
       root?.render(<PlayerCard player={{ ...dead, liveAdr: null }} />);
     });
 
-    expect(container.querySelector('.player-rail__dead-stats')?.textContent).toContain('ADR—');
+    expect(container.querySelector('.player-rail__dead-stats')?.textContent).not.toContain('ADR');
+    expect(container.querySelector('.player-rail__dead-stats')?.textContent).toContain('DMG96');
   });
 
   it('uses the official fixed team utility asset set for both side mappings', () => {
@@ -222,10 +225,19 @@ describe('Player Rails card presentation', () => {
       ]),
     ).toEqual([
       ['smoke', 'utility.smokegrenade'],
-      ['fire', 'utility.incgrenade'],
       ['flash', 'utility.flashbang'],
       ['he', 'utility.hegrenade'],
-      ['decoy', 'utility.decoy'],
+      ['fire', 'utility.incgrenade'],
     ]);
+  });
+
+  it('keeps decoys out of on-air utility clusters', () => {
+    const decoy = getCs2Item('utility.decoy');
+    expect(decoy).toBeDefined();
+    expect(
+      utilityPresentation([
+        { sourceWeaponId: 'decoy', name: null, item: decoy!, asset: null, ammoReserve: 1 },
+      ]),
+    ).toEqual([]);
   });
 });

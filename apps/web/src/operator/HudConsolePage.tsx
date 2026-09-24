@@ -28,11 +28,14 @@ import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
-  getProgramFixture,
-  PROGRAM_FIXTURE_IDS,
+  getHudEditorFixture,
+  HUD_EDITOR_DEFAULT_FIXTURE_ID,
+  HUD_EDITOR_FIXTURE_GROUPS,
+  HUD_EDITOR_RIVALS_BP_FIXTURE_IDS,
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
+import { radarSnapshotForProgramFixture } from '../program/fixtures/radar-fixtures';
 import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
 
 import { HudCanvasPreview } from './HudCanvasPreview';
@@ -141,7 +144,7 @@ export function HudConsolePage() {
   const [lastValidTheme, setLastValidTheme] = useState<HudTheme>(themeDraft);
   const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId | null>(null);
   const [previewSource, setPreviewSource] = useState<'fixture' | 'current-live'>('fixture');
-  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>('live-canonical');
+  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>(HUD_EDITOR_DEFAULT_FIXTURE_ID);
   const [showGrid, setShowGrid] = useState(true);
   const [showCenter, setShowCenter] = useState(true);
   const [showSafeArea, setShowSafeArea] = useState(false);
@@ -172,7 +175,11 @@ export function HudConsolePage() {
     readonly startY: number;
     readonly placement: HudLayout['widgets'][HudWidgetId];
   } | null>(null);
-  const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
+  const fixture = useMemo(() => getHudEditorFixture(fixtureId), [fixtureId]);
+  const fixtureRadarSnapshot = useMemo(
+    () => radarSnapshotForProgramFixture(fixtureId),
+    [fixtureId],
+  );
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
@@ -722,13 +729,25 @@ export function HudConsolePage() {
                   value={fixtureId}
                   onChange={(event) => setFixtureId(event.target.value as ProgramFixtureId)}
                 >
-                  {PROGRAM_FIXTURE_IDS.map((id) => (
-                    <option key={id} value={id}>
-                      {fixtureLabel(id)}
-                    </option>
+                  {HUD_EDITOR_FIXTURE_GROUPS.map((group) => (
+                    <optgroup key={group.label} label={group.label}>
+                      {group.ids.map((id) => (
+                        <option key={id} value={id}>
+                          {fixtureLabel(id)}
+                        </option>
+                      ))}
+                    </optgroup>
                   ))}
                 </select>
               </label>
+            ) : null}
+            {activePreviewSource === 'fixture' &&
+            (fixtureId.startsWith('bp-rivals-') ||
+              HUD_EDITOR_RIVALS_BP_FIXTURE_IDS.some((id) => id === fixtureId)) ? (
+              <p className="hud-console__fixture-note">
+                BP、系列比分、已赛地图结果、队名与队标取自 2026 NJU
+                Rivals，按预览样例配对；玩家、当前地图比分与雷达来自独立真实遥测回放。
+              </p>
             ) : null}
             <span
               className="hud-console__source-status"
@@ -743,7 +762,7 @@ export function HudConsolePage() {
           </section>
 
           <HudCanvasPreview
-            radarSnapshot={null}
+            radarSnapshot={activePreviewSource === 'fixture' ? fixtureRadarSnapshot : null}
             radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}

@@ -65,6 +65,8 @@ Gameplay visual acceptance is real-first. Normal Program/HUD states must use gen
 
 真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。视觉探索在 Draft PR 直接审查 CI candidate artifact；视觉定稿时运行 **Approve visual baseline**，再由 `pnpm visual:test` 验证。展示压力测试只覆盖文案、logo、选手 avatarUrl 与赛制展示；头像验收使用确定性本地/data-URI 图片，加载失败由组件测试验证；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
 
+HUD 编辑器的日常场景列表只露出少量真实遥测回放与必要展示边界；完整 fixture 注册表继续服务回归测试。`bp-rivals-*` 使用生产 RivalHub 中 2026 NJU Rivals 总决赛、胜者组半决赛的公开 BP 与赛果生成系列图条切面；背景 GSI 来自另一场已提交的真实回放，**不能作为这些赛事的游戏过程证据**。未进行地图没有赛果，未确认的起始边保持缺失，决胜图不伪造选图方。
+
 ### C. 真实 CS2 / CSTV
 
 覆盖：

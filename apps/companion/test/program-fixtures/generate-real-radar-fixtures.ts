@@ -15,6 +15,14 @@ export const RADAR_CAPTURE_MATRIX = [
   ['bomb-dropped', 'bomb/dropped'],
   ['bomb-plant', 'bomb/plant'],
   ['bomb-defuse', 'bomb/defuse'],
+  ['bomb-explode-reset', 'bomb/explode-reset'],
+  ['match-paused', 'match/paused'],
+  ['timeout-ct', 'match/timeout-ct'],
+  ['timeout-t', 'match/timeout-t'],
+  ['halftime-side-switch', 'match/halftime-side-switch'],
+  ['regulation-to-overtime', 'match/regulation-to-overtime'],
+  ['overtime-side-switch', 'match/overtime-side-switch'],
+  ['match-gameover', 'match/gameover'],
 ] as const;
 
 export async function generateRealRadarFixtures() {

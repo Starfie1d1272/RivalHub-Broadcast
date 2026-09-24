@@ -9,11 +9,21 @@ import {
   RADAR_PRESENTATION,
   SMOKE_PRESENTATION_DURATION_SECONDS,
   grenadeIcon,
+  isMultiLayerGeometry,
   isActiveSmoke,
-  onLayer,
+  layerOpacity,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
+import {
+  RADAR_CANVAS_GEOMETRY,
+  radarBroadcastPlacement,
+  radarCanvasPoint,
+  radarCanvasRadius,
+  radarPointInsideViewport,
+  type RadarCanvasPlacement,
+} from './canvas-geometry';
+import { effectCentroid, smokeContour, smokeLobes } from './effect-geometry';
 import './radar.css';
 
 export interface RadarProps {
@@ -73,17 +83,16 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         element.height = size;
       }
       const ctx = context;
-      ctx.setTransform(size / 1000, 0, 0, size / 1000, 0, 0);
-      ctx.clearRect(0, 0, 1000, 1000);
-      ctx.fillStyle = '#10191e';
-      ctx.fillRect(0, 0, 1000, 1000);
+      const logicalSize = RADAR_CANVAS_GEOMETRY.logicalSize;
+      ctx.setTransform(size / logicalSize, 0, 0, size / logicalSize, 0, 0);
+      ctx.clearRect(0, 0, logicalSize, logicalSize);
       const style = getComputedStyle(element);
       const sideColor = (side: RadarSide) =>
         side === 'CT'
-          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#77b8e8'
+          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#6aa8ff'
           : side === 'T'
-            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#eac56d'
-            : '#c2c8ce';
+            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#f2bd4f'
+            : '#aab4c0';
       const circle = (
         x: number,
         y: number,
@@ -102,115 +111,380 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.stroke();
         }
       };
+      const smoothClosedPath = (points: readonly { readonly x: number; readonly y: number }[]) => {
+        if (points.length < 3) return;
+        const first = points[0]!;
+        const last = points.at(-1)!;
+        ctx.beginPath();
+        ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+        for (let index = 0; index < points.length; index += 1) {
+          const current = points[index]!;
+          const next = points[(index + 1) % points.length]!;
+          ctx.quadraticCurveTo(
+            current.x,
+            current.y,
+            (current.x + next.x) / 2,
+            (current.y + next.y) / 2,
+          );
+        }
+        ctx.closePath();
+      };
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
-      const map = geometry ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
-      const background = map ? imageFor(map.outputPath) : null;
+      const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
+      const singleAsset =
+        geometry !== null && !multiLayer ? getRadarMapAsset(geometry.mapKey, 'overview') : null;
+      const singleImage = singleAsset ? imageFor(singleAsset.outputPath) : null;
+      const upperAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'upper') : null;
+      const lowerAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'lower') : null;
+      const upperImage = upperAsset ? imageFor(upperAsset.outputPath) : null;
+      const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
+      const placementFor = (layer: string): RadarCanvasPlacement | null =>
+        geometry === null ? null : radarBroadcastPlacement(geometry.mapKey, layer);
+      const pointAt = (point: { x: number; y: number; layer?: string }, layerHint?: string) => {
+        const placement = placementFor(layerHint ?? point.layer ?? model.layer);
+        if (placement !== null && !radarPointInsideViewport(point, placement.viewport)) return null;
+        return radarCanvasPoint(point, placement?.viewport ?? null, placement?.rect ?? null);
+      };
+      const radiusAt = (normalizedRadius: number, layer: string) => {
+        const placement = placementFor(layer);
+        return radarCanvasRadius(
+          normalizedRadius,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+      };
+      const drawArtwork = (
+        image: HTMLImageElement,
+        placement: RadarCanvasPlacement | null = null,
+      ) => {
+        if (placement === null) {
+          ctx.drawImage(
+            image,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+          );
+          return;
+        }
+        const { viewport, rect } = placement;
+        ctx.drawImage(
+          image,
+          viewport.x * image.naturalWidth,
+          viewport.y * image.naturalHeight,
+          viewport.width * image.naturalWidth,
+          viewport.height * image.naturalHeight,
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+        );
+      };
+      const detachedFloors = geometry?.mapKey === 'de_nuke' && multiLayer;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
+      element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
+      element.dataset.radarCompositor = detachedFloors
+        ? 'ewc-detached-floor-shared-calibration'
+        : multiLayer
+          ? 'shared-calibration'
+          : 'single-calibration';
+      element.dataset.radarCoordinateSpace = 'overview-1024';
+      element.dataset.radarArtwork = (multiLayer ? upperImage && lowerImage : singleImage)
+        ? 'ready'
+        : 'loading';
+      element.dataset.radarVisibleFloors = multiLayer ? 'upper,lower' : model.layer;
       element.dataset.radarPlayers = String(model.players.size);
       element.dataset.radarTrails = String(
         [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
       );
+      element.dataset.radarSmokes = String(
+        [...model.grenades.values()].filter((marker) => isActiveSmoke(marker.source)).length,
+      );
+      element.dataset.radarFlamePoints = String(
+        payload?.grenades.reduce((count, grenade) => count + grenade.flames.length, 0) ?? 0,
+      );
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(
+        RADAR_CANVAS_GEOMETRY.inset,
+        RADAR_CANVAS_GEOMETRY.inset,
+        RADAR_CANVAS_GEOMETRY.artworkSize,
+        RADAR_CANVAS_GEOMETRY.artworkSize,
+      );
+      ctx.clip();
       const z = model.zoom;
-      ctx.translate(500, 500);
+      ctx.translate(logicalSize / 2, logicalSize / 2);
       ctx.scale(z.scale, z.scale);
-      ctx.translate(-z.x * 1000, -z.y * 1000);
-      if (background) {
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(background, 0, 0, 1000, 1000);
+      ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
+      ctx.filter =
+        'grayscale(0.82) saturate(0.1) brightness(0.72) contrast(1.16) ' +
+        'drop-shadow(3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(-3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 3px 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 -3px 0 rgba(243,246,250,.72))';
+      if (singleImage) {
+        ctx.globalAlpha = 0.84;
+        drawArtwork(singleImage, placementFor('single'));
+        ctx.globalAlpha = 1;
+      } else if (geometry && multiLayer) {
+        const floors =
+          model.layer === 'upper' ? (['lower', 'upper'] as const) : (['upper', 'lower'] as const);
+        for (const floor of floors) {
+          const image = floor === 'upper' ? upperImage : lowerImage;
+          if (!image) continue;
+          ctx.globalAlpha = floor === model.layer ? 0.86 : model.layer === 'unknown' ? 0.72 : 0.5;
+          drawArtwork(image, placementFor(floor));
+        }
         ctx.globalAlpha = 1;
       }
+      ctx.filter = 'none';
+
+      const drawSiteBadge = (
+        label: 'A' | 'B',
+        normalized: { readonly x: number; readonly y: number },
+        layer: string,
+      ) => {
+        const placement = placementFor(layer);
+        const point = radarCanvasPoint(
+          normalized,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+        const size = 56;
+        ctx.fillStyle = '#f3ce22';
+        ctx.fillRect(point.x - size / 2, point.y - size / 2, size, size);
+        ctx.fillStyle = '#0b1119';
+        ctx.font = '900 32px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, point.x, point.y + 1);
+      };
+      if (geometry?.mapKey === 'de_ancient') {
+        // Valve overview artwork already owns spawn-zone geometry. Only add
+        // calibrated broadcast labels at the centers of the source bombsites.
+        drawSiteBadge('A', { x: 0.302, y: 0.26 }, 'single');
+        drawSiteBadge('B', { x: 0.8, y: 0.4 }, 'single');
+      } else if (geometry?.mapKey === 'de_nuke') {
+        drawSiteBadge('A', { x: 0.58, y: 0.48 }, 'upper');
+        drawSiteBadge('B', { x: 0.58, y: 0.58 }, 'lower');
+      }
+
       if (geometry && payload) {
-        // Effects are behind every player. Flame z is projected independently.
+        // Active effects are spatial footprints, not enlarged grenade markers.
+        // Eon (ISC) and Lexogrine (MIT) informed the state split; this Canvas
+        // implementation is original and keeps RivalHub's calibrated truth.
         let flameCount = 0;
         for (const source of payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
-          const side =
-            payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId)?.side ??
-            'unknown';
+          if (source.flames.length === 0) continue;
+          const flamePoints: Array<{
+            readonly x: number;
+            readonly y: number;
+            readonly radius: number;
+            readonly opacity: number;
+          }> = [];
           for (const flame of source.flames) {
             if (++flameCount > RADAR_PRESENTATION.maxFlames) break;
-            const p = projectWorldPosition(flame.position, geometry);
-            if (p && onLayer(p, model.layer))
-              circle(p.x * 1000, p.y * 1000, 9, '#e99b4680', sideColor(side), 2);
+            const projected = projectWorldPosition(flame.position, geometry);
+            if (!projected || projected.outOfBounds) continue;
+            const point = pointAt(projected);
+            if (point === null) continue;
+            const worldRadius = projectWorldRadius(52, geometry) ?? 0;
+            const radius = Math.max(8, Math.min(18, radiusAt(worldRadius, projected.layer)));
+            flamePoints.push({
+              x: point.x,
+              y: point.y,
+              radius,
+              opacity: layerOpacity(projected, model.layer),
+            });
           }
+          if (flamePoints.length === 0) continue;
+
+          ctx.save();
+          ctx.filter = 'blur(5px)';
+          ctx.fillStyle = '#e85f2f';
+          for (const flame of flamePoints) {
+            ctx.globalAlpha = flame.opacity * 0.46;
+            circle(flame.x, flame.y, flame.radius * 1.45, '#e85f2f');
+          }
+          ctx.filter = 'none';
+          ctx.globalCompositeOperation = 'lighter';
+          for (const flame of flamePoints) {
+            ctx.globalAlpha = flame.opacity * 0.58;
+            circle(flame.x, flame.y, flame.radius * 0.9, '#f49b3d');
+            ctx.globalAlpha = flame.opacity * 0.34;
+            circle(flame.x, flame.y, flame.radius * 0.42, '#ffd16a');
+          }
+          ctx.globalCompositeOperation = 'source-over';
+          const centroid = effectCentroid(flamePoints);
+          if (centroid !== null) {
+            ctx.globalAlpha =
+              flamePoints.reduce((sum, flame) => sum + flame.opacity, 0) / flamePoints.length / 2.5;
+            const ownerSide =
+              payload.players.find((player) => player.sourcePlayerId === source.ownerSourceId)
+                ?.side ?? 'unknown';
+            circle(centroid.x, centroid.y, 5, sideColor(ownerSide));
+          }
+          ctx.restore();
         }
+
         for (const marker of model.grenades.values()) {
           if (!isActiveSmoke(marker.source)) continue;
-          const x = marker.target.x * 1000;
-          const y = marker.target.y * 1000;
-          // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = (projectWorldRadius(144, geometry) ?? 0) * 1000;
-          const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
-          fill.addColorStop(0, '#c5cbd07a');
-          fill.addColorStop(0.75, '#a8afb460');
-          fill.addColorStop(1, '#a8afb410');
-          ctx.fillStyle = fill;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
+          const opacity = layerOpacity(marker.target, model.layer);
+          const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
+          const contour = smokeContour(marker.source.sourceEntityId, radius).map((offset) => ({
+            x: x + offset.x,
+            y: y + offset.y,
+          }));
+
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          smoothClosedPath(contour);
+          ctx.fillStyle = '#eef1f23d';
           ctx.fill();
-          ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 3;
+
+          for (const lobe of smokeLobes(marker.source.sourceEntityId, radius)) {
+            const lx = x + lobe.dx;
+            const ly = y + lobe.dy;
+            const fill = ctx.createRadialGradient(lx, ly, 0, lx, ly, lobe.radius);
+            fill.addColorStop(0, '#ffffffb8');
+            fill.addColorStop(0.48, '#f4f6f69a');
+            fill.addColorStop(0.82, '#e2e6e76e');
+            fill.addColorStop(1, '#d5dadd12');
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.arc(lx, ly, lobe.radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.globalAlpha = opacity * 0.78;
+          smoothClosedPath(contour);
+          ctx.strokeStyle = '#f7f8f8';
+          ctx.lineWidth = 2;
           ctx.stroke();
+
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
+            const timerRadius = radius * 0.525;
+            const remainingRatio = remaining / SMOKE_PRESENTATION_DURATION_SECONDS;
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + Math.PI * 2 * remainingRatio;
+
+            // Clock-like inner timer: the full face is faint, while the remaining
+            // sector stays brighter. The colored rim carries ownership only.
+            ctx.globalAlpha = opacity * 0.18;
+            circle(x, y, timerRadius - 3, '#ffffff');
+
+            if (remainingRatio > 0) {
+              ctx.globalAlpha = opacity * 0.42;
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.arc(x, y, timerRadius - 3, startAngle, endAngle);
+              ctx.closePath();
+              ctx.fillStyle = '#ffffff';
+              ctx.fill();
+            }
+
+            ctx.globalAlpha = opacity * 0.94;
             ctx.beginPath();
-            ctx.arc(
-              x,
-              y,
-              radius + 5,
-              -Math.PI / 2,
-              -Math.PI / 2 + (Math.PI * 2 * remaining) / SMOKE_PRESENTATION_DURATION_SECONDS,
-            );
-            ctx.lineWidth = 5;
+            ctx.arc(x, y, timerRadius, startAngle, endAngle);
+            ctx.strokeStyle = sideColor(marker.side);
+            ctx.lineWidth = 3.5;
             ctx.stroke();
           }
+          ctx.restore();
         }
         const drawTrail = (
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
           alpha: number,
         ) => {
-          ctx.globalAlpha = alpha * 0.6;
+          const trail = marker.trail
+            .map((point) => pointAt(point, marker.target.layer))
+            .filter((point): point is NonNullable<typeof point> => point !== null);
+          if (trail.length < 2) return;
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.72;
           ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.setLineDash([7, 6]);
           ctx.beginPath();
-          marker.trail.forEach((p, i) =>
-            i ? ctx.lineTo(p.x * 1000, p.y * 1000) : ctx.moveTo(p.x * 1000, p.y * 1000),
+          trail.forEach((point, index) =>
+            index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
           );
           ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.restore();
         };
         for (const exit of model.exits.values()) {
           const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
           drawTrail(exit.marker, alpha);
-          ctx.globalAlpha = alpha;
-          circle(
-            exit.marker.target.x * 1000,
-            exit.marker.target.y * 1000,
-            15 + (1 - alpha) * 18,
-            '#ffffff10',
-            sideColor(exit.marker.side),
-            2,
-          );
-          ctx.globalAlpha = 1;
+          const exitPoint = pointAt(exit.marker.target);
+          if (exitPoint === null) continue;
+
+          const kind = exit.marker.source.kind;
+          if (kind === 'frag' || kind === 'hegrenade') {
+            ctx.save();
+            ctx.globalAlpha = alpha * 0.8;
+            ctx.strokeStyle = '#f3f6fa';
+            ctx.lineWidth = 2.5;
+            ctx.beginPath();
+            ctx.arc(exitPoint.x, exitPoint.y, 10 + (1 - alpha) * 26, 0, Math.PI * 2);
+            ctx.stroke();
+            ctx.globalAlpha = alpha * 0.36;
+            ctx.beginPath();
+            ctx.arc(exitPoint.x, exitPoint.y, 5 + (1 - alpha) * 14, 0, Math.PI * 2);
+            ctx.fillStyle = '#f0b45e';
+            ctx.fill();
+            ctx.restore();
+            continue;
+          }
+
+          if (kind === 'flashbang') {
+            ctx.save();
+            ctx.translate(exitPoint.x, exitPoint.y);
+            ctx.globalAlpha = alpha * 0.88;
+            ctx.strokeStyle = '#ffffff';
+            ctx.lineWidth = 2.5;
+            for (let ray = 0; ray < 8; ray += 1) {
+              const angle = (ray / 8) * Math.PI * 2;
+              const inner = 5 + (1 - alpha) * 3;
+              const outer = 14 + (1 - alpha) * 16;
+              ctx.beginPath();
+              ctx.moveTo(Math.cos(angle) * inner, Math.sin(angle) * inner);
+              ctx.lineTo(Math.cos(angle) * outer, Math.sin(angle) * outer);
+              ctx.stroke();
+            }
+            ctx.globalAlpha = alpha * 0.7;
+            circle(0, 0, 6 + (1 - alpha) * 4, '#ffffff');
+            ctx.restore();
+          }
         }
         for (const marker of model.grenades.values()) {
           if (!marker.airborne) continue;
           drawTrail(marker, 1);
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
-          circle(x, y, 13, '#142028', sideColor(marker.side), 3);
-          const url = grenadeIcon(marker.source.kind);
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          const url = grenadeIcon(marker.source.kind, marker.side);
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 10, y - 10, 20, 20);
+          if (icon) ctx.drawImage(icon, x - 14, y - 14, 28, 28);
           else {
             ctx.fillStyle = '#ecedef';
-            ctx.fillRect(x - 4, y - 4, 8, 8);
+            ctx.fillRect(x - 6, y - 6, 12, 12);
           }
+          ctx.globalAlpha = 1;
         }
         const bomb = payload.bomb;
         const bombAsset = getCs2Asset('objective.c4');
@@ -223,81 +497,93 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           model.bombVisible(now)
         ) {
           const p = projectWorldPosition(bomb.position, geometry);
-          if (p && onLayer(p, model.layer)) {
-            const x = p.x * 1000;
-            const y = p.y * 1000;
-            circle(
-              x,
-              y,
-              22,
-              '#211c16',
-              bomb.state === 'defusing' || bomb.state === 'defused' ? '#89d7b3' : '#f0ae6d',
-              5,
-            );
-            if (bombIcon) ctx.drawImage(bombIcon, x - 13, y - 13, 26, 26);
+          if (p && !p.outOfBounds) {
+            const point = pointAt(p);
+            if (point !== null) {
+              const x = point.x;
+              const y = point.y;
+              ctx.globalAlpha = layerOpacity(p, model.layer);
+              if (bombIcon) ctx.drawImage(bombIcon, x - 18, y - 18, 36, 36);
+              ctx.globalAlpha = 1;
+            }
           }
         }
         for (const marker of model.players.values()) {
           const p = marker.source;
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
           const alive = p.lifeState === 'alive';
-          ctx.globalAlpha = alive ? 1 : 0.4;
           const color = sideColor(p.side);
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          if (!alive) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(x - 19, y - 19);
+            ctx.lineTo(x + 19, y + 19);
+            ctx.moveTo(x - 19, y + 19);
+            ctx.lineTo(x + 19, y - 19);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+          }
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
-            circle(x, y, 26, '#00000000', '#ffffff', 5);
-          if (alive && p.forward) {
+            circle(x, y, 33, '#00000000', '#ffffff', 4);
+          if (p.forward) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((marker.angle * Math.PI) / 180);
             ctx.beginPath();
-            ctx.moveTo(33, 0);
-            ctx.lineTo(13, -12);
-            ctx.lineTo(13, 12);
+            ctx.moveTo(41, 0);
+            ctx.lineTo(18, -12);
+            ctx.lineTo(18, 12);
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
             if (marker.shootingUntil > now) {
               ctx.fillStyle = '#fff4b0';
-              ctx.fillRect(34, -4, 15, 8);
+              ctx.fillRect(38, -4, 15, 8);
             }
             ctx.restore();
           }
-          circle(x, y, 18, color, '#10171f', 3);
-          if (p.lifeState === 'dead') {
-            ctx.strokeStyle = '#10171f';
+          const flashRatio =
+            alive && p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
+          circle(x, y, 29, '#f3f6fa');
+          circle(x, y, 25, color, '#0b1119', 2);
+          if (flashRatio > 0) {
+            ctx.globalAlpha = flashRatio * 0.9;
+            circle(x, y, 24, '#ffffff');
+            ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          }
+          ctx.fillStyle = flashRatio > 0.72 ? '#5d6670' : '#0b1119';
+          ctx.font = '800 28px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
+          if (marker.damageUntil > now) {
+            const damageAlpha = Math.max(
+              0,
+              Math.min(1, (marker.damageUntil - now) / RADAR_PRESENTATION.damageMs),
+            );
+            ctx.save();
+            ctx.translate(x, y);
+            ctx.rotate((marker.angle * Math.PI) / 180);
+            ctx.globalAlpha = damageAlpha * 0.95;
+            ctx.strokeStyle = '#ff6c69';
             ctx.lineWidth = 5;
+            ctx.lineCap = 'round';
             ctx.beginPath();
-            ctx.moveTo(x - 8, y - 8);
-            ctx.lineTo(x + 8, y + 8);
-            ctx.moveTo(x - 8, y + 8);
-            ctx.lineTo(x + 8, y - 8);
+            ctx.arc(0, 0, 31, Math.PI * 0.72, Math.PI * 1.28);
             ctx.stroke();
-          } else {
-            ctx.fillStyle = '#0c1420';
-            ctx.font = 'bold 25px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
+            ctx.restore();
           }
-          if (alive && p.flashAmount !== null && p.flashAmount > 0) {
-            ctx.globalAlpha = Math.min(1, p.flashAmount / 255);
-            circle(x, y, 21, '#ffffff55', '#ffffff', 4);
-            ctx.globalAlpha = 1;
-          }
-          if (marker.damageUntil > now) circle(x, y, 23, '#00000000', '#ff6c69', 5);
           if (
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
           ) {
-            ctx.fillStyle = '#111a22';
-            ctx.fillRect(x + 10, y + 10, 22, 22);
-            if (bombIcon) ctx.drawImage(bombIcon, x + 11, y + 11, 20, 20);
-          }
-          if (model.layer === 'unknown' && marker.target.layer !== 'single') {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '20px sans-serif';
-            ctx.fillText(marker.target.layer === 'upper' ? '↑' : '↓', x, y - 32);
+            if (bombIcon) ctx.drawImage(bombIcon, x + 18, y + 18, 28, 28);
           }
           ctx.globalAlpha = 1;
         }
@@ -305,11 +591,6 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.restore();
       if (!payload) {
         // Safe fail-closed presentation without disruptive center placeholder
-      } else if (model.layer === 'upper' || model.layer === 'lower') {
-        ctx.fillStyle = '#d8e3eb';
-        ctx.font = '27px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(model.layer === 'upper' ? '上层' : '下层', 25, 45);
       }
       frame = requestAnimationFrame(render);
     };

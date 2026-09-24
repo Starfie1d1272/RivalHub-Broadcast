@@ -109,8 +109,16 @@ test.describe('HUD 编辑器', () => {
     );
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-players',
+      '10',
+    );
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
-    await expect(fixtureSelect).toHaveValue('live-canonical');
+    await expect(fixtureSelect).toHaveValue('real-live-rich');
     await expect(page.locator('option[value="current-live"]')).toHaveAttribute('disabled', '');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
     await expect(page.locator('.hud-console')).toHaveScreenshot(
@@ -300,8 +308,24 @@ test.describe('HUD 编辑器', () => {
 
     await expect(page.getByText('选择组件', { exact: true })).toBeVisible();
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
-    await fixtureSelect.selectOption('stress-long-labels');
-    await expect(fixtureSelect).toHaveValue('stress-long-labels');
+    await fixtureSelect.selectOption('real-bomb-dropped');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await fixtureSelect.selectOption('real-planted');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await fixtureSelect.selectOption('real-defusing');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await fixtureSelect.selectOption('focused-avatar');
+    await expect(fixtureSelect).toHaveValue('focused-avatar');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveCount(0);
     await page.getByRole('button', { name: '选择雷达' }).click();
     await expect(page.getByRole('button', { name: '调整雷达大小' })).toBeVisible();
     await page.getByRole('checkbox', { name: '吸附到网格' }).uncheck();
@@ -391,7 +415,7 @@ test.describe('HUD 编辑器', () => {
     const topScoreBar = page.locator(
       '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
     );
-    await expect(topScoreBar).toHaveCSS('left', '720px');
+    await expect(topScoreBar).toHaveCSS('left', '840px');
 
     await page.getByRole('button', { name: '外观', exact: true }).click();
     await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
@@ -402,12 +426,12 @@ test.describe('HUD 编辑器', () => {
     const previewTopScoreBar = page.locator(
       '[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]',
     );
-    await expect(previewTopScoreBar).toHaveCSS('left', '720px');
+    await expect(previewTopScoreBar).toHaveCSS('left', '840px');
 
     await page.getByRole('button', { name: '预设', exact: true }).click();
     await expect(
       page.locator('[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]'),
-    ).toHaveCSS('left', '720px');
+    ).toHaveCSS('left', '840px');
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
       'style',
       /--rh-hud-brand: #ff00aa/,
@@ -432,7 +456,7 @@ test.describe('HUD 编辑器', () => {
     const topScoreBar = page.locator(
       '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
     );
-    await expect(topScoreBar).toHaveCSS('left', '740px');
+    await expect(topScoreBar).toHaveCSS('left', '860px');
 
     await page.getByRole('button', { name: '外观', exact: true }).click();
     await expect(page.getByLabel('名称')).toHaveValue('');
@@ -442,13 +466,13 @@ test.describe('HUD 编辑器', () => {
     );
     await expect(
       page.locator('[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]'),
-    ).toHaveCSS('left', '740px');
+    ).toHaveCSS('left', '860px');
   });
 
   test('输出画面路由不包含编辑辅助层', async ({ page }) => {
     await page.goto('/__visual/program/live-canonical');
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(0);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
-    await expect(page.locator('[data-hud-widget]')).toHaveCount(6);
+    await expect(page.locator('[data-hud-widget]')).toHaveCount(5);
   });
 });

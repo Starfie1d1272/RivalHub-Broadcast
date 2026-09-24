@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { programSnapshotSchema, type ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import {
+  HUD_EDITOR_FIXTURE_GROUPS,
   programFixtures,
   PROGRAM_FIXTURE_PROVENANCE,
   getProgramFixtureProvenance,
@@ -66,6 +67,22 @@ describe('Program fixture provenance policy', () => {
     for (const id of ['live-canonical', 'bomb-planted', 'bomb-defusing', 'timeout-ct'])
       expect(getProgramFixtureProvenance(id)?.kind).toBe('real-derived');
     expect(getProgramFixtureProvenance('unknown')).toBeNull();
+  });
+
+  it('keeps the operator preview limited to real replay and declared BP or media boundaries', () => {
+    const ids = HUD_EDITOR_FIXTURE_GROUPS.flatMap((group) => group.ids);
+    expect(ids).toHaveLength(14);
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(
+      HUD_EDITOR_FIXTURE_GROUPS[0]?.ids.every(
+        (id) => getProgramFixtureProvenance(id)?.kind === 'real-derived',
+      ),
+    ).toBe(true);
+    expect(
+      HUD_EDITOR_FIXTURE_GROUPS[1]?.ids.every(
+        (id) => getProgramFixtureProvenance(id)?.kind === 'synthetic-presentation',
+      ),
+    ).toBe(true);
   });
 
   it('rejects gameplay patches, including nested series injection, without changing the base', () => {

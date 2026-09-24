@@ -1,154 +1,155 @@
-/** Presentation shell adapted from Lexogrine Observed.tsx / observed.scss,
- * cs2-react-hud@7874750c97fcecd8f72eb3fad382917e035ec651 (MIT).
- * Program identity and official asset/ammo metadata replace donor ownership. */
 import { useState, type CSSProperties } from 'react';
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
 import type { PlayerRailAsset } from '../player-rails/presentation';
+import { DeathWatermark } from '../player-rails/DeathWatermark';
 import { buildFocusedPlayerPresentation, type FocusedPlayerPresentation } from './presentation';
 
-function Icon({
-  asset,
-  active = false,
-}: {
-  readonly asset: PlayerRailAsset | null;
-  readonly active?: boolean;
-}) {
-  return asset === null ? null : (
+function Icon({ asset }: { readonly asset: PlayerRailAsset | null }) {
+  if (asset === null) return null;
+  return (
     <span
       className="focused-player__icon"
       role="img"
       aria-label={asset.canonicalKey}
       data-asset-id={asset.canonicalKey}
-      data-active={active}
       style={{ '--focused-icon': `url("${asset.outputPath}")` } as CSSProperties}
     />
   );
 }
-function TeamLogo({ url }: { readonly url: string }) {
-  const [loaded, setLoaded] = useState(false);
-  const [failed, setFailed] = useState(false);
-  return failed ? null : (
-    <img
-      className="focused-player__team-logo"
-      src={url}
-      alt="队伍标志"
-      style={{ display: loaded ? undefined : 'none' }}
-      onLoad={() => setLoaded(true)}
-      onError={() => setFailed(true)}
-    />
-  );
-}
+
 export function FocusedPlayerCard({ player }: { readonly player: FocusedPlayerPresentation }) {
   return <Card key={`${player.sourcePlayerId}:${player.avatarUrl ?? ''}`} player={player} />;
 }
+
 function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
   const [avatarLoaded, setAvatarLoaded] = useState(false);
   const [avatarFailed, setAvatarFailed] = useState(false);
   const showAvatar = p.avatarUrl !== null && avatarLoaded && !avatarFailed;
-  const activeKey = p.activeItem?.asset?.canonicalKey;
   return (
     <article
-      aria-label="当前观察选手"
+      aria-label="Focused player"
       className="focused-player"
       data-focused-player={p.sourcePlayerId}
       data-avatar={showAvatar}
       data-side={p.side}
       data-dead={p.dead}
     >
-      {p.avatarUrl === null || avatarFailed ? null : (
-        <div className="focused-player__media" style={{ display: showAvatar ? undefined : 'none' }}>
-          <img
-            src={p.avatarUrl}
-            alt={`${p.displayName} 头像`}
-            onLoad={() => setAvatarLoaded(true)}
-            onError={() => setAvatarFailed(true)}
-          />
-          <span className="focused-player__slot">{p.observerSlot ?? '—'}</span>
-        </div>
-      )}
       <div className="focused-player__identity">
-        <div className="focused-player__name-row">
-          {showAvatar ? null : (
-            <span className="focused-player__slot">{p.observerSlot ?? '—'}</span>
-          )}
-          <strong title={p.displayName}>{p.displayName}</strong>
-        </div>
-        <div className="focused-player__metrics">
+        <strong className="focused-player__name" title={p.displayName}>
+          {p.displayName}
+        </strong>
+        <div className="focused-player__metrics" aria-label="K A D ADR">
           <span>
             <small>K</small>
-            {p.stats.kills ?? '—'}
+            <b>{p.stats.kills ?? '—'}</b>
           </span>
           <span>
             <small>A</small>
-            {p.stats.assists ?? '—'}
+            <b>{p.stats.assists ?? '—'}</b>
           </span>
           <span>
             <small>D</small>
-            {p.stats.deaths ?? '—'}
+            <b>{p.stats.deaths ?? '—'}</b>
           </span>
           <span>
             <small>ADR</small>
-            {p.completedAdr === null ? '—' : Number(p.completedAdr.toFixed(1))}
+            <b>{p.completedAdr === null ? '—' : Number(p.completedAdr.toFixed(1))}</b>
           </span>
         </div>
-        <div className="focused-player__bottom">
-          <div className="focused-player__team">
-            {p.teamLogoUrl === null ? null : <TeamLogo key={p.teamLogoUrl} url={p.teamLogoUrl} />}
-            <span title={p.teamName ?? undefined}>{p.teamName}</span>
-          </div>
-          {p.dead ? null : (
-            <div className="focused-player__utility">
-              {p.utility.map((u) => (
-                <span key={u.sourceWeaponId}>
-                  <Icon asset={u.asset} active={u.asset?.canonicalKey === activeKey} />
-                  {u.count > 1 ? <b>×{u.count}</b> : null}
-                </span>
-              ))}
-              <Icon asset={p.zeus?.asset ?? null} active={activeKey === 'utility.taser'} />
-              <Icon asset={p.kit} />
-              <Icon asset={p.c4} active={activeKey === 'objective.c4'} />
-            </div>
+      </div>
+
+      <div className="focused-player__action" data-focused-action="true">
+        <div
+          aria-label={
+            showAvatar ? `${p.displayName} avatar` : `Observer ${p.observerSlot ?? 'unknown'}`
+          }
+          className={`focused-player__media${showAvatar ? ' has-avatar' : ' is-observer-tile'}`}
+          data-avatar-slot="true"
+          data-side={p.side}
+        >
+          {p.avatarUrl === null || avatarFailed ? null : (
+            <img
+              src={p.avatarUrl}
+              alt={`${p.displayName} avatar`}
+              style={{ display: showAvatar ? undefined : 'none' }}
+              onLoad={() => setAvatarLoaded(true)}
+              onError={() => setAvatarFailed(true)}
+            />
+          )}
+          {showAvatar ? (
+            <span className="focused-player__slot-badge">{p.observerSlot ?? '—'}</span>
+          ) : (
+            <strong className="focused-player__observer-tile-number">
+              {p.observerSlot ?? '—'}
+            </strong>
           )}
         </div>
-      </div>
-      <div className="focused-player__combat">
+        <span
+          aria-hidden="true"
+          className="focused-player__action-gap focused-player__action-gap--a"
+        />
         {p.dead ? (
-          <strong className="focused-player__dead">DEAD</strong>
+          <div aria-label="Dead" className="focused-player__dead-state">
+            <DeathWatermark className="focused-player__death-mark" />
+          </div>
         ) : (
           <>
-            <div
-              className="focused-player__vitals"
-              data-danger={p.health !== null && p.health <= 25}
-            >
-              <strong>
-                {p.health ?? '—'}
-                <small>HP</small>
-              </strong>
-              {p.armorAsset === null ? null : (
-                <span>
-                  <Icon asset={p.armorAsset} />
-                  {p.armor}
-                </span>
-              )}
-              <div className="focused-player__health-track">
-                {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
-              </div>
+            <div className="focused-player__active" aria-label="Active item">
+              <Icon asset={p.activeItem?.asset ?? null} />
             </div>
-            <div className="focused-player__active">
-              {p.activeItem === null ? (
-                <span className="focused-player__unavailable">—</span>
-              ) : (
-                <Icon asset={p.activeItem.asset} />
-              )}
-            </div>
+            <span
+              aria-hidden="true"
+              className="focused-player__action-gap focused-player__action-gap--b"
+            />
             <div className="focused-player__ammo">
               {p.clip === null ? null : <strong>{p.clip}</strong>}
-              {p.clipFill === null ? null : (
-                <div className="focused-player__clip-track">
-                  <span style={{ width: `${p.clipFill * 100}%` }} />
-                </div>
+              {p.reserveMagazine === null ? null : (
+                <span
+                  aria-label={`Magazines in reserve: ${p.reserveMagazine.count}`}
+                  className="focused-player__reserve-magazines"
+                  data-ammo-presentation="magazine"
+                >
+                  <span
+                    aria-hidden="true"
+                    className="focused-player__reserve-magazine-icon"
+                    data-asset-id={p.reserveMagazine.asset.canonicalKey}
+                    style={
+                      {
+                        '--focused-icon': `url("${p.reserveMagazine.asset.outputPath}")`,
+                      } as CSSProperties
+                    }
+                  />
+                  <span>{p.reserveMagazine.count}</span>
+                </span>
               )}
-              {p.reserveText === null ? null : <span>{p.reserveText}</span>}
+              {p.reserveText === null ? null : (
+                <span
+                  data-ammo-presentation={
+                    p.reserveText.startsWith('SHELL ') ? 'shells' : 'reserve-rounds'
+                  }
+                >
+                  {p.reserveText}
+                </span>
+              )}
+            </div>
+          </>
+        )}
+      </div>
+
+      <div className="focused-player__vitals" data-danger={p.health !== null && p.health <= 25}>
+        {p.dead ? null : (
+          <>
+            <div className="focused-player__vitals-values">
+              <span className="focused-player__health-cluster">
+                <strong className="focused-player__hp">{p.health ?? '—'}</strong>
+                <span className="focused-player__health-track">
+                  {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
+                </span>
+              </span>
+              <span className="focused-player__armor">
+                <Icon asset={p.armorAsset} />
+                <b>{p.armor ?? '—'}</b>
+              </span>
             </div>
           </>
         )}
@@ -156,6 +157,7 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
     </article>
   );
 }
+
 export function FocusedPlayer({ snapshot }: HudWidgetRendererProps) {
   const player = buildFocusedPlayerPresentation(snapshot.payload);
   return player === null ? null : <FocusedPlayerCard player={player} />;

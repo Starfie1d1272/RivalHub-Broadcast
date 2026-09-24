@@ -17,9 +17,9 @@ export const RADAR_PRESENTATION = Object.freeze({
   teleportBaseWorld: 160,
   teleportSpeedWorldPerSecond: 1100,
   sampleGapMs: 500,
-  trailPoints: 32,
-  trailMs: 1800,
-  exitMs: 240,
+  trailPoints: 12,
+  trailMs: 450,
+  exitMs: 160,
   damageMs: 220,
   shootingMs: 110,
   maxPlayers: 64,
@@ -110,6 +110,14 @@ export function onLayer(point: RadarProjectedPosition, layer: RadarLayer): boole
   if (layer === 'unknown') return false;
   return point.layer === layer || point.layer === 'single';
 }
+export function isMultiLayerGeometry(geometry: MapGeometry): boolean {
+  return geometry.layerRule.kind !== 'single';
+}
+
+export function layerOpacity(point: RadarProjectedPosition, primary: RadarLayer): number {
+  if (point.layer === 'unknown' || primary === 'unknown') return 0.76;
+  return point.layer === primary ? 0.88 : 0.62;
+}
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;
   return d ? (Math.atan2(d.y, d.x) * 180) / Math.PI : 0;
@@ -165,17 +173,23 @@ function isShooting(before: Player, after: Player): boolean {
   const item = resolveCs2ItemByGsiName(a.name);
   return item.kind === 'known' && item.item.kind === 'firearm';
 }
-export function grenadeIcon(kind: string | null): string | null {
-  // GSI firebomb is deliberately generic; owner equipment cannot prove subtype.
-  const name = (
-    {
-      smoke: 'weapon_smokegrenade',
-      flashbang: 'weapon_flashbang',
-      frag: 'weapon_hegrenade',
-      hegrenade: 'weapon_hegrenade',
-      decoy: 'weapon_decoy',
-    } as Record<string, string>
-  )[kind ?? ''];
+export function grenadeIcon(kind: string | null, side: RadarSide = 'unknown'): string | null {
+  const name =
+    kind === 'firebomb'
+      ? side === 'CT'
+        ? 'weapon_incgrenade'
+        : side === 'T'
+          ? 'weapon_molotov'
+          : null
+      : (
+          {
+            smoke: 'weapon_smokegrenade',
+            flashbang: 'weapon_flashbang',
+            frag: 'weapon_hegrenade',
+            hegrenade: 'weapon_hegrenade',
+            decoy: 'weapon_decoy',
+          } as Record<string, string>
+        )[kind ?? ''];
   if (!name) return null;
   const item = resolveCs2ItemByGsiName(name);
   return item.kind === 'known' ? item.asset.outputPath : null;
@@ -245,7 +259,6 @@ export class RadarPresentation {
     if (
       reconnect ||
       this.boundary !== boundary ||
-      this.layer !== layer ||
       (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs)
     )
       this.reset();
@@ -263,7 +276,7 @@ export class RadarPresentation {
     const currentPlayers = new Set<string>();
     for (const source of snapshot.payload.players.slice(0, RADAR_PRESENTATION.maxPlayers)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || !onLayer(point, layer)) continue;
+      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourcePlayerId;
       currentPlayers.add(id);
       const old = this.players.get(id);
@@ -300,7 +313,7 @@ export class RadarPresentation {
     const currentGrenades = new Set<string>();
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || !onLayer(point, layer)) continue;
+      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourceEntityId;
       currentGrenades.add(id);
       this.exits.delete(id);

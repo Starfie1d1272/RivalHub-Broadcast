@@ -90,7 +90,7 @@ describe('GameplayHud shared renderer boundary', () => {
 
     expect(program).toMatchObject({ props: { 'data-gameplay-hud': 'true' } });
     expect(childrenOf(program)).toHaveLength(9);
-    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(6);
+    expect(childrenOf(program).filter((child) => child !== null)).toHaveLength(5);
     expect(editor).toMatchObject({ props: { 'data-hud-editor-overlay': 'true' } });
     expect(childrenOf(editor)).toHaveLength(9);
     const preview = HudEditorOverlay({
@@ -144,10 +144,10 @@ describe('GameplayHud shared renderer boundary', () => {
       '--rh-hud-objective-bomb': '#f06f6f',
       '--rh-hud-objective-defuse': '#83d8e8',
       '--rh-hud-surface-opacity': 0.88,
-      '--rh-hud-border-opacity': 0.18,
-      '--rh-hud-radius-sm': '4px',
-      '--rh-hud-radius-md': '8px',
-      '--rh-hud-radius-lg': '12px',
+      '--rh-hud-border-opacity': 0.16,
+      '--rh-hud-radius-sm': '0px',
+      '--rh-hud-radius-md': '0px',
+      '--rh-hud-radius-lg': '0px',
       '--rh-hud-font-family': 'Inter',
     });
   });

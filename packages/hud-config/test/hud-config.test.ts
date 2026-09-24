@@ -40,19 +40,40 @@ describe('hud-config schema and framework contract', () => {
     expect(preset.id).toBe(BUILTIN_PRESET_ID);
     expect(layout.id).toBe(BUILTIN_LAYOUT_ID);
     expect(Object.keys(layout.widgets).sort()).toEqual([...HUD_WIDGET_IDS].sort());
-    expect(layout.widgets.radar.size).toEqual({ width: 320, height: 320 });
+    expect(layout.widgets.radar.size).toEqual({ width: 400, height: 400 });
     expect(placementToBox('top-score-bar', layout.widgets['top-score-bar'])).toMatchObject({
-      left: 600,
-      top: 24,
-      width: 720,
-      height: 104,
+      left: 720,
+      top: 36,
+      width: 480,
+      height: 152,
     });
     expect(placementToBox('series-strip', layout.widgets['series-strip'])).toMatchObject({
-      left: 24,
-      top: 24,
-      width: 420,
-      height: 112,
+      left: 44,
+      top: 36,
+      width: 400,
+      height: 72,
     });
+    expect(placementToBox('team-ct-rail', layout.widgets['team-ct-rail'])).toMatchObject({
+      left: 0,
+      top: 524,
+      width: 440,
+      height: 478,
+    });
+    expect(placementToBox('team-t-rail', layout.widgets['team-t-rail'])).toMatchObject({
+      left: 1480,
+      top: 524,
+      width: 440,
+      height: 478,
+    });
+    expect(placementToBox('focused-player', layout.widgets['focused-player'])).toMatchObject({
+      left: 780,
+      top: 876,
+      width: 360,
+      height: 176,
+    });
+    expect(layout.widgets['round-history'].visible).toBe(false);
+    expect(layout.widgets.objective.visible).toBe(false);
+    expect(layout.widgets['round-result'].visible).toBe(false);
     expect(placementToBox('round-history', layout.widgets['round-history'])).toMatchObject({
       left: 680,
       top: 136,
@@ -76,7 +97,7 @@ describe('hud-config schema and framework contract', () => {
 
     const changed = getBuiltinLayout();
     changed.widgets.radar.offsetX = 100;
-    expect(getBuiltinLayout().widgets.radar.offsetX).toBe(0);
+    expect(getBuiltinLayout().widgets.radar.offsetX).toBe(44);
   });
 
   it('round-trips a strict v1 document and rejects unknown fields', () => {
@@ -137,7 +158,7 @@ describe('hud-config schema and framework contract', () => {
         ...getBuiltinLayout(),
         widgets: {
           ...getBuiltinLayout().widgets,
-          radar: { ...getBuiltinLayout().widgets.radar, offsetX: 1_000 },
+          radar: { ...getBuiltinLayout().widgets.radar, offsetX: 2_000 },
         },
       }),
     ).toThrow();
@@ -303,7 +324,7 @@ describe('hud-config schema and framework contract', () => {
     const reset = resetLayoutDraft(custom);
     expect(reset.id).toBe('custom-layout');
     expect(reset.name).toBe('现场布局');
-    expect(reset.widgets.radar.offsetX).toBe(0);
+    expect(reset.widgets.radar.offsetX).toBe(44);
   });
 });
 
@@ -322,7 +343,7 @@ describe('hud-config logical geometry', () => {
   it('allows only square radar resize and snaps to the 10px grid', () => {
     const resized = resizeRadarPlacement(getBuiltinLayout().widgets.radar, 77);
     expect(resized.size?.width).toBe(resized.size?.height);
-    expect(resized.size?.width).toBe(400);
+    expect(resized.size?.width).toBe(480);
     expect(snapToGrid(24)).toBe(20);
     expect(() => resizeRadarPlacement(getBuiltinLayout().widgets['top-score-bar'], 20)).toThrow();
     expect(resizeRadarPlacement(getBuiltinLayout().widgets.radar, 10_000).size?.width).toBe(
@@ -366,7 +387,7 @@ describe('hud-config logical geometry', () => {
       offsetY: -1_000,
     });
     const box = placementToBox('radar', normalized);
-    expect(box.left).toBe(1_600);
+    expect(box.left).toBe(1_000);
     expect(box.top).toBe(0);
     expect(box.left + box.width).toBeLessThanOrEqual(HUD_CANVAS_WIDTH);
     expect(box.top + box.height).toBeLessThanOrEqual(HUD_CANVAS_HEIGHT);

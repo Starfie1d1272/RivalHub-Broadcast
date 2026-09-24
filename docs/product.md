@@ -99,9 +99,13 @@ ProgramProjection 负责完成领域解释；React 组件只负责展示。例�
 
 系列赛比分、地图结果和当前地图绑定由 Broadcast 本地 `SeriesProgress` 统一维护。地图结束后本地立即推进，不等待 RivalHub 回写；进程重启使用有界 checkpoint 恢复已冻结事实。实际服务器地图与赛前计划不一致时，比赛 telemetry 仍可继续显示，但 Series 暂停绑定并等待 Operator 明确确认。Round History 恢复不完整时显示 `partial`，不由 Renderer 补猜缺失回合。
 
-中央比分条采用深色两翼、浅色斜切中央面板；双方比分下按获胜所需局数显示胜场格，已赢地图点亮。正常阶段显示回合与时钟；安装时中央改为 C4 与四格逐步填充的进度窗；安装后底部引信条向中央收缩，C4 图标闪动；拆弹时中央显示逆时针闭合的进度圆环，引信条仍独立继续。暂停优先占用中央区域。默认正式节目隐藏精确 objective 秒数；进度分母证据缺失时只显示状态与不可定量的轨道，不补猜时长。存活人数只在完整 current 5+5 证据且出现死亡后显示，左右沿用 entrant A/B，显示在比分条下方。整个逻辑组件保持 720×104，80px 主面板和 24px 存活人数区域不与回合历史重叠。减少动态效果偏好关闭闪动；时间不可用时停止闪动并隐藏定量进度。
+Default V1 的中央比分条使用固定 envelope 和稳定的 score / center / objective / alive 区域；状态变化优先在既有区域内替换内容，不推动其它 HUD 组件。正常阶段显示回合与时钟；planting 使用中性 C4 与水平 action progress；planted 后才进入 bomb/danger presentation，引信与 defuse action 分别表达独立事实。默认正式节目隐藏精确 objective 秒数；进度分母证据缺失时只显示状态与不可定量的轨道，不补猜时长。存活人数只在完整 current 5+5 证据且出现死亡后显示，左右沿用 entrant A/B。动画只消费已有 semantic state / progress，不拥有 gameplay timer；urgency 局部化，并支持 reduced motion。具体长期约束见 ADR-0007。
 
-当前观察选手卡使用 `observedPlayerSourceId` 精确匹配 current player，展示身份、K/A/D、`completedAdr`、生命、护甲和真正 active item；阵亡时只保留身份和稳定统计。逻辑尺寸固定 620×132、底部居中；可选头像加载成功时占 104px，缺失或失败时内部卡片缩为居中的 516px。弹药单位来自官方 item metadata，magazine reserve 显示弹匣数量，不换算为旧式备用子弹。Program 与 HUD 编辑器共享 renderer。
+当前观察选手卡使用 `observedPlayerSourceId` 精确匹配 current player，展示身份、K/A/D、`completedAdr`、生命、护甲和真正 active item；阵亡时只保留身份和稳定统计。Default V1 使用固定 360×176 envelope 与固定 media slot，头像存在、缺失或加载失败都不改变外框和字段位置。弹药单位来自官方 item metadata；magazine reserve 使用官方 magazine HUD asset + 数量，不换算为旧式备用子弹。Program 与 HUD 编辑器共享 renderer。
+
+Default V1 的 1920×1080 built-in placement 固定为：Series Strip `400×72 @ (44,36)`、Radar `400×400 @ (44,116)`、Top Score `480×152 @ top-center y=36`、左右 Player Rails `440×478 @ y=524`、Focused `360×176 @ bottom-center -28`。Round History、standalone objective 与 round-result 默认隐藏；Series / Radar / Rails / Focused 的状态变化不应推动其它组件改位。
+
+HUD 编辑器的 normal gameplay preview 继续遵守 #68 的 real-first policy。若同时显示 Program 与 Radar，两者必须解析到同一真实 replay source，并以 capture provenance + Program cursor 精确对齐；找不到同帧 Radar 时 fail closed，不再用“相近场景”拼接。Rivals BP/赛果可以作为明确标注的 presentation overlay，但不得冒充同一场 gameplay telemetry。需要连续时间历史的 ADR/DMG 与 grenade-flight / firing / damage / flash / explosion 等动态效果验收由 #76 的 full-round replay harness 承担，不在静态 fixture 中 patch gameplay truth。
 
 ### 5.1.1 Gameplay HUD 自定义
 
@@ -208,7 +212,7 @@ RivalHub 或其它赛事上下文提供方暂时不可达时：
 
 ## 9. 用户界面与语言
 
-正式产品界面默认中文。标题、按钮、状态、错误和操作提示不得直接显示内部枚举、类名或架构术语。
+Operator、配置、错误、诊断与操作提示默认中文，并避免直接暴露内部枚举、类名或架构术语。正式 on-air HUD 不要求逐项中文化：对于 CS 赛事中通用、短且高识别度的广播标签，可以直接使用英文，例如 `ROUND`、`CURRENT`、`DECIDER`、`TECH PAUSE`；语言选择属于 presentation system，不改变 domain truth。
 
 Debug 页面可以显示原始 JSON，但必须用中文说明数据属于哪一层、是否新鲜以及用户应如何判断异常。
 

@@ -43,8 +43,8 @@ describe('@rivalhub-broadcast/cs2-assets resolver', () => {
     });
   });
 
-  it("audits that all 71 catalog items have tintMode: 'mask' for monochromatic presentation", () => {
-    expect(CS2_ITEM_CATALOG).toHaveLength(71);
+  it("audits that all 72 catalog items have tintMode: 'mask' for monochromatic presentation", () => {
+    expect(CS2_ITEM_CATALOG).toHaveLength(72);
     for (const item of CS2_ITEM_CATALOG) {
       expect(item.tintMode, `Item ${item.canonicalKey} must have tintMode 'mask'`).toBe('mask');
       const asset = getCs2Asset(item.assetId);

@@ -5,11 +5,12 @@ import {
   type ProgramSnapshot,
 } from '@rivalhub-broadcast/protocol/program';
 
-import { realProgramFixtures, type RealProgramFixtureId } from './real-program-fixtures';
+import { realProgramFixtures, type RealProgramFixtureId } from './real-program-fixtures.js';
 import {
   derivePresentationStressFixture,
   type PresentationStressPatch,
-} from './presentation-stress';
+} from './presentation-stress.js';
+import { RIVALS_BP_RECORDS, rivalsSeriesCut } from './rivals-bp-records.js';
 
 type ProgramPlayer = ProgramPayload['players'][number];
 type PlayerState = NonNullable<ProgramPlayer['state']>;
@@ -294,6 +295,7 @@ const BO3_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
   ],
@@ -316,6 +318,7 @@ const BO3_MAP1_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_mirage',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'pending',
     }),
     seriesMap({
@@ -323,6 +326,7 @@ const BO3_MAP1_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
   ],
@@ -354,6 +358,7 @@ const BO5_SERIES = makeSeries({
       mapOrder: 1,
       mapName: 'de_ancient',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
       status: 'completed',
       finalScore: { a: 13, b: 11 },
       winnerEntryId: SERIES_ENTRANTS.a.entryId,
@@ -363,6 +368,7 @@ const BO5_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_anubis',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'completed',
       finalScore: { a: 8, b: 13 },
       winnerEntryId: SERIES_ENTRANTS.b.entryId,
@@ -371,14 +377,16 @@ const BO5_SERIES = makeSeries({
       mapId: 'fixture-bo5-map-3',
       mapOrder: 3,
       mapName: 'de_inferno',
-      selection: { kind: 'unknown' },
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'T',
       status: 'current',
     }),
     seriesMap({
       mapId: 'fixture-bo5-map-4',
       mapOrder: 4,
       mapName: 'de_mirage',
-      selection: { kind: 'unknown' },
+      selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'CT',
       status: 'pending',
     }),
     seriesMap({
@@ -386,9 +394,25 @@ const BO5_SERIES = makeSeries({
       mapOrder: 5,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'T',
       status: 'pending',
     }),
   ],
+});
+
+const BO5_PICK_LOSS_SERIES = makeSeries({
+  format: 'bo5',
+  score: { a: 2, b: 0 },
+  currentMapOrder: 3,
+  maps: BO5_SERIES.maps.map((map) =>
+    map.mapOrder === 2
+      ? {
+          ...map,
+          finalScore: { a: 13, b: 8 },
+          winnerEntryId: SERIES_ENTRANTS.a.entryId,
+        }
+      : map,
+  ),
 });
 
 const NOT_PLAYED_SERIES = makeSeries({
@@ -426,6 +450,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 1,
       mapName: 'de_ancient',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.a.entryId },
+      teamAStartSide: 'CT',
       status: 'completed',
       finalScore: { a: 13, b: 6 },
       winnerEntryId: SERIES_ENTRANTS.a.entryId,
@@ -435,6 +460,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 2,
       mapName: 'de_anubis',
       selection: { kind: 'pick', entryId: SERIES_ENTRANTS.b.entryId },
+      teamAStartSide: 'T',
       status: 'completed',
       finalScore: { a: 10, b: 13 },
       winnerEntryId: SERIES_ENTRANTS.b.entryId,
@@ -444,6 +470,7 @@ const DECIDER_SERIES = makeSeries({
       mapOrder: 3,
       mapName: 'de_nuke',
       selection: { kind: 'decider' },
+      teamAStartSide: 'CT',
       status: 'current',
     }),
   ],
@@ -830,6 +857,8 @@ const stressMatch = fixtureMatch({
   stage: 'Long Stage Name For Overflow And Layout Regression Coverage',
 });
 
+const presentationFixtureReplaySources = new WeakMap<ProgramSnapshot, RealProgramFixtureId>();
+
 function presentationFixture(
   id: RealProgramFixtureId,
   series: ProgramSeries,
@@ -843,7 +872,7 @@ function presentationFixture(
       : id === series.entrants.b.entryId
         ? entrants.b.entryId
         : id;
-  return derivePresentationStressFixture(base, {
+  const fixture = derivePresentationStressFixture(base, {
     teamAName: series.entrants.a.name,
     teamBName: series.entrants.b.name,
     teamALogoUrl: series.entrants.a.logoUrl,
@@ -864,9 +893,53 @@ function presentationFixture(
             ? { ...map.selection, entryId: entryId(map.selection.entryId)! }
             : map.selection,
       })),
-      veto: series.veto,
+      veto: series.veto.map((step) => ({ ...step, entryId: entryId(step.entryId) })),
     },
   });
+  presentationFixtureReplaySources.set(fixture, id);
+  return fixture;
+}
+
+/** Stable sample mapping pairs real BP with gameplay captures without claiming one match. */
+export const HUD_EDITOR_REAL_BP_FIXTURES = {
+  'real-live-rich': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'real-bomb-dropped': presentationFixture(
+    'real-bomb-dropped',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'real-planted': presentationFixture(
+    'real-planted',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
+  'real-defusing': presentationFixture(
+    'real-defusing',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'real-post-explosion-freezetime': presentationFixture(
+    'real-post-explosion-freezetime',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'real-timeout-ct': presentationFixture(
+    'real-timeout-ct',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
+  'real-halftime-after': presentationFixture(
+    'real-halftime-after',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, null),
+  ),
+  'real-gameover': presentationFixture(
+    'real-gameover',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+} as const satisfies Partial<Record<RealProgramFixtureId, ProgramSnapshot>>;
+
+export function getPresentationFixtureReplaySource(
+  snapshot: ProgramSnapshot,
+): RealProgramFixtureId | null {
+  return presentationFixtureReplaySources.get(snapshot) ?? null;
 }
 
 export const syntheticProgramFixtures = {
@@ -990,6 +1063,23 @@ export const syntheticProgramFixtures = {
   'series-bo1': presentationFixture('real-post-explosion-freezetime', BO1_SERIES),
   'series-bo3-map1': presentationFixture('real-live-rich', BO3_MAP1_SERIES),
   'series-bo5': presentationFixture('real-live-rich', BO5_SERIES),
+  'series-bo5-pick-loss': presentationFixture('real-live-rich', BO5_PICK_LOSS_SERIES),
+  'bp-rivals-final-map4': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'bp-rivals-final-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, null),
+  ),
+  'bp-rivals-semi-a-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'bp-rivals-semi-b-result': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
   'series-not-played': presentationFixture('real-live-rich', NOT_PLAYED_SERIES),
   'series-logo-mixed': presentationFixture('real-live-rich', MIXED_LOGO_SERIES),
   'series-decider': presentationFixture('real-live-rich', DECIDER_SERIES),
@@ -1133,6 +1223,28 @@ export const SYNTHETIC_FIXTURE_PROVENANCE = {
     kind: 'synthetic-presentation',
     reason:
       '以真实 Program snapshot 为底，仅施加系列赛计划、品牌或名称展示压力；计划不是 GSI evidence。',
+  },
+  'series-bo5-pick-loss': {
+    kind: 'synthetic-presentation',
+    reason: '以真实 Program snapshot 为底，合成选图方失利的比分与赢家，用于视觉预览。',
+  },
+  'bp-rivals-final-map4': {
+    kind: 'synthetic-presentation',
+    reason:
+      '2026 NJU Rivals 总决赛官方 BP/赛果，在第 4 图开打前截取；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-final-result': {
+    kind: 'synthetic-presentation',
+    reason:
+      '2026 NJU Rivals 总决赛官方 BP/赛果的赛后切面；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-semi-a-result': {
+    kind: 'synthetic-presentation',
+    reason: '2026 NJU Rivals 胜者组半决赛官方 BP/赛果；背景 GSI 来自独立真实回放，只验收系列图条。',
+  },
+  'bp-rivals-semi-b-result': {
+    kind: 'synthetic-presentation',
+    reason: '2026 NJU Rivals 胜者组半决赛官方 BP/赛果；背景 GSI 来自独立真实回放，只验收系列图条。',
   },
   'series-not-played': {
     kind: 'synthetic-presentation',

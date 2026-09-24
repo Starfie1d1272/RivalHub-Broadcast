@@ -1,5 +1,5 @@
 import { programSnapshotSchema, type ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
-import artifact from './generated/real-program-fixtures.generated.json';
+import artifact from './generated/real-program-fixtures.generated.json' with { type: 'json' };
 
 export interface RealProgramProvenance {
   readonly kind: 'real-derived';

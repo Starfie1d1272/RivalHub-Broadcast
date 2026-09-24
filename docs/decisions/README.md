@@ -27,6 +27,7 @@ ADR 用于记录会长期约束仓库的技术/产品架构决策，避免重要
 - [`0004-program-output-and-observer-assist-isolation.md`](0004-program-output-and-observer-assist-isolation.md)：Delayed Program timeline、machine-only Lookahead、Observer Assist Overlay、Program/Assist non-leak 与双 source continuity 边界。
 - [`0005-product-capability-boundaries-and-portability.md`](0005-product-capability-boundaries-and-portability.md)：三条产品能力线、Shared Runtime Foundation、RivalHub 第一方集成语义，以及 Core / Radar / Lookahead 不被第一方实现反向锁定的可移植性边界。
 - [`0006-local-independent-and-rivalhub-connected-modes.md`](0006-local-independent-and-rivalhub-connected-modes.md)：独立模式与 RivalHub 连接模式的产品边界；将校园赛、社区赛等明确为适用场景而非第三种运行模式，并冻结“RivalHub 是第一方集成但不是运行前置条件”的产品方向。
+- [`0007-gameplay-hud-presentation-invariants.md`](0007-gameplay-hud-presentation-invariants.md)：Gameplay HUD 长期 presentation invariant 与已验证反模式；冻结 entrant 物理位置、稳定几何、单一 Radar 坐标 owner、局部 urgency 与真实 fixture provenance，但不冻结具体美术语言。
 
 ## Clarification
 
