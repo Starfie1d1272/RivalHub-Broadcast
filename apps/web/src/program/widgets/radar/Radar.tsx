@@ -23,6 +23,7 @@ import {
   radarPointInsideViewport,
   type RadarCanvasPlacement,
 } from './canvas-geometry';
+import { effectCentroid, smokeContour, smokeLobes } from './effect-geometry';
 import './radar.css';
 
 export interface RadarProps {
@@ -110,6 +111,26 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.stroke();
         }
       };
+      const smoothClosedPath = (
+        points: readonly { readonly x: number; readonly y: number }[],
+      ) => {
+        if (points.length < 3) return;
+        const first = points[0]!;
+        const last = points.at(-1)!;
+        ctx.beginPath();
+        ctx.moveTo((last.x + first.x) / 2, (last.y + first.y) / 2);
+        for (let index = 0; index < points.length; index += 1) {
+          const current = points[index]!;
+          const next = points[(index + 1) % points.length]!;
+          ctx.quadraticCurveTo(
+            current.x,
+            current.y,
+            (current.x + next.x) / 2,
+            (current.y + next.y) / 2,
+          );
+        }
+        ctx.closePath();
+      };
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
       const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
@@ -185,6 +206,12 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       element.dataset.radarTrails = String(
         [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
       );
+      element.dataset.radarSmokes = String(
+        [...model.grenades.values()].filter((marker) => isActiveSmoke(marker.source)).length,
+      );
+      element.dataset.radarFlamePoints = String(
+        payload?.grenades.reduce((count, grenade) => count + grenade.flames.length, 0) ?? 0,
+      );
       ctx.save();
       ctx.beginPath();
       ctx.rect(
@@ -252,65 +279,120 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       }
 
       if (geometry && payload) {
-        // Effects are behind every player. Flame z is projected independently.
+        // Active effects are spatial footprints, not enlarged grenade markers.
+        // Eon (ISC) and Lexogrine (MIT) informed the state split; this Canvas
+        // implementation is original and keeps RivalHub's calibrated truth.
         let flameCount = 0;
         for (const source of payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
-          const side =
-            payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId)?.side ??
-            'unknown';
+          if (source.flames.length === 0) continue;
+          const flamePoints: Array<{
+            readonly x: number;
+            readonly y: number;
+            readonly radius: number;
+            readonly opacity: number;
+          }> = [];
           for (const flame of source.flames) {
             if (++flameCount > RADAR_PRESENTATION.maxFlames) break;
-            const p = projectWorldPosition(flame.position, geometry);
-            if (p && !p.outOfBounds) {
-              const point = pointAt(p);
-              if (point) {
-                ctx.globalAlpha = layerOpacity(p, model.layer);
-                circle(point.x, point.y, 18, '#ef9e3f70', sideColor(side), 1.5);
-                ctx.globalAlpha = 1;
-              }
-            }
+            const projected = projectWorldPosition(flame.position, geometry);
+            if (!projected || projected.outOfBounds) continue;
+            const point = pointAt(projected);
+            if (point === null) continue;
+            const worldRadius = projectWorldRadius(52, geometry) ?? 0;
+            const radius = Math.max(8, Math.min(18, radiusAt(worldRadius, projected.layer)));
+            flamePoints.push({
+              x: point.x,
+              y: point.y,
+              radius,
+              opacity: layerOpacity(projected, model.layer),
+            });
           }
+          if (flamePoints.length === 0) continue;
+
+          ctx.save();
+          ctx.filter = 'blur(5px)';
+          ctx.fillStyle = '#e85f2f';
+          for (const flame of flamePoints) {
+            ctx.globalAlpha = flame.opacity * 0.46;
+            circle(flame.x, flame.y, flame.radius * 1.45, '#e85f2f');
+          }
+          ctx.filter = 'none';
+          ctx.globalCompositeOperation = 'lighter';
+          for (const flame of flamePoints) {
+            ctx.globalAlpha = flame.opacity * 0.58;
+            circle(flame.x, flame.y, flame.radius * 0.9, '#f49b3d');
+            ctx.globalAlpha = flame.opacity * 0.34;
+            circle(flame.x, flame.y, flame.radius * 0.42, '#ffd16a');
+          }
+          ctx.globalCompositeOperation = 'source-over';
+          const centroid = effectCentroid(flamePoints);
+          if (centroid !== null) {
+            ctx.globalAlpha =
+              flamePoints.reduce((sum, flame) => sum + flame.opacity, 0) /
+              flamePoints.length /
+              2.5;
+            const ownerSide =
+              payload.players.find((player) => player.sourcePlayerId === source.ownerSourceId)
+                ?.side ?? 'unknown';
+            circle(centroid.x, centroid.y, 5, sideColor(ownerSide));
+          }
+          ctx.restore();
         }
+
         for (const marker of model.grenades.values()) {
           if (!isActiveSmoke(marker.source)) continue;
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
           if (point === null) continue;
           const x = point.x;
           const y = point.y;
-          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          // Approximate broadcast footprint, scaled through the domain calibration.
+          const opacity = layerOpacity(marker.target, model.layer);
           const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
-          const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
-          const smokeFill =
-            marker.side === 'CT'
-              ? ['#6aa8ff70', '#6aa8ff42', '#6aa8ff08']
-              : marker.side === 'T'
-                ? ['#f2bd4f70', '#f2bd4f42', '#f2bd4f08']
-                : ['#c5cbd070', '#a8afb442', '#a8afb408'];
-          fill.addColorStop(0, smokeFill[0]!);
-          fill.addColorStop(0.75, smokeFill[1]!);
-          fill.addColorStop(1, smokeFill[2]!);
-          ctx.fillStyle = fill;
-          ctx.beginPath();
-          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          const contour = smokeContour(marker.source.sourceEntityId, radius).map((offset) => ({
+            x: x + offset.x,
+            y: y + offset.y,
+          }));
+
+          ctx.save();
+          ctx.globalAlpha = opacity;
+          smoothClosedPath(contour);
+          ctx.fillStyle = '#aab2ba24';
           ctx.fill();
+
+          for (const lobe of smokeLobes(marker.source.sourceEntityId, radius)) {
+            const lx = x + lobe.dx;
+            const ly = y + lobe.dy;
+            const fill = ctx.createRadialGradient(lx, ly, 0, lx, ly, lobe.radius);
+            fill.addColorStop(0, '#eef1f270');
+            fill.addColorStop(0.48, '#c7cdd152');
+            fill.addColorStop(0.82, '#9ca5ad30');
+            fill.addColorStop(1, '#7f899200');
+            ctx.fillStyle = fill;
+            ctx.beginPath();
+            ctx.arc(lx, ly, lobe.radius, 0, Math.PI * 2);
+            ctx.fill();
+          }
+
+          ctx.globalAlpha = opacity * 0.58;
+          smoothClosedPath(contour);
           ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 1.75;
           ctx.stroke();
+
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
+            ctx.globalAlpha = opacity * 0.7;
             ctx.beginPath();
             ctx.arc(
               x,
               y,
-              radius + 5,
+              radius + 7,
               -Math.PI / 2,
               -Math.PI / 2 + (Math.PI * 2 * remaining) / SMOKE_PRESENTATION_DURATION_SECONDS,
             );
-            ctx.lineWidth = 5;
+            ctx.strokeStyle = '#f3f6fa';
+            ctx.lineWidth = 2.5;
             ctx.stroke();
           }
-          ctx.globalAlpha = 1;
+          ctx.restore();
         }
         const drawTrail = (
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
@@ -355,10 +437,10 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          circle(x, y, 21, '#00000000', sideColor(marker.side), 2);
-          const url = grenadeIcon(marker.source.kind);
+          circle(x, y, 18, '#00000000', sideColor(marker.side), 1.5);
+          const url = grenadeIcon(marker.source.kind, marker.side);
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 16, y - 16, 32, 32);
+          if (icon) ctx.drawImage(icon, x - 14, y - 14, 28, 28);
           else {
             ctx.fillStyle = '#ecedef';
             ctx.fillRect(x - 6, y - 6, 12, 12);
