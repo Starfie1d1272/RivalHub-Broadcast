@@ -24,18 +24,24 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
         {maps.map((map) => {
           const decider = map.selectionText === 'DECIDER';
           const mapAsset = getMapThumbnail(map.mapKey);
-          const sideLogo = map.startSide === null ? null : getSideLogo(map.startSide);
-          const statusText = decider ? 'DECIDER' : map.status === 'completed' ? map.statusText : '';
+          const sideLogo =
+            map.pickerStartSide === null ? null : getSideLogo(map.pickerStartSide);
+          const statusText =
+            decider || map.status === 'completed' || map.status === 'current'
+              ? decider
+                ? 'DECIDER'
+                : map.statusText
+              : '';
           const outcomeClass =
             map.pickOutcome === null ? '' : ` match-header__series-map--pick-${map.pickOutcome}`;
           return (
             <div
-              aria-label={`${map.mapName}${map.pickerName === null ? '' : ` picked by ${map.pickerName}`}${statusText ? ` ${statusText}` : ''}`}
+              aria-label={`${map.mapName}${map.pickerName === null ? '' : ` picked by ${map.pickerName}`}${map.pickerStartSide === null ? '' : ` starts ${map.pickerStartSide}`}${statusText ? ` ${statusText}` : ''}`}
               className={`match-header__series-map match-header__series-map--${map.status}${decider ? ' match-header__series-map--decider' : ''}${outcomeClass}`}
               data-map-order={map.mapOrder}
               data-picker={map.picker ?? 'none'}
               data-pick-outcome={map.pickOutcome ?? 'neutral'}
-              data-start-side={map.startSide ?? 'unknown'}
+              data-start-side={map.pickerStartSide ?? 'unknown'}
               data-map-status={map.status}
               key={map.mapOrder}
               role="listitem"
@@ -60,11 +66,11 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
                     src={map.pickerLogoUrl}
                   />
                 )}
-                {map.startSide === null ? null : (
+                {map.pickerStartSide === null ? null : (
                   <span
-                    aria-label={`Team A start side ${map.startSide}`}
-                    className={`match-header__series-map-start-side match-header__series-map-start-side--${map.startSide}`}
-                    data-side={map.startSide}
+                    aria-label={`${map.pickerName ?? 'Picker'} starts ${map.pickerStartSide}`}
+                    className={`match-header__series-map-start-side match-header__series-map-start-side--${map.pickerStartSide}`}
+                    data-side={map.pickerStartSide}
                     style={
                       sideLogo === null
                         ? undefined
