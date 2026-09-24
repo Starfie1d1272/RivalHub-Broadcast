@@ -24,8 +24,7 @@ export function SeriesStrip({ snapshot }: HudWidgetRendererProps) {
         {maps.map((map) => {
           const decider = map.selectionText === 'DECIDER';
           const mapAsset = getMapThumbnail(map.mapKey);
-          const sideLogo =
-            map.pickerStartSide === null ? null : getSideLogo(map.pickerStartSide);
+          const sideLogo = map.pickerStartSide === null ? null : getSideLogo(map.pickerStartSide);
           const statusText =
             decider || map.status === 'completed' || map.status === 'current'
               ? decider
