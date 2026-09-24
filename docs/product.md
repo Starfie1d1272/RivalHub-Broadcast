@@ -103,6 +103,10 @@ Default V1 的中央比分条使用固定 envelope 和稳定的 score / center /
 
 当前观察选手卡使用 `observedPlayerSourceId` 精确匹配 current player，展示身份、K/A/D、`completedAdr`、生命、护甲和真正 active item；阵亡时只保留身份和稳定统计。Default V1 使用固定 360×176 envelope 与固定 media slot，头像存在、缺失或加载失败都不改变外框和字段位置。弹药单位来自官方 item metadata；magazine reserve 使用官方 magazine HUD asset + 数量，不换算为旧式备用子弹。Program 与 HUD 编辑器共享 renderer。
 
+Default V1 的 1920×1080 built-in placement 固定为：Series Strip `400×72 @ (44,36)`、Radar `400×400 @ (44,116)`、Top Score `480×152 @ top-center y=36`、左右 Player Rails `440×478 @ y=524`、Focused `360×176 @ bottom-center -28`。Round History、standalone objective 与 round-result 默认隐藏；Series / Radar / Rails / Focused 的状态变化不应推动其它组件改位。
+
+HUD 编辑器的 normal gameplay preview 继续遵守 #68 的 real-first policy。若同时显示 Program 与 Radar，两者必须解析到同一真实 replay source，并以 capture provenance + Program cursor 精确对齐；找不到同帧 Radar 时 fail closed，不再用“相近场景”拼接。Rivals BP/赛果可以作为明确标注的 presentation overlay，但不得冒充同一场 gameplay telemetry。需要连续时间历史的 ADR/DMG 与 grenade-flight / firing / damage / flash / explosion 等动态效果验收由 #76 的 full-round replay harness 承担，不在静态 fixture 中 patch gameplay truth。
+
 ### 5.1.1 Gameplay HUD 自定义
 
 Gameplay HUD 的第一版自定义面向现场制播人员，固定分为三层：
