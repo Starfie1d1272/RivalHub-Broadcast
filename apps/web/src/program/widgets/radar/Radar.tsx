@@ -9,11 +9,20 @@ import {
   RADAR_PRESENTATION,
   SMOKE_PRESENTATION_DURATION_SECONDS,
   grenadeIcon,
+  isMultiLayerGeometry,
   isActiveSmoke,
-  onLayer,
+  layerOpacity,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
+import {
+  RADAR_CANVAS_GEOMETRY,
+  radarBroadcastPlacement,
+  radarCanvasPoint,
+  radarCanvasRadius,
+  radarPointInsideViewport,
+  type RadarCanvasPlacement,
+} from './canvas-geometry';
 import './radar.css';
 
 export interface RadarProps {
@@ -73,17 +82,16 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         element.height = size;
       }
       const ctx = context;
-      ctx.setTransform(size / 1000, 0, 0, size / 1000, 0, 0);
-      ctx.clearRect(0, 0, 1000, 1000);
-      ctx.fillStyle = '#10191e';
-      ctx.fillRect(0, 0, 1000, 1000);
+      const logicalSize = RADAR_CANVAS_GEOMETRY.logicalSize;
+      ctx.setTransform(size / logicalSize, 0, 0, size / logicalSize, 0, 0);
+      ctx.clearRect(0, 0, logicalSize, logicalSize);
       const style = getComputedStyle(element);
       const sideColor = (side: RadarSide) =>
         side === 'CT'
-          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#77b8e8'
+          ? style.getPropertyValue('--rh-hud-side-ct').trim() || '#6aa8ff'
           : side === 'T'
-            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#eac56d'
-            : '#c2c8ce';
+            ? style.getPropertyValue('--rh-hud-side-t').trim() || '#f2bd4f'
+            : '#aab4c0';
       const circle = (
         x: number,
         y: number,
@@ -104,27 +112,145 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       };
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
-      const map = geometry ? getRadarMapAsset(geometry.mapKey, model.layer) : null;
-      const background = map ? imageFor(map.outputPath) : null;
+      const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
+      const singleAsset =
+        geometry !== null && !multiLayer ? getRadarMapAsset(geometry.mapKey, 'overview') : null;
+      const singleImage = singleAsset ? imageFor(singleAsset.outputPath) : null;
+      const upperAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'upper') : null;
+      const lowerAsset =
+        geometry !== null && multiLayer ? getRadarMapAsset(geometry.mapKey, 'lower') : null;
+      const upperImage = upperAsset ? imageFor(upperAsset.outputPath) : null;
+      const lowerImage = lowerAsset ? imageFor(lowerAsset.outputPath) : null;
+      const placementFor = (layer: string): RadarCanvasPlacement | null =>
+        geometry === null ? null : radarBroadcastPlacement(geometry.mapKey, layer);
+      const pointAt = (point: { x: number; y: number; layer?: string }, layerHint?: string) => {
+        const placement = placementFor(layerHint ?? point.layer ?? model.layer);
+        if (placement !== null && !radarPointInsideViewport(point, placement.viewport)) return null;
+        return radarCanvasPoint(point, placement?.viewport ?? null, placement?.rect ?? null);
+      };
+      const radiusAt = (normalizedRadius: number, layer: string) => {
+        const placement = placementFor(layer);
+        return radarCanvasRadius(
+          normalizedRadius,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+      };
+      const drawArtwork = (
+        image: HTMLImageElement,
+        placement: RadarCanvasPlacement | null = null,
+      ) => {
+        if (placement === null) {
+          ctx.drawImage(
+            image,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.inset,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+            RADAR_CANVAS_GEOMETRY.artworkSize,
+          );
+          return;
+        }
+        const { viewport, rect } = placement;
+        ctx.drawImage(
+          image,
+          viewport.x * image.naturalWidth,
+          viewport.y * image.naturalHeight,
+          viewport.width * image.naturalWidth,
+          viewport.height * image.naturalHeight,
+          rect.x,
+          rect.y,
+          rect.width,
+          rect.height,
+        );
+      };
+      const detachedFloors = geometry?.mapKey === 'de_nuke' && multiLayer;
       element.dataset.radarState = !payload ? 'unavailable' : 'live';
       element.dataset.radarDiagnostic = model.diagnosticReason ?? 'none';
       if (model.unsupportedMap === null) delete element.dataset.radarUnsupportedMap;
       else element.dataset.radarUnsupportedMap = model.unsupportedMap;
       element.dataset.radarLayer = model.layer;
+      element.dataset.radarLayers = multiLayer ? 'simultaneous' : model.layer;
+      element.dataset.radarCompositor = detachedFloors
+        ? 'ewc-detached-floor-shared-calibration'
+        : multiLayer
+          ? 'shared-calibration'
+          : 'single-calibration';
+      element.dataset.radarCoordinateSpace = 'overview-1024';
+      element.dataset.radarArtwork = (multiLayer ? upperImage && lowerImage : singleImage)
+        ? 'ready'
+        : 'loading';
+      element.dataset.radarVisibleFloors = multiLayer ? 'upper,lower' : model.layer;
       element.dataset.radarPlayers = String(model.players.size);
       element.dataset.radarTrails = String(
         [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
       );
       ctx.save();
+      ctx.beginPath();
+      ctx.rect(
+        RADAR_CANVAS_GEOMETRY.inset,
+        RADAR_CANVAS_GEOMETRY.inset,
+        RADAR_CANVAS_GEOMETRY.artworkSize,
+        RADAR_CANVAS_GEOMETRY.artworkSize,
+      );
+      ctx.clip();
       const z = model.zoom;
-      ctx.translate(500, 500);
+      ctx.translate(logicalSize / 2, logicalSize / 2);
       ctx.scale(z.scale, z.scale);
-      ctx.translate(-z.x * 1000, -z.y * 1000);
-      if (background) {
-        ctx.globalAlpha = 0.85;
-        ctx.drawImage(background, 0, 0, 1000, 1000);
+      ctx.translate(-z.x * logicalSize, -z.y * logicalSize);
+      ctx.filter =
+        'grayscale(0.82) saturate(0.1) brightness(0.72) contrast(1.16) ' +
+        'drop-shadow(3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(-3px 0 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 3px 0 rgba(243,246,250,.72)) ' +
+        'drop-shadow(0 -3px 0 rgba(243,246,250,.72))';
+      if (singleImage) {
+        ctx.globalAlpha = 0.84;
+        drawArtwork(singleImage, placementFor('single'));
+        ctx.globalAlpha = 1;
+      } else if (geometry && multiLayer) {
+        const floors =
+          model.layer === 'upper' ? (['lower', 'upper'] as const) : (['upper', 'lower'] as const);
+        for (const floor of floors) {
+          const image = floor === 'upper' ? upperImage : lowerImage;
+          if (!image) continue;
+          ctx.globalAlpha = floor === model.layer ? 0.86 : model.layer === 'unknown' ? 0.72 : 0.5;
+          drawArtwork(image, placementFor(floor));
+        }
         ctx.globalAlpha = 1;
       }
+      ctx.filter = 'none';
+
+      const drawSiteBadge = (
+        label: 'A' | 'B',
+        normalized: { readonly x: number; readonly y: number },
+        layer: string,
+      ) => {
+        const placement = placementFor(layer);
+        const point = radarCanvasPoint(
+          normalized,
+          placement?.viewport ?? null,
+          placement?.rect ?? null,
+        );
+        const size = 56;
+        ctx.fillStyle = '#f3ce22';
+        ctx.fillRect(point.x - size / 2, point.y - size / 2, size, size);
+        ctx.fillStyle = '#0b1119';
+        ctx.font = '900 32px Inter, sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(label, point.x, point.y + 1);
+      };
+      if (geometry?.mapKey === 'de_ancient') {
+        // Valve overview artwork already owns spawn-zone geometry. Only add
+        // calibrated broadcast labels at the centers of the source bombsites.
+        drawSiteBadge('A', { x: 0.302, y: 0.26 }, 'single');
+        drawSiteBadge('B', { x: 0.8, y: 0.4 }, 'single');
+      } else if (geometry?.mapKey === 'de_nuke') {
+        drawSiteBadge('A', { x: 0.58, y: 0.48 }, 'upper');
+        drawSiteBadge('B', { x: 0.58, y: 0.58 }, 'lower');
+      }
+
       if (geometry && payload) {
         // Effects are behind every player. Flame z is projected independently.
         let flameCount = 0;
@@ -135,20 +261,35 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           for (const flame of source.flames) {
             if (++flameCount > RADAR_PRESENTATION.maxFlames) break;
             const p = projectWorldPosition(flame.position, geometry);
-            if (p && onLayer(p, model.layer))
-              circle(p.x * 1000, p.y * 1000, 9, '#e99b4680', sideColor(side), 2);
+            if (p && !p.outOfBounds) {
+              const point = pointAt(p);
+              if (point) {
+                ctx.globalAlpha = layerOpacity(p, model.layer);
+                circle(point.x, point.y, 18, '#ef9e3f70', sideColor(side), 1.5);
+                ctx.globalAlpha = 1;
+              }
+            }
           }
         }
         for (const marker of model.grenades.values()) {
           if (!isActiveSmoke(marker.source)) continue;
-          const x = marker.target.x * 1000;
-          const y = marker.target.y * 1000;
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           // Approximate broadcast footprint, scaled through the domain calibration.
-          const radius = (projectWorldRadius(144, geometry) ?? 0) * 1000;
+          const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
           const fill = ctx.createRadialGradient(x, y, 0, x, y, radius);
-          fill.addColorStop(0, '#c5cbd07a');
-          fill.addColorStop(0.75, '#a8afb460');
-          fill.addColorStop(1, '#a8afb410');
+          const smokeFill =
+            marker.side === 'CT'
+              ? ['#6aa8ff70', '#6aa8ff42', '#6aa8ff08']
+              : marker.side === 'T'
+                ? ['#f2bd4f70', '#f2bd4f42', '#f2bd4f08']
+                : ['#c5cbd070', '#a8afb442', '#a8afb408'];
+          fill.addColorStop(0, smokeFill[0]!);
+          fill.addColorStop(0.75, smokeFill[1]!);
+          fill.addColorStop(1, smokeFill[2]!);
           ctx.fillStyle = fill;
           ctx.beginPath();
           ctx.arc(x, y, radius, 0, Math.PI * 2);
@@ -169,17 +310,22 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.lineWidth = 5;
             ctx.stroke();
           }
+          ctx.globalAlpha = 1;
         }
         const drawTrail = (
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
           alpha: number,
         ) => {
-          ctx.globalAlpha = alpha * 0.6;
+          const trail = marker.trail
+            .map((point) => pointAt(point, marker.target.layer))
+            .filter((point): point is NonNullable<typeof point> => point !== null);
+          if (trail.length < 2) return;
+          ctx.globalAlpha = alpha * 0.34;
           ctx.strokeStyle = sideColor(marker.side);
-          ctx.lineWidth = 3;
+          ctx.lineWidth = 2;
           ctx.beginPath();
-          marker.trail.forEach((p, i) =>
-            i ? ctx.lineTo(p.x * 1000, p.y * 1000) : ctx.moveTo(p.x * 1000, p.y * 1000),
+          trail.forEach((point, index) =>
+            index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
           );
           ctx.stroke();
           ctx.globalAlpha = 1;
@@ -188,29 +334,36 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
           drawTrail(exit.marker, alpha);
           ctx.globalAlpha = alpha;
-          circle(
-            exit.marker.target.x * 1000,
-            exit.marker.target.y * 1000,
-            15 + (1 - alpha) * 18,
-            '#ffffff10',
-            sideColor(exit.marker.side),
-            2,
-          );
+          const exitPoint = pointAt(exit.marker.target);
+          if (exitPoint) {
+            circle(
+              exitPoint.x,
+              exitPoint.y,
+              15 + (1 - alpha) * 18,
+              '#ffffff10',
+              sideColor(exit.marker.side),
+              2,
+            );
+          }
           ctx.globalAlpha = 1;
         }
         for (const marker of model.grenades.values()) {
           if (!marker.airborne) continue;
           drawTrail(marker, 1);
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
-          circle(x, y, 13, '#142028', sideColor(marker.side), 3);
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          circle(x, y, 21, '#00000000', sideColor(marker.side), 2);
           const url = grenadeIcon(marker.source.kind);
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 10, y - 10, 20, 20);
+          if (icon) ctx.drawImage(icon, x - 16, y - 16, 32, 32);
           else {
             ctx.fillStyle = '#ecedef';
-            ctx.fillRect(x - 4, y - 4, 8, 8);
+            ctx.fillRect(x - 6, y - 6, 12, 12);
           }
+          ctx.globalAlpha = 1;
         }
         const bomb = payload.bomb;
         const bombAsset = getCs2Asset('objective.c4');
@@ -223,37 +376,62 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           model.bombVisible(now)
         ) {
           const p = projectWorldPosition(bomb.position, geometry);
-          if (p && onLayer(p, model.layer)) {
-            const x = p.x * 1000;
-            const y = p.y * 1000;
-            circle(
-              x,
-              y,
-              22,
-              '#211c16',
-              bomb.state === 'defusing' || bomb.state === 'defused' ? '#89d7b3' : '#f0ae6d',
-              5,
-            );
-            if (bombIcon) ctx.drawImage(bombIcon, x - 13, y - 13, 26, 26);
+          if (p && !p.outOfBounds) {
+            const point = pointAt(p);
+            if (point !== null) {
+              const x = point.x;
+              const y = point.y;
+              ctx.globalAlpha = layerOpacity(p, model.layer);
+              circle(
+                x,
+                y,
+                27,
+                '#00000000',
+                bomb.state === 'defusing' || bomb.state === 'defused'
+                  ? '#83d8e8'
+                  : bomb.state === 'planting'
+                    ? '#aab4c0'
+                    : bomb.state === 'planted'
+                      ? '#f06f6f'
+                      : '#f3f6fa',
+                3,
+              );
+              if (bombIcon) ctx.drawImage(bombIcon, x - 20, y - 20, 40, 40);
+              ctx.globalAlpha = 1;
+            }
           }
         }
         for (const marker of model.players.values()) {
           const p = marker.source;
-          const x = marker.x * 1000;
-          const y = marker.y * 1000;
+          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          if (point === null) continue;
+          const x = point.x;
+          const y = point.y;
           const alive = p.lifeState === 'alive';
-          ctx.globalAlpha = alive ? 1 : 0.4;
           const color = sideColor(p.side);
+          ctx.globalAlpha = layerOpacity(marker.target, model.layer);
+          if (!alive) {
+            ctx.strokeStyle = color;
+            ctx.lineWidth = 7;
+            ctx.beginPath();
+            ctx.moveTo(x - 19, y - 19);
+            ctx.lineTo(x + 19, y + 19);
+            ctx.moveTo(x - 19, y + 19);
+            ctx.lineTo(x + 19, y - 19);
+            ctx.stroke();
+            ctx.globalAlpha = 1;
+            continue;
+          }
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
-            circle(x, y, 26, '#00000000', '#ffffff', 5);
-          if (alive && p.forward) {
+            circle(x, y, 37, '#00000000', '#ffffff', 5);
+          if (p.forward) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((marker.angle * Math.PI) / 180);
             ctx.beginPath();
-            ctx.moveTo(33, 0);
-            ctx.lineTo(13, -12);
-            ctx.lineTo(13, 12);
+            ctx.moveTo(37, 0);
+            ctx.lineTo(14, -13);
+            ctx.lineTo(14, 13);
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
@@ -263,41 +441,25 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             }
             ctx.restore();
           }
-          circle(x, y, 18, color, '#10171f', 3);
-          if (p.lifeState === 'dead') {
-            ctx.strokeStyle = '#10171f';
-            ctx.lineWidth = 5;
-            ctx.beginPath();
-            ctx.moveTo(x - 8, y - 8);
-            ctx.lineTo(x + 8, y + 8);
-            ctx.moveTo(x - 8, y + 8);
-            ctx.lineTo(x + 8, y - 8);
-            ctx.stroke();
-          } else {
-            ctx.fillStyle = '#0c1420';
-            ctx.font = 'bold 25px Inter, sans-serif';
-            ctx.textAlign = 'center';
-            ctx.textBaseline = 'middle';
-            ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
-          }
+          circle(x, y, 33, '#f3f6fa');
+          circle(x, y, 29, color, '#0b1119', 2);
+          ctx.fillStyle = '#0b1119';
+          ctx.font = '800 32px Inter, sans-serif';
+          ctx.textAlign = 'center';
+          ctx.textBaseline = 'middle';
+          ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
           if (alive && p.flashAmount !== null && p.flashAmount > 0) {
             ctx.globalAlpha = Math.min(1, p.flashAmount / 255);
-            circle(x, y, 21, '#ffffff55', '#ffffff', 4);
+            circle(x, y, 24, '#ffffff55', '#ffffff', 4);
             ctx.globalAlpha = 1;
           }
-          if (marker.damageUntil > now) circle(x, y, 23, '#00000000', '#ff6c69', 5);
+          if (marker.damageUntil > now) circle(x, y, 27, '#00000000', '#ff6c69', 5);
           if (
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
           ) {
-            ctx.fillStyle = '#111a22';
-            ctx.fillRect(x + 10, y + 10, 22, 22);
-            if (bombIcon) ctx.drawImage(bombIcon, x + 11, y + 11, 20, 20);
-          }
-          if (model.layer === 'unknown' && marker.target.layer !== 'single') {
-            ctx.fillStyle = '#ffffff';
-            ctx.font = '20px sans-serif';
-            ctx.fillText(marker.target.layer === 'upper' ? '↑' : '↓', x, y - 32);
+            circle(x + 32, y + 32, 18, '#00000000', '#f3f6fa', 2);
+            if (bombIcon) ctx.drawImage(bombIcon, x + 16, y + 16, 32, 32);
           }
           ctx.globalAlpha = 1;
         }
@@ -305,11 +467,6 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       ctx.restore();
       if (!payload) {
         // Safe fail-closed presentation without disruptive center placeholder
-      } else if (model.layer === 'upper' || model.layer === 'lower') {
-        ctx.fillStyle = '#d8e3eb';
-        ctx.font = '27px sans-serif';
-        ctx.textAlign = 'left';
-        ctx.fillText(model.layer === 'upper' ? '上层' : '下层', 25, 45);
       }
       frame = requestAnimationFrame(render);
     };
