@@ -5,12 +5,12 @@ import {
   type ProgramSnapshot,
 } from '@rivalhub-broadcast/protocol/program';
 
-import { realProgramFixtures, type RealProgramFixtureId } from './real-program-fixtures';
+import { realProgramFixtures, type RealProgramFixtureId } from './real-program-fixtures.js';
 import {
   derivePresentationStressFixture,
   type PresentationStressPatch,
-} from './presentation-stress';
-import { RIVALS_BP_RECORDS, rivalsSeriesCut } from './rivals-bp-records';
+} from './presentation-stress.js';
+import { RIVALS_BP_RECORDS, rivalsSeriesCut } from './rivals-bp-records.js';
 
 type ProgramPlayer = ProgramPayload['players'][number];
 type PlayerState = NonNullable<ProgramPlayer['state']>;
