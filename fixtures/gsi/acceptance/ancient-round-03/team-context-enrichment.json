@@ -1,0 +1,29 @@
+{
+  "schemaVersion": 1,
+  "kind": "fixture-local-team-presentation-enrichment",
+  "source": {
+    "captureId": "20260914T060149Z-4cda66b7-recovered-match",
+    "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+    "sourceFrameSelection": {
+      "kind": "sequence-range",
+      "firstSequence": 587,
+      "lastSequence": 1214
+    }
+  },
+  "teams": [
+    {
+      "gsiTeamName": "FURIA",
+      "logoUrl": "/fixtures/ancient-round-03/assets/team-furia.svg",
+      "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/team-furia.svg",
+      "sha256": "d734cb7d9cd7e9d765e7aaabe72b11faf6ee6c982f5a03369e5edc2d65f91b4c",
+      "sourceUrl": "https://us.furia.gg/images/brand/logotipo-white.svg"
+    },
+    {
+      "gsiTeamName": "G2.Esports",
+      "logoUrl": "/fixtures/ancient-round-03/assets/team-g2.png",
+      "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/team-g2.png",
+      "sha256": "c564f830dc716068ada97a271887266e0091399c3fe1b55ee2592f420569c549",
+      "sourceUrl": "https://g2esports.com/cdn/shop/files/G2-Esports-2020-Logo_87bf0678-e67f-4834-8b09-e56137ffaa80.png?v=1641913940"
+    }
+  ]
+}

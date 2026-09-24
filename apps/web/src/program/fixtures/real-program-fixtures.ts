@@ -9,7 +9,7 @@ export interface RealProgramProvenance {
   readonly targetSequence: number;
   readonly firstSequence: number;
   readonly lastSequence: number;
-  readonly sanitizerVersion: 1;
+  readonly sanitizerVersion: 2;
 }
 export type RealProgramFixtureId = keyof typeof artifact.fixtures;
 
@@ -52,7 +52,7 @@ export function parseRealProgramArtifact(value: unknown): {
     ]);
     if (
       p.kind !== 'real-derived' ||
-      p.sanitizerVersion !== 1 ||
+      p.sanitizerVersion !== 2 ||
       typeof p.capturePath !== 'string' ||
       !/^fixtures\/gsi\/semantic\/[a-z0-9-]+\/[a-z0-9-]+$/.test(p.capturePath) ||
       typeof p.sourceCaptureId !== 'string' ||

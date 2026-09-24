@@ -11,7 +11,7 @@ export interface GoldCaptureProvenanceV1 {
   readonly sourceCaptureId: string;
   readonly sourceFramesSha256: string;
   readonly sourceFrameSelection: CaptureSelection;
-  readonly sanitizerVersion: 1;
+  readonly sanitizerVersion: 2;
   readonly lifecycleCoverage: 'partial' | 'full-match';
 }
 

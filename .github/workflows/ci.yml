@@ -93,6 +93,9 @@ jobs:
       - name: Verify real-derived Radar fixtures
         run: pnpm fixtures:radar:verify
 
+      - name: Verify replay acceptance artifacts
+        run: pnpm fixtures:replay:verify
+
       - name: Test
         run: pnpm test
 

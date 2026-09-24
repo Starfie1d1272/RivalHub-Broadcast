@@ -71,6 +71,8 @@ Team Summary、timeout、objective progress、alive XvY 等 transient presentati
 
 不得用手工构造的“看起来合理”正常比赛状态替代已有真实 evidence。
 
+Public-match real-derived capture 保留原始 Steam64、GSI player display name 和 team/clan name。Capture sanitizer 只清除凭据、本机/私有 endpoint、绝对本机路径与机器特有元数据。头像和队标是独立 presentation enrichment：必须按稳定 identity/name 关联并记录本地 asset hash 与来源；素材缺失时保持 unavailable，不生成近似身份素材。Steam Web API enrichment 仅在开发期一次性导入，Replay 与 CI 离线消费其结果。
+
 ## 已验证但不冻结为美术规范的探索
 
 以下内容曾用于 Default V1 探索，但不形成长期 invariant：

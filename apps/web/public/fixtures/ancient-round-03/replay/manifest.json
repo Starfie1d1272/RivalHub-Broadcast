@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "eventIndexSchemaVersion": 1,
+  "harnessVersion": 1,
+  "source": {
+    "id": "ancient-round-03",
+    "role": "primary",
+    "capturePath": "fixtures/gsi/acceptance/ancient-round-03",
+    "sourceCaptureId": "20260914T060149Z-4cda66b7-recovered-match",
+    "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+    "sanitizerVersion": 2,
+    "sourceFrameSelection": {
+      "kind": "sequence-range",
+      "firstSequence": 587,
+      "lastSequence": 1214
+    },
+    "mapName": "de_ancient",
+    "humanRound": 3
+  },
+  "frameCount": 628,
+  "firstSequence": 587,
+  "lastSequence": 1214,
+  "framesSha256": "e4a4765269d97c6a6554b39905d115ff883ef26a2b10e9aef476160dea221510",
+  "eventCount": 231,
+  "eventIndexSha256": "b1b65b53d76807c06ca1f9993c918fbc432adcc20c5ff29964366a303879f035",
+  "matchContextSha256": "6d13262335f34f5ca6ab5af35da817aaff88df801ce3322b98c2160c003b49c7",
+  "captureManifestSha256": "641f8fbdef62e4968db6382c815854ee74bbcc41adaffe951bbea59e799eb692",
+  "coverage": [
+    { "kind": "round-phase", "status": "observed" },
+    { "kind": "weapon-ammo-decrease", "status": "observed" },
+    { "kind": "health-decrease", "status": "observed" },
+    { "kind": "death", "status": "observed" },
+    { "kind": "flash-rise-fall", "status": "observed" },
+    { "kind": "grenade-airborne-terminal", "status": "observed" },
+    { "kind": "smoke-start", "status": "observed" },
+    { "kind": "smoke-end", "status": "observed" },
+    { "kind": "inferno-start", "status": "observed" },
+    { "kind": "inferno-end", "status": "observed" },
+    { "kind": "he-detonation", "status": "unavailable-from-current-source" },
+    { "kind": "bomb-state", "status": "observed" },
+    { "kind": "observer-target-switch", "status": "observed" },
+    { "kind": "round-boundary", "status": "observed" },
+    { "kind": "round-accumulator-finalize", "status": "observed" }
+  ]
+}

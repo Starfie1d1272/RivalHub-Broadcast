@@ -1,0 +1,352 @@
+{
+  "manifest": {
+    "schemaVersion": "rivalhub.broadcast-manifest.v1",
+    "revision": "fixture-manifest-r1",
+    "match": {
+      "matchId": "match-m2-01",
+      "competition": {
+        "competitionId": "competition-m2",
+        "slug": "m2-sample",
+        "name": "M2 示例赛",
+        "themeColor": "#1d4ed8"
+      },
+      "status": "in_progress",
+      "format": "bo3",
+      "stage": "瑞士赛",
+      "round": 1,
+      "entryRound": "upper",
+      "scheduledAt": "2026-09-16T10:00:00.000Z",
+      "startedAt": null,
+      "completedAt": null,
+      "scoreA": null,
+      "scoreB": null,
+      "isForfeit": false
+    },
+    "entrants": {
+      "a": {
+        "entryId": "entry-m2-a",
+        "name": "FURIA",
+        "logoUrl": "/fixtures/ancient-round-03/assets/team-furia.svg",
+        "roster": {
+          "rosterId": "roster-m2-a",
+          "players": [
+            {
+              "playerId": "steam-76561197960690195",
+              "steam64": "76561197960690195",
+              "displayName": "FalleN",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561197960690195-c592851dbfb5.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198058500492",
+              "steam64": "76561198058500492",
+              "displayName": "KSCERATO",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198058500492-499cf2d3bc35.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198134401925",
+              "steam64": "76561198134401925",
+              "displayName": "YEKINDAR",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198134401925-0d0624dece84.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198164970560",
+              "steam64": "76561198164970560",
+              "displayName": "yuurih",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198164970560-cee3fb279f26.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198200982290",
+              "steam64": "76561198200982290",
+              "displayName": "molodoy",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198200982290-bd6d6b55a1c6.jpg",
+              "isStarter": true
+            }
+          ]
+        }
+      },
+      "b": {
+        "entryId": "entry-m2-b",
+        "name": "G2.Esports",
+        "logoUrl": "/fixtures/ancient-round-03/assets/team-g2.png",
+        "roster": {
+          "rosterId": "roster-m2-b",
+          "players": [
+            {
+              "playerId": "steam-76561198012872053",
+              "steam64": "76561198012872053",
+              "displayName": "huNter-",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198012872053-89e7f0ad4292.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198053126645",
+              "steam64": "76561198053126645",
+              "displayName": "NertZ",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198053126645-d6a604e3fadb.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198068002993",
+              "steam64": "76561198068002993",
+              "displayName": "HeavyGod",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198068002993-21b4a358b366.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561198294381090",
+              "steam64": "76561198294381090",
+              "displayName": "r1nkle",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198294381090-b52765e6529e.jpg",
+              "isStarter": true
+            },
+            {
+              "playerId": "steam-76561199046478501",
+              "steam64": "76561199046478501",
+              "displayName": "MATYS",
+              "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561199046478501-5b3060d27a66.jpg",
+              "isStarter": true
+            }
+          ]
+        }
+      }
+    },
+    "maps": [
+      {
+        "mapId": "map-m2-01",
+        "mapOrder": 1,
+        "mapName": "de_ancient",
+        "pickedByEntryId": "entry-m2-a",
+        "teamAStartSide": "ct",
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      },
+      {
+        "mapId": "map-m2-02",
+        "mapOrder": 2,
+        "mapName": "de_mirage",
+        "pickedByEntryId": "entry-m2-b",
+        "teamAStartSide": "ct",
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      },
+      {
+        "mapId": "map-m2-03",
+        "mapOrder": 3,
+        "mapName": "de_nuke",
+        "pickedByEntryId": null,
+        "teamAStartSide": null,
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      }
+    ],
+    "veto": [
+      {
+        "stepOrder": 1,
+        "actionType": "ban",
+        "mapName": "de_dust2",
+        "entryId": "entry-m2-a",
+        "side": null
+      },
+      {
+        "stepOrder": 2,
+        "actionType": "ban",
+        "mapName": "de_inferno",
+        "entryId": "entry-m2-b",
+        "side": null
+      },
+      {
+        "stepOrder": 3,
+        "actionType": "pick",
+        "mapName": "de_ancient",
+        "entryId": "entry-m2-a",
+        "side": "t"
+      }
+    ],
+    "commentators": [
+      {
+        "userId": "user-commentator-m2",
+        "displayName": "现场解说",
+        "avatarUrl": null,
+        "liveStreamUrl": "https://stream.example.test/m2"
+      }
+    ]
+  },
+  "context": {
+    "matchId": "match-m2-01",
+    "competition": {
+      "competitionId": "competition-m2",
+      "slug": "m2-sample",
+      "name": "M2 示例赛",
+      "themeColor": "#1d4ed8"
+    },
+    "status": "in_progress",
+    "format": "bo3",
+    "stage": "瑞士赛",
+    "round": 1,
+    "entryRound": "upper",
+    "scheduledAt": "2026-09-16T10:00:00.000Z",
+    "startedAt": null,
+    "completedAt": null,
+    "scoreA": null,
+    "scoreB": null,
+    "isForfeit": false,
+    "entrants": {
+      "a": {
+        "entryId": "entry-m2-a",
+        "name": "FURIA",
+        "logoUrl": "/fixtures/ancient-round-03/assets/team-furia.svg",
+        "rosterId": "roster-m2-a",
+        "players": [
+          {
+            "playerId": "steam-76561197960690195",
+            "steam64": "76561197960690195",
+            "displayName": "FalleN",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561197960690195-c592851dbfb5.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198058500492",
+            "steam64": "76561198058500492",
+            "displayName": "KSCERATO",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198058500492-499cf2d3bc35.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198134401925",
+            "steam64": "76561198134401925",
+            "displayName": "YEKINDAR",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198134401925-0d0624dece84.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198164970560",
+            "steam64": "76561198164970560",
+            "displayName": "yuurih",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198164970560-cee3fb279f26.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198200982290",
+            "steam64": "76561198200982290",
+            "displayName": "molodoy",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198200982290-bd6d6b55a1c6.jpg",
+            "isStarter": true
+          }
+        ]
+      },
+      "b": {
+        "entryId": "entry-m2-b",
+        "name": "G2.Esports",
+        "logoUrl": "/fixtures/ancient-round-03/assets/team-g2.png",
+        "rosterId": "roster-m2-b",
+        "players": [
+          {
+            "playerId": "steam-76561198012872053",
+            "steam64": "76561198012872053",
+            "displayName": "huNter-",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198012872053-89e7f0ad4292.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198053126645",
+            "steam64": "76561198053126645",
+            "displayName": "NertZ",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198053126645-d6a604e3fadb.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198068002993",
+            "steam64": "76561198068002993",
+            "displayName": "HeavyGod",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198068002993-21b4a358b366.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561198294381090",
+            "steam64": "76561198294381090",
+            "displayName": "r1nkle",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561198294381090-b52765e6529e.jpg",
+            "isStarter": true
+          },
+          {
+            "playerId": "steam-76561199046478501",
+            "steam64": "76561199046478501",
+            "displayName": "MATYS",
+            "avatarUrl": "/fixtures/ancient-round-03/assets/avatar-76561199046478501-5b3060d27a66.jpg",
+            "isStarter": true
+          }
+        ]
+      }
+    },
+    "maps": [
+      {
+        "mapId": "map-m2-01",
+        "mapOrder": 1,
+        "mapName": "de_ancient",
+        "pickedByEntryId": "entry-m2-a",
+        "teamAStartSide": "CT",
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      },
+      {
+        "mapId": "map-m2-02",
+        "mapOrder": 2,
+        "mapName": "de_mirage",
+        "pickedByEntryId": "entry-m2-b",
+        "teamAStartSide": "CT",
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      },
+      {
+        "mapId": "map-m2-03",
+        "mapOrder": 3,
+        "mapName": "de_nuke",
+        "pickedByEntryId": null,
+        "teamAStartSide": null,
+        "scoreA": null,
+        "scoreB": null,
+        "completedAt": null
+      }
+    ],
+    "veto": [
+      {
+        "stepOrder": 1,
+        "actionType": "ban",
+        "mapName": "de_dust2",
+        "entryId": "entry-m2-a",
+        "side": null
+      },
+      {
+        "stepOrder": 2,
+        "actionType": "ban",
+        "mapName": "de_inferno",
+        "entryId": "entry-m2-b",
+        "side": null
+      },
+      {
+        "stepOrder": 3,
+        "actionType": "pick",
+        "mapName": "de_ancient",
+        "entryId": "entry-m2-a",
+        "side": "T"
+      }
+    ],
+    "commentators": [
+      {
+        "userId": "user-commentator-m2",
+        "displayName": "现场解说",
+        "avatarUrl": null,
+        "liveStreamUrl": "https://stream.example.test/m2"
+      }
+    ]
+  }
+}

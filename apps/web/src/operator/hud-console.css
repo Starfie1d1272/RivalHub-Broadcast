@@ -151,6 +151,122 @@
   padding: 0.7rem 0.8rem;
 }
 
+.hud-console__replay {
+  background: rgb(23 34 31 / 0.86);
+  border: 1px solid var(--hud-rule);
+  border-radius: 0.8rem;
+  display: grid;
+  gap: 0.7rem;
+  margin: 0 0 0.75rem;
+  padding: 0.8rem;
+}
+
+.hud-console__replay-actions {
+  align-items: center;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.45rem;
+}
+
+.hud-console__replay-actions button {
+  background: var(--hud-panel-deep);
+  border: 1px solid var(--hud-rule);
+  border-radius: 999px;
+  color: var(--hud-ink);
+  cursor: pointer;
+  font: inherit;
+  min-height: 2.3rem;
+  padding: 0.45rem 0.8rem;
+}
+
+.hud-console__replay-actions button:first-child {
+  background: var(--hud-signal);
+  border-color: var(--hud-signal);
+  color: #111a16;
+}
+
+.hud-console__replay-actions button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.hud-console__replay-scrubber {
+  color: var(--hud-muted);
+  display: grid;
+  font-size: 0.75rem;
+  gap: 0.25rem;
+}
+
+.hud-console__replay-event-select {
+  color: var(--hud-muted);
+  display: grid;
+  font-size: 0.75rem;
+  gap: 0.3rem;
+}
+
+.hud-console__replay-event-select select {
+  background: var(--hud-panel-deep);
+  border: 1px solid #526660;
+  border-radius: 0.45rem;
+  box-sizing: border-box;
+  color: var(--hud-ink);
+  font: inherit;
+  min-height: 2.3rem;
+  max-width: 100%;
+  padding: 0.45rem 0.65rem;
+}
+
+.hud-console__replay-scrubber input {
+  accent-color: var(--hud-signal);
+  width: 100%;
+}
+
+.hud-console__replay-readout {
+  align-items: baseline;
+  color: var(--hud-muted);
+  display: flex;
+  flex-wrap: wrap;
+  font-size: 0.74rem;
+  gap: 0.4rem 1rem;
+}
+
+.hud-console__replay-readout span:first-child,
+.hud-console__replay-readout span:nth-child(2) {
+  color: var(--hud-ink);
+  font-variant-numeric: tabular-nums;
+}
+
+.hud-console__replay-readout [role='alert'] {
+  color: #ffb7a9;
+}
+
+.hud-console__replay-provenance {
+  border-top: 1px solid var(--hud-rule);
+  color: var(--hud-muted);
+  font-size: 0.7rem;
+  padding-top: 0.55rem;
+}
+
+.hud-console__replay-provenance summary {
+  cursor: pointer;
+}
+
+.hud-console__replay-provenance dl {
+  display: grid;
+  gap: 0.35rem 0.75rem;
+  grid-template-columns: minmax(7rem, auto) minmax(0, 1fr);
+  margin: 0.65rem 0 0;
+}
+
+.hud-console__replay-provenance dt {
+  color: var(--hud-faint);
+}
+
+.hud-console__replay-provenance dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
 .hud-console__preview-toolbar label {
   color: var(--hud-muted);
   display: grid;

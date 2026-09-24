@@ -198,8 +198,12 @@ export function isActiveSmoke(g: Grenade): boolean {
   return (
     g.kind === 'smoke' &&
     g.position !== null &&
-    ((g.effectTimeSeconds !== null && g.effectTimeSeconds >= 0) ||
-      (g.velocity !== null && Math.hypot(g.velocity.x, g.velocity.y, g.velocity.z) === 0))
+    ((g.effectTimeSeconds !== null &&
+      g.effectTimeSeconds >= 0 &&
+      g.effectTimeSeconds < SMOKE_PRESENTATION_DURATION_SECONDS) ||
+      (g.effectTimeSeconds === null &&
+        g.velocity !== null &&
+        Math.hypot(g.velocity.x, g.velocity.y, g.velocity.z) === 0))
   );
 }
 

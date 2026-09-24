@@ -321,8 +321,8 @@ describe('Companion debug runtime composition', () => {
   });
 
   it.each([
-    ['halftime', 'match/halftime-side-switch', 'Fixture Team 002', 'Fixture Team 001'],
-    ['overtime', 'match/overtime-side-switch', 'Fixture Team 001', 'Fixture Team 002'],
+    ['halftime', 'match/halftime-side-switch', 'G2.Esports', 'FURIA'],
+    ['overtime', 'match/overtime-side-switch', 'FURIA', 'G2.Esports'],
   ] as const)(
     'keeps %s team identity continuity in the full debug path',
     async (_, path, ct, t) => {

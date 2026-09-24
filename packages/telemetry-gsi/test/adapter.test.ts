@@ -6,7 +6,10 @@ import {
   SYNTHETIC_EVIDENCE_INFORMED_PROVENANCE,
   SYNTHETIC_EVIDENCE_INFORMED_ROUND_AFTER_BOMB_FRAME,
 } from './fixtures/synthetic-evidence-informed.js';
-import { REAL_DERIVED_FRAME, REAL_DERIVED_PROVENANCE } from './fixtures/real-derived.js';
+import {
+  SYNTHETIC_RUNTIME_EDGE_FRAME,
+  SYNTHETIC_RUNTIME_EDGE_PROVENANCE,
+} from './fixtures/synthetic-runtime-edge.js';
 
 const receiveContext = {
   sequence: 17,
@@ -143,18 +146,17 @@ describe('adaptGsiPayload', () => {
     );
   });
 
-  it('keeps exact provenance for a sanitized real-derived frame excerpt', () => {
-    expect(REAL_DERIVED_PROVENANCE).toEqual({
-      fixtureKind: 'sanitized-real-derived',
-      sourceCaptureId: 'roundsense-economy-runtime-20260807',
-      sourceCaptureFramesSha256: 'beb711e09b4a9fcb7dca9c1b44cfd1699cecf7ed4a101a74ae69d995529646cb',
-      sourceFrameSequence: 2,
-      sourceFrameRange: 'seq=2..2',
-      sanitization:
-        'steamid -> fixture-player-ct-1; name -> Fixture Real-Derived Player; outer capture envelope omitted; provider timestamp and source fields retained',
+  it('keeps exact provenance for a synthetic runtime edge fixture', () => {
+    expect(SYNTHETIC_RUNTIME_EDGE_PROVENANCE).toEqual({
+      fixtureKind: 'synthetic-contract-fixture',
+      sourceFrame: 'synthetic GSI field composition; no private local capture is checked in',
+      sourceFrameSequence: null,
+      sourceFrameRange: null,
+      reason:
+        'exercise mixed real-world field presence without exporting a private account identity',
     });
 
-    const result = adaptGsiPayload(REAL_DERIVED_FRAME, receiveContext);
+    const result = adaptGsiPayload(SYNTHETIC_RUNTIME_EDGE_FRAME, receiveContext);
 
     expect(result.ok).toBe(true);
     if (!result.ok) return;
@@ -180,8 +182,8 @@ describe('adaptGsiPayload', () => {
       },
     });
     expect(result.observation.telemetry.player).toMatchObject({
-      sourcePlayerId: 'fixture-player-ct-1',
-      displayName: 'Fixture Real-Derived Player',
+      sourcePlayerId: 'synthetic-player-ct-1',
+      displayName: 'Synthetic CT Player',
       side: 'CT',
       state: { hasHelmet: false },
       weapons: [

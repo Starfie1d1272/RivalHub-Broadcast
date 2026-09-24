@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./replay-session": {
+      "types": "./dist/replay/session.d.ts",
+      "import": "./dist/replay/session.js"
     }
   },
   "scripts": {

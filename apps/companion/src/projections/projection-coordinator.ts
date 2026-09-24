@@ -35,7 +35,6 @@ import {
   RADAR_SCHEMA_VERSION,
 } from '@rivalhub-broadcast/protocol/version';
 import { projectRadarFrame, type RadarFrame } from '@rivalhub-broadcast/radar';
-import { performance } from 'node:perf_hooks';
 
 import type { MatchContextBinding } from '../match-context/index.js';
 import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
@@ -83,10 +82,10 @@ export interface ProjectionScheduler {
   clearTimeout(handle: unknown): void;
 }
 
-const defaultNowMonotonicMs = (): number => performance.now();
+const defaultNowMonotonicMs = (): number => globalThis.performance.now();
 const defaultScheduler: ProjectionScheduler = {
   setTimeout: (callback, delayMs) => setTimeout(callback, delayMs),
-  clearTimeout: (handle) => clearTimeout(handle as NodeJS.Timeout),
+  clearTimeout: (handle) => clearTimeout(handle as ReturnType<typeof setTimeout>),
 };
 
 function defaultPublishers(

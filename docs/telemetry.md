@@ -431,7 +431,10 @@ gate 为 `INCONCLUSIVE`；仅用 GSI 数据的生命周期语义仍可由原始�
 Capture、日志和 fixture 必须：
 
 - 移除 GSI token；
-- 避免保存不必要账户身份；
-- 对 player identity 使用可重复的脱敏方式；
+- capture sanitizer v2 移除认证凭据、本机/私有 endpoint、绝对本机路径和机器特有元数据；
+- public-match real-derived fixture 保留原始 Steam64、GSI player display name 与 team/clan name，以维持身份连续性和来源真实性；
+- 不把 Steam64、公开选手昵称或队名作为 secret；runtime/debug/qualification 各自既有的隐私与 secret guard 保持独立；
 - 保留验证 continuity 需要的结构，不通过删字段破坏语义；
 - 在进入仓库前执行 sanitizer 和 integrity check。
+
+本机私人比赛的原始账号素材不属于 public-match acceptance corpus。需要覆盖字段形状时使用明确标记的 synthetic contract fixture，不把私人账号伪装成公开职业选手。

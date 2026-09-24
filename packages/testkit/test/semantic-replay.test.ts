@@ -201,7 +201,7 @@ describe('semantic real-evidence capture replay', () => {
           firstSequence: fixture.firstSequence,
           lastSequence: fixture.lastSequence,
         },
-        sanitizerVersion: 1,
+        sanitizerVersion: 2,
         lifecycleCoverage: 'partial',
       });
 
@@ -222,7 +222,7 @@ describe('semantic real-evidence capture replay', () => {
 
     expect(telemetry.allPlayers).toHaveLength(10);
     const player = telemetry.allPlayers?.find(
-      (candidate) => candidate.sourcePlayerId === 'fixture-player-001',
+      (candidate) => candidate.sourcePlayerId === '76561197960690195',
     );
     expect(player).toMatchObject({
       position: { x: -498, y: 653.9, z: 144.4 },
@@ -336,13 +336,13 @@ describe('semantic real-evidence capture replay', () => {
     });
     expect(projection.bomb).toMatchObject({
       state: 'defusing',
-      sourcePlayerId: 'fixture-player-007',
+      sourcePlayerId: '76561198164970560',
       explosion: {
         durationSeconds: null,
       },
       action: {
         kind: 'defuse',
-        sourcePlayerId: 'fixture-player-007',
+        sourcePlayerId: '76561198164970560',
         remainingSeconds: 5.034,
         durationSeconds: 5,
         hasDefuseKit: true,
@@ -387,8 +387,8 @@ describe('semantic real-evidence capture replay', () => {
     const before = successfulObservation(resultAt(results, 6145), 6145);
     const after = successfulObservation(resultAt(results, 6147), 6147);
 
-    expect(sideNames(before)).toEqual({ ct: 'Fixture Team 001', t: 'Fixture Team 002' });
-    expect(sideNames(after)).toEqual({ ct: 'Fixture Team 002', t: 'Fixture Team 001' });
+    expect(sideNames(before)).toEqual({ ct: 'FURIA', t: 'G2.Esports' });
+    expect(sideNames(after)).toEqual({ ct: 'G2.Esports', t: 'FURIA' });
   });
 
   it('observes regulation to overtime transition', async () => {
@@ -416,8 +416,8 @@ describe('semantic real-evidence capture replay', () => {
     const before = successfulObservation(resultAt(results, 14461), 14461);
     const after = successfulObservation(resultAt(results, 14463), 14463);
 
-    expect(sideNames(before)).toEqual({ ct: 'Fixture Team 002', t: 'Fixture Team 001' });
-    expect(sideNames(after)).toEqual({ ct: 'Fixture Team 001', t: 'Fixture Team 002' });
+    expect(sideNames(before)).toEqual({ ct: 'G2.Esports', t: 'FURIA' });
+    expect(sideNames(after)).toEqual({ ct: 'FURIA', t: 'G2.Esports' });
   });
 
   it('observes final round to gameover', async () => {
@@ -456,7 +456,7 @@ describe('semantic real-evidence capture replay', () => {
     expect(observation.telemetry.allPlayers).toHaveLength(10);
   });
 
-  it('contains no raw identity or auth material in committed semantic fixture bytes', async () => {
+  it('preserves public identity and excludes secrets from committed semantic fixture bytes', async () => {
     for (const fixture of SEMANTIC_FIXTURES) {
       const dir = semanticCapturePath(fixture.name);
       const [manifest, frames] = await Promise.all([
@@ -464,8 +464,17 @@ describe('semantic real-evidence capture replay', () => {
         readFile(resolve(dir, 'frames.jsonl'), 'utf8'),
       ]);
       const bytes = `${manifest}\n${frames}`;
-      expect(bytes).not.toMatch(/\b\d{17}\b/);
-      expect(bytes).not.toMatch(/auth|token|password|secret|endpoint|uri/i);
+      expect(bytes).not.toMatch(/fixture-player-|Fixture Player \d+|Fixture Team \d+/i);
+      expect(bytes).not.toMatch(
+        /"(?:auth|authorization|cookie|setcookie|token|password|passwd|secret|api[_-]?key)"\s*:/i,
+      );
+      expect(bytes).not.toMatch(/\bBearer\s+[A-Za-z0-9._~+/-]+=*/i);
     }
+    const publicMatch = await readFile(
+      resolve(semanticCapturePath('observer/rich-live-state'), 'frames.jsonl'),
+      'utf8',
+    );
+    expect(publicMatch).toContain('76561197960690195');
+    expect(publicMatch).toContain('FalleN');
   });
 });

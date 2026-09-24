@@ -3,6 +3,7 @@ import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/pro
 import { RADAR_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
 import {
   grenadeIcon,
+  isActiveSmoke,
   RadarPresentation,
   shortestAngle,
   smokeRemaining,
@@ -229,6 +230,10 @@ describe('Radar renderer local lifecycle', () => {
     expect(smokeRemaining(null)).toBeNull();
     expect(smokeRemaining(22)).toBe(0);
     expect(smokeRemaining(-1)).toBe(20);
+    const smoke = real().payload.grenades.find((grenade) => grenade.kind === 'smoke');
+    if (smoke === undefined) throw new Error('real replay fixture has no smoke grenade');
+    expect(isActiveSmoke({ ...smoke, effectTimeSeconds: 19.9 })).toBe(true);
+    expect(isActiveSmoke({ ...smoke, effectTimeSeconds: 20 })).toBe(false);
     const previous = new Map<string, number>();
     let comparisons = 0;
     for (const sample of fixtures.fixtures['bomb-plant'].samples)

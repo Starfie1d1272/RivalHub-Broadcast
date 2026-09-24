@@ -107,6 +107,8 @@ Default V1 的 1920×1080 built-in placement 固定为：Series Strip `400×72 @
 
 HUD 编辑器的 normal gameplay preview 继续遵守 #68 的 real-first policy。若同时显示 Program 与 Radar，两者必须解析到同一真实 replay source，并以 capture provenance + Program cursor 精确对齐；找不到同帧 Radar 时 fail closed，不再用“相近场景”拼接。Rivals BP/赛果可以作为明确标注的 presentation overlay，但不得冒充同一场 gameplay telemetry。需要连续时间历史的 ADR/DMG 与 grenade-flight / firing / damage / flash / explosion 等动态效果验收由 #76 的 full-round replay harness 承担，不在静态 fixture 中 patch gameplay truth。
 
+HUD 编辑器的 Replay mode 通过 #76 的确定性 controller 浏览固定的真实回合。开发者可选 source、播放/暂停、重启、seek 和跳转 semantic event；Replay 只消费本地生成的 capture projection 与 presentation fixture。Steam API key 只用于开发期一次性素材导入，不进入 runtime、Replay UI 或 CI。
+
 ### 5.1.1 Gameplay HUD 自定义
 
 Gameplay HUD 的第一版自定义面向现场制播人员，固定分为三层：
