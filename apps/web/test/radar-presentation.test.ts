@@ -2,11 +2,17 @@ import { describe, expect, it } from 'vitest';
 import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
 import { RADAR_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
 import {
+  grenadeIcon,
   RadarPresentation,
   shortestAngle,
   smokeRemaining,
   RADAR_PRESENTATION,
 } from '../src/program/widgets/radar/presentation';
+import {
+  effectCentroid,
+  smokeContour,
+  smokeLobes,
+} from '../src/program/widgets/radar/effect-geometry';
 import fixtures from '../src/program/fixtures/generated/real-radar-fixtures.generated.json';
 
 function real(): RadarSnapshot {
@@ -67,6 +73,31 @@ describe('Radar renderer local lifecycle', () => {
         .success,
     ).toBe(false);
   });
+  it('keeps procedural effect geometry deterministic and bounded', () => {
+    const a = smokeLobes('smoke-188', 30);
+    const b = smokeLobes('smoke-188', 30);
+    const c = smokeLobes('smoke-202', 30);
+    expect(a).toEqual(b);
+    expect(a).not.toEqual(c);
+    expect(a).toHaveLength(9);
+    expect(a.every((lobe) => lobe.radius > 0 && lobe.radius <= 30)).toBe(true);
+
+    const contour = smokeContour('smoke-188', 30);
+    expect(contour).toHaveLength(18);
+    expect(
+      contour.every((point) => Math.hypot(point.x, point.y) >= 24 && Math.hypot(point.x, point.y) <= 33),
+    ).toBe(true);
+    expect(effectCentroid([{ x: 0, y: 2 }, { x: 2, y: 0 }])).toEqual({ x: 1, y: 1 });
+    expect(effectCentroid([])).toBeNull();
+  });
+
+  it('uses official side-appropriate assets for airborne firebombs', () => {
+    expect(grenadeIcon('firebomb', 'CT')).toContain('/utility/incgrenade.');
+    expect(grenadeIcon('firebomb', 'T')).toContain('/utility/molotov.');
+    expect(grenadeIcon('firebomb', 'unknown')).toBeNull();
+    expect(grenadeIcon('smoke', 'CT')).toContain('/utility/smokegrenade.');
+  });
+
   it('wraps angles along the shortest distance and eases movement without changing truth', () => {
     expect(shortestAngle(359, 1)).toBe(2);
     expect(shortestAngle(1, 359)).toBe(-2);
