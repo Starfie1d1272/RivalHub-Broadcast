@@ -768,8 +768,9 @@
 }
 
 .player-rail__combat {
+  position: relative;
   display: grid;
-  grid-template-columns: 59px 118px 62px minmax(0, 1fr);
+  grid-template-columns: 59px 118px 56px minmax(0, 1fr);
   column-gap: 4px;
 }
 
@@ -778,7 +779,7 @@
 }
 
 .player-rail--right .player-rail__combat {
-  grid-template-columns: minmax(0, 1fr) 62px 118px 59px;
+  grid-template-columns: minmax(0, 1fr) 56px 118px 59px;
 }
 
 .player-rail__combat .player-rail__kd {
@@ -821,13 +822,19 @@
   grid-column: 1;
 }
 
-/* Keep a full four-grenade loadout on the same outer edge as the 64px HP bar. */
+/* Anchor four utility icons to the 64px HP bar edge without shrinking their own box. */
+.player-rail__card[data-physical-side='left'] .player-rail__utility-icons,
+.player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
+  position: absolute;
+  width: 78px;
+}
+
 .player-rail__card[data-physical-side='left'] .player-rail__utility-icons {
-  margin-right: 26px;
+  right: 34px;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
-  margin-left: 26px;
+  left: 34px;
 }
 
 .player-rail__equipment-slot,
