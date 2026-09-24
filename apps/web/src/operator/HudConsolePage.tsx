@@ -33,6 +33,10 @@ import {
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
+import {
+  radarEditorPreviewSnapshot,
+  type RadarEditorPreviewScene,
+} from '../program/fixtures/radar-fixtures';
 import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
 
 import { HudCanvasPreview } from './HudCanvasPreview';
@@ -72,6 +76,21 @@ const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }
 
 function fixtureLabel(id: ProgramFixtureId): string {
   return id === 'awaiting-neutral' ? '等待数据' : PROGRAM_FIXTURE_LABELS[id];
+}
+
+function radarSceneForFixture(id: ProgramFixtureId): RadarEditorPreviewScene {
+  switch (id) {
+    case 'real-bomb-dropped':
+      return 'bomb-dropped';
+    case 'real-planted':
+      return 'bomb-planted';
+    case 'real-defusing':
+      return 'bomb-defusing';
+    case 'real-post-explosion-freezetime':
+      return 'warmup';
+    default:
+      return 'dense-utility';
+  }
 }
 
 function connectionLabel(state: LocalChannelConnectionState): string {
@@ -173,6 +192,10 @@ export function HudConsolePage() {
     readonly placement: HudLayout['widgets'][HudWidgetId];
   } | null>(null);
   const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
+  const fixtureRadarSnapshot = useMemo(
+    () => radarEditorPreviewSnapshot(radarSceneForFixture(fixtureId)),
+    [fixtureId],
+  );
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
   const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
@@ -752,7 +775,7 @@ export function HudConsolePage() {
           </section>
 
           <HudCanvasPreview
-            radarSnapshot={null}
+            radarSnapshot={activePreviewSource === 'fixture' ? fixtureRadarSnapshot : null}
             radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
