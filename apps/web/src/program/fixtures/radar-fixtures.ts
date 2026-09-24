@@ -1,6 +1,6 @@
 import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
-import { getProgramFixtureReplaySource } from './program-fixtures';
+import { getProgramFixtureReplaySource } from './program-fixtures.js';
 import artifact from './generated/real-radar-fixtures.generated.json' with { type: 'json' };
 
 export const RADAR_VISUAL_FIXTURES = [
