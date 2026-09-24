@@ -28,9 +28,10 @@ import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
-  getProgramFixture,
+  getHudEditorFixture,
   HUD_EDITOR_DEFAULT_FIXTURE_ID,
   HUD_EDITOR_FIXTURE_GROUPS,
+  HUD_EDITOR_RIVALS_BP_FIXTURE_IDS,
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
@@ -174,7 +175,7 @@ export function HudConsolePage() {
     readonly startY: number;
     readonly placement: HudLayout['widgets'][HudWidgetId];
   } | null>(null);
-  const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
+  const fixture = useMemo(() => getHudEditorFixture(fixtureId), [fixtureId]);
   const fixtureRadarSnapshot = useMemo(
     () => radarSnapshotForProgramFixture(fixtureId),
     [fixtureId],
@@ -740,10 +741,12 @@ export function HudConsolePage() {
                 </select>
               </label>
             ) : null}
-            {activePreviewSource === 'fixture' && fixtureId.startsWith('bp-rivals-') ? (
+            {activePreviewSource === 'fixture' &&
+            (fixtureId.startsWith('bp-rivals-') ||
+              HUD_EDITOR_RIVALS_BP_FIXTURE_IDS.some((id) => id === fixtureId)) ? (
               <p className="hud-console__fixture-note">
-                系列图条、已赛地图比分、系列比分、队名与队标来自 2026 NJU
-                Rivals；当前地图比分、选手与雷达来自同一段独立真实回放，仅用于检查系列图条。
+                BP、系列比分、已赛地图结果、队名与队标取自 2026 NJU
+                Rivals，按预览样例配对；玩家、当前地图比分与雷达来自独立真实遥测回放。
               </p>
             ) : null}
             <span

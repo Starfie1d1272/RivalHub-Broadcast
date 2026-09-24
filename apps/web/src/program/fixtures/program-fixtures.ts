@@ -1,6 +1,7 @@
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { realProgramFixtures, type RealProgramProvenance } from './real-program-fixtures';
 import {
+  HUD_EDITOR_REAL_BP_FIXTURES,
   syntheticProgramFixtures,
   getPresentationFixtureReplaySource,
   SYNTHETIC_FIXTURE_PROVENANCE,
@@ -36,7 +37,7 @@ export const PROGRAM_FIXTURE_IDS = Object.keys(programFixtures) as ProgramFixtur
 // The operator preview stays small; the full registry remains available to visual/unit tests.
 export const HUD_EDITOR_FIXTURE_GROUPS = [
   {
-    label: '真实遥测回放 · 赛前资料为测试样例',
+    label: '真实遥测回放 · BP 取自 2026 NJU Rivals',
     ids: [
       'real-live-rich',
       'real-bomb-dropped',
@@ -62,7 +63,10 @@ export const HUD_EDITOR_FIXTURE_GROUPS = [
   readonly label: string;
   readonly ids: readonly ProgramFixtureId[];
 }[];
-export const HUD_EDITOR_DEFAULT_FIXTURE_ID: ProgramFixtureId = 'bp-rivals-final-map4';
+export const HUD_EDITOR_DEFAULT_FIXTURE_ID: ProgramFixtureId = 'real-live-rich';
+export const HUD_EDITOR_RIVALS_BP_FIXTURE_IDS = Object.keys(
+  HUD_EDITOR_REAL_BP_FIXTURES,
+) as (keyof typeof HUD_EDITOR_REAL_BP_FIXTURES)[];
 export type ProgramFixtureProvenance =
   | RealProgramProvenance
   | { readonly kind: 'synthetic-edge' | 'synthetic-presentation'; readonly reason: string };
@@ -86,7 +90,7 @@ for (const [id, record] of Object.entries(realProgramFixtures)) {
 
 /** Resolve the real GSI replay behind a real fixture or presentation-only overlay. */
 export function getProgramFixtureReplaySource(id: string) {
-  const snapshot = getProgramFixture(id);
+  const snapshot = getHudEditorFixture(id);
   if (snapshot === null) return null;
   const sourceId =
     getPresentationFixtureReplaySource(snapshot) ?? realFixtureIdBySnapshot.get(snapshot);
@@ -162,6 +166,12 @@ export function getProgramFixture(id: string): ProgramSnapshot | null {
   return Object.prototype.hasOwnProperty.call(programFixtures, id)
     ? programFixtures[id as ProgramFixtureId]
     : null;
+}
+export function getHudEditorFixture(id: string): ProgramSnapshot | null {
+  if (Object.prototype.hasOwnProperty.call(HUD_EDITOR_REAL_BP_FIXTURES, id)) {
+    return HUD_EDITOR_REAL_BP_FIXTURES[id as keyof typeof HUD_EDITOR_REAL_BP_FIXTURES];
+  }
+  return getProgramFixture(id);
 }
 export function getProgramFixtureProvenance(id: string): ProgramFixtureProvenance | null {
   return Object.prototype.hasOwnProperty.call(PROGRAM_FIXTURE_PROVENANCE, id)

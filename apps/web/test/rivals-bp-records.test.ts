@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 
 import { RIVALS_BP_RECORDS, rivalsSeriesCut } from '../src/program/fixtures/rivals-bp-records';
 import {
+  getHudEditorFixture,
   getProgramFixture,
+  getProgramFixtureReplaySource,
   HUD_EDITOR_DEFAULT_FIXTURE_ID,
   HUD_EDITOR_FIXTURE_GROUPS,
+  HUD_EDITOR_RIVALS_BP_FIXTURE_IDS,
 } from '../src/program/fixtures';
 import { buildMatchHeaderPresentation } from '../src/program/widgets/match-header/presentation';
 
@@ -82,7 +85,7 @@ describe('Rivals BP preview records', () => {
     const editorIds = HUD_EDITOR_FIXTURE_GROUPS[1]?.ids ?? [];
 
     expect(editorIds).toEqual(records.map(([id]) => id));
-    expect(HUD_EDITOR_DEFAULT_FIXTURE_ID).toBe('bp-rivals-final-map4');
+    expect(HUD_EDITOR_DEFAULT_FIXTURE_ID).toBe('real-live-rich');
     expect(RIVALS_BP_RECORDS.final.maps).toHaveLength(5);
     expect(RIVALS_BP_RECORDS.semifinalA.maps).toHaveLength(3);
     expect(RIVALS_BP_RECORDS.semifinalB.maps).toHaveLength(3);
@@ -130,8 +133,44 @@ describe('Rivals BP preview records', () => {
       );
     }
 
-    const defaultFixture = getProgramFixture(HUD_EDITOR_DEFAULT_FIXTURE_ID);
-    if (defaultFixture === null) throw new Error('Default Rivals BP preview missing');
+    expect(HUD_EDITOR_RIVALS_BP_FIXTURE_IDS).toEqual(HUD_EDITOR_FIXTURE_GROUPS[0]?.ids);
+    for (const id of HUD_EDITOR_RIVALS_BP_FIXTURE_IDS) {
+      const fixture = getHudEditorFixture(id);
+      if (fixture === null) throw new Error(`Rivals BP HUD preview missing: ${id}`);
+      const series = fixture.payload.series;
+      expect(series?.veto, id).toHaveLength(7);
+      expect(series?.entrants.a.logoUrl, id).toContain('/storage/v1/object/public/team-logos/');
+      expect(series?.entrants.b.logoUrl, id).toContain('/storage/v1/object/public/team-logos/');
+
+      const header = buildMatchHeaderPresentation(fixture.payload);
+      expect(header.teamA.logoUrl, id).toBe(series?.entrants.a.logoUrl);
+      expect(header.teamB.logoUrl, id).toBe(series?.entrants.b.logoUrl);
+      const actualVeto = series!.veto.map(({ stepOrder, actionType, mapName, side }) => ({
+        stepOrder,
+        actionType,
+        mapName,
+        side,
+      }));
+      expect(
+        Object.values(RIVALS_BP_RECORDS).some(
+          (record) =>
+            JSON.stringify(actualVeto) ===
+            JSON.stringify(
+              record.veto.map(({ stepOrder, actionType, mapName, side }) => ({
+                stepOrder,
+                actionType,
+                mapName,
+                side,
+              })),
+            ),
+        ),
+        id,
+      ).toBe(true);
+      expect(getProgramFixtureReplaySource(id)?.snapshot).toBe(getProgramFixture(id));
+    }
+
+    const defaultFixture = getHudEditorFixture(HUD_EDITOR_DEFAULT_FIXTURE_ID);
+    if (defaultFixture === null) throw new Error('Default HUD BP preview missing');
     const header = buildMatchHeaderPresentation(defaultFixture.payload);
     expect(header.teamA.name).toBe(RIVALS_BP_RECORDS.final.entrants.a.name);
     expect(header.teamA.logoUrl).toBe(RIVALS_BP_RECORDS.final.entrants.a.logoUrl);

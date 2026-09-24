@@ -900,6 +900,42 @@ function presentationFixture(
   return fixture;
 }
 
+/** Stable sample mapping pairs real BP with gameplay captures without claiming one match. */
+export const HUD_EDITOR_REAL_BP_FIXTURES = {
+  'real-live-rich': presentationFixture(
+    'real-live-rich',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'real-bomb-dropped': presentationFixture(
+    'real-bomb-dropped',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'real-planted': presentationFixture(
+    'real-planted',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
+  'real-defusing': presentationFixture(
+    'real-defusing',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, 4),
+  ),
+  'real-post-explosion-freezetime': presentationFixture(
+    'real-post-explosion-freezetime',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+  'real-timeout-ct': presentationFixture(
+    'real-timeout-ct',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalB, null),
+  ),
+  'real-halftime-after': presentationFixture(
+    'real-halftime-after',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.final, null),
+  ),
+  'real-gameover': presentationFixture(
+    'real-gameover',
+    rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null),
+  ),
+} as const satisfies Partial<Record<RealProgramFixtureId, ProgramSnapshot>>;
+
 export function getPresentationFixtureReplaySource(
   snapshot: ProgramSnapshot,
 ): RealProgramFixtureId | null {
