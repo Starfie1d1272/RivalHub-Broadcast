@@ -111,9 +111,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           ctx.stroke();
         }
       };
-      const smoothClosedPath = (
-        points: readonly { readonly x: number; readonly y: number }[],
-      ) => {
+      const smoothClosedPath = (points: readonly { readonly x: number; readonly y: number }[]) => {
         if (points.length < 3) return;
         const first = points[0]!;
         const last = points.at(-1)!;
