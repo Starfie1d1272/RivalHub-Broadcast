@@ -1,16 +1,16 @@
 import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
-import { realProgramFixtures, type RealProgramProvenance } from './real-program-fixtures';
+import { realProgramFixtures, type RealProgramProvenance } from './real-program-fixtures.js';
 import {
   HUD_EDITOR_REAL_BP_FIXTURES,
   syntheticProgramFixtures,
   getPresentationFixtureReplaySource,
   SYNTHETIC_FIXTURE_PROVENANCE,
-} from './synthetic-program-fixtures';
+} from './synthetic-program-fixtures.js';
 
 import {
   objectiveFocusedFixtures,
   OBJECTIVE_FOCUSED_PROVENANCE,
-} from './objective-focused-fixtures';
+} from './objective-focused-fixtures.js';
 
 const aliases = {
   'live-canonical': 'real-live-rich',
