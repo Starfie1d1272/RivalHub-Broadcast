@@ -559,15 +559,8 @@
   position: relative;
 }
 
-.match-header__series-map--current::before {
-  position: absolute;
-  z-index: 2;
-  right: 0;
-  bottom: 0;
-  left: 0;
-  height: 2px;
-  background: #c8ef78;
-  content: '';
+.match-header__series-map--current .match-header__series-map-status {
+  color: #c8ef78;
 }
 
 .match-header__series-map-picker {
