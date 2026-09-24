@@ -281,7 +281,11 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
     await expect(page.locator('canvas.radar')).toHaveAttribute('data-radar-artwork', 'ready');
     await assertHudGeometry(page, fixtureId === 'default-live-5v5');
 
-    if (fixtureId === 'default-missing-logo') {
+    if (
+      ['default-freezetime', 'default-observed', 'default-dead', 'default-missing-logo'].includes(
+        fixtureId,
+      )
+    ) {
       await expect(page.locator('[data-team-logo-slot] img')).toHaveCount(0);
     } else {
       await expect(page.locator('[data-team-logo-slot] img')).toHaveCount(2);
