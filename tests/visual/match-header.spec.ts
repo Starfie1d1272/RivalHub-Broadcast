@@ -77,9 +77,7 @@ test.describe('Match Header HUD', () => {
     ).toContain('/assets/cs2/sides/ct.');
 
     await page.goto('/__visual/program/series-bo5');
-    const bPick = page.locator(
-      '[data-match-header-widget="series-strip"] [data-map-order="2"]',
-    );
+    const bPick = page.locator('[data-match-header-widget="series-strip"] [data-map-order="2"]');
     await expect(bPick).toHaveAttribute('data-picker', 'b');
     await expect(bPick).toHaveAttribute('data-start-side', 'CT');
     await expect(bPick.locator('.match-header__series-map-start-side')).toHaveAttribute(
@@ -144,10 +142,10 @@ test.describe('Match Header HUD', () => {
     await expect(page.locator('[data-match-header-widget="round-history"]')).toHaveCount(0);
   });
 
-  test(
-    'frozen fixture matrix keeps Map 1, not-played, logos, and unavailable rounds explicit',
-    async ({ page }) => {
-      await openFixture(page, 'series-bo3-map1');
+  test('frozen fixture matrix keeps Map 1, not-played, logos, and unavailable rounds explicit', async ({
+    page,
+  }) => {
+    await openFixture(page, 'series-bo3-map1');
       await expect(
         page.locator('[data-match-header-widget="series-strip"] [data-map-order="1"]'),
       ).toHaveAttribute('data-map-status', 'current');
@@ -172,7 +170,6 @@ test.describe('Match Header HUD', () => {
       await expect(
         page.locator('[data-match-header-widget="top-score-bar"] [data-round-label="true"]'),
       ).toHaveCount(0);
-      await expect(page.locator('.match-header__round-meta')).not.toContainText('回合编号不可用');
-    },
-  );
+    await expect(page.locator('.match-header__round-meta')).not.toContainText('回合编号不可用');
+  });
 });
