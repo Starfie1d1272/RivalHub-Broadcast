@@ -377,18 +377,31 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
 
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
-            const timerRadius = radius * 0.7;
-            ctx.globalAlpha = opacity * 0.96;
+            const timerRadius = radius * 0.525;
+            const remainingRatio = remaining / SMOKE_PRESENTATION_DURATION_SECONDS;
+            const startAngle = -Math.PI / 2;
+            const endAngle = startAngle + Math.PI * 2 * remainingRatio;
+
+            // Clock-like inner timer: the full face is faint, while the remaining
+            // sector stays brighter. The colored rim carries ownership only.
+            ctx.globalAlpha = opacity * 0.18;
+            circle(x, y, timerRadius - 3, '#ffffff');
+
+            if (remainingRatio > 0) {
+              ctx.globalAlpha = opacity * 0.42;
+              ctx.beginPath();
+              ctx.moveTo(x, y);
+              ctx.arc(x, y, timerRadius - 3, startAngle, endAngle);
+              ctx.closePath();
+              ctx.fillStyle = '#ffffff';
+              ctx.fill();
+            }
+
+            ctx.globalAlpha = opacity * 0.94;
             ctx.beginPath();
-            ctx.arc(
-              x,
-              y,
-              timerRadius,
-              -Math.PI / 2,
-              -Math.PI / 2 + (Math.PI * 2 * remaining) / SMOKE_PRESENTATION_DURATION_SECONDS,
-            );
+            ctx.arc(x, y, timerRadius, startAngle, endAngle);
             ctx.strokeStyle = sideColor(marker.side);
-            ctx.lineWidth = 4;
+            ctx.lineWidth = 3.5;
             ctx.stroke();
           }
           ctx.restore();
