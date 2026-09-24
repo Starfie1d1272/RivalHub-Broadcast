@@ -58,9 +58,7 @@ export function smokeContour(
   });
 }
 
-export function effectCentroid(
-  points: readonly RadarEffectPoint[],
-): RadarEffectPoint | null {
+export function effectCentroid(points: readonly RadarEffectPoint[]): RadarEffectPoint | null {
   if (points.length === 0) return null;
   return {
     x: points.reduce((sum, point) => sum + point.x, 0) / points.length,
