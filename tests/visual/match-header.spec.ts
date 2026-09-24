@@ -147,8 +147,6 @@ test.describe('Match Header HUD', () => {
   test(
     'frozen fixture matrix keeps Map 1, not-played, logos, and unavailable rounds explicit',
     async ({ page }) => {
-      page,
-    }) => {
       await openFixture(page, 'series-bo3-map1');
       await expect(
         page.locator('[data-match-header-widget="series-strip"] [data-map-order="1"]'),
@@ -158,18 +156,18 @@ test.describe('Match Header HUD', () => {
           '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-status',
         ),
       ).toHaveText('PLAYING');
-  
+
       await page.goto('/__visual/program/series-not-played');
       await expect(
         page.locator(
           '[data-match-header-widget="series-strip"] [data-map-status="not_played"] .match-header__series-map-status',
         ),
       ).toHaveText('');
-  
+
       await page.goto('/__visual/program/series-logo-mixed');
       await expect(page.locator('[data-team-logo-slot="a"] .match-header__team-logo')).toHaveCount(1);
       await expect(page.locator('[data-team-logo-slot="b"] .match-header__team-logo')).toHaveCount(0);
-  
+
       await page.goto('/__visual/program/series-round-unavailable');
       await expect(
         page.locator('[data-match-header-widget="top-score-bar"] [data-round-label="true"]'),
