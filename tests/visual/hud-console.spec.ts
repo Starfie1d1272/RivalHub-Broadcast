@@ -109,6 +109,14 @@ test.describe('HUD 编辑器', () => {
     );
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(1);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-players',
+      '10',
+    );
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
     await expect(fixtureSelect).toHaveValue('real-live-rich');
     await expect(page.locator('option[value="current-live"]')).toHaveAttribute('disabled', '');
@@ -300,8 +308,27 @@ test.describe('HUD 编辑器', () => {
 
     await expect(page.getByText('选择组件', { exact: true })).toBeVisible();
     const fixtureSelect = page.locator('select[aria-label="示例比赛"]');
+    await fixtureSelect.selectOption('real-bomb-dropped');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await fixtureSelect.selectOption('real-planted');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
+    await fixtureSelect.selectOption('real-defusing');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
     await fixtureSelect.selectOption('focused-avatar');
     await expect(fixtureSelect).toHaveValue('focused-avatar');
+    await expect(page.locator('[data-hud-widget="radar"] canvas.radar')).toHaveAttribute(
+      'data-radar-state',
+      'live',
+    );
     await page.getByRole('button', { name: '选择雷达' }).click();
     await expect(page.getByRole('button', { name: '调整雷达大小' })).toBeVisible();
     await page.getByRole('checkbox', { name: '吸附到网格' }).uncheck();
