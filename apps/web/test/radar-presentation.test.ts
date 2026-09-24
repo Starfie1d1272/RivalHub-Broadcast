@@ -85,7 +85,10 @@ describe('Radar renderer local lifecycle', () => {
     const contour = smokeContour('smoke-188', 30);
     expect(contour).toHaveLength(18);
     expect(
-      contour.every((point) => Math.hypot(point.x, point.y) >= 24 && Math.hypot(point.x, point.y) <= 33),
+      contour.every(
+        (point) =>
+          Math.hypot(point.x, point.y) >= 24 && Math.hypot(point.x, point.y) <= 33,
+      ),
     ).toBe(true);
     expect(effectCentroid([{ x: 0, y: 2 }, { x: 2, y: 0 }])).toEqual({ x: 1, y: 1 });
     expect(effectCentroid([])).toBeNull();
