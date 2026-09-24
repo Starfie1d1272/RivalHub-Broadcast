@@ -159,6 +159,26 @@ const AMMO_EVIDENCE_TABLE: readonly AmmoEvidenceCase[] = [
 ];
 
 describe('@rivalhub-broadcast/cs2-assets ammo evidence matrix', () => {
+  it('resolves the pinned Valve reserve-magazine HUD graphic without assigning it a GSI weapon identity', () => {
+    const magazine = getCs2Item('ammo.magazine');
+
+    expect(magazine).toMatchObject({
+      canonicalKey: 'ammo.magazine',
+      sourcePath: 'panorama/images/hud/ammo_reserve_magazine.vsvg_c',
+      assetId: 'ammo.magazine',
+      ammoPresentation: 'magazine',
+      gsiWeaponNames: [],
+      aliases: [],
+    });
+    expect(
+      magazine?.evidence.some(
+        (evidence) =>
+          evidence.kind === 'official-game-data' &&
+          evidence.reference.includes('2053759441494650084'),
+      ),
+    ).toBe(true);
+  });
+
   it('strictly validates every HUD item against the official ammo evidence matrix (table-driven)', () => {
     for (const testCase of AMMO_EVIDENCE_TABLE) {
       const item = getCs2Item(testCase.canonicalKey);

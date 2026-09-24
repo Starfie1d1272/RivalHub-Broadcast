@@ -119,6 +119,13 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
+## CS2 broadcast artwork
+
+Program series-strip map scenes and CT/T side marks are Valve / Counter-Strike 2 game assets. They were retrieved from pinned community extraction repositories at the revisions recorded in [`broadcast-assets.json`](packages/cs2-assets/generated/broadcast-assets.json); that manifest records original and packaged SHA-256 values plus the thumbnail resize/encoding step. The extraction repositories are provenance sources, not the asset copyright holders. This notice does not claim Valve artwork is MIT-licensed or make a broader redistribution-rights determination.
+
+- Scene thumbnails: [`MurkyYT/cs2-map-icons`](https://github.com/MurkyYT/cs2-map-icons), `images/thumbs/<map>_1_png.png`.
+- CT/T marks: [`Juknum/counter-strike-icons`](https://github.com/Juknum/counter-strike-icons), `cs2/panorama/images/icons/ui/{ct,t}_logo_1c.svg`.
+
 许可证参考：
 
 - MIT: https://opensource.org/license/mit

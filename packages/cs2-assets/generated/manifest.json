@@ -11,6 +11,14 @@
     "version": "20.0.6980+a06886f7d06049052d32a7381ec05523064a2ca0"
   },
   "assets": {
+    "ammo.magazine": {
+      "sourcePath": "panorama/images/hud/ammo_reserve_magazine.vsvg_c",
+      "sourceSha256": "dd6d877cb72da18bc2bb9b5bae8f3c395e1227d4a9995db7aac69d34e23c7f71",
+      "outputPath": "/assets/cs2/equipment/magazine.922432c975fd.svg",
+      "outputSha256": "922432c975fdc03b5b9b93df9f245fbfe25473218a57562d68171fe5cfd01819",
+      "mediaType": "image/svg+xml",
+      "tintMode": "mask"
+    },
     "equipment.armor": {
       "sourcePath": "panorama/images/hud/teamcounter/armor.vsvg_c",
       "sourceSha256": "02629f8ddf42c4d38be3266fb9b7ef16ef8ea8cf727ba873da59087a8d2ac36e",
