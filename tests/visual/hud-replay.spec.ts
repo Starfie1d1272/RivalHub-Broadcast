@@ -38,8 +38,9 @@ test.describe('HUD 编辑器 Replay', () => {
   test('uses capture time for smoke windows and renders a seek anchor deterministically', async ({
     page,
   }) => {
-    await page.clock.install();
+    await page.clock.install({ time: new Date('2026-01-01T00:00:00.000Z') });
     await page.goto('/operator/hud');
+    await page.clock.pauseAt(new Date('2026-01-01T00:00:01.000Z'));
     await page.getByLabel('预览来源').selectOption('replay');
     const replay = page.getByRole('region', { name: 'Replay 控制' });
     await expect(replay).toHaveAttribute('data-replay-cursor', '587');

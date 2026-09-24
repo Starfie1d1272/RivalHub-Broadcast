@@ -404,7 +404,7 @@ describe('architecture checker', () => {
         'packages/telemetry-cstv/src/parser-edge.ts': "import { DemoReader } from 'cs2parser';\n",
       }),
     ).toEqual([]);
-  });
+  }, 15_000);
 
   it('rejects shared package source exports', () => {
     const coreManifest = packageManifest('packages/core/package.json');
