@@ -9,6 +9,7 @@
     "catalog/items.json",
     "generated/manifest.json",
     "generated/radar-maps.json",
+    "generated/broadcast-assets.json",
     "test"
   ]
 }
