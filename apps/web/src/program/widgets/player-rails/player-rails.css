@@ -795,7 +795,7 @@
 }
 
 .player-rail__equipment {
-  width: 62px;
+  width: 56px;
   flex: none;
   grid-column: 3;
 }
