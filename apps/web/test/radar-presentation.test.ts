@@ -8,7 +8,11 @@ import {
   smokeRemaining,
   RADAR_PRESENTATION,
 } from '../src/program/widgets/radar/presentation';
-import { effectCentroid, smokeContour, smokeLobes } from '../src/program/widgets/radar/effect-geometry';
+import {
+  effectCentroid,
+  smokeContour,
+  smokeLobes,
+} from '../src/program/widgets/radar/effect-geometry';
 import fixtures from '../src/program/fixtures/generated/real-radar-fixtures.generated.json';
 
 function real(): RadarSnapshot {
@@ -268,29 +272,32 @@ describe('Radar renderer local lifecycle', () => {
     );
   });
 
-  it('fails closed with neutral presentation on unresolved layers for Nuke, Train, and Vertigo', () => {
-    for (const mapName of ['de_nuke', 'de_train', 'de_vertigo']) {
-      const s = single();
-      s.payload.mapName = mapName;
-      const upperZ = mapName === 'de_nuke' ? -400 : mapName === 'de_vertigo' ? 12000 : 100;
-      const lowerZ = mapName === 'de_nuke' ? -1000 : mapName === 'de_vertigo' ? 11500 : -200;
-      s.payload.players = [
-        {
-          ...s.payload.players[0]!,
-          sourcePlayerId: 'p-upper',
-          position: { x: 0, y: 0, z: upperZ },
-        },
-        {
-          ...s.payload.players[0]!,
-          sourcePlayerId: 'p-lower',
-          position: { x: 0, y: 0, z: lowerZ },
-        },
-      ];
-      const p = new RadarPresentation();
-      p.accept(s, 1000);
-      expect(p.layer).toBe('unknown');
-    }
-  });
+  it(
+    'fails closed with neutral presentation on unresolved layers for Nuke, Train, and Vertigo',
+    () => {
+      for (const mapName of ['de_nuke', 'de_train', 'de_vertigo']) {
+        const s = single();
+        s.payload.mapName = mapName;
+        const upperZ = mapName === 'de_nuke' ? -400 : mapName === 'de_vertigo' ? 12000 : 100;
+        const lowerZ = mapName === 'de_nuke' ? -1000 : mapName === 'de_vertigo' ? 11500 : -200;
+        s.payload.players = [
+          {
+            ...s.payload.players[0]!,
+            sourcePlayerId: 'p-upper',
+            position: { x: 0, y: 0, z: upperZ },
+          },
+          {
+            ...s.payload.players[0]!,
+            sourcePlayerId: 'p-lower',
+            position: { x: 0, y: 0, z: lowerZ },
+          },
+        ];
+        const p = new RadarPresentation();
+        p.accept(s, 1000);
+        expect(p.layer).toBe('unknown');
+      }
+    },
+  );
 
   it('retains unsupported-map diagnostic reason across reset', () => {
     const s = single();
