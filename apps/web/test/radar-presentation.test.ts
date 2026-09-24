@@ -8,11 +8,7 @@ import {
   smokeRemaining,
   RADAR_PRESENTATION,
 } from '../src/program/widgets/radar/presentation';
-import {
-  effectCentroid,
-  smokeContour,
-  smokeLobes,
-} from '../src/program/widgets/radar/effect-geometry';
+import { effectCentroid, smokeContour, smokeLobes } from '../src/program/widgets/radar/effect-geometry';
 import fixtures from '../src/program/fixtures/generated/real-radar-fixtures.generated.json';
 
 function real(): RadarSnapshot {
