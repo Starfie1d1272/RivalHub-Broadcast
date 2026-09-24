@@ -770,6 +770,7 @@
 .player-rail__combat {
   position: relative;
   display: grid;
+  box-sizing: border-box;
   grid-template-columns: 59px 118px 56px minmax(0, 1fr);
   column-gap: 4px;
 }
