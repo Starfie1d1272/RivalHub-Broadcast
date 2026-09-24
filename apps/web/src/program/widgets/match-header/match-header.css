@@ -240,6 +240,10 @@
   mask-size: contain;
 }
 
+.objective-center[data-objective-mode='planting'] .objective-center__icon {
+  background: #0b1119;
+}
+
 .objective-center[data-objective-mode='planted'] .objective-center__icon {
   background: #f06f6f;
 }
