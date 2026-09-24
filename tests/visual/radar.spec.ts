@@ -21,7 +21,10 @@ test('dense utility maintains frame progress with bounded presentation history',
   page,
 }) => {
   await page.goto('/__visual/radar/dense-utility');
-  await expect(page.locator('canvas.radar')).toHaveAttribute('data-radar-players', '10');
+  const radar = page.locator('canvas.radar');
+  await expect(radar).toHaveAttribute('data-radar-players', '10');
+  expect(Number(await radar.getAttribute('data-radar-smokes'))).toBeGreaterThan(0);
+  expect(Number(await radar.getAttribute('data-radar-flame-points'))).toBeGreaterThan(0);
   const samples = await page.evaluate(async () => {
     const times: number[] = [];
     await new Promise<void>((resolve) => {
