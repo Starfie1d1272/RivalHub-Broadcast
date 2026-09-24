@@ -86,11 +86,15 @@ describe('Radar renderer local lifecycle', () => {
     expect(contour).toHaveLength(18);
     expect(
       contour.every(
-        (point) =>
-          Math.hypot(point.x, point.y) >= 24 && Math.hypot(point.x, point.y) <= 33,
+        (point) => Math.hypot(point.x, point.y) >= 24 && Math.hypot(point.x, point.y) <= 33,
       ),
     ).toBe(true);
-    expect(effectCentroid([{ x: 0, y: 2 }, { x: 2, y: 0 }])).toEqual({ x: 1, y: 1 });
+    expect(
+      effectCentroid([
+        { x: 0, y: 2 },
+        { x: 2, y: 0 },
+      ]),
+    ).toEqual({ x: 1, y: 1 });
     expect(effectCentroid([])).toBeNull();
   });
 
@@ -272,32 +276,29 @@ describe('Radar renderer local lifecycle', () => {
     );
   });
 
-  it(
-    'fails closed with neutral presentation on unresolved layers for Nuke, Train, and Vertigo',
-    () => {
-      for (const mapName of ['de_nuke', 'de_train', 'de_vertigo']) {
-        const s = single();
-        s.payload.mapName = mapName;
-        const upperZ = mapName === 'de_nuke' ? -400 : mapName === 'de_vertigo' ? 12000 : 100;
-        const lowerZ = mapName === 'de_nuke' ? -1000 : mapName === 'de_vertigo' ? 11500 : -200;
-        s.payload.players = [
-          {
-            ...s.payload.players[0]!,
-            sourcePlayerId: 'p-upper',
-            position: { x: 0, y: 0, z: upperZ },
-          },
-          {
-            ...s.payload.players[0]!,
-            sourcePlayerId: 'p-lower',
-            position: { x: 0, y: 0, z: lowerZ },
-          },
-        ];
-        const p = new RadarPresentation();
-        p.accept(s, 1000);
-        expect(p.layer).toBe('unknown');
-      }
-    },
-  );
+  it('fails closed with neutral presentation on unresolved layers for Nuke, Train, and Vertigo', () => {
+    for (const mapName of ['de_nuke', 'de_train', 'de_vertigo']) {
+      const s = single();
+      s.payload.mapName = mapName;
+      const upperZ = mapName === 'de_nuke' ? -400 : mapName === 'de_vertigo' ? 12000 : 100;
+      const lowerZ = mapName === 'de_nuke' ? -1000 : mapName === 'de_vertigo' ? 11500 : -200;
+      s.payload.players = [
+        {
+          ...s.payload.players[0]!,
+          sourcePlayerId: 'p-upper',
+          position: { x: 0, y: 0, z: upperZ },
+        },
+        {
+          ...s.payload.players[0]!,
+          sourcePlayerId: 'p-lower',
+          position: { x: 0, y: 0, z: lowerZ },
+        },
+      ];
+      const p = new RadarPresentation();
+      p.accept(s, 1000);
+      expect(p.layer).toBe('unknown');
+    }
+  });
 
   it('retains unsupported-map diagnostic reason across reset', () => {
     const s = single();
