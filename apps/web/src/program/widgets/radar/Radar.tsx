@@ -414,15 +414,18 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             .map((point) => pointAt(point, marker.target.layer))
             .filter((point): point is NonNullable<typeof point> => point !== null);
           if (trail.length < 2) return;
-          ctx.globalAlpha = alpha * 0.34;
+          ctx.save();
+          ctx.globalAlpha = alpha * 0.72;
           ctx.strokeStyle = sideColor(marker.side);
           ctx.lineWidth = 2;
+          ctx.lineCap = 'round';
+          ctx.setLineDash([7, 6]);
           ctx.beginPath();
           trail.forEach((point, index) =>
             index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
           );
           ctx.stroke();
-          ctx.globalAlpha = 1;
+          ctx.restore();
         };
         for (const exit of model.exits.values()) {
           const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
@@ -503,21 +506,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
               const x = point.x;
               const y = point.y;
               ctx.globalAlpha = layerOpacity(p, model.layer);
-              circle(
-                x,
-                y,
-                27,
-                '#00000000',
-                bomb.state === 'defusing' || bomb.state === 'defused'
-                  ? '#83d8e8'
-                  : bomb.state === 'planting'
-                    ? '#aab4c0'
-                    : bomb.state === 'planted'
-                      ? '#f06f6f'
-                      : '#f3f6fa',
-                3,
-              );
-              if (bombIcon) ctx.drawImage(bombIcon, x - 20, y - 20, 40, 40);
+              if (bombIcon) ctx.drawImage(bombIcon, x - 18, y - 18, 36, 36);
               ctx.globalAlpha = 1;
             }
           }
@@ -544,28 +533,28 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             continue;
           }
           if (payload.observedPlayerSourceId === p.sourcePlayerId)
-            circle(x, y, 37, '#00000000', '#ffffff', 5);
+            circle(x, y, 33, '#00000000', '#ffffff', 4);
           if (p.forward) {
             ctx.save();
             ctx.translate(x, y);
             ctx.rotate((marker.angle * Math.PI) / 180);
             ctx.beginPath();
-            ctx.moveTo(37, 0);
-            ctx.lineTo(14, -13);
-            ctx.lineTo(14, 13);
+            ctx.moveTo(41, 0);
+            ctx.lineTo(18, -12);
+            ctx.lineTo(18, 12);
             ctx.closePath();
             ctx.fillStyle = color;
             ctx.fill();
             if (marker.shootingUntil > now) {
               ctx.fillStyle = '#fff4b0';
-              ctx.fillRect(34, -4, 15, 8);
+              ctx.fillRect(38, -4, 15, 8);
             }
             ctx.restore();
           }
-          circle(x, y, 33, '#f3f6fa');
-          circle(x, y, 29, color, '#0b1119', 2);
+          circle(x, y, 29, '#f3f6fa');
+          circle(x, y, 25, color, '#0b1119', 2);
           ctx.fillStyle = '#0b1119';
-          ctx.font = '800 32px Inter, sans-serif';
+          ctx.font = '800 28px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
           ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
@@ -579,8 +568,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             bomb?.sourcePlayerId === p.sourcePlayerId &&
             (bomb.state === 'carried' || bomb.state === 'planting')
           ) {
-            circle(x + 32, y + 32, 18, '#00000000', '#f3f6fa', 2);
-            if (bombIcon) ctx.drawImage(bombIcon, x + 16, y + 16, 32, 32);
+            if (bombIcon) ctx.drawImage(bombIcon, x + 18, y + 18, 28, 28);
           }
           ctx.globalAlpha = 1;
         }
