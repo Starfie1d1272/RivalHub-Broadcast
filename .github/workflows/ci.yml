@@ -127,8 +127,21 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Run visual regression
+      - name: Render visual candidates for draft PR
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
+        run: pnpm visual:update
+
+      - name: Run canonical visual regression
+        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
         run: pnpm visual:test
+
+      - name: Upload draft visual candidates
+        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && always() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: visual-candidates-${{ github.event.pull_request.head.sha }}
+          path: tests/visual/__screenshots__/linux/**
+          if-no-files-found: warn
 
       - name: Upload Playwright diagnostics
         if: ${{ failure() }}

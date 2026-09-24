@@ -45,3 +45,8 @@ blob-report/
 tmp/
 temp/
 .agent-tmp/
+
+# Non-canonical local visual snapshots
+# Linux / Chromium is the only committed visual baseline.
+tests/visual/__screenshots__/darwin/
+tests/visual/__screenshots__/win32/
