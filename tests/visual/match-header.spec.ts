@@ -70,10 +70,25 @@ test.describe('Match Header HUD', () => {
     );
     const sideMark = page.locator('.match-header__series-map-start-side').first();
     await expect(sideMark).toHaveAttribute('data-side', 'CT');
+    await expect(sideMark).toHaveAttribute('aria-label', /starts CT$/);
     await expect(sideMark).toHaveText('');
     expect(
       await sideMark.evaluate((node) => getComputedStyle(node, '::before').maskImage),
     ).toContain('/assets/cs2/sides/ct.');
+
+    await page.goto('/__visual/program/series-bo5');
+    const bPick = page.locator(
+      '[data-match-header-widget="series-strip"] [data-map-order="2"]',
+    );
+    await expect(bPick).toHaveAttribute('data-picker', 'b');
+    await expect(bPick).toHaveAttribute('data-start-side', 'CT');
+    await expect(bPick.locator('.match-header__series-map-start-side')).toHaveAttribute(
+      'data-side',
+      'CT',
+    );
+    await expect(
+      page.locator('[data-match-header-widget="series-strip"] [data-map-order="5"] .match-header__series-map-start-side'),
+    ).toHaveCount(0);
   });
 
   test('tactical timeout identifies the entrant only when side mapping resolves', async ({
@@ -138,7 +153,7 @@ test.describe('Match Header HUD', () => {
       page.locator(
         '[data-match-header-widget="series-strip"] [data-map-order="1"] .match-header__series-map-status',
       ),
-    ).toHaveText('');
+    ).toHaveText('PLAYING');
 
     await page.goto('/__visual/program/series-not-played');
     await expect(
