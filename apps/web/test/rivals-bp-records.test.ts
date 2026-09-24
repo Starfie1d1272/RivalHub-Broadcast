@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
 
 import { RIVALS_BP_RECORDS, rivalsSeriesCut } from '../src/program/fixtures/rivals-bp-records';
-import { getProgramFixture } from '../src/program/fixtures';
+import {
+  getProgramFixture,
+  HUD_EDITOR_DEFAULT_FIXTURE_ID,
+  HUD_EDITOR_FIXTURE_GROUPS,
+} from '../src/program/fixtures';
 import { buildMatchHeaderPresentation } from '../src/program/widgets/match-header/presentation';
 
 describe('Rivals BP preview records', () => {
@@ -19,6 +23,18 @@ describe('Rivals BP preview records', () => {
           expect(map.teamAStartSide).not.toBeNull();
         }
         if (map.selection.kind === 'decider') expect(map.winnerEntryId).toBeNull();
+      }
+
+      const preview = buildMatchHeaderPresentation({
+        ...getProgramFixture('bp-rivals-final-result')!.payload,
+        series: rivalsSeriesCut(record, null),
+      });
+      for (const map of preview.seriesMaps ?? []) {
+        if (map.picker === null) {
+          expect(map.pickerLogoUrl).toBeNull();
+          continue;
+        }
+        expect(map.pickerLogoUrl).toBe(record.entrants[map.picker].logoUrl);
       }
     }
   });
@@ -54,5 +70,72 @@ describe('Rivals BP preview records', () => {
     const semi = rivalsSeriesCut(RIVALS_BP_RECORDS.semifinalA, null);
     expect(semi.score).toEqual({ a: 0, b: 2 });
     expect(semi.maps[2]).toMatchObject({ selection: { kind: 'decider' }, teamAStartSide: 'CT' });
+  });
+
+  it('keeps all three complete Rivals veto records available as HUD editor cuts', () => {
+    const records = [
+      ['bp-rivals-final-map4', RIVALS_BP_RECORDS.final, 4],
+      ['bp-rivals-final-result', RIVALS_BP_RECORDS.final, null],
+      ['bp-rivals-semi-a-result', RIVALS_BP_RECORDS.semifinalA, null],
+      ['bp-rivals-semi-b-result', RIVALS_BP_RECORDS.semifinalB, null],
+    ] as const;
+    const editorIds = HUD_EDITOR_FIXTURE_GROUPS[1]?.ids ?? [];
+
+    expect(editorIds).toEqual(records.map(([id]) => id));
+    expect(HUD_EDITOR_DEFAULT_FIXTURE_ID).toBe('bp-rivals-final-map4');
+    expect(RIVALS_BP_RECORDS.final.maps).toHaveLength(5);
+    expect(RIVALS_BP_RECORDS.semifinalA.maps).toHaveLength(3);
+    expect(RIVALS_BP_RECORDS.semifinalB.maps).toHaveLength(3);
+
+    for (const [id, record, currentMapOrder] of records) {
+      const expected = rivalsSeriesCut(record, currentMapOrder);
+      const fixture = getProgramFixture(id);
+      if (fixture === null) throw new Error(`Rivals BP fixture missing: ${id}`);
+      const actual = fixture.payload.series;
+      expect(actual, id).not.toBeNull();
+      expect(actual!.score, id).toEqual(expected.score);
+      expect(
+        actual!.maps.map(({ mapName, selection, teamAStartSide, status, finalScore }) => ({
+          mapName,
+          selection: selection.kind,
+          teamAStartSide,
+          status,
+          finalScore,
+        })),
+        id,
+      ).toEqual(
+        expected.maps.map(({ mapName, selection, teamAStartSide, status, finalScore }) => ({
+          mapName,
+          selection: selection.kind,
+          teamAStartSide,
+          status,
+          finalScore,
+        })),
+      );
+      expect(
+        actual!.veto.map(({ stepOrder, actionType, mapName, side }) => ({
+          stepOrder,
+          actionType,
+          mapName,
+          side,
+        })),
+        id,
+      ).toEqual(
+        record.veto.map(({ stepOrder, actionType, mapName, side }) => ({
+          stepOrder,
+          actionType,
+          mapName,
+          side,
+        })),
+      );
+    }
+
+    const defaultFixture = getProgramFixture(HUD_EDITOR_DEFAULT_FIXTURE_ID);
+    if (defaultFixture === null) throw new Error('Default Rivals BP preview missing');
+    const header = buildMatchHeaderPresentation(defaultFixture.payload);
+    expect(header.teamA.name).toBe(RIVALS_BP_RECORDS.final.entrants.a.name);
+    expect(header.teamA.logoUrl).toBe(RIVALS_BP_RECORDS.final.entrants.a.logoUrl);
+    expect(header.teamB.name).toBe(RIVALS_BP_RECORDS.final.entrants.b.name);
+    expect(header.teamB.logoUrl).toBe(RIVALS_BP_RECORDS.final.entrants.b.logoUrl);
   });
 });

@@ -1,4 +1,6 @@
 import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
+import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
+import { getProgramFixtureReplaySource } from './program-fixtures';
 import artifact from './generated/real-radar-fixtures.generated.json' with { type: 'json' };
 
 export const RADAR_VISUAL_FIXTURES = [
@@ -87,6 +89,44 @@ export function radarEditorPreviewSnapshot(scene: RadarEditorPreviewScene): Rada
     throw new Error(`Radar editor preview scene is missing: ${scene}`);
   }
   return radarSnapshotSchema.parse(structuredClone(sample.snapshot));
+}
+
+function sameCursor(program: ProgramSnapshot['cursor'], radar: RadarSnapshot['cursor']): boolean {
+  return (
+    program.producerInstanceId === radar.producerInstanceId &&
+    program.liveSessionId === radar.liveSessionId &&
+    program.runtimeSeq === radar.runtimeSeq &&
+    program.programSourceGeneration === radar.programSourceGeneration &&
+    program.programReceiveSequence === radar.programReceiveSequence &&
+    program.mapEpoch === radar.mapEpoch
+  );
+}
+
+/** Return only the Radar projection derived from the exact Program replay frame. */
+export function radarSnapshotForProgramFixture(id: string): RadarSnapshot | null {
+  const source = getProgramFixtureReplaySource(id);
+  if (source === null) return null;
+
+  const provenance = source.provenance;
+  const radarFixture = Object.values(artifact.fixtures).find((candidate) => {
+    const selection = candidate.provenance.source.sourceFrameSelection;
+    return (
+      candidate.provenance.capturePath === provenance.capturePath &&
+      candidate.provenance.source.sourceCaptureId === provenance.sourceCaptureId &&
+      candidate.provenance.source.sourceFramesSha256 === provenance.sourceFramesSha256 &&
+      selection.kind === 'sequence-range' &&
+      selection.firstSequence <= provenance.targetSequence &&
+      selection.lastSequence >= provenance.targetSequence
+    );
+  });
+  if (radarFixture === undefined) return null;
+
+  const sample = radarFixture.samples.find(
+    (candidate) =>
+      candidate.snapshot.cursor.programReceiveSequence === provenance.targetSequence &&
+      sameCursor(source.snapshot.cursor, candidate.snapshot.cursor),
+  );
+  return sample === undefined ? null : radarSnapshotSchema.parse(structuredClone(sample.snapshot));
 }
 
 export function radarVisualFixture(id: RadarVisualFixture) {

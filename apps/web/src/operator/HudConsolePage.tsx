@@ -29,14 +29,12 @@ import { defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
 
 import {
   getProgramFixture,
+  HUD_EDITOR_DEFAULT_FIXTURE_ID,
   HUD_EDITOR_FIXTURE_GROUPS,
   PROGRAM_FIXTURE_LABELS,
   type ProgramFixtureId,
 } from '../program/fixtures';
-import {
-  radarEditorPreviewSnapshot,
-  type RadarEditorPreviewScene,
-} from '../program/fixtures/radar-fixtures';
+import { radarSnapshotForProgramFixture } from '../program/fixtures/radar-fixtures';
 import { hasAcceptedProgramSnapshot } from '../program/presentation-boundary';
 
 import { HudCanvasPreview } from './HudCanvasPreview';
@@ -76,21 +74,6 @@ const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }
 
 function fixtureLabel(id: ProgramFixtureId): string {
   return id === 'awaiting-neutral' ? '等待数据' : PROGRAM_FIXTURE_LABELS[id];
-}
-
-function radarSceneForFixture(id: ProgramFixtureId): RadarEditorPreviewScene {
-  switch (id) {
-    case 'real-bomb-dropped':
-      return 'bomb-dropped';
-    case 'real-planted':
-      return 'bomb-planted';
-    case 'real-defusing':
-      return 'bomb-defusing';
-    case 'real-post-explosion-freezetime':
-      return 'warmup';
-    default:
-      return 'dense-utility';
-  }
 }
 
 function connectionLabel(state: LocalChannelConnectionState): string {
@@ -160,7 +143,7 @@ export function HudConsolePage() {
   const [lastValidTheme, setLastValidTheme] = useState<HudTheme>(themeDraft);
   const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId | null>(null);
   const [previewSource, setPreviewSource] = useState<'fixture' | 'current-live'>('fixture');
-  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>('real-live-rich');
+  const [fixtureId, setFixtureId] = useState<ProgramFixtureId>(HUD_EDITOR_DEFAULT_FIXTURE_ID);
   const [showGrid, setShowGrid] = useState(true);
   const [showCenter, setShowCenter] = useState(true);
   const [showSafeArea, setShowSafeArea] = useState(false);
@@ -193,7 +176,7 @@ export function HudConsolePage() {
   } | null>(null);
   const fixture = useMemo(() => getProgramFixture(fixtureId), [fixtureId]);
   const fixtureRadarSnapshot = useMemo(
-    () => radarEditorPreviewSnapshot(radarSceneForFixture(fixtureId)),
+    () => radarSnapshotForProgramFixture(fixtureId),
     [fixtureId],
   );
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
@@ -759,7 +742,8 @@ export function HudConsolePage() {
             ) : null}
             {activePreviewSource === 'fixture' && fixtureId.startsWith('bp-rivals-') ? (
               <p className="hud-console__fixture-note">
-                BP 与赛果来自 2026 NJU Rivals；其余游戏画面属于独立回放，仅用于检查系列图条。
+                系列图条、已赛地图比分、系列比分、队名与队标来自 2026 NJU
+                Rivals；当前地图比分、选手与雷达来自同一段独立真实回放，仅用于检查系列图条。
               </p>
             ) : null}
             <span

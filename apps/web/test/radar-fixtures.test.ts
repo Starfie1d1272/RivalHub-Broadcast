@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import { projectWorldPosition, defaultMapGeometryProvider } from '@rivalhub-broadcast/radar';
+
 import { getDefaultHudCompositeFixture } from '../src/program/fixtures/default-hud-composite-fixtures';
-import { radarVisualFixture } from '../src/program/fixtures/radar-fixtures';
+import { getProgramFixture } from '../src/program/fixtures';
+import { realProgramFixtures } from '../src/program/fixtures/real-program-fixtures';
+import {
+  radarSnapshotForProgramFixture,
+  radarVisualFixture,
+} from '../src/program/fixtures/radar-fixtures';
 
 describe('Nuke Radar fixtures', () => {
   const geometry = defaultMapGeometryProvider.resolve('de_nuke');
@@ -32,5 +38,39 @@ describe('Nuke Radar fixtures', () => {
     expect(points.every((point) => point !== null && !point.outOfBounds)).toBe(true);
     expect(points.filter((point) => point?.layer === 'upper')).toHaveLength(5);
     expect(points.filter((point) => point?.layer === 'lower')).toHaveLength(5);
+  });
+});
+
+describe('paired Program and Radar editor fixtures', () => {
+  it('pairs every real Program fixture with its exact Radar frame and cursor', () => {
+    for (const [id, record] of Object.entries(realProgramFixtures)) {
+      const program = getProgramFixture(id);
+      const radar = radarSnapshotForProgramFixture(id);
+      expect(program, id).not.toBeNull();
+      expect(radar, id).not.toBeNull();
+      expect(radar!.cursor).toEqual(program!.cursor);
+      expect(radar!.cursor.programReceiveSequence).toBe(record.provenance.targetSequence);
+    }
+  });
+
+  it('keeps the real Rivals BP cuts paired with their underlying GSI replay frame', () => {
+    for (const id of [
+      'bp-rivals-final-map4',
+      'bp-rivals-final-result',
+      'bp-rivals-semi-a-result',
+      'bp-rivals-semi-b-result',
+    ]) {
+      const program = getProgramFixture(id);
+      const radar = radarSnapshotForProgramFixture(id);
+      expect(program, id).not.toBeNull();
+      expect(radar, id).not.toBeNull();
+      expect(radar!.cursor).toEqual(program!.cursor);
+    }
+  });
+
+  it('does not substitute a Radar scene when the Program frame has no exact pair', () => {
+    for (const id of ['awaiting-neutral', 'focused-avatar', 'player-rails-eco']) {
+      expect(radarSnapshotForProgramFixture(id), id).toBeNull();
+    }
   });
 });

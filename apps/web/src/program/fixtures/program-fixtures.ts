@@ -2,6 +2,7 @@ import type { ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { realProgramFixtures, type RealProgramProvenance } from './real-program-fixtures';
 import {
   syntheticProgramFixtures,
+  getPresentationFixtureReplaySource,
   SYNTHETIC_FIXTURE_PROVENANCE,
 } from './synthetic-program-fixtures';
 
@@ -61,6 +62,7 @@ export const HUD_EDITOR_FIXTURE_GROUPS = [
   readonly label: string;
   readonly ids: readonly ProgramFixtureId[];
 }[];
+export const HUD_EDITOR_DEFAULT_FIXTURE_ID: ProgramFixtureId = 'bp-rivals-final-map4';
 export type ProgramFixtureProvenance =
   | RealProgramProvenance
   | { readonly kind: 'synthetic-edge' | 'synthetic-presentation'; readonly reason: string };
@@ -76,6 +78,21 @@ export const PROGRAM_FIXTURE_PROVENANCE: Readonly<
     Object.entries(aliases).map(([id, source]) => [id, realProgramFixtures[source].provenance]),
   ) as { readonly [K in keyof typeof aliases]: RealProgramProvenance }),
 };
+
+const realFixtureIdBySnapshot = new WeakMap<ProgramSnapshot, keyof typeof realProgramFixtures>();
+for (const [id, record] of Object.entries(realProgramFixtures)) {
+  realFixtureIdBySnapshot.set(record.snapshot, id as keyof typeof realProgramFixtures);
+}
+
+/** Resolve the real GSI replay behind a real fixture or presentation-only overlay. */
+export function getProgramFixtureReplaySource(id: string) {
+  const snapshot = getProgramFixture(id);
+  if (snapshot === null) return null;
+  const sourceId =
+    getPresentationFixtureReplaySource(snapshot) ?? realFixtureIdBySnapshot.get(snapshot);
+  return sourceId === undefined || sourceId === null ? null : realProgramFixtures[sourceId];
+}
+
 export const PROGRAM_FIXTURE_LABELS: Readonly<Record<ProgramFixtureId, string>> = {
   'focused-avatar': '观察选手 · 显示头像',
   'focused-long-name': '观察选手 · 长名称与队徽',

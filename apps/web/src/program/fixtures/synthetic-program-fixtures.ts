@@ -857,6 +857,8 @@ const stressMatch = fixtureMatch({
   stage: 'Long Stage Name For Overflow And Layout Regression Coverage',
 });
 
+const presentationFixtureReplaySources = new WeakMap<ProgramSnapshot, RealProgramFixtureId>();
+
 function presentationFixture(
   id: RealProgramFixtureId,
   series: ProgramSeries,
@@ -870,7 +872,7 @@ function presentationFixture(
       : id === series.entrants.b.entryId
         ? entrants.b.entryId
         : id;
-  return derivePresentationStressFixture(base, {
+  const fixture = derivePresentationStressFixture(base, {
     teamAName: series.entrants.a.name,
     teamBName: series.entrants.b.name,
     teamALogoUrl: series.entrants.a.logoUrl,
@@ -894,6 +896,14 @@ function presentationFixture(
       veto: series.veto.map((step) => ({ ...step, entryId: entryId(step.entryId) })),
     },
   });
+  presentationFixtureReplaySources.set(fixture, id);
+  return fixture;
+}
+
+export function getPresentationFixtureReplaySource(
+  snapshot: ProgramSnapshot,
+): RealProgramFixtureId | null {
+  return presentationFixtureReplaySources.get(snapshot) ?? null;
 }
 
 export const syntheticProgramFixtures = {
