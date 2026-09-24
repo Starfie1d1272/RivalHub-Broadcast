@@ -479,7 +479,6 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          circle(x, y, 18, '#00000000', sideColor(marker.side), 1.5);
           const url = grenadeIcon(marker.source.kind, marker.side);
           const icon = url && imageFor(url);
           if (icon) ctx.drawImage(icon, x - 14, y - 14, 28, 28);
