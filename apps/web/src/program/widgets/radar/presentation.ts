@@ -271,7 +271,7 @@ export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
       // stale non-zero grenade velocity long after the smoke has settled; this matters
       // especially on seek/reconnect where renderer-local phase history is intentionally reset.
       if (g.effectTimeSeconds !== null && g.effectTimeSeconds > 0) return 'effect';
-      return moving ? 'projectile' : 'projectile';
+      return 'projectile';
     case 'firebomb':
       return moving ? 'projectile' : 'terminal';
     case 'inferno':
