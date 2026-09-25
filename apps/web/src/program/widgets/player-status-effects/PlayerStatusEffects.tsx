@@ -17,7 +17,7 @@ export function PlayerStatusEffects({
 }) {
   const smoke = effectStrength(state.smoked);
   const burning = effectStrength(state.burning);
-  const flashed = effectStrength(state.flashed);
+  const flashed = Math.min(0.72, effectStrength(state.flashed));
 
   const style = {
     '--rh-player-status-smoke': smoke,
