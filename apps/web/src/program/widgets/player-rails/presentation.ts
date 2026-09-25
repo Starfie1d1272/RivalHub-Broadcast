@@ -187,7 +187,6 @@ function knownWeapons(player: ProgramPayload['players'][number]): readonly Playe
 
 function primaryAndSecondary(
   weapons: readonly PlayerRailWeapon[],
-  phase: PlayerRailsPhase,
 ): { readonly primary: PlayerRailWeapon | null; readonly secondary: PlayerRailWeapon | null } {
   const firearms = weapons.filter(
     (weapon) => weapon.item?.kind === 'firearm' && weapon.item.family !== 'pistol',
@@ -196,7 +195,7 @@ function primaryAndSecondary(
     (weapon) => weapon.item?.kind === 'firearm' && weapon.item.family === 'pistol',
   );
   const primary = firearms[0] ?? pistols[0] ?? null;
-  const secondary = phase === 'freezetime' && firearms.length > 0 ? (pistols[0] ?? null) : null;
+  const secondary = firearms.length > 0 ? (pistols[0] ?? null) : null;
   return { primary, secondary };
 }
 
@@ -253,7 +252,7 @@ function playerPresentation(
 ): PlayerCardPresentation {
   const weapons = knownWeapons(player);
   const dead = player.lifeState === 'dead';
-  const { primary, secondary } = primaryAndSecondary(weapons, phase);
+  const { primary, secondary } = primaryAndSecondary(weapons);
   const armorAsset =
     player.state?.armor !== null && player.state?.armor !== undefined && player.state.armor > 0
       ? assetForCanonicalKey(
