@@ -77,6 +77,7 @@
   width: 4px;
   height: 74px;
   background: #aab4c0;
+  transition: background-color 160ms ease-out;
 }
 
 .match-header__side-accent--a {
@@ -118,6 +119,7 @@
   width: 18px;
   height: 5px;
   background: rgba(243, 246, 250, 0.2);
+  transition: background-color 140ms ease-out;
 }
 
 .match-header__win-slots span[data-series-win-slot='won'] {
@@ -175,6 +177,7 @@
   flex-direction: column;
   align-items: center;
   justify-content: center;
+  animation: match-header-center-mode-in 140ms ease-out both;
 }
 
 .match-header__round-over span {
@@ -196,6 +199,7 @@
   justify-content: center;
   gap: 6px;
   white-space: nowrap;
+  animation: match-header-center-mode-in 140ms ease-out both;
 }
 
 .match-header__tech-pause svg {
@@ -218,6 +222,7 @@
   align-items: center;
   justify-content: center;
   color: #f3f6fa;
+  animation: match-header-center-mode-in 120ms ease-out both;
 }
 
 .objective-center__bomb {
@@ -484,6 +489,9 @@
   overflow: hidden;
   background: #111923;
   color: #f3f6fa;
+  transition:
+    background-color 160ms ease-out,
+    opacity 160ms ease-out;
 }
 
 .match-header__series-map + .match-header__series-map::after {
@@ -638,6 +646,18 @@
   color: #aab4c0;
 }
 
+@keyframes match-header-center-mode-in {
+  from {
+    opacity: 0;
+    transform: translateY(-3px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
 @keyframes match-header-panel-in {
   from {
     opacity: 0;
@@ -727,12 +747,22 @@
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .objective-center,
   .objective-center__icon.is-planted-commit,
   .objective-center[data-planted-transition='true'] .objective-center__led,
   .objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led,
+  .match-header__round-over,
+  .match-header__tech-pause,
   .match-header__timeout-panel,
   .match-header__alive-matchup {
     animation: none;
+  }
+
+  .match-header__side-accent,
+  .match-header__win-slots span,
+  .match-header__series-map,
+  .match-header__series-map-status {
+    transition: none;
   }
 
   .objective-center__plant-progress span,
