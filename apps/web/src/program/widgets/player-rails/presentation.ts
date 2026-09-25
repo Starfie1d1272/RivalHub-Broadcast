@@ -5,6 +5,10 @@ import {
   type Cs2ItemMetadata,
 } from '@rivalhub-broadcast/cs2-assets';
 import type { ProgramPayload } from '@rivalhub-broadcast/protocol/program';
+import {
+  playerStatusEffectState,
+  type PlayerStatusEffectState,
+} from '../player-status-effects/presentation';
 
 export type PlayerRailSide = 'CT' | 'T';
 export type PlayerRailsPhase = 'freezetime' | 'live' | 'unknown';
@@ -53,6 +57,7 @@ export interface PlayerCardPresentation {
   readonly lifeState: 'alive' | 'dead' | 'unknown';
   readonly mode: 'freezetime' | 'live' | 'dead' | 'unknown';
   readonly observed: boolean;
+  readonly statusEffects: PlayerStatusEffectState;
   readonly health: number | null;
   readonly healthPercent: number | null;
   readonly armorAsset: PlayerRailAsset | null;
@@ -270,6 +275,7 @@ function playerPresentation(
     lifeState: player.lifeState,
     mode,
     observed: payload.observedPlayerSourceId === player.sourcePlayerId,
+    statusEffects: playerStatusEffectState(player, mode === 'live'),
     health: dead ? null : (player.state?.health ?? null),
     healthPercent: dead ? null : healthPercent(player.state?.health ?? null),
     armorAsset: dead ? null : armorAsset,
