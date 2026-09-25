@@ -211,6 +211,23 @@ describe('Player Rails card presentation', () => {
 
     act(() => {
       root?.render(
+
+    act(() => {
+      root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
+      'enter',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(110);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
+      'steady',
+    );
+
+    act(() => {
+      root?.render(
         <PlayerCard
           player={{ ...carrier, defuserAsset: null, hasDefuser: false }}
           presentationRevision={0}
