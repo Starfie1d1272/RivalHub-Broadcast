@@ -304,9 +304,11 @@ function PlayerBody({
 export function PlayerCard({
   player,
   physicalSide = 'left',
+  presentationRevision = 0,
 }: {
   readonly player: PlayerCardPresentation;
   readonly physicalSide?: 'left' | 'right';
+  readonly presentationRevision?: number;
 }) {
   const dead = player.mode === 'dead';
   const hasAvatar = player.avatarUrl !== null;
@@ -341,7 +343,11 @@ export function PlayerCard({
     >
       {avatar}
       {body}
-      <PlayerStatusEffects anchor={physicalSide} state={player.statusEffects} />
+      <PlayerStatusEffects
+        key={`status:${presentationRevision}`}
+        anchor={physicalSide}
+        state={player.statusEffects}
+      />
       {endcap}
     </article>
   );
