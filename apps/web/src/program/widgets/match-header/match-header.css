@@ -150,6 +150,7 @@
   font-size: 12px;
   font-weight: 800;
   line-height: 14px;
+  animation: match-header-center-mode-in 140ms ease-out both;
 }
 
 .match-header__clock {
@@ -158,6 +159,7 @@
   height: 38px;
   align-items: center;
   justify-content: center;
+  animation: match-header-center-mode-in 140ms ease-out both;
 }
 
 .match-header__clock-value {
@@ -563,6 +565,9 @@
   font-size: 10px;
   font-weight: 800;
   line-height: 14px;
+  transition:
+    background-color 160ms ease-out,
+    color 160ms ease-out;
 }
 
 .match-header__series-map--completed .match-header__series-map-status {
@@ -751,6 +756,8 @@
   .objective-center__icon.is-planted-commit,
   .objective-center[data-planted-transition='true'] .objective-center__led,
   .objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led,
+  .match-header__round-meta,
+  .match-header__clock,
   .match-header__round-over,
   .match-header__tech-pause,
   .match-header__timeout-panel,
