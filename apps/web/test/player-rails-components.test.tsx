@@ -131,6 +131,28 @@ describe('Player Rails card presentation', () => {
     }
   });
 
+  it('renders real GSI smoke state across the full player card', () => {
+    const snapshot = getProgramFixture('real-live-rich');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const smoked = [...presentation.left.players, ...presentation.right.players].find(
+      (player) => (player.statusEffects.smoked ?? 0) > 0,
+    );
+    if (smoked === undefined) throw new Error('real fixture has no smoked player');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={smoked} />);
+    });
+
+    expect(container.querySelector('[data-smoked="true"]')).not.toBeNull();
+    expect(container.querySelector('.player-status-effects')?.getAttribute('data-anchor')).toBe(
+      'left',
+    );
+  });
+
   it('keeps live armor, kit, and C4 owner equipment visible', () => {
     const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');
