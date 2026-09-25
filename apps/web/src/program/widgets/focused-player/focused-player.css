@@ -51,6 +51,10 @@
   animation: focused-player-fade-in 140ms linear both;
 }
 
+.focused-player__face--pending {
+  visibility: hidden;
+}
+
 .focused-player::before {
   position: absolute;
   z-index: 2;

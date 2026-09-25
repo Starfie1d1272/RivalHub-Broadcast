@@ -289,12 +289,13 @@
 
 .objective-center__plant-progress {
   position: absolute;
-  right: 5px;
-  bottom: 4px;
-  left: 5px;
-  height: 3px;
+  bottom: 0;
+  left: 50%;
+  width: 72px;
+  height: 4px;
   overflow: hidden;
   background: rgba(243, 246, 250, 0.18);
+  transform: translateX(-50%);
 }
 
 .objective-center__plant-progress span {

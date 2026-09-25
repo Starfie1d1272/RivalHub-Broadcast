@@ -134,9 +134,11 @@ pnpm lint
 pnpm test
 pnpm build
 pnpm architecture:check
-pnpm visual:test
+pnpm acceptance:test
 pnpm local-web:production-smoke
 ```
+
+正式版视觉冻结时手动运行 `pnpm visual:update` 和 `pnpm visual:test`；截图回归不属于普通 PR CI。
 
 CI 根据改动面选择必要的验证 lane；未知路径、工具链、workflow 和 CI planner 变更会 fail closed 到完整验证。真实 Windows + CS2 + OBS 验收与普通自动化验证分开管理，详见 [`docs/development-validation.md`](docs/development-validation.md)。
 

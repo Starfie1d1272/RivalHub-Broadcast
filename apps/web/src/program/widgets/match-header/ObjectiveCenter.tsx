@@ -187,11 +187,7 @@ export function ObjectiveCenter({
             data-objective-track="action"
             data-progress={c.action === null || c.stateOnly ? 'unavailable' : 'determinate'}
           >
-            <Icon
-              className={plantedTransition ? 'is-planted-commit' : ''}
-              id={c.hasKit ? 'equipment.defuse-kit' : 'objective.c4'}
-              defusing
-            />
+            <Icon id={c.hasKit ? 'equipment.defuse-kit' : 'objective.c4'} defusing />
             <svg viewBox="0 0 64 64" aria-hidden="true">
               <circle className="objective-center__ring-track" cx="32" cy="32" r="29" />
               {action.value === null || c.stateOnly ? null : (
@@ -218,7 +214,7 @@ export function ObjectiveCenter({
       ) : (
         <>
           <div className="objective-center__bomb">
-            <Icon id="objective.c4" />
+            <Icon className={plantedTransition ? 'is-planted-commit' : ''} id="objective.c4" />
             <span aria-hidden="true" className="objective-center__led" />
             {c.mode === 'planting' ? (
               <div

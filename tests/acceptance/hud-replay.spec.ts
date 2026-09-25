@@ -98,7 +98,24 @@ async function advanceReplayTo(
   await page.clock.runFor(20);
 }
 
-test.describe('HUD 编辑器 Replay', () => {
+async function readPlayerRailState(rail: Locator) {
+  return rail.evaluate((element) => ({
+    entrant: element.getAttribute('data-entrant'),
+    phase: element.getAttribute('data-player-rail-phase'),
+    side: element.getAttribute('data-player-rail'),
+    players: Array.from(element.querySelectorAll<HTMLElement>('[data-player-card]')).map(
+      (player) => ({
+        id: player.dataset.playerCard,
+        lifeState: player.dataset.lifeState,
+        observed: player.dataset.observed,
+        side: player.dataset.side,
+        text: player.innerText.replace(/\s+/g, ' ').trim(),
+      }),
+    ),
+  }));
+}
+
+test.describe('HUD 编辑器 Replay acceptance', () => {
   test.describe.configure({ timeout: 90_000 });
 
   test('shows the fixed real identities and locally frozen presentation assets', async ({
@@ -157,9 +174,8 @@ test.describe('HUD 编辑器 Replay', () => {
     await eventSelect.selectOption(seekAnchor!.id);
     await expect(replay).toHaveAttribute('data-replay-cursor', String(seekAnchor!.sequence));
     await page.clock.runFor(300);
-    const directSeekImage = await page
-      .locator('[data-hud-widget="team-ct-rail"]')
-      .screenshot({ animations: 'disabled' });
+    const teamCtRail = page.locator('[data-hud-widget="team-ct-rail"]');
+    const directSeekState = await readPlayerRailState(teamCtRail);
 
     await page.getByRole('button', { name: '重播' }).click();
     await expect(replay).toHaveAttribute('data-replay-cursor', '587');
@@ -168,10 +184,7 @@ test.describe('HUD 编辑器 Replay', () => {
     await expect(replay).toHaveAttribute('data-replay-cursor', String(seekAnchor!.sequence));
     await page.getByRole('button', { name: '暂停' }).click();
     await page.clock.runFor(300);
-    const replayToAnchorImage = await page
-      .locator('[data-hud-widget="team-ct-rail"]')
-      .screenshot({ animations: 'disabled' });
-    expect(replayToAnchorImage).toEqual(directSeekImage);
+    expect(await readPlayerRailState(teamCtRail)).toEqual(directSeekState);
 
     await eventSelect.selectOption(smokeStart.id);
     await expect(replay).toHaveAttribute('data-replay-cursor', String(smokeStart.sequence));
@@ -311,6 +324,24 @@ test.describe('HUD 编辑器 Replay', () => {
     const planted = eventAt(events, 'bomb-state', 1029, (event) => event.detail.to === 'planted');
     await selectReplayEvent(page, replay, planting);
 
+    const plantTrack = page.locator('.objective-center__plant-progress');
+    const trackGeometry = await plantTrack.evaluate((track) => {
+      const rect = track.getBoundingClientRect();
+      const style = getComputedStyle(track);
+      const header = document.querySelector('.match-header__top-score');
+      if (!(header instanceof HTMLElement)) throw new Error('Match header is unavailable');
+      const headerRect = header.getBoundingClientRect();
+      return {
+        center: rect.left + rect.width / 2,
+        headerCenter: headerRect.left + headerRect.width / 2,
+        height: Number.parseFloat(style.height),
+        width: Number.parseFloat(style.width),
+      };
+    });
+    expect(trackGeometry.width).toBe(72);
+    expect(trackGeometry.height).toBe(4);
+    expect(Math.abs(trackGeometry.center - trackGeometry.headerCenter)).toBeLessThan(1);
+
     const plantProgress = page.locator('.objective-center__plant-progress span');
     const early = Number(await plantProgress.getAttribute('data-action-value'));
     await advanceReplayTo(page, replay, frames, 1017);
@@ -327,6 +358,10 @@ test.describe('HUD 编辑器 Replay', () => {
     await advanceReplayTo(page, replay, frames, planted.sequence);
     const objective = page.locator('.objective-center');
     await expect(objective).toHaveAttribute('data-planted-transition', 'true');
+    await expect(objective.locator('.objective-center__bomb .objective-center__icon')).toHaveCSS(
+      'animation-name',
+      'c4-plant-commit',
+    );
     await page.clock.runFor(300);
     await expect(objective).toHaveAttribute('data-planted-transition', 'false');
 
@@ -394,7 +429,24 @@ test.describe('HUD 编辑器 Replay', () => {
     page,
   }, testInfo) => {
     await page.clock.install({ time: new Date('2026-01-01T00:00:00.000Z') });
-    await page.goto('/operator/hud');
+    let signalAvatarRequest!: () => void;
+    const avatarRequested = new Promise<void>((resolve) => {
+      signalAvatarRequest = resolve;
+    });
+    const releaseAvatarRequests: Array<() => void> = [];
+    let holdIncomingAvatar = true;
+    const releaseIncomingAvatar = () => {
+      holdIncomingAvatar = false;
+      for (const release of releaseAvatarRequests.splice(0)) release();
+    };
+    await page.route('**/avatar-76561198012872053-89e7f0ad4292.jpg', async (route) => {
+      if (holdIncomingAvatar) {
+        signalAvatarRequest();
+        await new Promise<void>((resolve) => releaseAvatarRequests.push(resolve));
+      }
+      await route.continue();
+    });
+    await page.goto('/operator/hud', { waitUntil: 'domcontentloaded' });
     await page.clock.pauseAt(new Date('2026-01-01T00:00:01.000Z'));
     await page.getByLabel('预览来源').selectOption('replay');
     const replay = page.getByRole('region', { name: 'Replay 控制' });
@@ -415,6 +467,15 @@ test.describe('HUD 编辑器 Replay', () => {
     await advanceReplayTo(page, replay, frames, switchEvent.sequence);
     await expect(card).toHaveAttribute('data-focused-player', '76561198012872053');
     await expect(card).toHaveAttribute('data-acceptance-root-id', 'stable');
+    await avatarRequested;
+    await expect(card).toHaveAttribute('data-observer-transition', 'false');
+    await expect(card.locator('.focused-player__face--pending')).toHaveCount(1);
+    const outgoingWhileLoading = card.locator(
+      '.focused-player__face:not(.focused-player__face--pending)',
+    );
+    await expect(outgoingWhileLoading.locator('.focused-player__name')).toContainText('KSCERATO');
+    await expect(outgoingWhileLoading).toHaveCSS('visibility', 'visible');
+    releaseIncomingAvatar();
     await expect(card).toHaveAttribute('data-observer-transition', 'true');
     const currentFace = card.locator('.focused-player__face:not(.focused-player__face--outgoing)');
     await expect(currentFace.locator('.focused-player__name')).toContainText('huNter-');
