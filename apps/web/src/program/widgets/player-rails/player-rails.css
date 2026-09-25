@@ -37,6 +37,7 @@
   width: 3px;
   background: #6aa8ff;
   content: '';
+  transition: background-color 160ms ease-out;
 }
 
 .player-rail--t .player-rail__header::before {
@@ -1126,6 +1127,7 @@
 
 @media (prefers-reduced-motion: reduce) {
   .player-rail__summary,
+  .player-rail__header::before,
   .player-rail__card::after,
   .player-rail__endcap,
   .player-rail__endcap strong,
