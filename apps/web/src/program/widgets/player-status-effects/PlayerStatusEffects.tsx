@@ -1,15 +1,10 @@
 import type { CSSProperties } from 'react';
 
-export interface PlayerStatusEffectState {
-  readonly flashed: number | null;
-  readonly smoked: number | null;
-  readonly burning: number | null;
-}
+import type { PlayerStatusEffectState } from './presentation';
 
 function effectStrength(value: number | null): number {
   if (value === null || !Number.isFinite(value) || value <= 0) return 0;
-  // CS2 GSI commonly exposes these status fields on a 0..255-ish scale.
-  // Synthetic fixtures may use normalized values, so accept both forms.
+  // GSI exposes these effects as intensities; normalize the common 0..255 range.
   const normalized = value <= 1 ? value : value / 255;
   return Math.max(0.42, Math.min(1, normalized));
 }
