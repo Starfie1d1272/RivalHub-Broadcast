@@ -7,10 +7,9 @@
 
 .focused-player {
   position: relative;
-  display: grid;
+  display: block;
   width: 360px;
   height: 176px;
-  grid-template-rows: 42px 82px 52px;
   overflow: hidden;
   background: #111923;
   color: #f3f6fa;
@@ -24,6 +23,32 @@
 
 .focused-player[data-side='T'] {
   background: #181c22;
+}
+
+.focused-player__face {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  grid-template-rows: 42px 82px 52px;
+  background: #111923;
+}
+
+.focused-player__face[data-side='CT'] {
+  background: #141c26;
+}
+
+.focused-player__face[data-side='T'] {
+  background: #181c22;
+}
+
+.focused-player__face--outgoing {
+  z-index: 1;
+  animation: focused-player-fade-out 140ms linear both;
+}
+
+.focused-player__face--incoming {
+  z-index: 1;
+  animation: focused-player-fade-in 140ms linear both;
 }
 
 .focused-player::before {
@@ -166,13 +191,31 @@
 }
 
 .focused-player__active {
+  position: relative;
   display: flex;
   width: 148px;
   height: 82px;
   align-items: center;
   justify-content: center;
+  overflow: hidden;
   grid-column: 3;
   grid-row: 1;
+}
+
+.focused-player__item-layer {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.focused-player__item-layer--outgoing {
+  animation: focused-item-fade-out 120ms linear both;
+}
+
+.focused-player__item-layer--incoming {
+  animation: focused-item-fade-in 120ms ease-out both;
 }
 
 .focused-player__icon {
@@ -193,6 +236,31 @@
   width: 136px;
   max-height: 44px;
   height: 44px;
+}
+
+.focused-player__item-layer[data-item-kind='knife'] .focused-player__icon {
+  width: 88px;
+  height: 38px;
+}
+
+.focused-player__item-layer[data-item-kind='grenade'] .focused-player__icon {
+  width: 72px;
+  height: 40px;
+}
+
+.focused-player__item-layer[data-item-kind='objective'] .focused-player__icon {
+  width: 64px;
+  height: 40px;
+}
+
+.focused-player__item-layer[data-item-kind='taser'] .focused-player__icon {
+  width: 90px;
+  height: 44px;
+}
+
+.focused-player__item-layer[data-item-kind='other'] .focused-player__icon {
+  width: 64px;
+  height: 40px;
 }
 
 .focused-player__action-gap--b {
@@ -338,28 +406,79 @@
   background-color: #f06f6f;
 }
 
-.focused-player[data-dead='true'] {
+.focused-player__face[data-dead='true'] {
   grid-template-rows: 42px 134px 0;
   background: #242b32;
+}
+
+.focused-player__face[data-dead='true'] .focused-player__action {
+  height: 134px;
+}
+
+.focused-player__face[data-dead='true'] .focused-player__vitals {
+  display: none;
+}
+
+.focused-player__face[data-dead='true'] .focused-player__media img {
+  filter: grayscale(1);
+  opacity: 0.6;
+}
+
+.focused-player__face[data-dead='true'] .focused-player__media.is-observer-tile {
+  background: #252c34;
 }
 
 .focused-player[data-dead='true']::before {
   background: rgba(170, 180, 192, 0.7);
 }
 
-.focused-player[data-dead='true'] .focused-player__action {
-  height: 134px;
+@keyframes focused-player-fade-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
 }
 
-.focused-player[data-dead='true'] .focused-player__media img {
-  filter: grayscale(1);
-  opacity: 0.6;
+@keyframes focused-player-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
 }
 
-.focused-player[data-dead='true'] .focused-player__media.is-observer-tile {
-  background: #252c34;
+@keyframes focused-item-fade-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
 }
 
-.focused-player[data-dead='true'] .focused-player__vitals {
-  display: none;
+@keyframes focused-item-fade-out {
+  from {
+    opacity: 1;
+  }
+
+  to {
+    opacity: 0;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .focused-player__face--outgoing,
+  .focused-player__face--incoming,
+  .focused-player__item-layer--outgoing,
+  .focused-player__item-layer--incoming {
+    animation: none;
+  }
 }

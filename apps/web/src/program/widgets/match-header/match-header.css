@@ -266,8 +266,12 @@
   animation: c4-led-pulse 720ms ease-in-out infinite alternate;
 }
 
-.objective-center[data-planted-transition='true'] .objective-center__icon {
-  animation: planted-pop 240ms ease-out both;
+.objective-center__icon.is-planted-commit {
+  animation: c4-plant-commit 280ms ease-out both;
+}
+
+.objective-center[data-planted-transition='true'] .objective-center__led {
+  animation: c4-led-commit 280ms ease-out both;
 }
 
 .objective-center__caption {
@@ -347,10 +351,10 @@
 }
 
 .objective-center__fuse span {
-  display: block;
-  height: 100%;
+  position: absolute;
+  top: 0;
+  bottom: 0;
   background: #f06f6f;
-  transform-origin: left center;
 }
 
 .objective-center__fuse[data-progress='unavailable'] span {
@@ -619,15 +623,33 @@
   color: #aab4c0;
 }
 
-@keyframes planted-pop {
-  from {
-    opacity: 0.65;
-    transform: scale(0.94);
+@keyframes c4-plant-commit {
+  0% {
+    opacity: 0.7;
+    transform: scale(0.9);
   }
 
-  to {
+  64% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+
+  100% {
     opacity: 1;
     transform: scale(1);
+  }
+}
+
+@keyframes c4-led-commit {
+  0%,
+  62% {
+    background: #aab4c0;
+    box-shadow: 0 0 0 rgba(243, 246, 250, 0);
+  }
+
+  100% {
+    background: #f3f6fa;
+    box-shadow: 0 0 7px rgba(243, 246, 250, 0.9);
   }
 }
 
@@ -638,6 +660,20 @@
 
   to {
     opacity: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .objective-center__icon.is-planted-commit,
+  .objective-center[data-planted-transition='true'] .objective-center__led,
+  .objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led {
+    animation: none;
+  }
+
+  .objective-center__plant-progress span,
+  .objective-center__ring-fill,
+  .objective-center__fuse span {
+    transition: none !important;
   }
 }
 

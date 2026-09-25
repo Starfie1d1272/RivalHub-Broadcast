@@ -20,6 +20,7 @@ export interface HudCanvasPreviewProps {
   readonly radarSnapshot?: RadarProps['snapshot'];
   readonly resolvedPreset: HudResolvedPreset;
   readonly snapshot: ProgramSnapshot | null;
+  readonly presentationRevision?: number;
   readonly connectionState: LocalChannelConnectionState;
   readonly liveSource: boolean;
   readonly editorMode?: 'layout' | 'preview';
@@ -40,6 +41,7 @@ export function HudCanvasPreview({
   radarClient,
   radarSnapshot,
   snapshot,
+  presentationRevision = 0,
   connectionState,
   liveSource,
   editorMode = 'layout',
@@ -98,6 +100,7 @@ export function HudCanvasPreview({
           radarSnapshot={radarSnapshot}
           resolvedPreset={resolvedPreset}
           snapshot={presentationSnapshot}
+          presentationRevision={presentationRevision}
         />
         <HudEditorOverlay
           mode={editorMode}

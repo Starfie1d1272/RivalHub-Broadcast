@@ -122,8 +122,12 @@ packages/cs2-assets
   CS2 official presentation asset 的唯一 owner：semantic catalog、content-hashed generated SVG、manifest、provenance 与 framework-neutral resolver。
   不拥有 RuntimeState、Program protocol、Raw GSI/CSTV、React renderer 或地图 geometry；Source 2 解包只通过 pinned development-time VRF CLI adapter 完成。
 
+packages/replay
+  framework-neutral 的离散回放 cursor 与 scheduler；按 capture 时间选择 authoritative frame，并通过注入的 source seam 请求 deterministic prefix rebuild。
+  不读取 capture 文件、不解析 Raw GSI、不构造 gameplay truth，也不依赖 React、DOM、浏览器或 Node API。
+
 packages/testkit
-  capture 读取、replay、simulation、fault injection 和 deterministic assertions。
+  capture 读取、production replay composition、simulation、fault injection 和 deterministic assertions；复用 `packages/replay` 的 cursor 与 scheduler。
   不得成为 production runtime dependency。
 ```
 

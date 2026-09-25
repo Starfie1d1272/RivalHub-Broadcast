@@ -1,12 +1,14 @@
-export interface ReplayControllerFrame {
-  readonly cursor: {
-    readonly captureIndex: number;
-    readonly sequence: number;
-    readonly scheduledElapsedUs: number;
-  };
+export interface ReplaySessionCursor {
+  readonly captureIndex: number;
+  readonly sequence: number;
+  readonly scheduledElapsedUs: number;
 }
 
-export interface ReplayControllerEvent {
+export interface ReplaySessionFrame {
+  readonly cursor: ReplaySessionCursor;
+}
+
+export interface ReplaySessionEvent {
   readonly id: string;
   readonly kind: string;
   readonly captureIndex: number;
@@ -15,49 +17,52 @@ export interface ReplayControllerEvent {
   readonly label: string;
 }
 
-export interface ReplayControllerSnapshot<Frame extends ReplayControllerFrame> {
-  readonly current: Frame | null;
-  readonly currentIndex: number;
-  readonly currentEventId: string | null;
-  readonly isPlaying: boolean;
-  readonly isSeeking: boolean;
-  readonly error: string | null;
-}
-
-export interface ReplayControllerSource<Frame extends ReplayControllerFrame> {
-  readonly frames: readonly Frame[];
-  readonly events: readonly ReplayControllerEvent[];
-  rebuild(targetCaptureIndex: number, signal: AbortSignal): Promise<Frame>;
-}
-
-export interface ReplayControllerScheduler {
+export interface ReplaySessionScheduler {
   nowMs(): number;
   setTimeout(callback: () => void, delayMs: number): unknown;
   clearTimeout(handle: unknown): void;
 }
 
-const defaultScheduler: ReplayControllerScheduler = {
-  nowMs: () => globalThis.performance.now(),
-  setTimeout: (callback, delayMs) => globalThis.setTimeout(callback, delayMs),
-  clearTimeout: (handle) => globalThis.clearTimeout(handle as ReturnType<typeof setTimeout>),
-};
+export interface ReplaySessionSource<Frame extends ReplaySessionFrame> {
+  readonly frames: readonly Frame[];
+  readonly events: readonly ReplaySessionEvent[];
+  /** Seeking reconstructs the frame from a fresh production replay prefix. */
+  rebuild(targetCaptureIndex: number, signal: AbortSignal): Frame | Promise<Frame>;
+}
 
-export class ReplayController<Frame extends ReplayControllerFrame> {
+export interface ReplaySessionSnapshot<Frame extends ReplaySessionFrame> {
+  readonly current: Frame | null;
+  readonly currentIndex: number;
+  readonly currentEventId: string | null;
+  readonly presentationRevision: number;
+  readonly isPlaying: boolean;
+  readonly isSeeking: boolean;
+  readonly error: string | null;
+}
+
+/**
+ * Framework-neutral replay cursor and scheduler. It selects discrete capture frames;
+ * presentation code may animate between them but cannot alter their gameplay state.
+ */
+export class ReplaySession<Frame extends ReplaySessionFrame> {
   private readonly listeners = new Set<() => void>();
-  private readonly source: ReplayControllerSource<Frame>;
-  private readonly scheduler: ReplayControllerScheduler;
-  private snapshot: ReplayControllerSnapshot<Frame>;
+  private readonly source: ReplaySessionSource<Frame>;
+  private readonly scheduler: ReplaySessionScheduler;
+  private snapshot: ReplaySessionSnapshot<Frame>;
   private timer: unknown;
   private generation = 0;
   private seekController: AbortController | undefined;
   private disposed = false;
-  private playbackAnchorMs = 0;
+  private playbackWallAnchorMs = 0;
+  private playbackCaptureAnchorUs = 0;
+  private speed = 1;
 
-  constructor(source: ReplayControllerSource<Frame>, scheduler = defaultScheduler) {
-    if (source.frames.length === 0) throw new RangeError('Replay needs at least one frame');
+  constructor(source: ReplaySessionSource<Frame>, scheduler: ReplaySessionScheduler) {
+    if (source.frames.length === 0) throw new RangeError('Replay session needs at least one frame');
     for (let index = 0; index < source.frames.length; index += 1) {
       const frame = source.frames[index];
-      if (frame === undefined || frame.cursor.captureIndex !== index) {
+      if (frame === undefined) throw new RangeError(`Replay frame ${index} is missing`);
+      if (frame.cursor.captureIndex !== index) {
         throw new RangeError(`Replay frame cursor mismatch at captureIndex ${index}`);
       }
       if (
@@ -73,13 +78,14 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
       current: source.frames[0]!,
       currentIndex: 0,
       currentEventId: this.eventIdAt(0),
+      presentationRevision: 0,
       isPlaying: false,
       isSeeking: false,
       error: null,
     };
   }
 
-  getSnapshot = (): ReplayControllerSnapshot<Frame> => this.snapshot;
+  getSnapshot = (): ReplaySessionSnapshot<Frame> => this.snapshot;
 
   subscribe = (listener: () => void): (() => void) => {
     this.assertActive();
@@ -87,13 +93,17 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
     return () => this.listeners.delete(listener);
   };
 
-  play(): void {
+  play(speed = 1): void {
     this.assertActive();
+    if (!Number.isFinite(speed) || speed <= 0)
+      throw new RangeError('Replay speed must be positive');
     if (this.snapshot.currentIndex >= this.source.frames.length - 1 || this.snapshot.isPlaying)
       return;
-    const currentElapsedUs = this.snapshot.current?.cursor.scheduledElapsedUs ?? 0;
-    const firstElapsedUs = this.source.frames[0]!.cursor.scheduledElapsedUs;
-    this.playbackAnchorMs = this.scheduler.nowMs() - (currentElapsedUs - firstElapsedUs) / 1_000;
+    this.speed = speed;
+    this.playbackCaptureAnchorUs =
+      this.snapshot.current?.cursor.scheduledElapsedUs ??
+      this.source.frames[0]!.cursor.scheduledElapsedUs;
+    this.playbackWallAnchorMs = this.scheduler.nowMs();
     this.update({ isPlaying: true, error: null });
     this.scheduleNextFrame();
   }
@@ -135,12 +145,13 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
       const frame = await this.source.rebuild(targetCaptureIndex, controller.signal);
       if (this.disposed || generation !== this.generation) return;
       if (frame.cursor.captureIndex !== targetCaptureIndex) {
-        throw new Error('Replay rebuild returned a mismatched capture cursor');
+        throw new Error('Replay prefix rebuild returned a mismatched capture cursor');
       }
       this.update({
         current: frame,
         currentIndex: targetCaptureIndex,
         currentEventId: eventId ?? this.eventIdAt(targetCaptureIndex),
+        presentationRevision: this.snapshot.presentationRevision + 1,
         isSeeking: false,
       });
       this.seekController = undefined;
@@ -155,11 +166,31 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
     }
   }
 
+  async seekElapsedUs(targetElapsedUs: number): Promise<void> {
+    this.assertActive();
+    if (!Number.isFinite(targetElapsedUs))
+      throw new RangeError('Replay elapsed time must be finite');
+    const clamped = Math.max(0, targetElapsedUs);
+    let target = 0;
+    for (let index = 1; index < this.source.frames.length; index += 1) {
+      if (this.source.frames[index]!.cursor.scheduledElapsedUs > clamped) break;
+      target = index;
+    }
+    await this.seekCaptureIndex(target);
+  }
+
   async seekEvent(eventId: string): Promise<void> {
     this.assertActive();
     const event = this.source.events.find((candidate) => candidate.id === eventId);
     if (event === undefined) throw new RangeError(`Replay event not found: ${eventId}`);
     await this.seekCaptureIndex(event.captureIndex, event.id);
+  }
+
+  async stepFrame(direction: -1 | 1): Promise<void> {
+    this.assertActive();
+    await this.seekCaptureIndex(
+      Math.max(0, Math.min(this.source.frames.length - 1, this.snapshot.currentIndex + direction)),
+    );
   }
 
   async stepEvent(direction: -1 | 1): Promise<void> {
@@ -177,9 +208,7 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
 
   dispose(): void {
     if (this.disposed) return;
-    this.generation += 1;
-    this.seekController?.abort();
-    this.seekController = undefined;
+    this.abort();
     this.disposed = true;
     this.cancelTimer();
     this.listeners.clear();
@@ -187,38 +216,56 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
       current: null,
       currentIndex: -1,
       currentEventId: null,
+      presentationRevision: this.snapshot.presentationRevision,
       isPlaying: false,
       isSeeking: false,
       error: null,
     };
   }
 
+  abort(): void {
+    if (this.disposed) return;
+    this.generation += 1;
+    this.seekController?.abort();
+    this.seekController = undefined;
+    this.cancelTimer();
+    if (this.snapshot.isPlaying || this.snapshot.isSeeking) {
+      this.update({ isPlaying: false, isSeeking: false });
+    }
+  }
+
   private scheduleNextFrame(): void {
     if (this.disposed || !this.snapshot.isPlaying) return;
-    const nextIndex = this.snapshot.currentIndex + 1;
-    const nextFrame = this.source.frames[nextIndex];
+    const nextFrame = this.source.frames[this.snapshot.currentIndex + 1];
     if (nextFrame === undefined) {
       this.update({ isPlaying: false });
       return;
     }
     const deadline =
-      this.playbackAnchorMs +
-      (nextFrame.cursor.scheduledElapsedUs - this.source.frames[0]!.cursor.scheduledElapsedUs) /
-        1_000;
+      this.playbackWallAnchorMs +
+      (nextFrame.cursor.scheduledElapsedUs - this.playbackCaptureAnchorUs) / 1000 / this.speed;
     this.timer = this.scheduler.setTimeout(
       () => {
         this.timer = undefined;
         if (this.disposed || !this.snapshot.isPlaying) return;
-        this.playbackAnchorMs =
-          this.scheduler.nowMs() -
-          (nextFrame.cursor.scheduledElapsedUs - this.source.frames[0]!.cursor.scheduledElapsedUs) /
-            1_000;
-        this.update({
-          current: nextFrame,
-          currentIndex: nextIndex,
-          currentEventId: this.eventIdAt(nextIndex),
-        });
-        if (nextIndex >= this.source.frames.length - 1) this.update({ isPlaying: false });
+        const targetCaptureUs =
+          this.playbackCaptureAnchorUs +
+          (this.scheduler.nowMs() - this.playbackWallAnchorMs) * 1000 * this.speed;
+        let targetIndex = this.snapshot.currentIndex;
+        while (
+          targetIndex + 1 < this.source.frames.length &&
+          this.source.frames[targetIndex + 1]!.cursor.scheduledElapsedUs <= targetCaptureUs
+        ) {
+          targetIndex += 1;
+        }
+        if (targetIndex > this.snapshot.currentIndex) {
+          this.update({
+            current: this.source.frames[targetIndex]!,
+            currentIndex: targetIndex,
+            currentEventId: this.eventIdAt(targetIndex),
+          });
+        }
+        if (targetIndex >= this.source.frames.length - 1) this.update({ isPlaying: false });
         else this.scheduleNextFrame();
       },
       Math.max(0, deadline - this.scheduler.nowMs()),
@@ -238,19 +285,19 @@ export class ReplayController<Frame extends ReplayControllerFrame> {
     return null;
   }
 
-  private update(patch: Partial<ReplayControllerSnapshot<Frame>>): void {
+  private update(patch: Partial<ReplaySessionSnapshot<Frame>>): void {
     this.snapshot = { ...this.snapshot, ...patch };
     for (const listener of this.listeners) listener();
   }
 
   private assertActive(): void {
-    if (this.disposed) throw new Error('Replay controller has been disposed');
+    if (this.disposed) throw new Error('Replay session has been disposed');
   }
 }
 
-export function createReplayController<Frame extends ReplayControllerFrame>(
-  source: ReplayControllerSource<Frame>,
-  scheduler?: ReplayControllerScheduler,
-): ReplayController<Frame> {
-  return new ReplayController(source, scheduler);
+export function createReplaySession<Frame extends ReplaySessionFrame>(
+  source: ReplaySessionSource<Frame>,
+  scheduler: ReplaySessionScheduler,
+): ReplaySession<Frame> {
+  return new ReplaySession(source, scheduler);
 }

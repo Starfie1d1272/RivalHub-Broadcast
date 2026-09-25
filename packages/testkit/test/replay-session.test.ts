@@ -78,14 +78,18 @@ const events: readonly ReplaySessionEvent[] = [
 describe('ReplaySession', () => {
   it('rebuilds the production replay prefix for seek, restart, frame and event stepping', async () => {
     const rebuilt: number[] = [];
-    const session = createReplaySession({
-      frames,
-      events,
-      rebuild: (captureIndex) => {
-        rebuilt.push(captureIndex);
-        return frames[captureIndex]!;
+    const scheduler = new ManualScheduler();
+    const session = createReplaySession(
+      {
+        frames,
+        events,
+        rebuild: (captureIndex) => {
+          rebuilt.push(captureIndex);
+          return frames[captureIndex]!;
+        },
       },
-    });
+      scheduler,
+    );
 
     await session.seekEvent('event-b');
     expect(session.getSnapshot().current?.value).toBe('frame-3');
@@ -121,11 +125,10 @@ describe('ReplaySession', () => {
   });
 
   it('rejects mismatched frame rebuilds and prevents work after disposal', async () => {
-    const session = createReplaySession({
-      frames,
-      events,
-      rebuild: () => frames[1]!,
-    });
+    const session = createReplaySession(
+      { frames, events, rebuild: () => frames[1]! },
+      new ManualScheduler(),
+    );
     await expect(session.seekCaptureIndex(2)).rejects.toThrow('mismatched capture cursor');
     session.dispose();
     await expect(session.restart()).rejects.toThrow('disposed');

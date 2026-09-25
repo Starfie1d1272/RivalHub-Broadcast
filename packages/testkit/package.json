@@ -20,6 +20,7 @@
     "typecheck": "tsc -b tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
   },
   "dependencies": {
+    "@rivalhub-broadcast/replay": "workspace:*",
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*"
   },
   "devDependencies": {

@@ -23,6 +23,7 @@ export interface GameplayHudProps {
   readonly radarClient?: RadarProps['client'];
   readonly radarSnapshot?: RadarProps['snapshot'];
   readonly snapshot: ProgramSnapshot | null;
+  readonly presentationRevision?: number;
   readonly resolvedPreset: HudResolvedPreset;
   /** Test-only injection keeps the production registry closed while exercising the React seam. */
   readonly rendererRegistry?: HudRendererRegistry;
@@ -57,6 +58,7 @@ export function GameplayHud({
   radarClient,
   radarSnapshot,
   resolvedPreset,
+  presentationRevision = 0,
   rendererRegistry = HUD_RENDERER_REGISTRY,
 }: GameplayHudProps) {
   const programFresh = snapshot?.payload.status.telemetry === 'fresh';
@@ -88,6 +90,7 @@ export function GameplayHud({
               resolvedPreset={resolvedPreset}
               settings={resolvedPreset.widgets[descriptor.id]}
               snapshot={snapshot}
+              presentationRevision={presentationRevision}
               widgetId={descriptor.id}
             />
           );
@@ -100,6 +103,7 @@ export function GameplayHud({
               placement={placement}
               radarClient={radarClient}
               radarSnapshot={radarSnapshot}
+              presentationRevision={presentationRevision}
               resolvedPreset={resolvedPreset}
               settings={resolvedPreset.widgets[descriptor.id]}
               widgetId={descriptor.id}

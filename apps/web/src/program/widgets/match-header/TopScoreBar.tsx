@@ -60,7 +60,7 @@ function Team({ team }: { readonly team: MatchHeaderTeamPresentation }) {
     </>
   );
 }
-export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
+export function TopScoreBar({ snapshot, presentationRevision = 0 }: HudWidgetRendererProps) {
   const p = buildMatchHeaderPresentation(snapshot.payload);
   const timeout = p.timeoutPanel;
   const objective =
@@ -89,7 +89,11 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
               <strong>TECH PAUSE</strong>
             </div>
           ) : objective ? (
-            <ObjectiveCenter presentation={p} />
+            <ObjectiveCenter
+              cursor={snapshot.cursor}
+              presentation={p}
+              presentationRevision={presentationRevision}
+            />
           ) : p.phaseLabel === 'ROUND OVER' ? (
             <div className="match-header__round-over" data-round-over="true">
               <span>ROUND</span>
@@ -111,7 +115,11 @@ export function TopScoreBar({ snapshot }: HudWidgetRendererProps) {
       {objective &&
       (p.objective.mode === 'planted' || p.objective.mode === 'defusing') &&
       !p.objective.stateOnly ? (
-        <ObjectiveFuse center={p.objective} />
+        <ObjectiveFuse
+          center={p.objective}
+          cursor={snapshot.cursor}
+          presentationRevision={presentationRevision}
+        />
       ) : null}
       {timeout?.owner === 'a' ? (
         <TimeoutPanel timeout={timeout} side="a" ownerSide={p.teamA.side} />

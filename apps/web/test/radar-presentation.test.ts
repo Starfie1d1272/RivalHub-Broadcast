@@ -5,6 +5,7 @@ import {
   grenadeIcon,
   isActiveSmoke,
   RadarPresentation,
+  radarUtilityPhase,
   shortestAngle,
   smokeRemaining,
   RADAR_PRESENTATION,
@@ -106,6 +107,70 @@ describe('Radar renderer local lifecycle', () => {
     expect(grenadeIcon('smoke', 'CT')).toContain('/utility/smokegrenade.');
   });
 
+  it('keeps a moving smoke projectile airborne when effecttime is zero', () => {
+    const source = single().payload.grenades[0]!;
+    const movingSmoke = {
+      ...source,
+      kind: 'smoke' as const,
+      velocity: { x: 25, y: 0, z: 0 },
+      effectTimeSeconds: 0,
+    };
+    const stationarySmoke = {
+      ...movingSmoke,
+      velocity: { x: 0, y: 0, z: 0 },
+      effectTimeSeconds: 0.2,
+    };
+
+    expect(radarUtilityPhase(movingSmoke)).toBe('projectile');
+    expect(isActiveSmoke(movingSmoke)).toBe(false);
+    expect(radarUtilityPhase(stationarySmoke)).toBe('effect');
+    expect(isActiveSmoke(stationarySmoke)).toBe(true);
+    expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
+  });
+
+  it('hands a terminal firebomb off to flame evidence without a second projectile presentation', () => {
+    // A presentation-only lifecycle edge: it changes no Program/Radar gameplay truth.
+    const before = single();
+    const owner = before.payload.players[0]!.sourcePlayerId;
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        sourceEntityId: 'synthetic-firebomb',
+        kind: 'firebomb',
+        ownerSourceId: owner,
+        velocity: { x: 100, y: 0, z: 0 },
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    expect([...model.grenades.values()][0]!.phase).toBe('projectile');
+
+    const after = next(before);
+    after.payload.grenades = [
+      {
+        ...after.payload.grenades[0]!,
+        sourceEntityId: 'synthetic-inferno',
+        kind: 'inferno',
+        ownerSourceId: owner,
+        position: null,
+        velocity: null,
+        flames: [
+          { sourceFlameId: 'flame-a', position: { x: -1000, y: 0, z: 0 } },
+          { sourceFlameId: 'flame-b', position: { x: -900, y: 0, z: 0 } },
+        ],
+      },
+    ];
+    model.accept(after, 100);
+
+    expect(model.grenades.has('synthetic-firebomb')).toBe(false);
+    expect(model.grenades.get('synthetic-inferno')?.phase).toBe('effect');
+    expect(model.grenades.get('synthetic-inferno')?.target).toBeDefined();
+    expect(model.exits.get('synthetic-firebomb')?.includeProjectileIcon).toBe(false);
+    expect(
+      [...model.grenades.values()].filter((marker) => marker.phase === 'projectile'),
+    ).toHaveLength(0);
+  });
+
   it('wraps angles along the shortest distance and eases movement without changing truth', () => {
     expect(shortestAngle(359, 1)).toBe(2);
     expect(shortestAngle(1, 359)).toBe(-2);
@@ -122,6 +187,49 @@ describe('Radar renderer local lifecycle', () => {
     expect(p.x).toBeGreaterThan(before);
     expect(p.x).toBeLessThan(p.target.x);
     expect(b.payload.players[0]!.position!.x).toBe(-900);
+  });
+  it('interpolates between real-time samples and bounds prediction to 100 ms', () => {
+    const model = new RadarPresentation();
+    const a = single();
+    model.accept(a, 0);
+    model.tick(0, false);
+    const before = [...model.players.values()][0]!;
+    const b = next(a);
+    b.payload.players[0]!.position!.x = -900;
+    model.accept(b, 250);
+    model.tick(375, false);
+
+    const between = [...model.players.values()][0]!;
+    const dx = between.target.x - between.previousTarget.x;
+    const dy = between.target.y - between.previousTarget.y;
+    const distanceSquared = dx * dx + dy * dy;
+    const progress =
+      ((between.x - between.previousTarget.x) * dx + (between.y - between.previousTarget.y) * dy) /
+      distanceSquared;
+    expect(before.target.x).toBe(between.previousTarget.x);
+    expect(progress).toBeCloseTo(0.5, 1);
+
+    model.tick(600, false);
+    const atPredictionLimit = [...model.players.values()][0]!;
+    const boundedX = atPredictionLimit.x;
+    model.tick(900, false);
+    expect([...model.players.values()][0]!.x).toBe(boundedX);
+    expect(atPredictionLimit.x).toBeCloseTo(
+      atPredictionLimit.target.x + atPredictionLimit.velocity.x * 100,
+      6,
+    );
+  });
+  it('snaps motion at a skipped source sample instead of bridging the gap', () => {
+    const model = new RadarPresentation();
+    const a = single();
+    model.accept(a, 0);
+    const gap = next(a);
+    gap.cursor.programReceiveSequence = (gap.cursor.programReceiveSequence ?? 0) + 1;
+    gap.payload.players[0]!.position!.x = -900;
+    model.accept(gap, 250);
+    const marker = [...model.players.values()][0]!;
+    expect(marker.x).toBe(marker.target.x);
+    expect(marker.interpolationDurationMs).toBe(0);
   });
   it('snaps teleports, resets HP/ammo baselines and does not infer on first sample', () => {
     const m = new RadarPresentation();

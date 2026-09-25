@@ -25,6 +25,7 @@ export default tseslint.config(
             'packages/hud-config/test/*.ts',
             'packages/protocol/test/*.ts',
             'packages/radar/test/*.ts',
+            'packages/replay/test/*.ts',
           ],
           maximumDefaultProjectFileMatchCount_THIS_WILL_SLOW_DOWN_LINTING: 16,
           defaultProject: 'tsconfig.node.json',

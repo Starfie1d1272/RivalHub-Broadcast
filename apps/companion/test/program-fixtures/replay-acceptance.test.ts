@@ -4,7 +4,7 @@ import { resolve } from 'node:path';
 
 import { programSnapshotSchema, type ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
-import { createReplaySession } from '@rivalhub-broadcast/testkit';
+import { createReplaySession, type ReplaySessionScheduler } from '@rivalhub-broadcast/testkit';
 import type { ReplaySessionEvent, ReplaySessionFrame } from '@rivalhub-broadcast/testkit';
 import { describe, expect, it } from 'vitest';
 
@@ -159,22 +159,32 @@ describe('Issue 76 production replay acceptance', () => {
     });
     expect(death).toBeDefined();
     const selectedDeath = death!;
-    const session = createReplaySession({
-      frames: artifact.frames,
-      events: artifact.events,
-      rebuild: async (targetCaptureIndex) => {
-        const expected = artifact.frames[targetCaptureIndex]!;
-        const rebuilt = await replayRealProgram({
-          capturePath: primaryCapturePath,
-          targetSequence: expected.cursor.sequence,
-        });
-        return {
-          ...expected,
-          program: rebuilt.snapshot,
-          radar: rebuilt.radarSnapshot,
-        };
+    const scheduler: ReplaySessionScheduler = {
+      nowMs: () => 0,
+      setTimeout: () => {
+        throw new Error('Playback is not part of this seek-only replay assertion');
       },
-    });
+      clearTimeout: () => undefined,
+    };
+    const session = createReplaySession(
+      {
+        frames: artifact.frames,
+        events: artifact.events,
+        rebuild: async (targetCaptureIndex) => {
+          const expected = artifact.frames[targetCaptureIndex]!;
+          const rebuilt = await replayRealProgram({
+            capturePath: primaryCapturePath,
+            targetSequence: expected.cursor.sequence,
+          });
+          return {
+            ...expected,
+            program: rebuilt.snapshot,
+            radar: rebuilt.radarSnapshot,
+          };
+        },
+      },
+      scheduler,
+    );
 
     await session.seekEvent(selectedDeath.id);
     const deadFrame = session.getSnapshot().current!;

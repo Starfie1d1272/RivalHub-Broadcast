@@ -66,7 +66,7 @@ import {
 } from './hud-console-state';
 import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
 import { loadReplayFixture, type LoadedReplayFixture, type ReplaySourceId } from './replay-fixture';
-import type { ReplayControllerSnapshot } from './replay-controller';
+import type { ReplaySessionSnapshot } from '@rivalhub-broadcast/replay';
 import type { AcceptanceReplayFrame } from './replay-fixture';
 import {
   HudConfigMutationError,
@@ -84,10 +84,11 @@ const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }
   { id: 'theme', label: '外观' },
 ];
 
-const EMPTY_REPLAY_SNAPSHOT: ReplayControllerSnapshot<AcceptanceReplayFrame> = {
+const EMPTY_REPLAY_SNAPSHOT: ReplaySessionSnapshot<AcceptanceReplayFrame> = {
   current: null,
   currentIndex: 0,
   currentEventId: null,
+  presentationRevision: 0,
   isPlaying: false,
   isSeeking: false,
   error: null,
@@ -1046,6 +1047,9 @@ export function HudConsolePage() {
           <HudCanvasPreview
             radarSnapshot={activeRadarSnapshot}
             radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
+            presentationRevision={
+              activePreviewSource === 'replay' ? replayState.presentationRevision : 0
+            }
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
             editorMode={workspace === 'layout' ? 'layout' : 'preview'}

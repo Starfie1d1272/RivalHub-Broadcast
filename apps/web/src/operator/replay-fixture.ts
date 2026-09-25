@@ -1,15 +1,16 @@
 import { programSnapshotSchema, type ProgramSnapshot } from '@rivalhub-broadcast/protocol/program';
 import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/protocol/radar';
 import {
-  createReplayController,
-  type ReplayController,
-  type ReplayControllerEvent,
-  type ReplayControllerFrame,
-} from './replay-controller';
+  createReplaySession,
+  type ReplaySession,
+  type ReplaySessionEvent,
+  type ReplaySessionFrame,
+  type ReplaySessionScheduler,
+} from '@rivalhub-broadcast/replay';
 
 export type ReplaySourceId = 'ancient-round-03' | 'ancient-round-11-defuse';
 
-export interface AcceptanceReplayFrame extends ReplayControllerFrame {
+export interface AcceptanceReplayFrame extends ReplaySessionFrame {
   readonly program: ProgramSnapshot;
   readonly radar: RadarSnapshot;
 }
@@ -65,6 +66,12 @@ const sourceFiles: Record<ReplaySourceId, SourceFiles> = {
   },
 };
 
+const replayScheduler: ReplaySessionScheduler = {
+  nowMs: () => window.performance.now(),
+  setTimeout: (callback, delayMs) => window.setTimeout(callback, delayMs),
+  clearTimeout: (handle) => window.clearTimeout(handle as number),
+};
+
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) return value.map(canonicalize);
   if (typeof value !== 'object' || value === null) return value;
@@ -116,9 +123,9 @@ function cursorKey(snapshot: ProgramSnapshot | RadarSnapshot): string {
 export interface LoadedReplayFixture {
   readonly id: ReplaySourceId;
   readonly title: string;
-  readonly session: ReplayController<AcceptanceReplayFrame>;
+  readonly session: ReplaySession<AcceptanceReplayFrame>;
   readonly manifest: ReplayArtifactManifest;
-  readonly events: readonly ReplayControllerEvent[];
+  readonly events: readonly ReplaySessionEvent[];
   dispose(): void;
 }
 
@@ -207,7 +214,7 @@ export async function loadReplayFixture(id: ReplaySourceId): Promise<LoadedRepla
     program: programSnapshotSchema.parse(frame.program),
     radar: radarSnapshotSchema.parse(frame.radar),
   }));
-  const events = parseJsonLines<ReplayControllerEvent>(
+  const events = parseJsonLines<ReplaySessionEvent>(
     new TextDecoder().decode(eventsBytes),
     `${id}/events`,
   );
@@ -229,42 +236,45 @@ export async function loadReplayFixture(id: ReplaySourceId): Promise<LoadedRepla
     }
   }
 
-  const session = createReplayController<AcceptanceReplayFrame>({
-    frames,
-    events,
-    rebuild: async (targetCaptureIndex, signal) => {
-      const expected = frames[targetCaptureIndex]!;
-      const response = await fetch('/__local/replay-prefix', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        cache: 'no-store',
-        signal,
-        body: JSON.stringify({ sourceId: id, targetSequence: expected.cursor.sequence }),
-      });
-      if (!response.ok) {
-        throw new Error(`Replay prefix rebuild failed (${response.status})`);
-      }
-      const rebuilt = (await response.json()) as {
-        readonly targetSequence: number;
-        readonly program: ProgramSnapshot;
-        readonly radar: RadarSnapshot;
-      };
-      const snapshots = {
-        program: programSnapshotSchema.parse(rebuilt.program),
-        radar: radarSnapshotSchema.parse(rebuilt.radar),
-      };
-      if (
-        rebuilt.targetSequence !== expected.cursor.sequence ||
-        canonicalJson(snapshots) !==
-          canonicalJson({ program: expected.program, radar: expected.radar })
-      ) {
-        throw new Error(
-          `Replay prefix output drift at source sequence ${expected.cursor.sequence}`,
-        );
-      }
-      return { ...expected, ...snapshots };
+  const session = createReplaySession<AcceptanceReplayFrame>(
+    {
+      frames,
+      events,
+      rebuild: async (targetCaptureIndex, signal) => {
+        const expected = frames[targetCaptureIndex]!;
+        const response = await fetch('/__local/replay-prefix', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          cache: 'no-store',
+          signal,
+          body: JSON.stringify({ sourceId: id, targetSequence: expected.cursor.sequence }),
+        });
+        if (!response.ok) {
+          throw new Error(`Replay prefix rebuild failed (${response.status})`);
+        }
+        const rebuilt = (await response.json()) as {
+          readonly targetSequence: number;
+          readonly program: ProgramSnapshot;
+          readonly radar: RadarSnapshot;
+        };
+        const snapshots = {
+          program: programSnapshotSchema.parse(rebuilt.program),
+          radar: radarSnapshotSchema.parse(rebuilt.radar),
+        };
+        if (
+          rebuilt.targetSequence !== expected.cursor.sequence ||
+          canonicalJson(snapshots) !==
+            canonicalJson({ program: expected.program, radar: expected.radar })
+        ) {
+          throw new Error(
+            `Replay prefix output drift at source sequence ${expected.cursor.sequence}`,
+          );
+        }
+        return { ...expected, ...snapshots };
+      },
     },
-  });
+    replayScheduler,
+  );
 
   return {
     id,

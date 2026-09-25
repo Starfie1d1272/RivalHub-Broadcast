@@ -8,9 +8,7 @@ import {
   RadarPresentation,
   RADAR_PRESENTATION,
   SMOKE_PRESENTATION_DURATION_SECONDS,
-  grenadeIcon,
   isMultiLayerGeometry,
-  isActiveSmoke,
   layerOpacity,
   smokeRemaining,
   type RadarSide,
@@ -23,22 +21,30 @@ import {
   radarPointInsideViewport,
   type RadarCanvasPlacement,
 } from './canvas-geometry';
-import { effectCentroid, smokeContour, smokeLobes } from './effect-geometry';
+import { smokeContour, smokeLobes } from './effect-geometry';
 import './radar.css';
 
 export interface RadarProps {
   readonly client?: LocalChannelClient<'radar'> | undefined;
   readonly snapshot?: RadarSnapshot | null | undefined;
   readonly zoomMode?: 'full-map' | 'auto' | undefined;
+  readonly presentationRevision?: number | undefined;
 }
 
 /** React owns the surface. Accepted channel samples and rAF own all motion. */
-export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
+export function Radar({
+  client,
+  snapshot,
+  zoomMode = 'full-map',
+  presentationRevision = 0,
+}: RadarProps) {
   const canvas = useRef<HTMLCanvasElement>(null);
   const currentSnapshot = useRef(snapshot);
+  const currentPresentationRevision = useRef(presentationRevision);
   useEffect(() => {
     currentSnapshot.current = snapshot;
-  }, [snapshot]);
+    currentPresentationRevision.current = presentationRevision;
+  }, [presentationRevision, snapshot]);
   useEffect(() => {
     const element = canvas.current;
     const context = element?.getContext('2d');
@@ -49,6 +55,19 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
     let disposed = false;
     let lastStatic: RadarSnapshot | null | undefined;
     let lastConnection: unknown;
+    let lastPresentationRevision = currentPresentationRevision.current;
+    const updateUtilityPhaseDataset = () => {
+      let phases = '';
+      let projectiles = '';
+      for (const marker of model.grenades.values()) {
+        phases += `${phases.length === 0 ? '' : ','}${marker.source.sourceEntityId}:${marker.phase}`;
+        if (marker.phase === 'projectile') {
+          projectiles += `${projectiles.length === 0 ? '' : ','}${marker.source.sourceEntityId}`;
+        }
+      }
+      element.dataset.radarUtilityPhases = phases;
+      element.dataset.radarProjectileIds = projectiles;
+    };
     const imageFor = (url: string): HTMLImageElement | null => {
       let image = images.get(url);
       if (!image) {
@@ -64,14 +83,22 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       if (state === lastConnection) return;
       lastConnection = state;
       model.accept(state.state === 'live' ? state.current : null, performance.now(), false);
+      updateUtilityPhaseDataset();
     };
     const unsubscribe = client?.subscribe(accept);
     accept();
     const render = (now: number) => {
       if (disposed) return;
+      if (!client && lastPresentationRevision !== currentPresentationRevision.current) {
+        model.reset();
+        lastPresentationRevision = currentPresentationRevision.current;
+        lastStatic = undefined;
+        updateUtilityPhaseDataset();
+      }
       if (!client && lastStatic !== currentSnapshot.current) {
         lastStatic = currentSnapshot.current;
         model.accept(lastStatic ?? null, now);
+        updateUtilityPhaseDataset();
       }
       model.tick(now, zoomMode === 'auto');
       const size = Math.max(
@@ -131,6 +158,9 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
       };
       const geometry = model.geometry;
       const payload = model.snapshot?.payload;
+      element.dataset.radarSampleSequence = String(
+        model.snapshot?.cursor.programReceiveSequence ?? '',
+      );
       const multiLayer = geometry !== null && isMultiLayerGeometry(geometry);
       const singleAsset =
         geometry !== null && !multiLayer ? getRadarMapAsset(geometry.mapKey, 'overview') : null;
@@ -201,15 +231,49 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         : 'loading';
       element.dataset.radarVisibleFloors = multiLayer ? 'upper,lower' : model.layer;
       element.dataset.radarPlayers = String(model.players.size);
-      element.dataset.radarTrails = String(
-        [...model.grenades.values()].reduce((n, g) => n + g.trail.length, 0),
-      );
-      element.dataset.radarSmokes = String(
-        [...model.grenades.values()].filter((marker) => isActiveSmoke(marker.source)).length,
-      );
+      let trailPoints = 0;
+      let projectiles = 0;
+      let smokeEffects = 0;
+      let smokeProjectiles = 0;
+      let infernoEffects = 0;
+      let firebombProjectiles = 0;
+      for (const marker of model.grenades.values()) {
+        trailPoints += marker.trail.length;
+        if (marker.phase === 'projectile') {
+          projectiles += 1;
+          if (marker.source.kind === 'smoke') smokeProjectiles += 1;
+          if (marker.source.kind === 'firebomb') firebombProjectiles += 1;
+        }
+        if (marker.phase === 'effect' && marker.source.kind === 'smoke') smokeEffects += 1;
+        if (marker.phase === 'effect' && marker.source.kind === 'inferno') infernoEffects += 1;
+      }
+      element.dataset.radarTrails = String(trailPoints);
+      element.dataset.radarProjectiles = String(projectiles);
+      element.dataset.radarSmokeProjectiles = String(smokeProjectiles);
+      element.dataset.radarSmokes = String(smokeEffects);
+      element.dataset.radarFirebombProjectiles = String(firebombProjectiles);
+      element.dataset.radarInfernos = String(infernoEffects);
       element.dataset.radarFlamePoints = String(
         payload?.grenades.reduce((count, grenade) => count + grenade.flames.length, 0) ?? 0,
       );
+      const observedPlayer = payload?.observedPlayerSourceId;
+      const observedMarker = observedPlayer == null ? undefined : model.players.get(observedPlayer);
+      if (observedPlayer != null && observedMarker !== undefined) {
+        element.dataset.radarObservedPlayer = observedPlayer;
+        element.dataset.radarObservedMotion = [
+          observedMarker.previousTarget.x,
+          observedMarker.previousTarget.y,
+          observedMarker.target.x,
+          observedMarker.target.y,
+          observedMarker.x,
+          observedMarker.y,
+        ]
+          .map((value) => value.toFixed(6))
+          .join(',');
+      } else {
+        delete element.dataset.radarObservedPlayer;
+        delete element.dataset.radarObservedMotion;
+      }
       ctx.save();
       ctx.beginPath();
       ctx.rect(
@@ -281,66 +345,91 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
         // Eon (ISC) and Lexogrine (MIT) informed the state split; this Canvas
         // implementation is original and keeps RivalHub's calibrated truth.
         let flameCount = 0;
-        for (const source of payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
-          if (source.flames.length === 0) continue;
-          const flamePoints: Array<{
-            readonly x: number;
-            readonly y: number;
-            readonly radius: number;
-            readonly opacity: number;
-          }> = [];
-          for (const flame of source.flames) {
-            if (++flameCount > RADAR_PRESENTATION.maxFlames) break;
+        const drawInferno = (
+          marker: typeof model.grenades extends Map<string, infer V> ? V : never,
+          alpha: number,
+        ) => {
+          if (marker.source.kind !== 'inferno' || marker.source.flames.length === 0) return;
+          let totalX = 0;
+          let totalY = 0;
+          let totalOpacity = 0;
+          let pointCount = 0;
+          let processedFlames = 0;
+          const worldRadius = projectWorldRadius(52, geometry) ?? 0;
+          ctx.save();
+          ctx.filter = 'blur(5px)';
+          ctx.fillStyle = '#e85f2f';
+          for (const flame of marker.source.flames) {
+            if (flameCount >= RADAR_PRESENTATION.maxFlames) break;
+            flameCount += 1;
+            processedFlames += 1;
             const projected = projectWorldPosition(flame.position, geometry);
             if (!projected || projected.outOfBounds) continue;
             const point = pointAt(projected);
             if (point === null) continue;
-            const worldRadius = projectWorldRadius(52, geometry) ?? 0;
             const radius = Math.max(8, Math.min(18, radiusAt(worldRadius, projected.layer)));
-            flamePoints.push({
-              x: point.x,
-              y: point.y,
-              radius,
-              opacity: layerOpacity(projected, model.layer),
-            });
-          }
-          if (flamePoints.length === 0) continue;
-
-          ctx.save();
-          ctx.filter = 'blur(5px)';
-          ctx.fillStyle = '#e85f2f';
-          for (const flame of flamePoints) {
-            ctx.globalAlpha = flame.opacity * 0.46;
-            circle(flame.x, flame.y, flame.radius * 1.45, '#e85f2f');
+            const opacity = layerOpacity(projected, model.layer);
+            totalX += point.x;
+            totalY += point.y;
+            totalOpacity += opacity;
+            pointCount += 1;
+            ctx.globalAlpha = alpha * opacity * 0.46;
+            circle(point.x, point.y, radius * 1.45, '#e85f2f');
           }
           ctx.filter = 'none';
           ctx.globalCompositeOperation = 'lighter';
-          for (const flame of flamePoints) {
-            ctx.globalAlpha = flame.opacity * 0.58;
-            circle(flame.x, flame.y, flame.radius * 0.9, '#f49b3d');
-            ctx.globalAlpha = flame.opacity * 0.34;
-            circle(flame.x, flame.y, flame.radius * 0.42, '#ffd16a');
+          let drawnFlames = 0;
+          for (const flame of marker.source.flames) {
+            if (drawnFlames >= processedFlames) break;
+            drawnFlames += 1;
+            const projected = projectWorldPosition(flame.position, geometry);
+            if (!projected || projected.outOfBounds) continue;
+            const point = pointAt(projected);
+            if (point === null) continue;
+            const radius = Math.max(8, Math.min(18, radiusAt(worldRadius, projected.layer)));
+            const opacity = layerOpacity(projected, model.layer);
+            ctx.globalAlpha = alpha * opacity * 0.58;
+            circle(point.x, point.y, radius * 0.9, '#f49b3d');
+            ctx.globalAlpha = alpha * opacity * 0.34;
+            circle(point.x, point.y, radius * 0.42, '#ffd16a');
           }
           ctx.globalCompositeOperation = 'source-over';
-          const centroid = effectCentroid(flamePoints);
-          if (centroid !== null) {
-            ctx.globalAlpha =
-              flamePoints.reduce((sum, flame) => sum + flame.opacity, 0) / flamePoints.length / 2.5;
+          if (pointCount > 0) {
             const ownerSide =
-              payload.players.find((player) => player.sourcePlayerId === source.ownerSourceId)
-                ?.side ?? 'unknown';
-            circle(centroid.x, centroid.y, 5, sideColor(ownerSide));
+              payload.players.find(
+                (player) => player.sourcePlayerId === marker.source.ownerSourceId,
+              )?.side ?? 'unknown';
+            ctx.globalAlpha = (totalOpacity / pointCount / 2.5) * alpha;
+            circle(totalX / pointCount, totalY / pointCount, 5, sideColor(ownerSide));
           }
           ctx.restore();
+        };
+        for (const marker of model.grenades.values()) {
+          if (marker.phase !== 'effect' || marker.source.kind !== 'inferno') continue;
+          drawInferno(
+            marker,
+            Math.min(
+              1,
+              Math.max(0, (now - marker.phaseStartedAt) / RADAR_PRESENTATION.infernoEnterMs),
+            ),
+          );
+        }
+        for (const exit of model.exits.values()) {
+          if (exit.marker.phase === 'effect' && exit.marker.source.kind === 'inferno') {
+            drawInferno(exit.marker, Math.max(0, (exit.until - now) / exit.durationMs));
+          }
         }
 
-        for (const marker of model.grenades.values()) {
-          if (!isActiveSmoke(marker.source)) continue;
+        const drawSmoke = (
+          marker: typeof model.grenades extends Map<string, infer V> ? V : never,
+          alpha: number,
+        ) => {
+          if (marker.source.kind !== 'smoke') return;
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
-          if (point === null) continue;
+          if (point === null) return;
           const x = point.x;
           const y = point.y;
-          const opacity = layerOpacity(marker.target, model.layer);
+          const opacity = layerOpacity(marker.target, model.layer) * alpha;
           const radius = radiusAt(projectWorldRadius(144, geometry) ?? 0, marker.target.layer);
           const contour = smokeContour(marker.source.sourceEntityId, radius).map((offset) => ({
             x: x + offset.x,
@@ -403,36 +492,61 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             ctx.stroke();
           }
           ctx.restore();
+        };
+        for (const marker of model.grenades.values()) {
+          if (marker.phase !== 'effect' || marker.source.kind !== 'smoke') continue;
+          drawSmoke(
+            marker,
+            Math.min(
+              1,
+              Math.max(0, (now - marker.phaseStartedAt) / RADAR_PRESENTATION.smokeEnterMs),
+            ),
+          );
+        }
+        for (const exit of model.exits.values()) {
+          if (exit.marker.phase === 'effect' && exit.marker.source.kind === 'smoke') {
+            drawSmoke(exit.marker, Math.max(0, (exit.until - now) / exit.durationMs));
+          }
         }
         const drawTrail = (
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
           alpha: number,
         ) => {
-          const trail = marker.trail
-            .map((point) => pointAt(point, marker.target.layer))
-            .filter((point): point is NonNullable<typeof point> => point !== null);
-          if (trail.length < 2) return;
+          if (marker.trail.length < 2) return;
           ctx.save();
-          ctx.globalAlpha = alpha * 0.72;
           ctx.strokeStyle = sideColor(marker.side);
           ctx.lineWidth = 2;
           ctx.lineCap = 'round';
           ctx.setLineDash([7, 6]);
-          ctx.beginPath();
-          trail.forEach((point, index) =>
-            index ? ctx.lineTo(point.x, point.y) : ctx.moveTo(point.x, point.y),
-          );
-          ctx.stroke();
+          for (let index = 1; index < marker.trail.length; index += 1) {
+            const before = pointAt(marker.trail[index - 1]!, marker.target.layer);
+            const after = pointAt(marker.trail[index]!, marker.target.layer);
+            if (before === null || after === null) continue;
+            const tailOpacity = 0.2 + 0.8 * (index / (marker.trail.length - 1));
+            ctx.globalAlpha = alpha * 0.72 * tailOpacity;
+            ctx.beginPath();
+            ctx.moveTo(before.x, before.y);
+            ctx.lineTo(after.x, after.y);
+            ctx.stroke();
+          }
           ctx.restore();
         };
         for (const exit of model.exits.values()) {
-          const alpha = Math.max(0, (exit.until - now) / RADAR_PRESENTATION.exitMs);
+          const alpha = Math.max(0, (exit.until - now) / exit.durationMs);
           drawTrail(exit.marker, alpha);
           const exitPoint = pointAt(exit.marker.target);
           if (exitPoint === null) continue;
 
           const kind = exit.marker.source.kind;
-          if (kind === 'frag' || kind === 'hegrenade') {
+          if (exit.marker.phase === 'projectile' && kind === 'firebomb') {
+            ctx.save();
+            ctx.globalAlpha = alpha * layerOpacity(exit.marker.target, model.layer);
+            const icon =
+              exit.includeProjectileIcon && exit.marker.iconUrl && imageFor(exit.marker.iconUrl);
+            if (icon) ctx.drawImage(icon, exitPoint.x - 14, exitPoint.y - 14, 28, 28);
+            ctx.restore();
+          }
+          if (exit.marker.phase === 'projectile' && (kind === 'frag' || kind === 'hegrenade')) {
             ctx.save();
             ctx.globalAlpha = alpha * 0.8;
             ctx.strokeStyle = '#f3f6fa';
@@ -449,7 +563,7 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             continue;
           }
 
-          if (kind === 'flashbang') {
+          if (exit.marker.phase === 'projectile' && kind === 'flashbang') {
             ctx.save();
             ctx.translate(exitPoint.x, exitPoint.y);
             ctx.globalAlpha = alpha * 0.88;
@@ -468,16 +582,30 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
             circle(0, 0, 6 + (1 - alpha) * 4, '#ffffff');
             ctx.restore();
           }
+          if (
+            exit.marker.phase === 'projectile' &&
+            exit.includeProjectileIcon &&
+            kind !== 'firebomb' &&
+            kind !== 'frag' &&
+            kind !== 'hegrenade' &&
+            kind !== 'flashbang'
+          ) {
+            const icon = exit.marker.iconUrl && imageFor(exit.marker.iconUrl);
+            ctx.save();
+            ctx.globalAlpha = alpha * layerOpacity(exit.marker.target, model.layer);
+            if (icon) ctx.drawImage(icon, exitPoint.x - 14, exitPoint.y - 14, 28, 28);
+            ctx.restore();
+          }
         }
         for (const marker of model.grenades.values()) {
-          if (!marker.airborne) continue;
+          if (marker.phase !== 'projectile') continue;
           drawTrail(marker, 1);
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
           if (point === null) continue;
           const x = point.x;
           const y = point.y;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          const url = grenadeIcon(marker.source.kind, marker.side);
+          const url = marker.iconUrl;
           const icon = url && imageFor(url);
           if (icon) ctx.drawImage(icon, x - 14, y - 14, 28, 28);
           else {
@@ -609,11 +737,17 @@ export function Radar({ client, snapshot, zoomMode = 'full-map' }: RadarProps) {
   return <canvas aria-label="比赛雷达" className="radar" ref={canvas} />;
 }
 
-export function RadarWidget({ radarClient, radarSnapshot, settings }: RadarHudWidgetRendererProps) {
+export function RadarWidget({
+  radarClient,
+  radarSnapshot,
+  settings,
+  presentationRevision,
+}: RadarHudWidgetRendererProps) {
   return (
     <Radar
       client={radarClient}
       snapshot={radarSnapshot}
+      presentationRevision={presentationRevision}
       zoomMode={settings.settings.zoomMode === 'auto' ? 'auto' : 'full-map'}
     />
   );

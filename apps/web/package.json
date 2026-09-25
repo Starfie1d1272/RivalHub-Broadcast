@@ -13,6 +13,7 @@
     "@rivalhub-broadcast/core": "workspace:*",
     "@rivalhub-broadcast/hud-config": "workspace:*",
     "@rivalhub-broadcast/protocol": "workspace:*",
+    "@rivalhub-broadcast/replay": "workspace:*",
     "react": "catalog:",
     "react-dom": "catalog:",
     "@rivalhub-broadcast/radar": "workspace:*"
