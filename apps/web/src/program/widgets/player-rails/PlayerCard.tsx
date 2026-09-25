@@ -1,6 +1,7 @@
 import type { CSSProperties } from 'react';
 
 import { observerHotkeyLabel } from '../../observer-hotkey';
+import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
 import {
   weaponVisualRole,
   type PlayerCardPresentation,
@@ -340,6 +341,7 @@ export function PlayerCard({
     >
       {avatar}
       {body}
+      <PlayerStatusEffects anchor={physicalSide} state={player.statusEffects} />
       {endcap}
     </article>
   );
