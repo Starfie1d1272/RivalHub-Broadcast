@@ -2,13 +2,55 @@
  * (MIT). Angular shell, series pips and objective choreography follow the user-provided reference.
  * Team binding and all gameplay progress remain owned by the existing presentation join/Core. */
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ObjectiveCenter, ObjectiveFuse } from './ObjectiveCenter';
 import {
   buildMatchHeaderPresentation,
   formatMatchHeaderScore,
   type MatchHeaderTeamPresentation,
 } from './presentation';
+
+const PANEL_EXIT_MS = 160;
+
+type PanelMotionPhase = 'enter' | 'steady' | 'exit';
+
+function usePanelPresence<T>(value: T | null, exitMs = PANEL_EXIT_MS) {
+  const [rendered, setRendered] = useState<T | null>(value);
+  const [phase, setPhase] = useState<PanelMotionPhase>(value === null ? 'steady' : 'enter');
+  const wasPresent = useRef(value !== null);
+  const firstEffect = useRef(true);
+
+  useEffect(() => {
+    if (firstEffect.current) {
+      firstEffect.current = false;
+      return;
+    }
+
+    if (value !== null) {
+      const entering = !wasPresent.current;
+      wasPresent.current = true;
+      setRendered(value);
+      setPhase(entering ? 'enter' : 'steady');
+      return;
+    }
+
+    if (!wasPresent.current) {
+      setRendered(null);
+      setPhase('steady');
+      return;
+    }
+
+    wasPresent.current = false;
+    setPhase('exit');
+    const timer = window.setTimeout(() => {
+      setRendered(null);
+      setPhase('steady');
+    }, exitMs);
+    return () => window.clearTimeout(timer);
+  }, [exitMs, value]);
+
+  return { phase, value: rendered } as const;
+}
 
 function TeamLogo({ team }: { readonly team: MatchHeaderTeamPresentation }) {
   const [failed, setFailed] = useState(false);
@@ -121,27 +163,64 @@ export function TopScoreBar({ snapshot, presentationRevision = 0 }: HudWidgetRen
           presentationRevision={presentationRevision}
         />
       ) : null}
-      {timeout?.owner === 'a' ? (
-        <TimeoutPanel timeout={timeout} side="a" ownerSide={p.teamA.side} />
+      <MatchHeaderPanels
+        key={`panels:${presentationRevision}`}
+        aliveCount={p.objective.aliveCount}
+        teamASide={p.teamA.side}
+        teamBSide={p.teamB.side}
+        timeout={timeout}
+      />
+    </section>
+  );
+}
+
+function MatchHeaderPanels({
+  aliveCount,
+  teamASide,
+  teamBSide,
+  timeout,
+}: {
+  readonly aliveCount: string | null;
+  readonly teamASide: MatchHeaderTeamPresentation['side'];
+  readonly teamBSide: MatchHeaderTeamPresentation['side'];
+  readonly timeout: ReturnType<typeof buildMatchHeaderPresentation>['timeoutPanel'];
+}) {
+  const timeoutPresence = usePanelPresence(timeout);
+  const alivePresence = usePanelPresence(aliveCount);
+  const visibleTimeout = timeoutPresence.value;
+  const visibleAlive = alivePresence.value;
+
+  return (
+    <>
+      {visibleTimeout?.owner === 'a' ? (
+        <TimeoutPanel
+          motionPhase={timeoutPresence.phase}
+          ownerSide={teamASide}
+          side="a"
+          timeout={visibleTimeout}
+        />
       ) : null}
-      {timeout?.owner === 'b' ? (
-        <TimeoutPanel timeout={timeout} side="b" ownerSide={p.teamB.side} />
+      {visibleTimeout?.owner === 'b' ? (
+        <TimeoutPanel
+          motionPhase={timeoutPresence.phase}
+          ownerSide={teamBSide}
+          side="b"
+          timeout={visibleTimeout}
+        />
       ) : null}
-      {p.objective.aliveCount === null ? null : (
+      {visibleAlive === null ? null : (
         <div
+          aria-hidden={alivePresence.phase === 'exit'}
+          aria-label={`存活人数 ${visibleAlive}`}
           className="match-header__alive-matchup"
-          aria-label={`存活人数 ${p.objective.aliveCount}`}
+          data-motion-phase={alivePresence.phase}
         >
-          <strong data-side={p.teamA.side ?? 'unknown'}>
-            {p.objective.aliveCount.split('v')[0]}
-          </strong>
+          <strong data-side={teamASide ?? 'unknown'}>{visibleAlive.split('v')[0]}</strong>
           <span>VS</span>
-          <strong data-side={p.teamB.side ?? 'unknown'}>
-            {p.objective.aliveCount.split('v')[1]}
-          </strong>
+          <strong data-side={teamBSide ?? 'unknown'}>{visibleAlive.split('v')[1]}</strong>
         </div>
       )}
-    </section>
+    </>
   );
 }
 
@@ -149,10 +228,12 @@ function TimeoutPanel({
   timeout,
   side,
   ownerSide,
+  motionPhase,
 }: {
   readonly timeout: NonNullable<ReturnType<typeof buildMatchHeaderPresentation>['timeoutPanel']>;
   readonly side: 'a' | 'b';
   readonly ownerSide: MatchHeaderTeamPresentation['side'];
+  readonly motionPhase: PanelMotionPhase;
 }) {
   return (
     <div
@@ -160,6 +241,8 @@ function TimeoutPanel({
       data-timeout-owner={side}
       data-side={ownerSide ?? 'unknown'}
       data-timeout-panel="true"
+      data-motion-phase={motionPhase}
+      aria-hidden={motionPhase === 'exit'}
       aria-label="TACTICAL TIMEOUT"
     >
       <strong className="match-header__timeout-label">TACTICAL TIMEOUT</strong>
