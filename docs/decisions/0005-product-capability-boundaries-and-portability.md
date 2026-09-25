@@ -97,6 +97,8 @@ Lookahead source adapter ───────┘            │
 
 如果某项业务需要 RivalHub 提供 display name、avatar、branding、canonical roster 或 lifecycle，它应作为可验证的赛事上下文输入参与 identity/enrichment，而不是成为通用时间轴和 cue 算法的隐式前提。
 
+真实回放 acceptance fixture 中，GSI player identity 与 telemetry 保持原样；display avatar 和 team logo 属于单独的 fixture-local presentation enrichment，以 Steam64 / capture team name 显式关联并记录来源/hash。一次性 Steam Web API 导入只 materialize 本地 fixture，不参与 replay/runtime，也不改写 GSI 昵称或比赛事实。
+
 ### 5. 三条能力线的 authority 不相同
 
 #### 赛事与实时数据

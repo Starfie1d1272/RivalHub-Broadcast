@@ -13,13 +13,23 @@ import {
 // server cvar or a claim about the exact volumetric visibility/collision field.
 export const SMOKE_PRESENTATION_DURATION_SECONDS = 20;
 export const RADAR_PRESENTATION = Object.freeze({
-  smoothingMs: 55,
+  correctionSmoothingMs: 80,
+  maxExtrapolationMs: 100,
+  utilityVelocityEpsilon: 0.01,
+  smokeStationaryWorldThreshold: 6,
+  smokeStationarySamples: 2,
   teleportBaseWorld: 160,
   teleportSpeedWorldPerSecond: 1100,
   sampleGapMs: 500,
   trailPoints: 12,
-  trailMs: 450,
-  exitMs: 160,
+  trailDistanceThreshold: 0.002,
+  trailSampleIntervalMs: 100,
+  projectileExitMs: 180,
+  smokeEnterMs: 160,
+  smokeExitMs: 200,
+  infernoEnterMs: 120,
+  infernoExitMs: 160,
+  exitMs: 180,
   damageMs: 220,
   shootingMs: 110,
   maxPlayers: 64,
@@ -33,6 +43,7 @@ type Player = RadarSnapshot['payload']['players'][number];
 type Grenade = RadarSnapshot['payload']['grenades'][number];
 type Vector = NonNullable<Player['position']>;
 export type RadarSide = Player['side'];
+export type RadarUtilityPhase = 'projectile' | 'effect' | 'terminal';
 export interface TrailPoint {
   x: number;
   y: number;
@@ -42,25 +53,38 @@ export interface Motion {
   x: number;
   y: number;
   angle: number;
+  previousTarget: { readonly x: number; readonly y: number };
   target: RadarProjectedPosition;
   targetAngle: number;
   world: Vector;
+  previousSampleAt: number;
   sampledAt: number;
+  velocity: { readonly x: number; readonly y: number };
+  interpolationDurationMs: number;
 }
 export interface PlayerMarker extends Motion {
   source: Player;
   damageUntil: number;
   shootingUntil: number;
+  deathPosition: { readonly x: number; readonly y: number } | null;
 }
 export interface GrenadeMarker extends Motion {
   source: Grenade;
   side: RadarSide;
   trail: TrailPoint[];
-  airborne: boolean;
+  phase: RadarUtilityPhase;
+  phaseStartedAt: number;
+  iconUrl: string | null;
+  previousPosition: Vector;
+  stationarySampleCount: number;
+  positionAvailable: boolean;
 }
 export interface GrenadeExit {
   marker: GrenadeMarker;
+  startedAt: number;
   until: number;
+  durationMs: number;
+  includeProjectileIcon: boolean;
 }
 
 export function shortestAngle(from: number, to: number): number {
@@ -118,6 +142,11 @@ export function layerOpacity(point: RadarProjectedPosition, primary: RadarLayer)
   if (point.layer === 'unknown' || primary === 'unknown') return 0.76;
   return point.layer === primary ? 0.88 : 0.62;
 }
+export function radarPlayerMarkerKind(lifeState: Player['lifeState']): 'alive' | 'dead' | null {
+  if (lifeState === 'alive') return 'alive';
+  if (lifeState === 'dead') return 'dead';
+  return null;
+}
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;
   return d ? (Math.atan2(d.y, d.x) * 180) / Math.PI : 0;
@@ -148,10 +177,40 @@ function motion(world: Vector, point: RadarProjectedPosition, angle: number, now
     x: point.x,
     y: point.y,
     angle,
+    previousTarget: { x: point.x, y: point.y },
     target: point,
     targetAngle: angle,
     world,
+    previousSampleAt: now,
     sampledAt: now,
+    velocity: { x: 0, y: 0 },
+    interpolationDurationMs: 0,
+  };
+}
+function retarget(
+  previous: Motion,
+  world: Vector,
+  point: RadarProjectedPosition,
+  angle: number,
+  now: number,
+): Motion {
+  const sampleIntervalMs = Math.max(0, now - previous.sampledAt);
+  return {
+    ...previous,
+    previousTarget: { x: previous.x, y: previous.y },
+    target: point,
+    targetAngle: angle,
+    world,
+    previousSampleAt: previous.sampledAt,
+    sampledAt: now,
+    velocity:
+      sampleIntervalMs > 0
+        ? {
+            x: (point.x - previous.target.x) / sampleIntervalMs,
+            y: (point.y - previous.target.y) / sampleIntervalMs,
+          }
+        : { x: 0, y: 0 },
+    interpolationDurationMs: Math.max(RADAR_PRESENTATION.correctionSmoothingMs, sampleIntervalMs),
   };
 }
 function isShooting(before: Player, after: Player): boolean {
@@ -194,13 +253,95 @@ export function grenadeIcon(kind: string | null, side: RadarSide = 'unknown'): s
   const item = resolveCs2ItemByGsiName(name);
   return item.kind === 'known' ? item.asset.outputPath : null;
 }
+function velocityMagnitude(g: Grenade): number | null {
+  return g.velocity === null ? null : Math.hypot(g.velocity.x, g.velocity.y, g.velocity.z);
+}
+
+export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
+  const speed = velocityMagnitude(g);
+  const moving = speed !== null && speed > RADAR_PRESENTATION.utilityVelocityEpsilon;
+  switch (g.kind) {
+    case 'smoke':
+      if (
+        g.effectTimeSeconds !== null &&
+        g.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
+      )
+        return 'terminal';
+      if (moving) return 'projectile';
+      return g.effectTimeSeconds !== null && g.effectTimeSeconds > 0 ? 'effect' : 'projectile';
+    case 'firebomb':
+      return moving ? 'projectile' : 'terminal';
+    case 'inferno':
+      return g.flames.length > 0 ? 'effect' : 'terminal';
+    default:
+      return moving ? 'projectile' : 'terminal';
+  }
+}
 export function isActiveSmoke(g: Grenade): boolean {
+  return g.kind === 'smoke' && radarUtilityPhase(g) === 'effect';
+}
+
+function worldDisplacement(before: Vector, after: Vector): number {
+  return Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z);
+}
+
+function transitionSmokePhase(
+  previousPhase: RadarUtilityPhase,
+  source: Grenade,
+  stationarySampleCount: number,
+): RadarUtilityPhase {
+  if (previousPhase === 'terminal') return 'terminal';
+  if (
+    source.effectTimeSeconds !== null &&
+    source.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
+  )
+    return 'terminal';
+  if (previousPhase === 'effect') return 'effect';
+  if (
+    (source.effectTimeSeconds !== null && source.effectTimeSeconds > 0) ||
+    stationarySampleCount >= RADAR_PRESENTATION.smokeStationarySamples
+  )
+    return 'effect';
+  return 'projectile';
+}
+
+function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): old is GrenadeMarker {
   return (
-    g.kind === 'smoke' &&
-    g.position !== null &&
-    ((g.effectTimeSeconds !== null && g.effectTimeSeconds >= 0) ||
-      (g.velocity !== null && Math.hypot(g.velocity.x, g.velocity.y, g.velocity.z) === 0))
+    source.kind === 'smoke' &&
+    old?.source.kind === 'smoke' &&
+    old.source.ownerSourceId === source.ownerSourceId &&
+    !(
+      old.source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds < old.source.lifetimeSeconds
+    )
   );
+}
+
+function exitDuration(marker: GrenadeMarker): number {
+  if (marker.phase === 'projectile') return RADAR_PRESENTATION.projectileExitMs;
+  if (marker.phase !== 'effect') return 0;
+  return marker.source.kind === 'smoke'
+    ? RADAR_PRESENTATION.smokeExitMs
+    : RADAR_PRESENTATION.infernoExitMs;
+}
+
+function presentationPosition(grenade: Grenade): Vector | null {
+  if (grenade.position !== null) return grenade.position;
+  if (grenade.kind !== 'inferno' || grenade.flames.length === 0) return null;
+  let x = 0;
+  let y = 0;
+  let z = 0;
+  for (const flame of grenade.flames) {
+    x += flame.position.x;
+    y += flame.position.y;
+    z += flame.position.z;
+  }
+  return {
+    x: x / grenade.flames.length,
+    y: y / grenade.flames.length,
+    z: z / grenade.flames.length,
+  };
 }
 
 /** All history is local presentation, bounded, and disposable; never a domain reducer. */
@@ -218,6 +359,23 @@ export class RadarPresentation {
   private lastFrame: number | null = null;
   private acceptedAt: number | null = null;
   private bombTerminalAt: number | null = null;
+
+  private beginExit(
+    id: string,
+    marker: GrenadeMarker,
+    now: number,
+    includeProjectileIcon = true,
+  ): void {
+    const durationMs = exitDuration(marker);
+    if (durationMs <= 0) return;
+    this.exits.set(id, {
+      marker,
+      startedAt: now,
+      until: now + durationMs,
+      durationMs,
+      includeProjectileIcon,
+    });
+  }
 
   reset(reason: 'unsupported-map' | 'stale' | 'awaiting' | null = null): void {
     this.snapshot = null;
@@ -256,9 +414,18 @@ export class RadarPresentation {
     this.diagnosticReason = null;
     const boundary = radarBoundary(snapshot);
     const layer = selectLayer(snapshot, geometry);
+    const previousSequence = this.snapshot?.cursor.programReceiveSequence;
+    const nextSequence = snapshot.cursor.programReceiveSequence;
+    const skippedSample =
+      previousSequence !== undefined &&
+      previousSequence !== null &&
+      nextSequence !== undefined &&
+      nextSequence !== null &&
+      nextSequence !== previousSequence + 1;
     if (
       reconnect ||
       this.boundary !== boundary ||
+      skippedSample ||
       (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs)
     )
       this.reset();
@@ -276,27 +443,69 @@ export class RadarPresentation {
     const currentPlayers = new Set<string>();
     for (const source of snapshot.payload.players.slice(0, RADAR_PRESENTATION.maxPlayers)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourcePlayerId;
-      currentPlayers.add(id);
       const old = this.players.get(id);
+      const projectedPoint = point && !point.outOfBounds ? point : null;
+      if (source.lifeState === 'dead') {
+        const deathPosition =
+          old?.source.lifeState === 'dead' && old.deathPosition !== null
+            ? old.deathPosition
+            : projectedPoint
+              ? { x: projectedPoint.x, y: projectedPoint.y }
+              : old
+                ? { x: old.target.x, y: old.target.y }
+                : null;
+        if (deathPosition === null) continue;
+        currentPlayers.add(id);
+        if (old?.source.lifeState === 'dead' && old.deathPosition !== null) {
+          this.players.set(id, { ...old, source, deathPosition: old.deathPosition });
+          continue;
+        }
+        const world = source.position ?? old?.world;
+        const target = projectedPoint ?? old?.target;
+        if (world === undefined || target === undefined) continue;
+        const baseMotion = old ?? motion(world, target, direction(source), now);
+        this.players.set(id, {
+          ...baseMotion,
+          source,
+          x: deathPosition.x,
+          y: deathPosition.y,
+          previousTarget: { ...deathPosition },
+          target,
+          targetAngle: baseMotion.angle,
+          world,
+          previousSampleAt: now,
+          sampledAt: now,
+          velocity: { x: 0, y: 0 },
+          interpolationDurationMs: 0,
+          damageUntil: 0,
+          shootingUntil: 0,
+          deathPosition,
+        });
+        continue;
+      }
+      if (!source.position || !projectedPoint) continue;
+      currentPlayers.add(id);
       const angle = direction(source);
       const continuous =
         old &&
-        !discontinuous(old, source.position, point, now) &&
+        !discontinuous(old, source.position, projectedPoint, now) &&
         old.source.lifeState === source.lifeState &&
         old.source.side === source.side &&
         snapshot.payload.coverage.allPlayers === 'present' &&
         this.snapshot?.payload.coverage.allPlayers === 'present';
       const next: PlayerMarker = {
-        ...(continuous ? old : motion(source.position, point, angle, now)),
+        ...(continuous
+          ? retarget(old, source.position, projectedPoint, angle, now)
+          : motion(source.position, projectedPoint, angle, now)),
         source,
-        target: point,
+        target: projectedPoint,
         targetAngle: angle,
         world: source.position,
         sampledAt: now,
         damageUntil: continuous ? old.damageUntil : 0,
         shootingUntil: continuous ? old.shootingUntil : 0,
+        deathPosition: null,
       };
       if (
         continuous &&
@@ -310,53 +519,113 @@ export class RadarPresentation {
       this.players.set(id, next);
     }
     for (const id of this.players.keys()) if (!currentPlayers.has(id)) this.players.delete(id);
+    const infernoEvidenceOwners = new Set(
+      snapshot.payload.grenades
+        .filter((grenade) => grenade.kind === 'inferno' && grenade.flames.length > 0)
+        .map((grenade) => grenade.ownerSourceId)
+        .filter((owner): owner is string => owner !== null),
+    );
     const currentGrenades = new Set<string>();
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
-      const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourceEntityId;
+      const old = this.grenades.get(id);
+      const world = presentationPosition(source);
+      if (world === null) {
+        if (sameSmokeLifecycle(old, source)) {
+          currentGrenades.add(id);
+          const phase = transitionSmokePhase(old.phase, source, 0);
+          if (old.phase !== phase) this.beginExit(id, old, now);
+          const activeExit = this.exits.get(id);
+          if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+          this.grenades.set(id, {
+            ...old,
+            source,
+            phase,
+            phaseStartedAt: old.phase === phase ? old.phaseStartedAt : now,
+            stationarySampleCount: 0,
+            positionAvailable: false,
+            trail: phase === 'projectile' ? old.trail : [],
+          });
+        }
+        continue;
+      }
+      const point = projectWorldPosition(world, geometry);
+      if (!point || point.outOfBounds) continue;
       currentGrenades.add(id);
-      this.exits.delete(id);
       const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
       const side = owner?.side ?? 'unknown';
-      const old = this.grenades.get(id);
       const continuous =
         old &&
         old.source.kind === source.kind &&
         old.source.ownerSourceId === source.ownerSourceId &&
-        !discontinuous(old, source.position, point, now) &&
+        old.positionAvailable &&
+        !discontinuous(old, world, point, now) &&
         !(
           old.source.lifetimeSeconds !== null &&
           source.lifetimeSeconds !== null &&
           source.lifetimeSeconds < old.source.lifetimeSeconds
         );
-      const airborne =
-        source.velocity !== null &&
-        !isActiveSmoke(source) &&
-        source.kind !== 'inferno' &&
-        Math.hypot(source.velocity.x, source.velocity.y, source.velocity.z) > 0;
+      const stationarySampleCount =
+        source.kind === 'smoke' &&
+        continuous &&
+        old.phase === 'projectile' &&
+        source.effectTimeSeconds !== null &&
+        worldDisplacement(old.previousPosition, world) <=
+          RADAR_PRESENTATION.smokeStationaryWorldThreshold
+          ? old.stationarySampleCount + 1
+          : 0;
+      const phase = sameSmokeLifecycle(old, source)
+        ? transitionSmokePhase(old.phase, source, stationarySampleCount)
+        : radarUtilityPhase(source);
+      if (old && old.phase !== phase) {
+        const infernoHandoff =
+          old.source.kind === 'firebomb' &&
+          old.phase === 'projectile' &&
+          source.ownerSourceId !== null &&
+          infernoEvidenceOwners.has(source.ownerSourceId);
+        this.beginExit(id, old, now, !infernoHandoff);
+      }
+      const activeExit = this.exits.get(id);
+      if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
       const trail =
-        continuous && airborne
-          ? old.trail.filter((p) => now - p.at <= RADAR_PRESENTATION.trailMs)
-          : [];
-      if (airborne) trail.push({ x: point.x, y: point.y, at: now });
+        continuous && old.phase === 'projectile' && phase === 'projectile' ? old.trail.slice() : [];
+      const lastTrailPoint = trail.at(-1);
+      if (
+        phase === 'projectile' &&
+        (lastTrailPoint === undefined ||
+          Math.hypot(point.x - lastTrailPoint.x, point.y - lastTrailPoint.y) >
+            RADAR_PRESENTATION.trailDistanceThreshold ||
+          now - lastTrailPoint.at > RADAR_PRESENTATION.trailSampleIntervalMs)
+      ) {
+        trail.push({ x: point.x, y: point.y, at: now });
+      }
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
       this.grenades.set(id, {
-        ...(continuous ? old : motion(source.position, point, 0, now)),
+        ...(continuous ? retarget(old, world, point, 0, now) : motion(world, point, 0, now)),
         source,
         side,
-        airborne,
+        phase,
+        phaseStartedAt: continuous && old.phase === phase ? old.phaseStartedAt : now,
+        iconUrl: grenadeIcon(source.kind, side),
         trail,
+        previousPosition: world,
+        stationarySampleCount: phase === 'projectile' ? stationarySampleCount : 0,
+        positionAvailable: true,
         target: point,
         targetAngle: 0,
-        world: source.position,
+        world,
         sampledAt: now,
       });
     }
     for (const [id, marker] of this.grenades)
       if (!currentGrenades.has(id)) {
-        if (marker.airborne) this.exits.set(id, { marker, until: now + RADAR_PRESENTATION.exitMs });
+        const infernoHandoff =
+          marker.source.kind === 'firebomb' &&
+          marker.phase === 'projectile' &&
+          marker.source.ownerSourceId !== null &&
+          infernoEvidenceOwners.has(marker.source.ownerSourceId);
+        this.beginExit(id, marker, now, !infernoHandoff);
         this.grenades.delete(id);
       }
     while (this.exits.size > RADAR_PRESENTATION.maxGrenades)
@@ -375,24 +644,54 @@ export class RadarPresentation {
   tick(now: number, autoZoom: boolean): void {
     const dt = this.lastFrame === null ? 0 : Math.max(0, Math.min(100, now - this.lastFrame));
     this.lastFrame = now;
-    const mix = 1 - Math.exp(-dt / RADAR_PRESENTATION.smoothingMs);
-    for (const marker of [...this.players.values(), ...this.grenades.values()]) {
-      marker.x += (marker.target.x - marker.x) * mix;
-      marker.y += (marker.target.y - marker.y) * mix;
-      marker.angle += shortestAngle(marker.angle, marker.targetAngle) * mix;
+    const mix = 1 - Math.exp(-dt / 180);
+    const updateMotion = (marker: Motion) => {
+      const elapsedMs = Math.max(0, now - marker.sampledAt);
+      const intervalMs = marker.interpolationDurationMs;
+      if (intervalMs > 0 && elapsedMs < intervalMs) {
+        const progress = elapsedMs / intervalMs;
+        marker.x = marker.previousTarget.x + (marker.target.x - marker.previousTarget.x) * progress;
+        marker.y = marker.previousTarget.y + (marker.target.y - marker.previousTarget.y) * progress;
+        marker.angle +=
+          shortestAngle(marker.angle, marker.targetAngle) *
+          Math.min(1, Math.max(0, Math.min(1, dt / RADAR_PRESENTATION.correctionSmoothingMs)));
+      } else {
+        const predictedMs = Math.min(
+          RADAR_PRESENTATION.maxExtrapolationMs,
+          Math.max(0, elapsedMs - intervalMs),
+        );
+        marker.x = marker.target.x + marker.velocity.x * predictedMs;
+        marker.y = marker.target.y + marker.velocity.y * predictedMs;
+        marker.angle = marker.targetAngle;
+      }
+    };
+    for (const marker of this.players.values()) {
+      if (marker.source.lifeState === 'dead') {
+        if (marker.deathPosition !== null) {
+          marker.x = marker.deathPosition.x;
+          marker.y = marker.deathPosition.y;
+        }
+        continue;
+      }
+      updateMotion(marker);
     }
+    for (const marker of this.grenades.values()) updateMotion(marker);
     for (const [id, exit] of this.exits) if (now >= exit.until) this.exits.delete(id);
-    for (const grenade of this.grenades.values())
-      grenade.trail = grenade.trail.filter((p) => now - p.at <= RADAR_PRESENTATION.trailMs);
-    const alive = [...this.players.values()].filter((p) => p.source.lifeState === 'alive');
     let x = 0.5;
     let y = 0.5;
     let scale = 1;
-    if (autoZoom && alive.length) {
-      const minX = Math.min(...alive.map((p) => p.target.x));
-      const maxX = Math.max(...alive.map((p) => p.target.x));
-      const minY = Math.min(...alive.map((p) => p.target.y));
-      const maxY = Math.max(...alive.map((p) => p.target.y));
+    let minX = Number.POSITIVE_INFINITY;
+    let maxX = Number.NEGATIVE_INFINITY;
+    let minY = Number.POSITIVE_INFINITY;
+    let maxY = Number.NEGATIVE_INFINITY;
+    for (const player of this.players.values()) {
+      if (player.source.lifeState !== 'alive') continue;
+      minX = Math.min(minX, player.target.x);
+      maxX = Math.max(maxX, player.target.x);
+      minY = Math.min(minY, player.target.y);
+      maxY = Math.max(maxY, player.target.y);
+    }
+    if (autoZoom && Number.isFinite(minX)) {
       scale = Math.max(
         1,
         Math.min(

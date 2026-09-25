@@ -1,4 +1,12 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import {
+  Fragment,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useSyncExternalStore,
+} from 'react';
 import type { PointerEvent } from 'react';
 
 import {
@@ -57,6 +65,9 @@ import {
   type HudWorkspace,
 } from './hud-console-state';
 import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
+import { loadReplayFixture, type LoadedReplayFixture, type ReplaySourceId } from './replay-fixture';
+import type { ReplaySessionSnapshot } from '@rivalhub-broadcast/replay';
+import type { AcceptanceReplayFrame } from './replay-fixture';
 import {
   HudConfigMutationError,
   mutateHudConfig,
@@ -72,6 +83,28 @@ const WORKSPACES: readonly { readonly id: HudWorkspace; readonly label: string }
   { id: 'layout', label: '布局' },
   { id: 'theme', label: '外观' },
 ];
+
+const EMPTY_REPLAY_SNAPSHOT: ReplaySessionSnapshot<AcceptanceReplayFrame> = {
+  current: null,
+  currentIndex: 0,
+  currentEventId: null,
+  presentationRevision: 0,
+  isPlaying: false,
+  isSeeking: false,
+  error: null,
+};
+
+function replayTimeLabel(elapsedUs: number): string {
+  const totalMs = Math.floor(elapsedUs / 1_000);
+  const minutes = Math.floor(totalMs / 60_000)
+    .toString()
+    .padStart(2, '0');
+  const seconds = Math.floor((totalMs % 60_000) / 1_000)
+    .toString()
+    .padStart(2, '0');
+  const milliseconds = (totalMs % 1_000).toString().padStart(3, '0');
+  return `${minutes}:${seconds}.${milliseconds}`;
+}
 
 function fixtureLabel(id: ProgramFixtureId): string {
   return id === 'awaiting-neutral' ? '等待数据' : PROGRAM_FIXTURE_LABELS[id];
@@ -143,8 +176,28 @@ export function HudConsolePage() {
   );
   const [lastValidTheme, setLastValidTheme] = useState<HudTheme>(themeDraft);
   const [selectedWidgetId, setSelectedWidgetId] = useState<HudWidgetId | null>(null);
-  const [previewSource, setPreviewSource] = useState<'fixture' | 'current-live'>('fixture');
+  const [previewSource, setPreviewSource] = useState<'fixture' | 'replay' | 'current-live'>(() =>
+    new URLSearchParams(window.location.search).get('mode') === 'replay' ? 'replay' : 'fixture',
+  );
   const [fixtureId, setFixtureId] = useState<ProgramFixtureId>(HUD_EDITOR_DEFAULT_FIXTURE_ID);
+  const [replaySourceId, setReplaySourceId] = useState<ReplaySourceId>('ancient-round-03');
+  const [replayLoadState, setReplayLoadState] = useState<
+    | {
+        readonly sourceId: ReplaySourceId;
+        readonly generation: number;
+        readonly status: 'ready';
+        readonly fixture: LoadedReplayFixture;
+      }
+    | {
+        readonly sourceId: ReplaySourceId;
+        readonly generation: number;
+        readonly status: 'error';
+        readonly error: string;
+      }
+    | null
+  >(null);
+  const replayLoadGeneration = useRef(0);
+  const [pendingReplayIndex, setPendingReplayIndex] = useState<number | null>(null);
   const [showGrid, setShowGrid] = useState(true);
   const [showCenter, setShowCenter] = useState(true);
   const [showSafeArea, setShowSafeArea] = useState(false);
@@ -180,15 +233,81 @@ export function HudConsolePage() {
     () => radarSnapshotForProgramFixture(fixtureId),
     [fixtureId],
   );
+  useEffect(() => {
+    const generation = replayLoadGeneration.current + 1;
+    replayLoadGeneration.current = generation;
+    if (previewSource !== 'replay') return;
+    let active = true;
+    let loaded: LoadedReplayFixture | null = null;
+    void loadReplayFixture(replaySourceId)
+      .then((fixture) => {
+        loaded = fixture;
+        if (!active || replayLoadGeneration.current !== generation) {
+          fixture.dispose();
+          return;
+        }
+        setReplayLoadState({ sourceId: replaySourceId, generation, status: 'ready', fixture });
+      })
+      .catch((error: unknown) => {
+        if (!active || replayLoadGeneration.current !== generation) return;
+        setReplayLoadState({
+          sourceId: replaySourceId,
+          generation,
+          status: 'error',
+          error: error instanceof Error ? error.message : '无法载入本地回放素材',
+        });
+      });
+    return () => {
+      active = false;
+      loaded?.dispose();
+    };
+  }, [previewSource, replaySourceId]);
+  const currentReplayLoadState =
+    replayLoadState?.sourceId === replaySourceId &&
+    replayLoadState.generation === replayLoadGeneration.current
+      ? replayLoadState
+      : null;
+  const replayFixture =
+    previewSource === 'replay' && currentReplayLoadState?.status === 'ready'
+      ? currentReplayLoadState.fixture
+      : null;
+  const replayLoadError =
+    previewSource === 'replay' && currentReplayLoadState?.status === 'error'
+      ? currentReplayLoadState.error
+      : null;
+  const replayLoading = previewSource === 'replay' && currentReplayLoadState === null;
+  const replaySession = replayFixture?.session ?? null;
+  const subscribeReplay = useCallback(
+    (listener: () => void) => replaySession?.subscribe(listener) ?? (() => undefined),
+    [replaySession],
+  );
+  const getReplaySnapshot = useCallback(
+    () => replaySession?.getSnapshot() ?? EMPTY_REPLAY_SNAPSHOT,
+    [replaySession],
+  );
+  const replayState = useSyncExternalStore(subscribeReplay, getReplaySnapshot, getReplaySnapshot);
   const previewSourceLive = hasAcceptedProgramSnapshot(program.current, program.state);
   const activePreviewSource = previewSource;
-  const activeSnapshot = activePreviewSource === 'current-live' ? program.current : fixture;
+  const replayFrame = activePreviewSource === 'replay' ? replayState.current : null;
+  const activeSnapshot =
+    activePreviewSource === 'current-live'
+      ? program.current
+      : activePreviewSource === 'replay'
+        ? (replayFrame?.program ?? null)
+        : fixture;
+  const activeRadarSnapshot =
+    activePreviewSource === 'replay'
+      ? (replayFrame?.radar ?? null)
+      : activePreviewSource === 'fixture'
+        ? fixtureRadarSnapshot
+        : null;
   let unsupportedRadarMap: string | null = null;
-  if (radar.state === 'live') {
-    const mapName = radar.current?.payload.mapName;
-    if (mapName && defaultMapGeometryProvider.resolve(mapName) === null) {
-      unsupportedRadarMap = mapName;
-    }
+  const previewRadarMapName =
+    activePreviewSource === 'current-live'
+      ? radar.current?.payload.mapName
+      : activeRadarSnapshot?.payload.mapName;
+  if (previewRadarMapName && defaultMapGeometryProvider.resolve(previewRadarMapName) === null) {
+    unsupportedRadarMap = previewRadarMapName;
   }
   const radarDiagnosticAttributes =
     unsupportedRadarMap === null
@@ -217,6 +336,22 @@ export function HudConsolePage() {
   };
   const hasDirtyDraft = presetDirty || layoutDirty || themeDirty;
   const activationStale = hudEditor.activationStale;
+  const currentReplayEvent = replayFixture?.events.find(
+    (event) => event.id === replayState.currentEventId,
+  );
+
+  function commitReplaySeek(targetIndex?: number): void {
+    if (replaySession === null || replayState.isSeeking) return;
+    const selectedIndex = targetIndex ?? pendingReplayIndex ?? replayState.currentIndex;
+    setPendingReplayIndex(null);
+    void replaySession.seekCaptureIndex(selectedIndex);
+  }
+
+  function stepReplayEvent(direction: -1 | 1): void {
+    if (replaySession === null || replayState.isSeeking) return;
+    setPendingReplayIndex(null);
+    void replaySession.stepEvent(direction);
+  }
 
   useEffect(() => {
     const nextDocument = authoritativeDocument;
@@ -701,9 +836,11 @@ export function HudConsolePage() {
               <strong>
                 {activePreviewSource === 'fixture'
                   ? fixtureLabel(fixtureId)
-                  : previewSourceLive
-                    ? '实时比赛'
-                    : '实时数据不可用'}
+                  : activePreviewSource === 'replay'
+                    ? (replayFixture?.title ?? (replayLoading ? '正在载入真实回放' : '回放不可用'))
+                    : previewSourceLive
+                      ? '实时比赛'
+                      : '实时数据不可用'}
               </strong>
             </div>
             <label>
@@ -712,10 +849,11 @@ export function HudConsolePage() {
                 aria-label="预览来源"
                 value={activePreviewSource}
                 onChange={(event) =>
-                  setPreviewSource(event.target.value as 'fixture' | 'current-live')
+                  setPreviewSource(event.target.value as 'fixture' | 'replay' | 'current-live')
                 }
               >
                 <option value="fixture">示例比赛</option>
+                <option value="replay">Replay 回放</option>
                 <option disabled={!previewSourceLive} value="current-live">
                   实时比赛
                 </option>
@@ -741,6 +879,22 @@ export function HudConsolePage() {
                 </select>
               </label>
             ) : null}
+            {activePreviewSource === 'replay' ? (
+              <label>
+                回放来源
+                <select
+                  aria-label="回放来源"
+                  value={replaySourceId}
+                  onChange={(event) => {
+                    setPendingReplayIndex(null);
+                    setReplaySourceId(event.target.value as ReplaySourceId);
+                  }}
+                >
+                  <option value="ancient-round-03">Ancient · 第 3 回合</option>
+                  <option value="ancient-round-11-defuse">Ancient · 第 11 回合拆弹</option>
+                </select>
+              </label>
+            ) : null}
             {activePreviewSource === 'fixture' &&
             (fixtureId.startsWith('bp-rivals-') ||
               HUD_EDITOR_RIVALS_BP_FIXTURE_IDS.some((id) => id === fixtureId)) ? (
@@ -751,19 +905,151 @@ export function HudConsolePage() {
             ) : null}
             <span
               className="hud-console__source-status"
-              data-connection-state={program.state}
+              data-connection-state={activePreviewSource === 'replay' ? 'replay' : program.state}
               {...radarDiagnosticAttributes}
             >
-              {connectionLabel(program.state)}
+              {activePreviewSource === 'replay'
+                ? replayLoadError === null
+                  ? '本地真实 capture · Replay'
+                  : 'Replay 素材不可用'
+                : connectionLabel(program.state)}
               {activePreviewSource === 'current-live' && unsupportedRadarMap !== null
                 ? ` · 雷达不可用：不支持地图 ${unsupportedRadarMap}`
                 : null}
             </span>
           </section>
 
+          {activePreviewSource === 'replay' ? (
+            <section
+              aria-label="Replay 控制"
+              className="hud-console__replay"
+              data-replay-cursor={replayFrame?.cursor.sequence ?? ''}
+              data-replay-event-kind={currentReplayEvent?.kind ?? ''}
+            >
+              <div className="hud-console__replay-actions">
+                <button
+                  disabled={replaySession === null || replayState.isSeeking || replayLoading}
+                  onClick={() =>
+                    replayState.isPlaying ? replaySession?.pause() : replaySession?.play()
+                  }
+                  type="button"
+                >
+                  {replayState.isPlaying ? '暂停' : '播放'}
+                </button>
+                <button
+                  disabled={replaySession === null || replayState.isSeeking || replayLoading}
+                  onClick={() => {
+                    setPendingReplayIndex(null);
+                    void replaySession?.restart();
+                  }}
+                  type="button"
+                >
+                  重播
+                </button>
+                <button
+                  aria-label="上一个语义事件"
+                  disabled={replaySession === null || replayState.isSeeking}
+                  onClick={() => stepReplayEvent(-1)}
+                  type="button"
+                >
+                  上一事件
+                </button>
+                <button
+                  aria-label="下一个语义事件"
+                  disabled={replaySession === null || replayState.isSeeking}
+                  onClick={() => stepReplayEvent(1)}
+                  type="button"
+                >
+                  下一事件
+                </button>
+              </div>
+              <label className="hud-console__replay-scrubber">
+                回放进度
+                <input
+                  aria-label="回放进度"
+                  disabled={replaySession === null || replayState.isSeeking || replayLoading}
+                  max={Math.max(0, (replayFixture?.manifest.frameCount ?? 1) - 1)}
+                  min={0}
+                  onChange={(event) => setPendingReplayIndex(Number(event.target.value))}
+                  onKeyUp={() => commitReplaySeek()}
+                  onPointerUp={(event) => commitReplaySeek(Number(event.currentTarget.value))}
+                  type="range"
+                  value={Math.max(
+                    0,
+                    Math.min(
+                      pendingReplayIndex ?? replayState.currentIndex,
+                      (replayFixture?.manifest.frameCount ?? 1) - 1,
+                    ),
+                  )}
+                />
+              </label>
+              <label className="hud-console__replay-event-select">
+                语义事件
+                <select
+                  aria-label="语义事件"
+                  disabled={replaySession === null || replayState.isSeeking || replayLoading}
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      setPendingReplayIndex(null);
+                      void replaySession?.seekEvent(event.target.value);
+                    }
+                  }}
+                  value={currentReplayEvent?.id ?? ''}
+                >
+                  <option value="">当前窗口无事件</option>
+                  {replayFixture?.events.map((event) => (
+                    <option key={event.id} value={event.id}>
+                      {event.sequence} · {event.label}
+                    </option>
+                  ))}
+                </select>
+              </label>
+              <div className="hud-console__replay-readout" aria-live="polite">
+                <span>
+                  {replayFrame === null
+                    ? '00:00.000'
+                    : replayTimeLabel(replayFrame.cursor.scheduledElapsedUs)}
+                </span>
+                <span>序列 {replayFrame?.cursor.sequence ?? '—'}</span>
+                <span>{currentReplayEvent?.label ?? '当前窗口无语义事件'}</span>
+                {replayState.isSeeking ? <span>正在重建回放前缀…</span> : null}
+                {replayLoadError !== null ? <span role="alert">{replayLoadError}</span> : null}
+                {replayState.error !== null ? <span role="alert">{replayState.error}</span> : null}
+              </div>
+              {replayFixture !== null ? (
+                <details className="hud-console__replay-provenance">
+                  <summary>来源、覆盖与完整性</summary>
+                  <dl>
+                    <dt>原始 capture</dt>
+                    <dd>{replayFixture.manifest.source.sourceCaptureId}</dd>
+                    <dt>来源 SHA-256</dt>
+                    <dd>{replayFixture.manifest.source.sourceFramesSha256}</dd>
+                    <dt>帧 / 语义事件</dt>
+                    <dd>
+                      {replayFixture.manifest.frameCount} / {replayFixture.manifest.eventCount}
+                    </dd>
+                    <dt>Sanitizer</dt>
+                    <dd>v{replayFixture.manifest.source.sanitizerVersion}</dd>
+                    {replayFixture.manifest.coverage
+                      .filter((item) => item.status !== 'observed')
+                      .map((item) => (
+                        <Fragment key={item.kind}>
+                          <dt>{item.kind}</dt>
+                          <dd>{item.status}</dd>
+                        </Fragment>
+                      ))}
+                  </dl>
+                </details>
+              ) : null}
+            </section>
+          ) : null}
+
           <HudCanvasPreview
-            radarSnapshot={activePreviewSource === 'fixture' ? fixtureRadarSnapshot : null}
+            radarSnapshot={activeRadarSnapshot}
             radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
+            presentationRevision={
+              activePreviewSource === 'replay' ? replayState.presentationRevision : 0
+            }
             canvasFrameRef={canvasFrameRef}
             connectionState={program.state}
             editorMode={workspace === 'layout' ? 'layout' : 'preview'}

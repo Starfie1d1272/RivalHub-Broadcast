@@ -1,0 +1,28 @@
+import { defineConfig } from '@playwright/test';
+
+const acceptancePort = Number(process.env.PLAYWRIGHT_PORT ?? '4173');
+
+export default defineConfig({
+  testDir: 'tests/acceptance',
+  fullyParallel: false,
+  workers: 1,
+  reporter: [['list'], ['html', { open: 'never', outputFolder: 'playwright-acceptance-report' }]],
+  projects: [
+    {
+      name: 'chromium',
+      use: {
+        baseURL: `http://127.0.0.1:${acceptancePort}`,
+        browserName: 'chromium',
+        deviceScaleFactor: 1,
+        headless: true,
+        viewport: { height: 1080, width: 1920 },
+      },
+    },
+  ],
+  webServer: {
+    command: `pnpm --filter @rivalhub-broadcast/web exec vite --host 127.0.0.1 --port ${acceptancePort}`,
+    env: { VITE_VISUAL_FIXTURES: '1' },
+    reuseExistingServer: !process.env.CI,
+    url: `http://127.0.0.1:${acceptancePort}`,
+  },
+});

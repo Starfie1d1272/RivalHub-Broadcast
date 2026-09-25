@@ -1,5 +1,7 @@
 import { defineConfig } from '@playwright/test';
 
+const visualPort = Number(process.env.PLAYWRIGHT_PORT ?? '4173');
+
 export default defineConfig({
   testDir: 'tests/visual',
   fullyParallel: false,
@@ -19,7 +21,7 @@ export default defineConfig({
     {
       name: 'chromium',
       use: {
-        baseURL: 'http://127.0.0.1:4173',
+        baseURL: `http://127.0.0.1:${visualPort}`,
         browserName: 'chromium',
         deviceScaleFactor: 1,
         headless: true,
@@ -28,9 +30,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'pnpm --filter @rivalhub-broadcast/web dev',
+    command: `pnpm --filter @rivalhub-broadcast/web exec vite --host 127.0.0.1 --port ${visualPort}`,
     env: { VITE_VISUAL_FIXTURES: '1' },
     reuseExistingServer: !process.env.CI,
-    url: 'http://127.0.0.1:4173',
+    url: `http://127.0.0.1:${visualPort}`,
   },
 });

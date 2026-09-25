@@ -5,11 +5,8 @@ import { operatorSnapshotSchema } from '@rivalhub-broadcast/protocol/operator';
 import { programSnapshotSchema } from '@rivalhub-broadcast/protocol/program';
 import { radarSnapshotSchema } from '@rivalhub-broadcast/protocol/radar';
 import {
-  buildCaptureRedactionMap,
   canonicalJsonLine,
-  replayCapture,
   verifyCapture,
-  type CaptureIdentityMapping,
   type ReplayFaultPlanV1,
   type VerifiedCapture,
 } from '@rivalhub-broadcast/testkit';
@@ -51,22 +48,6 @@ function normalizeChannelSeq<T extends { readonly channelSeq: number }>(
   return rest;
 }
 
-async function findCaptureRedactionMap(
-  capture: VerifiedCapture,
-): Promise<ReadonlyMap<string, string>> {
-  for await (const event of replayCapture(capture, { mode: { kind: 'step' } })) {
-    if (event.kind !== 'frame') continue;
-    if (!event.result.ok) {
-      throw new Error(`完整 capture 在 seq=${event.sourceFrame.sequence} 适配失败`);
-    }
-    const observation = event.result.observation;
-    if (observation.coverage.allPlayers !== 'present') continue;
-    if (observation.telemetry.allPlayers?.length !== 10) continue;
-    return buildCaptureRedactionMap(observation);
-  }
-  throw new Error('完整 capture 缺少可建立脱敏映射的首个五打五 allplayers frame');
-}
-
 function digestSnapshots(
   digest: ReturnType<typeof createHash>,
   coordinator: ReturnType<typeof createProjectionCoordinator>,
@@ -102,7 +83,6 @@ function digestSnapshots(
 
 async function runPipeline(
   capture: VerifiedCapture,
-  redactionMap: CaptureIdentityMapping,
   faultPlan?: ReplayFaultPlanV1,
 ): Promise<ReplayPipelineResult> {
   const digest = createHash('sha256');
@@ -112,7 +92,6 @@ async function runPipeline(
   let final: ReturnType<ReturnType<typeof createProjectionCoordinator>['getCurrent']> | undefined;
   const result = await replayRealProgram({
     capturePath: capture.directory,
-    mapping: redactionMap,
     ...(faultPlan === undefined ? {} : { faultPlan }),
     onStart: ({ coordinator }) => digestSnapshots(digest, coordinator),
     beforeEvent: (event, { runtime, coordinator }) => {
@@ -178,11 +157,10 @@ describe('完整真实 GSI replay → Companion projection pipeline', () => {
       expect(capture.manifest.droppedFrames).toBe(0);
       expect(capture.computedFramesSha256).toBe(FULL_MATCH_FRAMES_SHA256);
 
-      const redactionMap = await findCaptureRedactionMap(capture);
-      const first = await runPipeline(capture, redactionMap);
-      const second = await runPipeline(capture, redactionMap);
-      const faultedFirst = await runPipeline(capture, redactionMap, FULL_MATCH_FAULT_PLAN);
-      const faultedSecond = await runPipeline(capture, redactionMap, FULL_MATCH_FAULT_PLAN);
+      const first = await runPipeline(capture);
+      const second = await runPipeline(capture);
+      const faultedFirst = await runPipeline(capture, FULL_MATCH_FAULT_PLAN);
+      const faultedSecond = await runPipeline(capture, FULL_MATCH_FAULT_PLAN);
 
       expect(first.frames).toBe(FULL_MATCH_FRAME_COUNT);
       expect(first.accepted).toBe(FULL_MATCH_FRAME_COUNT);

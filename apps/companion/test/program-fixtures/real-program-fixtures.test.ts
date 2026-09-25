@@ -3,12 +3,7 @@ import { tmpdir } from 'node:os';
 import { resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { programSnapshotSchema } from '@rivalhub-broadcast/protocol/program';
-import {
-  iterateCaptureFrames,
-  replayCapture,
-  redactObservationPlayerIds,
-  SANITIZED_FIXTURE_STEAM64,
-} from '@rivalhub-broadcast/testkit';
+import { iterateCaptureFrames, replayCapture } from '@rivalhub-broadcast/testkit';
 import {
   generateRealProgramFixtures,
   serializeRealProgramFixtures,
@@ -105,10 +100,7 @@ describe('real-derived Program fixture generation', { timeout: 30_000 }, () => {
     });
     for await (const event of replayCapture(capture, { mode: { kind: 'step' } })) {
       if (event.kind !== 'frame' || !event.result.ok) throw new Error('Unexpected source');
-      const observed = redactObservationPlayerIds(
-        event.result.observation,
-        SANITIZED_FIXTURE_STEAM64,
-      );
+      const observed = event.result.observation;
       for (const player of live.players) {
         const source = observed.telemetry.allPlayers?.find(
           (p) => p.sourcePlayerId === player.sourcePlayerId,
@@ -129,12 +121,35 @@ describe('real-derived Program fixture generation', { timeout: 30_000 }, () => {
       }
     }
     expect(payload('real-warmup').status.identity).toBe('matched');
-    expect(payload('real-warmup').teams.t.entryId).toBe(live.teams.ct.entryId);
+    const warmupFrame = JSON.parse(
+      (
+        await readFile(
+          resolve(REPOSITORY_ROOT, 'fixtures/gsi/semantic/warmup/observer/frames.jsonl'),
+          'utf8',
+        )
+      ).split(/\r?\n/)[0]!,
+    ) as {
+      readonly payload: {
+        readonly map: {
+          readonly team_ct: { readonly name: string };
+          readonly team_t: { readonly name: string };
+        };
+        readonly allplayers: Record<string, { readonly name: string }>;
+      };
+    };
+    const warmup = payload('real-warmup');
+    expect(warmup.teams.ct.name).toBe(warmupFrame.payload.map.team_ct.name);
+    expect(warmup.teams.t.name).toBe(warmupFrame.payload.map.team_t.name);
+    expect(warmup.teams.ct.entryId).toBe(warmup.series?.entrants.a.entryId);
+    expect(warmup.teams.t.entryId).toBe(warmup.series?.entrants.b.entryId);
+    for (const player of warmup.players) {
+      expect(player.displayName).toBe(warmupFrame.payload.allplayers[player.sourcePlayerId]?.name);
+    }
     expect(payload('real-planting').bomb).toMatchObject({
       state: 'planting',
       action: {
         kind: 'plant',
-        sourcePlayerId: '76561198000000014',
+        sourcePlayerId: '76561198294381090',
         remainingSeconds: 2.943,
         durationSeconds: 2.943,
       },
@@ -147,7 +162,7 @@ describe('real-derived Program fixture generation', { timeout: 30_000 }, () => {
       state: 'defusing',
       action: {
         kind: 'defuse',
-        sourcePlayerId: '76561198000000004',
+        sourcePlayerId: '76561198164970560',
         remainingSeconds: 5.034,
         hasDefuseKit: true,
       },

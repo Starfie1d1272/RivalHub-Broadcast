@@ -4,7 +4,7 @@ import { createCiPlan, evaluateCiGate, parseGitDiffNameStatus } from './plan.mjs
 
 const full = {
   runQuality: true,
-  runVisual: true,
+  runAcceptance: true,
   runPlatform: true,
   runQualification: true,
 };
@@ -26,17 +26,37 @@ describe('changed-surface CI planner', () => {
       ['docs/product.md', 'README.md', 'THIRD-PARTY-NOTICES.md'],
       {
         runQuality: false,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: false,
         runQualification: false,
       },
     ],
     [
-      'web HUD/CSS',
+      'web HUD/CSS only',
       ['apps/web/src/program/program.css'],
       {
         runQuality: true,
-        runVisual: true,
+        runAcceptance: false,
+        runPlatform: false,
+        runQualification: false,
+      },
+    ],
+    [
+      'web HUD behavior',
+      ['apps/web/src/program/widgets/player-rails/PlayerCard.tsx'],
+      {
+        runQuality: true,
+        runAcceptance: true,
+        runPlatform: false,
+        runQualification: false,
+      },
+    ],
+    [
+      'manual screenshot suite',
+      ['tests/visual/match-header.spec.ts'],
+      {
+        runQuality: true,
+        runAcceptance: false,
         runPlatform: false,
         runQualification: false,
       },
@@ -46,7 +66,7 @@ describe('changed-surface CI planner', () => {
       ['packages/core/src/projection/program.ts'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: false,
         runQualification: false,
       },
@@ -56,7 +76,7 @@ describe('changed-surface CI planner', () => {
       ['packages/radar/src/map-geometry.ts'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: false,
         runQualification: false,
       },
@@ -66,7 +86,7 @@ describe('changed-surface CI planner', () => {
       ['apps/companion/src/runtime/program-runtime.ts'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: true,
         runQualification: false,
       },
@@ -76,7 +96,7 @@ describe('changed-surface CI planner', () => {
       ['packages/telemetry-gsi/src/adapter.ts'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: true,
         runQualification: false,
       },
@@ -86,7 +106,7 @@ describe('changed-surface CI planner', () => {
       ['scripts/qualification/offline.mjs'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: true,
         runQualification: true,
       },
@@ -96,7 +116,7 @@ describe('changed-surface CI planner', () => {
       ['config/gamestate_integration_rivalhub_broadcast.cfg.template'],
       {
         runQuality: true,
-        runVisual: false,
+        runAcceptance: false,
         runPlatform: false,
         runQualification: true,
       },
@@ -112,6 +132,7 @@ describe('changed-surface CI planner', () => {
     ['lockfile', ['pnpm-lock.yaml']],
     ['workspace config', ['pnpm-workspace.yaml']],
     ['toolchain config', ['tsconfig.json']],
+    ['acceptance Playwright config', ['playwright.acceptance.config.ts']],
     ['workflow', ['.github/workflows/ci.yml']],
     ['planner self-change', ['scripts/ci/plan.mjs']],
     ['unknown path', ['fixtures/custom-input.json']],
@@ -145,7 +166,7 @@ describe('CI gate selection', () => {
         requiredJobs: [],
         jobResults: {
           quality: 'skipped',
-          visual: 'skipped',
+          acceptance: 'skipped',
           platform: 'skipped',
           qualification_offline: 'skipped',
           qualification_windows: 'skipped',
@@ -158,10 +179,10 @@ describe('CI gate selection', () => {
     expect(
       evaluateCiGate({
         planResult: 'success',
-        requiredJobs: ['quality', 'visual'],
-        jobResults: { quality: 'success', visual: 'skipped' },
+        requiredJobs: ['quality', 'acceptance'],
+        jobResults: { quality: 'success', acceptance: 'skipped' },
       }),
-    ).toEqual({ ok: false, failures: ['visual=skipped'] });
+    ).toEqual({ ok: false, failures: ['acceptance=skipped'] });
   });
 
   it('fails when the planner fails or emits an invalid selection', () => {

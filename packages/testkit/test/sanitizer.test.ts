@@ -18,23 +18,32 @@ const TEAM_T = 'Raw T Team';
 const AUTH_TOKEN = 'raw-auth-token-value';
 
 interface SanitizedPayload {
+  readonly provider: { readonly steamid: string; readonly name: string; readonly version: string };
+  readonly observer: { readonly steamid: string; readonly name: string };
   readonly map: {
     readonly team_ct: { readonly name: string };
     readonly team_t: { readonly name: string };
   };
   readonly player: {
+    readonly steamid: string;
+    readonly name: string;
     readonly clan: string;
     readonly weapons: { readonly weapon_0: { readonly name: string } };
   };
   readonly allplayers: Record<
     string,
     {
+      readonly name: string;
+      readonly clan: string;
       readonly weapons: { readonly weapon_0: { readonly name: string } };
     }
   >;
   readonly previously: { readonly player: { readonly clan: string } };
-  readonly provider: { readonly version: string };
-  readonly futureEvidence: { readonly stableValue: string; readonly stableNumber: number };
+  readonly futureEvidence: {
+    readonly stableValue: string;
+    readonly stableNumber: number;
+    readonly localPath: string;
+  };
 }
 
 interface TeamSides {
@@ -89,8 +98,12 @@ function sensitivePayload(): Record<string, unknown> {
       allplayers: { [PLAYER_ID]: { name: PLAYER_NAME, clan: `${TEAM_CT} ` } },
     },
     auth: { token: AUTH_TOKEN },
-    endpoint: 'https://example.invalid/raw-endpoint',
-    futureEvidence: { stableValue: 'preserve-me', stableNumber: 42 },
+    endpoint: 'http://127.0.0.1:3000/gsi',
+    futureEvidence: {
+      stableValue: 'preserve-me',
+      stableNumber: 42,
+      localPath: 'C:\\Users\\broadcast\\AppData\\Local\\capture.json',
+    },
   };
 }
 
@@ -143,11 +156,13 @@ describe('deterministic capture sanitizer', () => {
       ];
       await writeCapture(rawDir, frames, {
         manifest: {
+          windowsVersion: 'Windows 11 Pro for Workstations',
           notes: 'raw manifest secret should not enter sanitized output',
           gsiConfig: {
-            parameters: { timeout: 5, buffer: 1, uri: 'https://secret.invalid', future: true },
+            parameters: { timeout: 5, buffer: 1, uri: 'https://example.invalid/gsi', future: true },
             components: ['provider', 'map'],
             auth: { token: AUTH_TOKEN },
+            endpoint: 'http://localhost:3000/gsi',
           },
         },
       });
@@ -183,7 +198,7 @@ describe('deterministic capture sanitizer', () => {
           .update(`${frames.map((frame) => JSON.stringify(frame)).join('\n')}\n`, 'utf8')
           .digest('hex'),
         sourceFrameSelection: { kind: 'all' },
-        sanitizerVersion: 1,
+        sanitizerVersion: 2,
         lifecycleCoverage: 'partial',
       });
       expect(verified.computedFramesSha256).toBe(verified.manifest.framesSha256);
@@ -192,28 +207,43 @@ describe('deterministic capture sanitizer', () => {
         payload: SanitizedPayload;
       };
       const payload = firstFrame.payload;
-      expect(firstFrames).not.toContain(PLAYER_ID);
-      expect(firstFrames).not.toContain(OBSERVER_ID);
-      expect(firstFrames).not.toContain(PLAYER_NAME);
-      expect(firstFrames).not.toContain(OBSERVER_NAME);
+      expect(firstFrames).toContain(PLAYER_ID);
+      expect(firstFrames).toContain(OBSERVER_ID);
+      expect(firstFrames).toContain(PLAYER_NAME);
+      expect(firstFrames).toContain(OBSERVER_NAME);
       expect(firstFrames).not.toContain(AUTH_TOKEN);
-      expect(firstFrames).not.toContain('raw-endpoint');
-      expect(payload.map.team_ct.name).toBe(payload.player.clan);
-      expect(payload.map.team_ct.name).toBe(payload.previously.player.clan);
-      expect(payload.map.team_t.name).not.toBe(payload.map.team_ct.name);
+      expect(firstFrames).not.toContain('127.0.0.1');
+      expect(firstFrames).not.toContain('C:\\Users\\broadcast');
+      expect(payload.map.team_ct.name).toBe(TEAM_CT);
+      expect(payload.map.team_t.name).toBe(TEAM_T);
+      expect(payload.player).toMatchObject({
+        steamid: PLAYER_ID,
+        name: PLAYER_NAME,
+        clan: `${TEAM_CT} `,
+      });
+      expect(payload.observer).toEqual({ steamid: OBSERVER_ID, name: OBSERVER_NAME });
+      expect(payload.previously.player.clan).toBe(`${TEAM_CT} `);
       expect(payload.provider.version).toBe('1.0.0');
       expect(payload.player.weapons.weapon_0.name).toBe('weapon_knife');
       const firstAllPlayerKey = Object.keys(payload.allplayers)[0] ?? '';
+      expect(firstAllPlayerKey).toBe(PLAYER_ID);
       const firstAllPlayer = payload.allplayers[firstAllPlayerKey];
       if (firstAllPlayer === undefined) throw new Error('sanitized allplayers is empty');
+      expect(firstAllPlayer.name).toBe(PLAYER_NAME);
+      expect(firstAllPlayer.clan).toBe(`${TEAM_CT} `);
       expect(firstAllPlayer.weapons.weapon_0.name).toBe('weapon_ak47');
-      expect(payload.futureEvidence).toEqual({ stableValue: 'preserve-me', stableNumber: 42 });
+      expect(payload.futureEvidence).toEqual({
+        stableValue: 'preserve-me',
+        stableNumber: 42,
+        localPath: '[REDACTED_LOCAL_PATH]',
+      });
 
       expect(verified.manifest.notes).toBeUndefined();
       expect(verified.manifest.gsiConfig).toEqual({
-        parameters: { timeout: 5, buffer: 1 },
+        parameters: { timeout: 5, buffer: 1, uri: 'https://example.invalid/gsi', future: true },
         components: ['provider', 'map'],
       });
+      expect(verified.manifest.windowsVersion).toBeUndefined();
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -234,6 +264,26 @@ describe('deterministic capture sanitizer', () => {
           lifecycleCoverage: 'partial',
         }),
       ).rejects.toMatchObject({ code: 'INELIGIBLE_GOLD_SOURCE' });
+    } finally {
+      await rm(root, { recursive: true, force: true });
+    }
+  });
+
+  it('fails closed when a credential value also appears outside its secret field', async () => {
+    const root = await temporaryDirectory();
+    try {
+      const rawDir = join(root, 'raw');
+      await writeCapture(rawDir, [
+        testFrame(1, 1_000, { auth: { token: AUTH_TOKEN }, diagnosticLabel: AUTH_TOKEN }),
+      ]);
+      await expect(
+        sanitizeCapture({
+          inputDir: rawDir,
+          outputDir: join(root, 'sanitized-output'),
+          scenario: 'credential-leak-regression',
+          lifecycleCoverage: 'partial',
+        }),
+      ).rejects.toMatchObject({ code: 'SANITIZATION_LEAK' });
     } finally {
       await rm(root, { recursive: true, force: true });
     }
@@ -273,8 +323,8 @@ describe('deterministic capture sanitizer', () => {
 
       const fixtureTeamA = first.map.team_ct.name;
       const fixtureTeamB = first.map.team_t.name;
-      expect(fixtureTeamA).toMatch(/^Fixture Team \d{3}$/);
-      expect(fixtureTeamB).toMatch(/^Fixture Team \d{3}$/);
+      expect(fixtureTeamA).toBe(teamA);
+      expect(fixtureTeamB).toBe(teamB);
       expect(fixtureTeamA).not.toBe(fixtureTeamB);
 
       expect(second.map.team_ct.name).toBe(fixtureTeamB);

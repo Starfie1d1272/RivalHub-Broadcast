@@ -3,7 +3,10 @@ import { radarSnapshotSchema, type RadarSnapshot } from '@rivalhub-broadcast/pro
 import { RADAR_SCHEMA_VERSION } from '@rivalhub-broadcast/protocol/version';
 import {
   grenadeIcon,
+  isActiveSmoke,
   RadarPresentation,
+  radarPlayerMarkerKind,
+  radarUtilityPhase,
   shortestAngle,
   smokeRemaining,
   RADAR_PRESENTATION,
@@ -105,6 +108,196 @@ describe('Radar renderer local lifecycle', () => {
     expect(grenadeIcon('smoke', 'CT')).toContain('/utility/smokegrenade.');
   });
 
+  it('keeps a moving smoke projectile airborne when effecttime is zero', () => {
+    const source = single().payload.grenades[0]!;
+    const movingSmoke = {
+      ...source,
+      kind: 'smoke' as const,
+      velocity: { x: 25, y: 0, z: 0 },
+      effectTimeSeconds: 0,
+    };
+    const stationarySmoke = {
+      ...movingSmoke,
+      velocity: { x: 0, y: 0, z: 0 },
+      effectTimeSeconds: 0.2,
+    };
+
+    expect(radarUtilityPhase(movingSmoke)).toBe('projectile');
+    expect(isActiveSmoke(movingSmoke)).toBe(false);
+    expect(radarUtilityPhase(stationarySmoke)).toBe('effect');
+    expect(isActiveSmoke(stationarySmoke)).toBe(true);
+    expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
+  });
+
+  it('latches smoke from projectile to effect and never returns on residual velocity', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: { x: 25, y: 0, z: 0 },
+        effectTimeSeconds: 0,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('projectile');
+
+    const started = next(before);
+    started.payload.grenades[0]!.effectTimeSeconds = 0.2;
+    model.accept(started, 100);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
+
+    const missingPosition = next(started);
+    missingPosition.payload.grenades[0]!.position = null;
+    missingPosition.payload.grenades[0]!.effectTimeSeconds = 0.4;
+    model.accept(missingPosition, 150);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      positionAvailable: false,
+    });
+
+    const residualVelocity = next(missingPosition);
+    residualVelocity.payload.grenades[0]!.position = { ...started.payload.grenades[0]!.position! };
+    residualVelocity.payload.grenades[0]!.velocity = { x: 25, y: 0, z: 0 };
+    residualVelocity.payload.grenades[0]!.position.x += 2;
+    residualVelocity.payload.grenades[0]!.effectTimeSeconds = 0.5;
+    model.accept(residualVelocity, 200);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      positionAvailable: true,
+    });
+
+    const expired = next(residualVelocity);
+    expired.payload.grenades[0]!.effectTimeSeconds = 20;
+    model.accept(expired, 300);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('terminal');
+    expect(model.exits.get('synthetic-projectile')?.marker.phase).toBe('effect');
+  });
+
+  it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: null,
+        effectTimeSeconds: 0,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+
+    const firstStationary = next(before);
+    firstStationary.payload.grenades[0]!.position!.x += 1;
+    model.accept(firstStationary, 100);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'projectile',
+      stationarySampleCount: 1,
+    });
+
+    const secondStationary = next(firstStationary);
+    secondStationary.payload.grenades[0]!.position!.x += 1;
+    model.accept(secondStationary, 200);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      stationarySampleCount: 0,
+    });
+  });
+
+  it('draw state omits unknown life and freezes death position until alive again', () => {
+    expect(radarPlayerMarkerKind('unknown')).toBeNull();
+    expect(radarPlayerMarkerKind('dead')).toBe('dead');
+
+    const before = single();
+    before.payload.players[0]!.lifeState = 'alive';
+    const playerId = before.payload.players[0]!.sourcePlayerId;
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+
+    const died = next(before);
+    died.payload.players[0]!.lifeState = 'dead';
+    died.payload.players[0]!.position!.x += 40;
+    model.accept(died, 100);
+    const marker = model.players.get(playerId)!;
+    expect(marker.deathPosition).toEqual({ x: marker.target.x, y: marker.target.y });
+    const deathPosition = marker.deathPosition;
+
+    const corpseMoved = next(died);
+    corpseMoved.payload.players[0]!.position!.x += 400;
+    model.accept(corpseMoved, 200);
+    model.tick(200, false);
+    expect(marker.deathPosition).toEqual(deathPosition);
+    expect({ x: marker.x, y: marker.y }).toEqual(deathPosition);
+
+    const aliveAgain = next(corpseMoved);
+    aliveAgain.payload.players[0]!.lifeState = 'alive';
+    aliveAgain.payload.players[0]!.position!.x += 20;
+    model.accept(aliveAgain, 300);
+    expect(model.players.get(playerId)?.deathPosition).toBeNull();
+  });
+
+  it('falls back to the last target when the first authoritative dead sample has no position', () => {
+    const before = single();
+    before.payload.players[0]!.lifeState = 'alive';
+    const playerId = before.payload.players[0]!.sourcePlayerId;
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    const lastTarget = model.players.get(playerId)!.target;
+
+    const died = next(before);
+    died.payload.players[0]!.lifeState = 'dead';
+    died.payload.players[0]!.position = null;
+    model.accept(died, 100);
+    expect(model.players.get(playerId)?.deathPosition).toEqual({
+      x: lastTarget.x,
+      y: lastTarget.y,
+    });
+  });
+
+  it('hands a terminal firebomb off to flame evidence without a second projectile presentation', () => {
+    // A presentation-only lifecycle edge: it changes no Program/Radar gameplay truth.
+    const before = single();
+    const owner = before.payload.players[0]!.sourcePlayerId;
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        sourceEntityId: 'synthetic-firebomb',
+        kind: 'firebomb',
+        ownerSourceId: owner,
+        velocity: { x: 100, y: 0, z: 0 },
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    expect([...model.grenades.values()][0]!.phase).toBe('projectile');
+
+    const after = next(before);
+    after.payload.grenades = [
+      {
+        ...after.payload.grenades[0]!,
+        sourceEntityId: 'synthetic-inferno',
+        kind: 'inferno',
+        ownerSourceId: owner,
+        position: null,
+        velocity: null,
+        flames: [
+          { sourceFlameId: 'flame-a', position: { x: -1000, y: 0, z: 0 } },
+          { sourceFlameId: 'flame-b', position: { x: -900, y: 0, z: 0 } },
+        ],
+      },
+    ];
+    model.accept(after, 100);
+
+    expect(model.grenades.has('synthetic-firebomb')).toBe(false);
+    expect(model.grenades.get('synthetic-inferno')?.phase).toBe('effect');
+    expect(model.grenades.get('synthetic-inferno')?.target).toBeDefined();
+    expect(model.exits.get('synthetic-firebomb')?.includeProjectileIcon).toBe(false);
+    expect(
+      [...model.grenades.values()].filter((marker) => marker.phase === 'projectile'),
+    ).toHaveLength(0);
+  });
+
   it('wraps angles along the shortest distance and eases movement without changing truth', () => {
     expect(shortestAngle(359, 1)).toBe(2);
     expect(shortestAngle(1, 359)).toBe(-2);
@@ -121,6 +314,49 @@ describe('Radar renderer local lifecycle', () => {
     expect(p.x).toBeGreaterThan(before);
     expect(p.x).toBeLessThan(p.target.x);
     expect(b.payload.players[0]!.position!.x).toBe(-900);
+  });
+  it('interpolates between real-time samples and bounds prediction to 100 ms', () => {
+    const model = new RadarPresentation();
+    const a = single();
+    model.accept(a, 0);
+    model.tick(0, false);
+    const before = [...model.players.values()][0]!;
+    const b = next(a);
+    b.payload.players[0]!.position!.x = -900;
+    model.accept(b, 250);
+    model.tick(375, false);
+
+    const between = [...model.players.values()][0]!;
+    const dx = between.target.x - between.previousTarget.x;
+    const dy = between.target.y - between.previousTarget.y;
+    const distanceSquared = dx * dx + dy * dy;
+    const progress =
+      ((between.x - between.previousTarget.x) * dx + (between.y - between.previousTarget.y) * dy) /
+      distanceSquared;
+    expect(before.target.x).toBe(between.previousTarget.x);
+    expect(progress).toBeCloseTo(0.5, 1);
+
+    model.tick(600, false);
+    const atPredictionLimit = [...model.players.values()][0]!;
+    const boundedX = atPredictionLimit.x;
+    model.tick(900, false);
+    expect([...model.players.values()][0]!.x).toBe(boundedX);
+    expect(atPredictionLimit.x).toBeCloseTo(
+      atPredictionLimit.target.x + atPredictionLimit.velocity.x * 100,
+      6,
+    );
+  });
+  it('snaps motion at a skipped source sample instead of bridging the gap', () => {
+    const model = new RadarPresentation();
+    const a = single();
+    model.accept(a, 0);
+    const gap = next(a);
+    gap.cursor.programReceiveSequence = (gap.cursor.programReceiveSequence ?? 0) + 1;
+    gap.payload.players[0]!.position!.x = -900;
+    model.accept(gap, 250);
+    const marker = [...model.players.values()][0]!;
+    expect(marker.x).toBe(marker.target.x);
+    expect(marker.interpolationDurationMs).toBe(0);
   });
   it('snaps teleports, resets HP/ammo baselines and does not infer on first sample', () => {
     const m = new RadarPresentation();
@@ -229,6 +465,10 @@ describe('Radar renderer local lifecycle', () => {
     expect(smokeRemaining(null)).toBeNull();
     expect(smokeRemaining(22)).toBe(0);
     expect(smokeRemaining(-1)).toBe(20);
+    const smoke = real().payload.grenades.find((grenade) => grenade.kind === 'smoke');
+    if (smoke === undefined) throw new Error('real replay fixture has no smoke grenade');
+    expect(isActiveSmoke({ ...smoke, effectTimeSeconds: 19.9 })).toBe(true);
+    expect(isActiveSmoke({ ...smoke, effectTimeSeconds: 20 })).toBe(false);
     const previous = new Map<string, number>();
     let comparisons = 0;
     for (const sample of fixtures.fixtures['bomb-plant'].samples)

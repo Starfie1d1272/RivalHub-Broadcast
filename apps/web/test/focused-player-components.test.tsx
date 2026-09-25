@@ -25,7 +25,10 @@ function host() {
 describe('Focused media and combat presentation lifecycle', () => {
   it('loads optional media, hides failed image without retry, resets on player/URL/boundary', () => {
     const container = host();
-    const player = buildFocusedPlayerPresentation(getProgramFixture('focused-avatar')!.payload)!;
+    const player = {
+      ...buildFocusedPlayerPresentation(getProgramFixture('focused-avatar')!.payload)!,
+      observerSlot: 9,
+    };
     const render = (p = player, key = 'boundary') => {
       act(() => {
         root!.render(<FocusedPlayerCard key={key} player={p} />);
@@ -34,10 +37,18 @@ describe('Focused media and combat presentation lifecycle', () => {
     render();
     const media = () => container.querySelector<HTMLImageElement>('.focused-player__media img');
     expect(container.querySelector('[data-avatar="true"]')).toBeNull();
+    expect(container.querySelector('.focused-player__observer-tile-number')?.textContent).toBe('0');
+    expect(container.querySelector('.focused-player__media')?.getAttribute('aria-label')).toBe(
+      'Observer hotkey 0',
+    );
     act(() => {
       media()!.dispatchEvent(new Event('load'));
     });
     expect(container.querySelector('[data-avatar="true"]')).not.toBeNull();
+    expect(container.querySelector('.focused-player__slot-badge')?.textContent).toBe('0');
+    expect(container.querySelector('.focused-player__media')?.getAttribute('aria-label')).toBe(
+      `${player.displayName} avatar, observer hotkey 0`,
+    );
     act(() => {
       media()!.dispatchEvent(new Event('error'));
     });
@@ -99,6 +110,7 @@ describe('Focused media and combat presentation lifecycle', () => {
     act(() => root!.render(<FocusedPlayerCard player={{ ...player, dead: true }} />));
     expect(container.textContent).not.toContain('DEAD');
     expect(container.querySelector('.focused-player__dead-state')).not.toBeNull();
+    expect(container.querySelector('.focused-player__death-mark')).toBeNull();
     expect(container.querySelector('.focused-player__active')).toBeNull();
     expect(container.querySelector('.focused-player__ammo')).toBeNull();
     expect(container.querySelector('.focused-player__utility')).toBeNull();

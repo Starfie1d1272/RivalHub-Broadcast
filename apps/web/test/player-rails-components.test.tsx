@@ -191,6 +191,103 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('[data-player-equipment="true"]')).toBeNull();
   });
 
+  it('keeps KD in the same row for alive and dead players and preserves round kills', () => {
+    const snapshot = getProgramFixture('player-rails-freezetime');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const player = presentation.ct.players.find((candidate) => candidate.lifeState === 'alive');
+    if (player === undefined) throw new Error('alive player missing');
+    const alive = { ...player, mode: 'live' as const, roundKills: 0, observerSlot: 0 };
+    const dead = {
+      ...alive,
+      lifeState: 'dead' as const,
+      mode: 'dead' as const,
+      primaryWeapon: null,
+      secondaryWeapon: null,
+      utility: [],
+      roundKills: 2,
+    };
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={alive} />);
+    });
+
+    const kdBefore = container.querySelector('.player-rail__combat > .player-rail__kd');
+    expect(kdBefore).not.toBeNull();
+    expect(
+      [...container.querySelector('.player-rail__combat')!.children].map((child) =>
+        child.getAttribute('data-player-rail-row-part'),
+      ),
+    ).toEqual(['kd', 'context']);
+    expect(container.querySelector('.player-rail__round-kill-slot')).not.toBeNull();
+    expect(container.querySelector('.player-rail__round-kill-badge')).toBeNull();
+    expect(container.querySelector('[data-card-part="observer-endcap"]')?.textContent).toBe('1');
+    expect(
+      container.querySelector('[data-card-part="observer-endcap"]')?.getAttribute('aria-label'),
+    ).toBe('Observer hotkey 1');
+
+    act(() => {
+      root?.render(<PlayerCard player={dead} />);
+    });
+    expect(container.querySelector('.player-rail__combat > .player-rail__kd')).toBe(kdBefore);
+    expect(
+      [...container.querySelector('.player-rail__combat')!.children].map((child) =>
+        child.getAttribute('data-player-rail-row-part'),
+      ),
+    ).toEqual(['kd', 'context']);
+    expect(container.querySelectorAll('.player-rail__kd')).toHaveLength(1);
+    expect(container.querySelector('.player-rail__bottom .player-rail__kd')).toBeNull();
+    expect(container.querySelector('[data-dead-stats="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-player-equipment="true"]')).toBeNull();
+    expect(container.querySelector('.player-rail__death-watermark')).toBeNull();
+    expect(container.querySelectorAll('.player-rail__kd svg')).toHaveLength(2);
+    expect(
+      container.querySelector('[data-round-kill-slot="true"] [data-round-kills="2"]'),
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-round-kill-slot="true"] [data-round-kills="2"] circle'),
+    ).not.toBeNull();
+  });
+
+  it('uses contextual weapon visual roles for paired and pistol-only loadouts', () => {
+    const snapshot = getProgramFixture('player-rails-freezetime');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const player = presentation.ct.players.find(
+      (candidate) => candidate.primaryWeapon !== null && candidate.secondaryWeapon !== null,
+    );
+    if (player?.secondaryWeapon?.item?.family !== 'pistol') {
+      throw new Error('freezetime fixture has no paired firearm and pistol');
+    }
+
+    const pistolOnly = {
+      ...player,
+      primaryWeapon: player.secondaryWeapon,
+      secondaryWeapon: null,
+    };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={player} />);
+    });
+
+    expect(
+      [...container.querySelectorAll('[data-weapon-visual-role]')].map((icon) =>
+        icon.getAttribute('data-weapon-visual-role'),
+      ),
+    ).toEqual(['primary-firearm', 'secondary-pistol']);
+
+    act(() => {
+      root?.render(<PlayerCard player={pistolOnly} />);
+    });
+    expect(container.querySelector('[data-weapon-visual-role="standalone-pistol"]')).not.toBeNull();
+    expect(container.querySelector('[data-weapon-visual-role="primary-firearm"]')).toBeNull();
+  });
+
   it('omits unavailable dead ADR while keeping known damage', () => {
     const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');

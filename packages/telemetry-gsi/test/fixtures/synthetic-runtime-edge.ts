@@ -1,14 +1,12 @@
-export const REAL_DERIVED_PROVENANCE = {
-  fixtureKind: 'sanitized-real-derived',
-  sourceCaptureId: 'roundsense-economy-runtime-20260807',
-  sourceCaptureFramesSha256: 'beb711e09b4a9fcb7dca9c1b44cfd1699cecf7ed4a101a74ae69d995529646cb',
-  sourceFrameSequence: 2,
-  sourceFrameRange: 'seq=2..2',
-  sanitization:
-    'steamid -> fixture-player-ct-1; name -> Fixture Real-Derived Player; outer capture envelope omitted; provider timestamp and source fields retained',
+export const SYNTHETIC_RUNTIME_EDGE_PROVENANCE = {
+  fixtureKind: 'synthetic-contract-fixture',
+  sourceFrame: 'synthetic GSI field composition; no private local capture is checked in',
+  sourceFrameSequence: null,
+  sourceFrameRange: null,
+  reason: 'exercise mixed real-world field presence without exporting a private account identity',
 } as const;
 
-export const REAL_DERIVED_FRAME = {
+export const SYNTHETIC_RUNTIME_EDGE_FRAME = {
   provider: {
     name: 'Counter-Strike: Global Offensive',
     appid: 730,
@@ -38,8 +36,8 @@ export const REAL_DERIVED_FRAME = {
     phase: 'freezetime',
   },
   player: {
-    steamid: 'fixture-player-ct-1',
-    name: 'Fixture Real-Derived Player',
+    steamid: 'synthetic-player-ct-1',
+    name: 'Synthetic CT Player',
     activity: 'playing',
     observer_slot: 0,
     team: 'CT',

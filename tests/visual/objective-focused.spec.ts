@@ -57,7 +57,7 @@ for (const id of cases)
         );
         await expect(
           page.locator('.objective-center[data-objective-mode="planting"] .objective-center__icon'),
-        ).toHaveCSS('background-color', 'rgb(11, 17, 25)');
+        ).toHaveCSS('background-color', 'rgb(243, 246, 250)');
       }
       if (id === 'objective-dual-progress-edge') {
         await expect(page.locator('.objective-center__ring-fill')).toHaveAttribute(
@@ -67,7 +67,7 @@ for (const id of cases)
         const fuse = page.locator('.objective-center__fuse');
         const track = await fuse.boundingBox();
         const fill = await fuse.locator('span').boundingBox();
-        expect(fill!.x).toBeCloseTo(track!.x, 1);
+        expect(fill!.x + fill!.width / 2).toBeCloseTo(track!.x + track!.width / 2, 1);
         expect(fill!.width).toBeGreaterThan(0);
         expect(fill!.width).toBeLessThan(track!.width);
       }

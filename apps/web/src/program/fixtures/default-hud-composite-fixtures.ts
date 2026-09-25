@@ -39,33 +39,6 @@ const SOURCES: Record<DefaultHudCompositeFixture, string> = {
   'default-missing-logo': 'series-logo-mixed',
 };
 
-const AVATAR_COLORS = [
-  ['#3b607a', '#d9ad83', '#192e3b'],
-  ['#634f78', '#b77e66', '#32233f'],
-  ['#3c6c5c', '#e2c19b', '#263c37'],
-  ['#806649', '#9f6657', '#3d3027'],
-  ['#39587d', '#c99079', '#273449'],
-  ['#815255', '#d7b08b', '#412c33'],
-  ['#496f7e', '#a8755e', '#283d49'],
-  ['#706142', '#dfb997', '#3b3525'],
-  ['#47556e', '#b87d65', '#282f40'],
-  ['#4f7054', '#e1bd9b', '#2b3b2c'],
-] as const;
-
-function deterministicAvatar(index: number): string {
-  const [background, skin, clothing] = AVATAR_COLORS[index % AVATAR_COLORS.length]!;
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="78" height="78" viewBox="0 0 78 78"><rect width="78" height="78" fill="${background}"/><path d="M5 78c3-20 15-29 34-29s31 9 34 29" fill="${clothing}"/><path d="M24 29c0-13 6-21 16-21s16 8 16 21v8c0 12-7 21-16 21s-16-9-16-21z" fill="${skin}"/><path d="M22 30c0-17 8-25 19-25 10 0 17 6 18 20-7-2-11-8-13-12-5 8-13 13-24 14z" fill="${clothing}"/></svg>`;
-  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
-}
-
-function deterministicFixtureLogo(entrant: 'a' | 'b'): string {
-  const mark =
-    entrant === 'a'
-      ? '<path d="M5 39 15 8l9 14 9-11 10 28-12-9-7 11-8-11z" fill="#f3f6fa"/><path d="m24 22 7 10-6 7-6-8z" fill="#0b1119"/>'
-      : '<path d="m6 12 13-7 8 9 8-9 11 7-8 31-11-9-12 9z" fill="#f3f6fa"/><path d="m19 19 8 9 8-9-5 17-6-6-6 6z" fill="#0b1119"/>';
-  return `data:image/svg+xml,${encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 48 48">${mark}</svg>`)}`;
-}
-
 function sourceSnapshot(id: DefaultHudCompositeFixture): ProgramSnapshot {
   const snapshot = getProgramFixture(SOURCES[id]);
   if (snapshot === null) throw new Error(`Default HUD source fixture is missing: ${SOURCES[id]}`);
@@ -73,13 +46,9 @@ function sourceSnapshot(id: DefaultHudCompositeFixture): ProgramSnapshot {
 }
 
 function mutateProgram(id: DefaultHudCompositeFixture, snapshot: ProgramSnapshot): void {
-  if (id !== 'default-missing-logo' && snapshot.payload.series !== null) {
-    snapshot.payload.series.entrants.a.logoUrl = deterministicFixtureLogo('a');
-    snapshot.payload.series.entrants.b.logoUrl = deterministicFixtureLogo('b');
-  }
-  if (id === 'default-avatar-present') {
-    snapshot.payload.players.forEach((player, index) => {
-      player.avatarUrl = deterministicAvatar(index);
+  if (id === 'default-avatar-missing') {
+    snapshot.payload.players.forEach((player) => {
+      player.avatarUrl = null;
     });
   }
   if (id === 'default-observed' || id === 'default-low-hp') {

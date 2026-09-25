@@ -3,13 +3,14 @@ import { pathToFileURL } from 'node:url';
 
 export const CI_JOB_IDS = Object.freeze([
   'quality',
-  'visual',
+  'acceptance',
   'platform',
   'qualification_offline',
   'qualification_windows',
 ]);
 
 const DOCS_ONLY_PATTERN = /^(?:docs\/.*|.*\.(?:md|mdx))$/;
+const WEB_BEHAVIOR_SOURCE_PATTERN = /\.(?:ts|tsx|js|jsx|html)$/;
 const KNOWN_QUALITY_PREFIXES = ['apps/', 'packages/', 'tests/', 'scripts/'];
 const PLATFORM_PREFIXES = [
   'apps/companion/',
@@ -38,7 +39,8 @@ function isForcedFullPath(path) {
     name.startsWith('tsconfig') ||
     name.startsWith('eslint.config.') ||
     name.startsWith('vitest.config.') ||
-    name.startsWith('playwright.config.')
+    name.startsWith('playwright.config.') ||
+    (name.startsWith('playwright.') && name.endsWith('.config.ts'))
   );
 }
 
@@ -52,14 +54,14 @@ function isKnownQualityPath(path) {
   );
 }
 
-function isVisualPath(path) {
+function isAcceptancePath(path) {
   return (
-    path.startsWith('apps/web/') ||
-    path.startsWith('tests/visual/') ||
+    (path.startsWith('apps/web/') && WEB_BEHAVIOR_SOURCE_PATTERN.test(path)) ||
+    path.startsWith('tests/acceptance/') ||
+    path.startsWith('packages/replay/') ||
     path === 'packages/protocol/src/program.ts' ||
     path === 'packages/protocol/src/version.ts' ||
-    path.includes('program/fixtures/') ||
-    (path.includes('/program/') && path.endsWith('.css'))
+    path.includes('program-fixtures/')
   );
 }
 
@@ -81,7 +83,7 @@ function isUnsafeChangeStatus(status) {
 function fullPlan(reason, includeOfflineQualification = false) {
   return {
     runQuality: true,
-    runVisual: true,
+    runAcceptance: true,
     runPlatform: true,
     runQualification: true,
     requiredJobs: CI_JOB_IDS.filter(
@@ -93,12 +95,12 @@ function fullPlan(reason, includeOfflineQualification = false) {
 
 function selectivePlan(changedFiles) {
   const runQuality = changedFiles.some(({ path }) => isKnownQualityPath(path));
-  const runVisual = changedFiles.some(({ path }) => isVisualPath(path));
+  const runAcceptance = changedFiles.some(({ path }) => isAcceptancePath(path));
   const runPlatform = changedFiles.some(({ path }) => isPlatformPath(path));
   const runQualification = changedFiles.some(({ path }) => isQualificationPath(path));
   const requiredJobs = CI_JOB_IDS.filter((job) => {
     if (job === 'quality') return runQuality;
-    if (job === 'visual') return runVisual;
+    if (job === 'acceptance') return runAcceptance;
     if (job === 'platform') return runPlatform;
     if (job === 'qualification_offline') return false;
     return runQualification;
@@ -106,7 +108,7 @@ function selectivePlan(changedFiles) {
 
   return {
     runQuality,
-    runVisual,
+    runAcceptance,
     runPlatform,
     runQualification,
     requiredJobs,
@@ -164,7 +166,7 @@ export function createCiPlan(options = {}) {
   if (changedFiles.every(({ path }) => isDocsOnlyPath(path))) {
     return {
       runQuality: false,
-      runVisual: false,
+      runAcceptance: false,
       runPlatform: false,
       runQualification: false,
       requiredJobs: [],
@@ -209,7 +211,7 @@ export function evaluateCiGate(input) {
 function outputPlan(plan) {
   return {
     run_quality: String(plan.runQuality),
-    run_visual: String(plan.runVisual),
+    run_acceptance: String(plan.runAcceptance),
     run_platform: String(plan.runPlatform),
     run_qualification: String(plan.runQualification),
     required_jobs: JSON.stringify(plan.requiredJobs),
@@ -242,7 +244,7 @@ function runGate() {
     requiredJobs,
     jobResults: {
       quality: process.env.QUALITY_RESULT,
-      visual: process.env.VISUAL_RESULT,
+      acceptance: process.env.ACCEPTANCE_RESULT,
       platform: process.env.PLATFORM_RESULT,
       qualification_offline: process.env.QUALIFICATION_OFFLINE_RESULT,
       qualification_windows: process.env.QUALIFICATION_WINDOWS_RESULT,

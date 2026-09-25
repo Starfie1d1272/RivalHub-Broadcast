@@ -1,0 +1,56 @@
+{
+  "formatVersion": 1,
+  "captureId": "sanitized-20260914T060149Z-4cda66b7-recovered-match-seq-587-1214",
+  "createdAt": "2026-09-14T06:01:49.408Z",
+  "platform": "win32",
+  "broadcastCommit": "08c0239ef2ae5fea1286d0163d3b7b3cb423039b",
+  "scenario": "ancient-round-03-full-round",
+  "gsiConfig": {
+    "components": [
+      "provider",
+      "map",
+      "map_round_wins",
+      "round",
+      "player_id",
+      "player_state",
+      "player_weapons",
+      "player_match_stats",
+      "player_position",
+      "phase_countdowns",
+      "allplayers_id",
+      "allplayers_state",
+      "allplayers_match_stats",
+      "allplayers_weapons",
+      "allplayers_position",
+      "allgrenades",
+      "bomb"
+    ],
+    "fileName": "gamestate_integration_rivalhub_broadcast_capture.cfg",
+    "parameters": {
+      "buffer": "0.1",
+      "heartbeat": "60.0",
+      "precision_position": "1",
+      "precision_time": "3",
+      "precision_vector": "3",
+      "throttle": "0.1",
+      "timeout": "1.1"
+    },
+    "tokenConfigured": true
+  },
+  "complete": true,
+  "frameCount": 628,
+  "droppedFrames": 0,
+  "framesSha256": "54fbddf82f67d61126ccfb0f1e19c98ff23c94a31e9bfdbfb79038dabd99f7c3",
+  "provenance": {
+    "fixtureKind": "sanitized-real-capture",
+    "sourceCaptureId": "20260914T060149Z-4cda66b7-recovered-match",
+    "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+    "sourceFrameSelection": {
+      "kind": "sequence-range",
+      "firstSequence": 587,
+      "lastSequence": 1214
+    },
+    "sanitizerVersion": 2,
+    "lifecycleCoverage": "partial"
+  }
+}

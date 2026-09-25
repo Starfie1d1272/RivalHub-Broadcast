@@ -148,7 +148,7 @@
   width: 362px;
   height: 78px;
   flex: 0 0 362px;
-  grid-template-rows: 32px 3px 25px 18px;
+  grid-template-rows: 24px 3px 25px 26px;
   overflow: hidden;
   background: #111923;
 }
@@ -205,7 +205,7 @@
 .player-rail__identity {
   display: flex;
   min-width: 0;
-  height: 32px;
+  height: 24px;
   align-items: center;
   gap: 7px;
   padding: 0 8px;
@@ -244,20 +244,6 @@
   color: #f06f6f;
 }
 
-.player-rail__round-kills {
-  display: inline-flex;
-  width: 40px;
-  height: 20px;
-  flex: 0 0 40px;
-  align-items: center;
-  justify-content: center;
-  gap: 3px;
-  color: #f3f6fa;
-  font-size: 12px;
-  font-weight: 800;
-  line-height: 20px;
-}
-
 .player-rail__health-bar,
 .player-rail__health-spacer {
   width: calc(100% - 16px);
@@ -291,25 +277,30 @@
 }
 
 .player-rail__combat {
-  display: flex;
+  display: grid;
   width: 100%;
   height: 25px;
   align-items: center;
+  grid-template-columns: 59px minmax(0, 1fr);
+  grid-template-areas: 'kd context';
   padding: 0 8px;
 }
 
 .player-rail--right .player-rail__combat {
-  flex-direction: row-reverse;
+  grid-template-columns: minmax(0, 1fr) 59px;
+  grid-template-areas: 'context kd';
 }
 
 .player-rail__combat .player-rail__kd {
-  width: 72px;
-  flex: 0 0 72px;
+  width: 59px;
+  flex: 0 0 59px;
+  grid-area: kd;
+  margin: 0;
 }
 
 .player-rail__weapons {
-  width: 100px;
-  flex: 0 0 100px;
+  width: 118px;
+  flex: 0 0 118px;
 }
 
 .player-rail__equipment {
@@ -332,12 +323,39 @@
 
 .player-rail__weapons {
   display: flex;
+  width: 118px;
+  flex: 0 0 118px;
+  height: 25px;
+  align-items: center;
+  justify-content: flex-start;
+  overflow: hidden;
+}
+
+.player-rail__weapon-icons {
+  display: flex;
+  height: 25px;
+  align-items: center;
+  gap: 4px;
+}
+
+.player-rail__context {
+  position: relative;
+  width: 100%;
+  height: 25px;
+  min-width: 0;
+  grid-area: context;
+}
+
+.player-rail__loadout {
+  display: flex;
   width: 100%;
   height: 25px;
   align-items: center;
-  justify-content: center;
   gap: 4px;
-  overflow: hidden;
+}
+
+.player-rail--right .player-rail__loadout {
+  flex-direction: row-reverse;
 }
 
 .player-rail__equipment {
@@ -389,22 +407,48 @@
   -webkit-mask-size: contain;
 }
 
-.player-rail__icon.is-primary {
-  width: 96px;
-  max-width: 96px;
-  height: 23px;
+.player-rail__icon[data-weapon-visual-role] {
+  mask-position: left center;
+  -webkit-mask-position: left center;
 }
 
-.player-rail__combat[data-phase='freezetime'][data-secondary='true'] .player-rail__icon.is-primary {
-  width: 58px;
-  max-width: 58px;
+.player-rail__icon[data-weapon-visual-role='primary-firearm'] {
+  width: 116px;
+  max-width: 116px;
+  height: 24px;
+}
+
+.player-rail__combat[data-phase='freezetime'][data-secondary='true']
+  .player-rail__icon[data-weapon-visual-role='primary-firearm'] {
+  width: 80px;
+  max-width: 80px;
+}
+
+.player-rail__icon[data-weapon-visual-role='standalone-pistol'] {
+  width: 72px;
+  max-width: 72px;
   height: 20px;
 }
 
-.player-rail__icon.is-secondary {
-  width: 26px;
-  max-width: 26px;
+.player-rail__icon[data-weapon-visual-role='secondary-pistol'] {
+  width: 28px;
+  max-width: 28px;
   height: 14px;
+}
+
+.player-rail--right .player-rail__weapons {
+  justify-content: flex-end;
+  flex-direction: row-reverse;
+}
+
+.player-rail--right .player-rail__weapon-icons {
+  flex-direction: row-reverse;
+  margin-left: auto;
+}
+
+.player-rail--right .player-rail__icon[data-weapon-visual-role] {
+  mask-position: right center;
+  -webkit-mask-position: right center;
 }
 
 .player-rail__utility-item {
@@ -435,24 +479,6 @@
 .player-rail--right .player-rail__dead-stats {
   flex-direction: row-reverse;
   text-align: right;
-}
-
-.player-rail__death-mark {
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  display: flex;
-  width: 46px;
-  height: 46px;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.1;
-  transform: translateY(-50%);
-}
-
-.player-rail--right .player-rail__death-mark {
-  right: auto;
-  left: 14px;
 }
 
 .player-rail__adr,
@@ -497,7 +523,7 @@
 .player-rail__bottom {
   display: flex;
   width: 100%;
-  height: 18px;
+  height: 26px;
   align-items: center;
   gap: 6px;
   padding: 0 8px;
@@ -700,11 +726,6 @@
   flex-direction: row-reverse;
 }
 
-.player-rail--right .player-rail__kd {
-  margin-right: auto;
-  margin-left: 0;
-}
-
 /* Broadcast card hierarchy. The outer card and four body rows keep their fixed boxes. */
 .player-rail__body {
   background: #141c26;
@@ -736,6 +757,7 @@
 .player-rail__health-value {
   min-width: 36px;
   font-weight: 850;
+  line-height: 24px;
   letter-spacing: -0.035em;
   text-shadow: none;
 }
@@ -767,60 +789,30 @@
   background: transparent;
 }
 
-.player-rail__combat {
-  position: relative;
-  display: grid;
-  box-sizing: border-box;
-  grid-template-columns: 59px 118px 56px minmax(0, 1fr);
-  column-gap: 4px;
-}
-
-.player-rail__combat > * {
-  grid-row: 1;
-}
-
-.player-rail--right .player-rail__combat {
-  grid-template-columns: minmax(0, 1fr) 56px 118px 59px;
-}
-
 .player-rail__combat .player-rail__kd {
-  width: auto;
-  grid-column: 1;
+  width: 59px;
+  grid-area: kd;
 }
 
-.player-rail__weapons {
-  width: 118px;
-  flex: none;
-  grid-column: 2;
+.player-rail--right .player-rail__combat .player-rail__kd {
+  justify-content: flex-end;
+  margin: 0;
 }
 
 .player-rail__equipment {
   width: 56px;
-  flex: none;
-  grid-column: 3;
+  flex: 0 0 56px;
 }
 
 .player-rail__utility-icons {
-  width: auto;
-  flex: none;
+  min-width: 0;
+  flex: 1 1 auto;
   gap: 2px;
-  grid-column: 4;
 }
 
-.player-rail--right .player-rail__combat .player-rail__kd {
-  grid-column: 4;
-}
-
-.player-rail--right .player-rail__weapons {
-  grid-column: 3;
-}
-
-.player-rail--right .player-rail__equipment {
-  grid-column: 2;
-}
-
-.player-rail--right .player-rail__utility-icons {
-  grid-column: 1;
+.player-rail__utility-icons {
+  position: absolute;
+  width: 78px;
 }
 
 /* Anchor four utility icons to the 64px HP bar edge without shrinking their own box. */
@@ -831,7 +823,7 @@
 }
 
 .player-rail__card[data-physical-side='left'] .player-rail__utility-icons {
-  right: 34px;
+  right: 26px;
   justify-content: flex-end;
 }
 
@@ -845,24 +837,6 @@
   width: 16px;
   height: 16px;
   flex-basis: 16px;
-}
-
-.player-rail__icon.is-primary {
-  width: 116px;
-  max-width: 116px;
-  height: 24px;
-}
-
-.player-rail__combat[data-phase='freezetime'][data-secondary='true'] .player-rail__icon.is-primary {
-  width: 80px;
-  max-width: 80px;
-  height: 22px;
-}
-
-.player-rail__icon.is-secondary {
-  width: 28px;
-  max-width: 28px;
-  background-color: #b6c0cc;
 }
 
 .player-rail__utility-item {
@@ -888,18 +862,42 @@
   stroke: currentColor;
 }
 
-.player-rail__round-kills {
-  width: auto;
-  height: 18px;
-  flex: none;
+.player-rail__round-kill-slot {
+  display: flex;
+  width: 32px;
+  height: 26px;
+  flex: 0 0 32px;
+  align-items: center;
+  justify-content: center;
   margin-left: auto;
-  color: #d7dee6;
-  font-size: 12px;
+  color: #f3f6fa;
 }
 
-.player-rail--right .player-rail__round-kills {
+.player-rail--right .player-rail__round-kill-slot {
   margin-right: auto;
   margin-left: 0;
+}
+
+.player-rail__round-kill-badge,
+.player-rail__round-kill-badge svg {
+  display: block;
+  width: 26px;
+  height: 26px;
+}
+
+.player-rail__round-kill-badge path,
+.player-rail__round-kill-badge circle {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-width: 1.6px;
+}
+
+.player-rail__round-kill-badge text {
+  fill: currentColor;
+  font-family: inherit;
+  font-size: 9.5px;
+  font-weight: 900;
 }
 
 .player-rail__money {
@@ -915,33 +913,9 @@
   text-shadow: none;
 }
 
-.player-rail__death-mark {
-  right: 66px;
-  width: 66px;
-  height: 66px;
-  opacity: 0.2;
-}
-
-.player-rail--right .player-rail__death-mark {
-  right: auto;
-  left: 66px;
-}
-
-.player-rail__death-mark .player-rail__death-watermark {
-  width: 66px;
-  height: 66px;
-  flex: 0 0 66px;
-}
-
-.player-rail__death-watermark .death-watermark__body {
-  fill: #e0e2df;
-}
-
-.player-rail__death-watermark .death-watermark__cutout {
-  fill: #383d40;
-}
-
 .player-rail__dead-stats {
+  width: 100%;
+  height: 25px;
   justify-content: flex-start;
   gap: 18px;
   padding: 0 16px;

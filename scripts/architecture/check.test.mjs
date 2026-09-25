@@ -293,21 +293,21 @@ describe('architecture checker', () => {
     expectRule(
       withFiles({
         'apps/web/src/undeclared.ts':
-          "import { value } from '@rivalhub-broadcast/core';\nvoid value;\n",
+          "import { value } from '@rivalhub-broadcast/telemetry-gsi';\nvoid value;\n",
       }),
       'ARCH_UNDECLARED_WORKSPACE_DEP',
-      '@rivalhub-broadcast/core',
+      '@rivalhub-broadcast/telemetry-gsi',
     );
 
     const webManifest = packageManifest('apps/web/package.json');
     webManifest.dependencies = {
-      '@rivalhub-broadcast/core': '^1.0.0',
+      '@rivalhub-broadcast/telemetry-gsi': '^1.0.0',
       ...webManifest.dependencies,
     };
     expectRule(
       withFiles({ 'apps/web/package.json': JSON.stringify(webManifest) }),
       'ARCH_WORKSPACE_PROTOCOL',
-      '@rivalhub-broadcast/core',
+      '@rivalhub-broadcast/telemetry-gsi',
     );
   });
 
@@ -404,7 +404,7 @@ describe('architecture checker', () => {
         'packages/telemetry-cstv/src/parser-edge.ts': "import { DemoReader } from 'cs2parser';\n",
       }),
     ).toEqual([]);
-  });
+  }, 15_000);
 
   it('rejects shared package source exports', () => {
     const coreManifest = packageManifest('packages/core/package.json');

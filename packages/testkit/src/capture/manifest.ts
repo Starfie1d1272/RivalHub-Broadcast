@@ -107,7 +107,7 @@ function validateProvenance(raw: unknown): CaptureProvenanceV1 {
     });
   }
   if (raw.kind === 'production-recorder') return validateProductionProvenance(raw);
-  if (raw.fixtureKind !== 'sanitized-real-capture' || raw.sanitizerVersion !== 1) {
+  if (raw.fixtureKind !== 'sanitized-real-capture' || raw.sanitizerVersion !== 2) {
     throw new CaptureFormatError('INVALID_PROVENANCE', 'manifest.provenance version is invalid', {
       path: 'manifest.provenance',
     });
@@ -137,7 +137,7 @@ function validateProvenance(raw: unknown): CaptureProvenanceV1 {
       raw.sourceFrameSelection,
       'manifest.provenance.sourceFrameSelection',
     ),
-    sanitizerVersion: 1,
+    sanitizerVersion: 2,
     lifecycleCoverage: raw.lifecycleCoverage,
   };
 }

@@ -5,6 +5,28 @@ import {
   utilityPresentation,
 } from '../player-rails/presentation';
 
+export type FocusedPlayerItemKind =
+  'firearm' | 'knife' | 'grenade' | 'objective' | 'taser' | 'other';
+
+function activeItemKind(
+  item: ReturnType<typeof weaponPresentation>['item'],
+): FocusedPlayerItemKind {
+  if (item === null) return 'other';
+  if (item.canonicalKey === 'utility.taser') return 'taser';
+  switch (item.kind) {
+    case 'firearm':
+      return 'firearm';
+    case 'melee':
+      return 'knife';
+    case 'objective':
+      return 'objective';
+    case 'utility':
+      return item.family === 'grenade' ? 'grenade' : 'other';
+    default:
+      return 'other';
+  }
+}
+
 export function buildReserveAmmoPresentation(
   ammoPresentation: string | undefined,
   reserve: number | null | undefined,
@@ -104,6 +126,7 @@ export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
         : null,
     c4: hasC4 ? assetForCanonicalKey('objective.c4') : null,
     activeItem,
+    activeItemKind: activeItemKind(activeItem?.item ?? null),
     clip: firearm ? (active?.ammoClip ?? null) : null,
     clipFill:
       firearm &&

@@ -46,24 +46,17 @@
 - 静态网页与本地 WebSocket；
 - `/program` / `/operator` / `/debug`；
 - `/operator/hud` 的三类配置工作区、共享 `GameplayHud` 预览与 HUD ETag conditional polling；
+- HUD Replay 的真实 capture browser acceptance，包括事件 seek/play、Radar utility 阶段、objective progress、Focused Player observer handoff；
 - 浏览器 reconnect；
 - current baseline；
 - Origin / subprotocol / LAN policy；
-- Program 视觉回归；
 - production web smoke。
 
-Program 视觉回归只维护一套正式基准：固定版本 Playwright Chromium + `ubuntu-24.04`。仓库只提交 `tests/visual/__screenshots__/linux/`；Darwin / Windows 本地截图属于临时预览，不是正式 baseline，也不应提交。
+Browser acceptance uses real-derived Program fixtures whenever committed capture evidence exists. Synthetic fixtures are reserved for explicit edge/fail-closed or presentation stress and must declare provenance/reason. Browser acceptance checks behavior and semantic state; diagnostic screenshots may be attached, but do not determine pass/fail.
 
-视觉验证区分两个生命周期：
+Screenshot/pixel regression is a manual release-time tool, not an ordinary PR gate. `pnpm visual:test`, `pnpm visual:update`, and `tests/visual/__screenshots__/linux/` remain available when a release is ready for visual freeze. Only Linux / Chromium output is canonical; local Darwin / Windows screenshots are previews and should not be committed as baselines.
 
-- **Draft PR = 设计探索。** visual job 使用 `pnpm visual:update` 在 Ubuntu / Chromium 上实际渲染全部视觉场景，并上传 `visual-candidates-<SHA>` artifact。截图与旧 baseline 不同本身不是失败；渲染错误、非截图断言失败仍会使 job 失败。
-- **Ready PR / main = 验收。** visual job 使用 `pnpm visual:test` 严格比较 canonical Linux baseline。准备定稿时，不要求开发者在 macOS 或虚拟机生成 Linux 截图；直接在目标分支手工运行 **Approve visual baseline** workflow，由 Ubuntu runner 生成并提交新的 canonical baseline，然后 Ready PR 再接受严格回归。
-
-因此 visual baseline 表达“已经批准的设计”，不是设计探索期间的工作草稿。只有准备把视觉状态作为可回归产品事实时才更新 baseline；普通 CSS / composition 探索无需先制造一次预期失败再上传截图。
-
-Gameplay visual acceptance is real-first. Normal Program/HUD states must use generated real-derived Program fixtures whenever committed capture evidence exists. Synthetic fixtures are reserved for explicit edge/fail-closed or presentation stress and must declare provenance/reason.
-
-真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。视觉探索在 Draft PR 直接审查 CI candidate artifact；视觉定稿时运行 **Approve visual baseline**，再由 `pnpm visual:test` 验证。展示压力测试只覆盖文案、logo、选手 avatarUrl 与赛制展示；头像验收使用确定性本地/data-URI 图片，加载失败由组件测试验证；游戏事实来自真实 fixture。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
+真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。#76 的连续 replay artifact 通过 `pnpm fixtures:replay:generate` 从固定 Ancient 第 3 回合与第 11 回合 capture 生成；Program、Radar、cursor 和 semantic event index 来自同一 production composition，并由 `pnpm fixtures:replay:verify` 检查 hash 与内容漂移。HUD Editor 只消费本地生成并校验过的 Program/Radar projection；seek 由 Vite 开发期 local-only harness 从 capture 起点重建 production composition 前缀，再返回同一 cursor 的 projection pair 核对 artifact。Web 与 testkit 共用 `packages/replay` 中 framework-neutral 的离散 cursor/scheduler；capture 读取、Raw GSI adapter 与 replay prefix composition 留在 Companion/testkit 边界，不能进入 Web runtime。HUD Replay browser acceptance 使用固定真实 capture，检查语义事件 seek/play、utility handoff、objective progress 和 observer identity handoff。截图/pixel baseline 只在正式版视觉冻结时人工运行和审查；普通 PR 不自动生成、提交或推送 baseline。合成展示压力测试使用确定性本地/data-URI 图片；#76 的真实头像仅由本机可选导入步骤 materialize 为本地、带来源与 SHA-256 的 fixture asset。导入脚本只从 `STEAM_WEB_API_KEY` 环境变量读取，Replay、HUD editor、acceptance test 与 CI 不访问 Steam。团队名称来自 capture，team logo 单独通过 fixture-local MatchContext presentation enrichment 绑定；无可验证素材时保持 unavailable。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
 
 HUD 编辑器的日常场景列表只露出少量真实遥测回放与必要展示边界；完整 fixture 注册表继续服务回归测试。`bp-rivals-*` 使用生产 RivalHub 中 2026 NJU Rivals 总决赛、胜者组半决赛的公开 BP 与赛果生成系列图条切面；背景 GSI 来自另一场已提交的真实回放，**不能作为这些赛事的游戏过程证据**。未进行地图没有赛果，未确认的起始边保持缺失，决胜图不伪造选图方。
 
@@ -113,11 +106,11 @@ PR 使用 changed-surface planner，只运行与改动面匹配的证据。
 planner + ci-gate
 ```
 
-不运行 quality / visual / platform / qualification。
+不运行 quality / acceptance / platform / qualification。
 
 ### 普通代码
 
-`apps/`、`packages/`、`tests/`、`scripts/` 的已知路径至少进入 quality。Web / Program 相关路径额外运行 visual；Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
+`apps/`、`packages/`、`tests/`、`scripts/` 的已知路径至少进入 quality。Web 的语义源码（`.ts` / `.tsx` / `.js` / `.jsx` / `.html`）、Replay 和 acceptance test 路径额外运行 browser acceptance；Web CSS-only 改动只运行 quality。Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
 
 ### 现场验收敏感路径
 
@@ -149,12 +142,15 @@ pnpm format:check
 pnpm lint
 pnpm typecheck
 pnpm fixtures:program:verify
+pnpm fixtures:replay:verify
 pnpm test
 pnpm build
 pnpm architecture:check
-pnpm visual:test
+pnpm acceptance:test
 pnpm local-web:production-smoke
 ```
+
+`pnpm visual:update` 与 `pnpm visual:test` 仅在正式版视觉冻结时手动使用，不属于普通 PR CI。
 
 现场验收工具：
 

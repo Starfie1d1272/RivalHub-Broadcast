@@ -9,6 +9,10 @@
     ".": {
       "types": "./dist/index.d.ts",
       "import": "./dist/index.js"
+    },
+    "./replay-session": {
+      "types": "./dist/replay/session.d.ts",
+      "import": "./dist/replay/session.js"
     }
   },
   "scripts": {
@@ -16,6 +20,7 @@
     "typecheck": "tsc -b tsconfig.json --pretty false && tsc -p tsconfig.test.json --noEmit --pretty false"
   },
   "dependencies": {
+    "@rivalhub-broadcast/replay": "workspace:*",
     "@rivalhub-broadcast/telemetry-gsi": "workspace:*"
   },
   "devDependencies": {

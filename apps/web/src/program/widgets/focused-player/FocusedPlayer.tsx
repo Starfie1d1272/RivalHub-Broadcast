@@ -1,8 +1,22 @@
-import { useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
+import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
+import { consecutivePresentationSamples } from '../../presentation-sample';
+import { observerHotkeyLabel } from '../../observer-hotkey';
 import type { PlayerRailAsset } from '../player-rails/presentation';
-import { DeathWatermark } from '../player-rails/DeathWatermark';
-import { buildFocusedPlayerPresentation, type FocusedPlayerPresentation } from './presentation';
+import {
+  buildFocusedPlayerPresentation,
+  type FocusedPlayerItemKind,
+  type FocusedPlayerPresentation,
+} from './presentation';
 
 function Icon({ asset }: { readonly asset: PlayerRailAsset | null }) {
   if (asset === null) return null;
@@ -17,19 +31,168 @@ function Icon({ asset }: { readonly asset: PlayerRailAsset | null }) {
   );
 }
 
-export function FocusedPlayerCard({ player }: { readonly player: FocusedPlayerPresentation }) {
-  return <Card key={`${player.sourcePlayerId}:${player.avatarUrl ?? ''}`} player={player} />;
+interface ActiveItemState {
+  readonly key: string;
+  readonly asset: PlayerRailAsset | null;
+  readonly kind: FocusedPlayerItemKind;
+  readonly cursor: ProjectionCursor | null;
+  readonly presentationRevision: number;
 }
 
-function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
-  const [avatarLoaded, setAvatarLoaded] = useState(false);
-  const [avatarFailed, setAvatarFailed] = useState(false);
-  const showAvatar = p.avatarUrl !== null && avatarLoaded && !avatarFailed;
+function ActiveItemSlot({
+  player,
+  cursor,
+  presentationRevision,
+}: {
+  readonly player: FocusedPlayerPresentation;
+  readonly cursor: ProjectionCursor | null;
+  readonly presentationRevision: number;
+}) {
+  const itemKey = player.activeItem?.item?.canonicalKey ?? player.activeItem?.name ?? 'unavailable';
+  const current = useMemo<ActiveItemState>(
+    () => ({
+      key: itemKey,
+      asset: player.activeItem?.asset ?? null,
+      kind: player.activeItemKind,
+      cursor,
+      presentationRevision,
+    }),
+    [itemKey, player.activeItem?.asset, player.activeItemKind, cursor, presentationRevision],
+  );
+  const previous = useRef(current);
+  const timer = useRef<number | null>(null);
+  const [outgoing, setOutgoing] = useState<ActiveItemState | null>(null);
+  useEffect(() => {
+    const last = previous.current;
+    const changed = last.key !== current.key;
+    const continuous =
+      last.cursor !== null &&
+      cursor !== null &&
+      consecutivePresentationSamples(
+        last.cursor,
+        cursor,
+        last.presentationRevision,
+        presentationRevision,
+      );
+    previous.current = current;
+    if (changed && continuous) {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      setOutgoing(last);
+      timer.current = window.setTimeout(() => {
+        timer.current = null;
+        setOutgoing(null);
+      }, 120);
+    } else if (changed) {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+      timer.current = null;
+      setOutgoing(null);
+    }
+  }, [
+    current,
+    itemKey,
+    cursor,
+    cursor?.producerInstanceId,
+    cursor?.liveSessionId,
+    cursor?.programSourceGeneration,
+    cursor?.programReceiveSequence,
+    cursor?.mapEpoch,
+    cursor?.runtimeSeq,
+    presentationRevision,
+  ]);
+  useEffect(
+    () => () => {
+      if (timer.current !== null) window.clearTimeout(timer.current);
+    },
+    [],
+  );
+
   return (
-    <article
-      aria-label="Focused player"
-      className="focused-player"
-      data-focused-player={p.sourcePlayerId}
+    <div
+      className="focused-player__active"
+      aria-label="Active item"
+      data-active-item-kind={player.activeItemKind}
+      data-active-item-key={itemKey}
+      data-item-transition={outgoing !== null}
+    >
+      {outgoing === null ? null : (
+        <span
+          aria-hidden="true"
+          className="focused-player__item-layer focused-player__item-layer--outgoing"
+          data-item-kind={outgoing.kind}
+        >
+          <Icon asset={outgoing.asset} />
+        </span>
+      )}
+      <span
+        className={`focused-player__item-layer${outgoing === null ? '' : ' focused-player__item-layer--incoming'}`}
+        data-item-kind={player.activeItemKind}
+      >
+        <Icon asset={player.activeItem?.asset ?? null} />
+      </span>
+    </div>
+  );
+}
+
+function FocusedPlayerFace({
+  player: p,
+  cursor,
+  presentationRevision,
+  avatarIdentityKey,
+  onAvatarReady,
+  onAvatarUnavailable,
+  outgoing = false,
+  incoming = false,
+  pending = false,
+}: {
+  readonly player: FocusedPlayerPresentation;
+  readonly cursor: ProjectionCursor | null;
+  readonly presentationRevision: number;
+  readonly avatarIdentityKey: string;
+  readonly onAvatarReady: (avatarIdentityKey: string) => void;
+  readonly onAvatarUnavailable: (avatarIdentityKey: string) => void;
+  readonly outgoing?: boolean;
+  readonly incoming?: boolean;
+  readonly pending?: boolean;
+}) {
+  const [displayAvatarUrl, setDisplayAvatarUrl] = useState<string | null>(null);
+  const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
+  useLayoutEffect(() => {
+    const avatarUrl = p.avatarUrl;
+    if (avatarUrl === null) return;
+    if (displayAvatarUrl === avatarUrl || failedAvatarUrl === avatarUrl) return;
+    let active = true;
+    const image = new Image();
+    image.onload = () => {
+      if (!active) return;
+      setDisplayAvatarUrl(avatarUrl);
+      setFailedAvatarUrl(null);
+      onAvatarReady(avatarIdentityKey);
+    };
+    image.onerror = () => {
+      if (!active) return;
+      setDisplayAvatarUrl(null);
+      setFailedAvatarUrl(avatarUrl);
+      onAvatarUnavailable(avatarIdentityKey);
+    };
+    image.src = avatarUrl;
+    return () => {
+      active = false;
+    };
+  }, [
+    avatarIdentityKey,
+    displayAvatarUrl,
+    failedAvatarUrl,
+    onAvatarReady,
+    onAvatarUnavailable,
+    p.avatarUrl,
+  ]);
+  const showAvatar =
+    p.avatarUrl !== null && displayAvatarUrl === p.avatarUrl && failedAvatarUrl !== p.avatarUrl;
+  const hotkeyLabel = observerHotkeyLabel(p.observerSlot);
+  return (
+    <div
+      aria-hidden={outgoing || pending || undefined}
+      className={`focused-player__face${outgoing ? ' focused-player__face--outgoing' : ''}${incoming ? ' focused-player__face--incoming' : ''}${pending ? ' focused-player__face--pending' : ''}`}
       data-avatar={showAvatar}
       data-side={p.side}
       data-dead={p.dead}
@@ -61,27 +224,36 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
       <div className="focused-player__action" data-focused-action="true">
         <div
           aria-label={
-            showAvatar ? `${p.displayName} avatar` : `Observer ${p.observerSlot ?? 'unknown'}`
+            showAvatar
+              ? `${p.displayName} avatar, observer hotkey ${hotkeyLabel}`
+              : `Observer hotkey ${hotkeyLabel}`
           }
           className={`focused-player__media${showAvatar ? ' has-avatar' : ' is-observer-tile'}`}
           data-avatar-slot="true"
           data-side={p.side}
+          role="img"
         >
-          {p.avatarUrl === null || avatarFailed ? null : (
+          {p.avatarUrl !== null && failedAvatarUrl !== p.avatarUrl ? (
             <img
               src={p.avatarUrl}
               alt={`${p.displayName} avatar`}
-              style={{ display: showAvatar ? undefined : 'none' }}
-              onLoad={() => setAvatarLoaded(true)}
-              onError={() => setAvatarFailed(true)}
+              style={{ visibility: showAvatar ? 'visible' : 'hidden' }}
+              onLoad={() => {
+                setDisplayAvatarUrl(p.avatarUrl);
+                setFailedAvatarUrl(null);
+                onAvatarReady(avatarIdentityKey);
+              }}
+              onError={() => {
+                setDisplayAvatarUrl(null);
+                setFailedAvatarUrl(p.avatarUrl);
+                onAvatarUnavailable(avatarIdentityKey);
+              }}
             />
-          )}
+          ) : null}
           {showAvatar ? (
-            <span className="focused-player__slot-badge">{p.observerSlot ?? '—'}</span>
+            <span className="focused-player__slot-badge">{hotkeyLabel}</span>
           ) : (
-            <strong className="focused-player__observer-tile-number">
-              {p.observerSlot ?? '—'}
-            </strong>
+            <strong className="focused-player__observer-tile-number">{hotkeyLabel}</strong>
           )}
         </div>
         <span
@@ -89,14 +261,14 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
           className="focused-player__action-gap focused-player__action-gap--a"
         />
         {p.dead ? (
-          <div aria-label="Dead" className="focused-player__dead-state">
-            <DeathWatermark className="focused-player__death-mark" />
-          </div>
+          <div aria-label="Dead" className="focused-player__dead-state"></div>
         ) : (
           <>
-            <div className="focused-player__active" aria-label="Active item">
-              <Icon asset={p.activeItem?.asset ?? null} />
-            </div>
+            <ActiveItemSlot
+              cursor={cursor}
+              player={p}
+              presentationRevision={presentationRevision}
+            />
             <span
               aria-hidden="true"
               className="focused-player__action-gap focused-player__action-gap--b"
@@ -138,27 +310,172 @@ function Card({ player: p }: { readonly player: FocusedPlayerPresentation }) {
 
       <div className="focused-player__vitals" data-danger={p.health !== null && p.health <= 25}>
         {p.dead ? null : (
-          <>
-            <div className="focused-player__vitals-values">
-              <span className="focused-player__health-cluster">
-                <strong className="focused-player__hp">{p.health ?? '—'}</strong>
-                <span className="focused-player__health-track">
-                  {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
-                </span>
+          <div className="focused-player__vitals-values">
+            <span className="focused-player__health-cluster">
+              <strong className="focused-player__hp">{p.health ?? '—'}</strong>
+              <span className="focused-player__health-track">
+                {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
               </span>
-              <span className="focused-player__armor">
-                <Icon asset={p.armorAsset} />
-                <b>{p.armor ?? '—'}</b>
-              </span>
-            </div>
-          </>
+            </span>
+            <span className="focused-player__armor">
+              <Icon asset={p.armorAsset} />
+              <b>{p.armor ?? '—'}</b>
+            </span>
+          </div>
         )}
       </div>
+    </div>
+  );
+}
+
+type FocusedPlayerHandoff = {
+  readonly avatarIdentityKey: string;
+  readonly outgoing: FocusedPlayerPresentation;
+  readonly phase: 'waiting' | 'crossfading';
+};
+
+export function FocusedPlayerCard({
+  player,
+  cursor = null,
+  presentationRevision = 0,
+}: {
+  readonly player: FocusedPlayerPresentation;
+  readonly cursor?: ProjectionCursor | null;
+  readonly presentationRevision?: number;
+}) {
+  const currentAvatarIdentityKey = `${player.sourcePlayerId}:${player.avatarUrl ?? ''}`;
+  const [loadedAvatarIdentityKey, setLoadedAvatarIdentityKey] = useState<string | null>(null);
+  const [unavailableAvatarIdentityKey, setUnavailableAvatarIdentityKey] = useState<string | null>(
+    null,
+  );
+  const currentAvatarReady =
+    player.avatarUrl === null ||
+    loadedAvatarIdentityKey === currentAvatarIdentityKey ||
+    unavailableAvatarIdentityKey === currentAvatarIdentityKey;
+  const [handoff, setHandoff] = useState<FocusedPlayerHandoff | null>(null);
+  const onAvatarReady = useCallback((avatarIdentityKey: string) => {
+    setLoadedAvatarIdentityKey(avatarIdentityKey);
+    setUnavailableAvatarIdentityKey((current) => (current === avatarIdentityKey ? null : current));
+    setHandoff((current) =>
+      current?.phase === 'waiting' && current.avatarIdentityKey === avatarIdentityKey
+        ? { ...current, phase: 'crossfading' }
+        : current,
+    );
+  }, []);
+  const onAvatarUnavailable = useCallback((avatarIdentityKey: string) => {
+    setUnavailableAvatarIdentityKey(avatarIdentityKey);
+    setHandoff((current) =>
+      current?.phase === 'waiting' && current.avatarIdentityKey === avatarIdentityKey
+        ? { ...current, phase: 'crossfading' }
+        : current,
+    );
+  }, []);
+  const previous = useRef<{
+    readonly player: FocusedPlayerPresentation;
+    readonly cursor: ProjectionCursor | null;
+    readonly presentationRevision: number;
+  }>({ player, cursor, presentationRevision });
+  const timer = useRef<number | null>(null);
+  useLayoutEffect(() => {
+    const prior = previous.current;
+    const changedIdentity = prior.player.sourcePlayerId !== player.sourcePlayerId;
+    const continuous =
+      prior.cursor !== null &&
+      cursor !== null &&
+      consecutivePresentationSamples(
+        prior.cursor,
+        cursor,
+        prior.presentationRevision,
+        presentationRevision,
+      );
+    previous.current = { player, cursor, presentationRevision };
+    if (!changedIdentity) return;
+    if (timer.current !== null) window.clearTimeout(timer.current);
+    timer.current = null;
+    const outgoing = handoff?.phase === 'waiting' ? handoff.outgoing : prior.player;
+    // Keep the old face through the same paint that observes the new identity.
+    setHandoff(
+      !continuous
+        ? null
+        : {
+            avatarIdentityKey: currentAvatarIdentityKey,
+            outgoing,
+            phase: player.avatarUrl !== null && !currentAvatarReady ? 'waiting' : 'crossfading',
+          },
+    );
+  }, [
+    player,
+    cursor,
+    player.sourcePlayerId,
+    cursor?.producerInstanceId,
+    cursor?.liveSessionId,
+    cursor?.programSourceGeneration,
+    cursor?.programReceiveSequence,
+    cursor?.mapEpoch,
+    cursor?.runtimeSeq,
+    presentationRevision,
+    currentAvatarReady,
+    currentAvatarIdentityKey,
+    handoff,
+  ]);
+  useEffect(() => {
+    if (handoff?.phase !== 'crossfading') return;
+    const currentHandoff = handoff;
+    const timeout = window.setTimeout(() => {
+      timer.current = null;
+      setHandoff((current) => (current === currentHandoff ? null : current));
+    }, 140);
+    timer.current = timeout;
+    return () => {
+      window.clearTimeout(timeout);
+      if (timer.current === timeout) timer.current = null;
+    };
+  }, [handoff]);
+  const crossfadeActive = handoff?.phase === 'crossfading';
+  return (
+    <article
+      aria-label="Focused player"
+      className="focused-player"
+      data-focused-player={player.sourcePlayerId}
+      data-avatar={loadedAvatarIdentityKey === currentAvatarIdentityKey ? true : undefined}
+      data-side={player.side}
+      data-dead={player.dead}
+      data-observer-transition={crossfadeActive}
+    >
+      {handoff === null ? null : (
+        <FocusedPlayerFace
+          key={`outgoing:${handoff.outgoing.sourcePlayerId}:${handoff.outgoing.avatarUrl ?? ''}`}
+          avatarIdentityKey={`${handoff.outgoing.sourcePlayerId}:${handoff.outgoing.avatarUrl ?? ''}`}
+          cursor={null}
+          onAvatarReady={onAvatarReady}
+          onAvatarUnavailable={onAvatarUnavailable}
+          outgoing={crossfadeActive}
+          player={handoff.outgoing}
+          presentationRevision={presentationRevision}
+        />
+      )}
+      <FocusedPlayerFace
+        key={`current:${player.sourcePlayerId}:${player.avatarUrl ?? ''}`}
+        avatarIdentityKey={currentAvatarIdentityKey}
+        cursor={cursor}
+        incoming={crossfadeActive}
+        onAvatarReady={onAvatarReady}
+        onAvatarUnavailable={onAvatarUnavailable}
+        pending={handoff?.phase === 'waiting'}
+        player={player}
+        presentationRevision={presentationRevision}
+      />
     </article>
   );
 }
 
-export function FocusedPlayer({ snapshot }: HudWidgetRendererProps) {
+export function FocusedPlayer({ snapshot, presentationRevision = 0 }: HudWidgetRendererProps) {
   const player = buildFocusedPlayerPresentation(snapshot.payload);
-  return player === null ? null : <FocusedPlayerCard player={player} />;
+  return player === null ? null : (
+    <FocusedPlayerCard
+      cursor={snapshot.cursor}
+      player={player}
+      presentationRevision={presentationRevision}
+    />
+  );
 }

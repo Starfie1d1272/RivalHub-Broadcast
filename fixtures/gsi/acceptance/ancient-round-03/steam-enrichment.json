@@ -1,0 +1,126 @@
+{
+  "schemaVersion": 1,
+  "source": {
+    "captureId": "20260914T060149Z-4cda66b7-recovered-match",
+    "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+    "sourceFrameSelection": {
+      "firstSequence": 587,
+      "kind": "sequence-range",
+      "lastSequence": 1214
+    },
+    "endpoint": "ISteamUser/GetPlayerSummaries/v2",
+    "apiKeySource": "STEAM_WEB_API_KEY environment variable"
+  },
+  "players": [
+    {
+      "steam64": "76561197960690195",
+      "personaName": "Lucio",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561197960690195-c592851dbfb5.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561197960690195-c592851dbfb5.jpg",
+        "sha256": "c592851dbfb5e9ece7e261c24e2c0a43afd0502a629ece3fa519eb1daee2fb58",
+        "sourceUrl": "https://avatars.steamstatic.com/2406d386e613af5716460faba2a7831526d44735_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198012872053",
+      "personaName": "riDSLk22",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198012872053-89e7f0ad4292.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198012872053-89e7f0ad4292.jpg",
+        "sha256": "89e7f0ad429293fd28e41c31d78b9b5adf731fbd583adc240e26a9d76ad945a8",
+        "sourceUrl": "https://avatars.steamstatic.com/7c0f0d2c2016076bbd45659c490f867ffed4b4b2_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198053126645",
+      "personaName": "Guy Sensei",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198053126645-d6a604e3fadb.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198053126645-d6a604e3fadb.jpg",
+        "sha256": "d6a604e3fadb16606227c534d44a33616481bc40821fb00c32d242e918bf65b5",
+        "sourceUrl": "https://avatars.steamstatic.com/e1a56a771fab9f97e84c7b0fd87ae639b2467231_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198058500492",
+      "personaName": "water",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198058500492-499cf2d3bc35.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198058500492-499cf2d3bc35.jpg",
+        "sha256": "499cf2d3bc35d518c9262bb354a484942241d7e8e7c0909bbb04a403577630f0",
+        "sourceUrl": "https://avatars.steamstatic.com/8614dbc75aef381afcf3b8718edeb061153fc4ce_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198068002993",
+      "personaName": "HeavyGoD",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198068002993-21b4a358b366.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198068002993-21b4a358b366.jpg",
+        "sha256": "21b4a358b366702d4cd8e18a0ef8645ccfeb291c7fc993b7c0f39934a2719ca7",
+        "sourceUrl": "https://avatars.steamstatic.com/16b8707564aa1530419e5ef953944b29ddfdb2d2_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198134401925",
+      "personaName": "SLAVE OF THE SYSTEM",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198134401925-0d0624dece84.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198134401925-0d0624dece84.jpg",
+        "sha256": "0d0624dece84e723f468651126b917a51f76fcd6e078e92aa568890fb17f9717",
+        "sourceUrl": "https://avatars.steamstatic.com/265d043506f0654d97a5049f03c3bb5e9018f513_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198164970560",
+      "personaName": "yuurih",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198164970560-cee3fb279f26.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198164970560-cee3fb279f26.jpg",
+        "sha256": "cee3fb279f26e23fa59a67e03559cd7fff987857ffd78eb92b881edbf0a7853a",
+        "sourceUrl": "https://avatars.steamstatic.com/eb68a0491bc93b9f7b7183aeecc5017da9f85c15_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198200982290",
+      "personaName": "molodoy",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198200982290-bd6d6b55a1c6.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198200982290-bd6d6b55a1c6.jpg",
+        "sha256": "bd6d6b55a1c68d9ad569d92867e8a2ba6466409ede2a8d176b47dbe7cd4643d5",
+        "sourceUrl": "https://avatars.steamstatic.com/113ba279eba7c5346482d7f3e83943e76de4413f_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561198294381090",
+      "personaName": "r1ツ",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561198294381090-b52765e6529e.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561198294381090-b52765e6529e.jpg",
+        "sha256": "b52765e6529e585fd7c96cdc144f5f4207a318c3e5561b8f3395d13f9d6d1dc0",
+        "sourceUrl": "https://avatars.steamstatic.com/9dbec36b0d1fee7a871fa5e92f40ef5acbc68071_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    },
+    {
+      "steam64": "76561199046478501",
+      "personaName": "^^",
+      "avatar": {
+        "assetPath": "apps/web/public/fixtures/ancient-round-03/assets/avatar-76561199046478501-5b3060d27a66.jpg",
+        "publicUrl": "/fixtures/ancient-round-03/assets/avatar-76561199046478501-5b3060d27a66.jpg",
+        "sha256": "5b3060d27a664d41a493dd99252df71e701af840703c8467372a29cc1e8ac2ce",
+        "sourceUrl": "https://avatars.steamstatic.com/3b52974680ce4fdf1d43d2957814cf18227181aa_full.jpg",
+        "mediaType": "image/jpeg"
+      }
+    }
+  ]
+}

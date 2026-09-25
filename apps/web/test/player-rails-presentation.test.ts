@@ -41,6 +41,13 @@ describe('Player Rails presentation selector', () => {
       'stress-player-1',
       'stress-player-5',
     ]);
+    expect(presentation.ct.players.map((player) => player.observerSlot)).toEqual([
+      1,
+      3,
+      4,
+      null,
+      null,
+    ]);
     expect(presentation.ct.players).toHaveLength(5);
     expect(presentation.t.players).toHaveLength(5);
   });

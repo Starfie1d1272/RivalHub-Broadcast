@@ -15,7 +15,7 @@ concurrency:
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   plan:
@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-24.04
     outputs:
       run_quality: ${{ steps.plan.outputs.run_quality }}
-      run_visual: ${{ steps.plan.outputs.run_visual }}
+      run_acceptance: ${{ steps.plan.outputs.run_acceptance }}
       run_platform: ${{ steps.plan.outputs.run_platform }}
       run_qualification: ${{ steps.plan.outputs.run_qualification }}
       required_jobs: ${{ steps.plan.outputs.required_jobs }}
@@ -93,6 +93,9 @@ jobs:
       - name: Verify real-derived Radar fixtures
         run: pnpm fixtures:radar:verify
 
+      - name: Verify replay acceptance artifacts
+        run: pnpm fixtures:replay:verify
+
       - name: Test
         run: pnpm test
 
@@ -103,15 +106,14 @@ jobs:
         timeout-minutes: 2
         run: pnpm local-web:production-smoke
 
-  visual:
-    name: visual
-    if: ${{ needs.plan.outputs.run_visual == 'true' }}
+  acceptance:
+    name: acceptance
+    if: ${{ needs.plan.outputs.run_acceptance == 'true' }}
     needs: [plan]
     runs-on: ubuntu-24.04
+    timeout-minutes: 10
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          ref: ${{ github.event.pull_request.head.ref || github.sha }}
 
       - name: Set up Node.js 24 and pnpm 12
         uses: pnpm/setup@703c52620218391530e48b9e8870d5c0082e1b9b # v2.1.0
@@ -129,42 +131,16 @@ jobs:
       - name: Install Playwright Chromium
         run: pnpm exec playwright install --with-deps chromium
 
-      - name: Render visual candidates for draft PR
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
-        run: pnpm visual:update
+      - name: Run HUD Replay browser acceptance
+        run: pnpm acceptance:test
 
-      - name: Commit approved draft visual baseline
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft }}
-        shell: bash
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add tests/visual/__screenshots__/linux
-          if git diff --cached --quiet; then
-            exit 0
-          fi
-          git commit -m "test(hud): refresh canonical visual baselines"
-          git push origin HEAD:${{ github.event.pull_request.head.ref }}
-
-      - name: Run canonical visual regression
-        if: ${{ github.event_name != 'pull_request' || !github.event.pull_request.draft }}
-        run: pnpm visual:test
-
-      - name: Upload draft visual candidates
-        if: ${{ github.event_name == 'pull_request' && github.event.pull_request.draft && always() }}
-        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
-        with:
-          name: visual-candidates-${{ github.event.pull_request.head.sha }}
-          path: tests/visual/__screenshots__/linux/**
-          if-no-files-found: warn
-
-      - name: Upload Playwright diagnostics
+      - name: Upload browser acceptance diagnostics
         if: ${{ failure() }}
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: playwright-visual-diagnostics
+          name: playwright-acceptance-diagnostics
           path: |
-            playwright-report/**
+            playwright-acceptance-report/**
             test-results/**
           if-no-files-found: warn
 
@@ -380,7 +356,7 @@ jobs:
   ci-gate:
     name: ci-gate
     if: always()
-    needs: [plan, quality, visual, platform, qualification_offline, qualification_windows]
+    needs: [plan, quality, acceptance, platform, qualification_offline, qualification_windows]
     runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -391,7 +367,7 @@ jobs:
           PLAN_RESULT: ${{ needs.plan.result }}
           REQUIRED_JOBS: ${{ needs.plan.outputs.required_jobs }}
           QUALITY_RESULT: ${{ needs.quality.result }}
-          VISUAL_RESULT: ${{ needs.visual.result }}
+          ACCEPTANCE_RESULT: ${{ needs.acceptance.result }}
           PLATFORM_RESULT: ${{ needs.platform.result }}
           QUALIFICATION_OFFLINE_RESULT: ${{ needs.qualification_offline.result }}
           QUALIFICATION_WINDOWS_RESULT: ${{ needs.qualification_windows.result }}

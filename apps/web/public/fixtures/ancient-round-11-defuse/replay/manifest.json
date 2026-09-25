@@ -1,0 +1,45 @@
+{
+  "schemaVersion": 1,
+  "eventIndexSchemaVersion": 1,
+  "harnessVersion": 1,
+  "source": {
+    "id": "ancient-round-11-defuse",
+    "role": "supplemental",
+    "capturePath": "fixtures/gsi/acceptance/ancient-round-11-defuse",
+    "sourceCaptureId": "20260914T060149Z-4cda66b7-recovered-match",
+    "sourceFramesSha256": "7a2dfed10f28903de6a94e782ca3f0955593fe2f653e7e831e05305d8e99347a",
+    "sanitizerVersion": 2,
+    "sourceFrameSelection": {
+      "kind": "sequence-range",
+      "firstSequence": 5522,
+      "lastSequence": 5544
+    },
+    "mapName": "de_ancient",
+    "humanRound": 11
+  },
+  "frameCount": 23,
+  "firstSequence": 5522,
+  "lastSequence": 5544,
+  "framesSha256": "6ebf34dbf2e396661c39de3384203300e201b5cf5cdf7fd7a2ba6322a441d0a1",
+  "eventCount": 5,
+  "eventIndexSha256": "4f244e52a4adcd7ac511572e2a18568ba1faa2c1a071f2d2d7bcfadfacced1c2",
+  "matchContextSha256": "6d13262335f34f5ca6ab5af35da817aaff88df801ce3322b98c2160c003b49c7",
+  "captureManifestSha256": "431e542e1204401bc1c1fb1270ea8335a59fc43f7a500f0ea96c287668f1d65c",
+  "coverage": [
+    { "kind": "round-phase", "status": "observed" },
+    { "kind": "weapon-ammo-decrease", "status": "not-observed-in-selected-window" },
+    { "kind": "health-decrease", "status": "unavailable-from-current-source" },
+    { "kind": "death", "status": "not-observed-in-selected-window" },
+    { "kind": "flash-rise-fall", "status": "not-observed-in-selected-window" },
+    { "kind": "grenade-airborne-terminal", "status": "not-observed-in-selected-window" },
+    { "kind": "smoke-start", "status": "not-observed-in-selected-window" },
+    { "kind": "smoke-end", "status": "not-observed-in-selected-window" },
+    { "kind": "inferno-start", "status": "not-observed-in-selected-window" },
+    { "kind": "inferno-end", "status": "not-observed-in-selected-window" },
+    { "kind": "he-detonation", "status": "unavailable-from-current-source" },
+    { "kind": "bomb-state", "status": "observed" },
+    { "kind": "observer-target-switch", "status": "not-observed-in-selected-window" },
+    { "kind": "round-boundary", "status": "observed" },
+    { "kind": "round-accumulator-finalize", "status": "not-observed-in-selected-window" }
+  ]
+}

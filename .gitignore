@@ -38,6 +38,7 @@ Thumbs.db
 # Test output
 test-results/
 playwright-report/
+playwright-acceptance-report/
 blob-report/
 
 # Temporary files

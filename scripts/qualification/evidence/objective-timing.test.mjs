@@ -812,7 +812,7 @@ describe('objective timing capture analyzer', () => {
           sourceCaptureId: 'raw-capture',
           sourceFramesSha256: 'c'.repeat(64),
           sourceFrameSelection: { kind: 'all' },
-          sanitizerVersion: 1,
+          sanitizerVersion: 2,
           lifecycleCoverage: 'full-match',
         },
       },
