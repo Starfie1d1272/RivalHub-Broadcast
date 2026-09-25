@@ -20,7 +20,7 @@
 
 .player-status-effects__smoke {
   inset: -12% -5%;
-  opacity: calc(var(--rh-player-status-smoke, 0) * 0.94);
+  opacity: var(--rh-player-status-smoke, 0);
   background:
     radial-gradient(
       ellipse 32% 72% at var(--rh-player-status-anchor-x) 48%,
@@ -97,7 +97,7 @@
 }
 
 .player-status-effects__fire {
-  opacity: calc(var(--rh-player-status-burning, 0) * 0.96);
+  opacity: var(--rh-player-status-burning, 0);
   background:
     radial-gradient(
       ellipse 28% 62% at var(--rh-player-status-anchor-x) 112%,
@@ -146,7 +146,7 @@
 }
 
 .player-status-effects__flash {
-  opacity: calc(var(--rh-player-status-flashed, 0) * 0.8);
+  opacity: var(--rh-player-status-flashed, 0);
   background:
     radial-gradient(
       circle at var(--rh-player-status-anchor-x) 42%,
