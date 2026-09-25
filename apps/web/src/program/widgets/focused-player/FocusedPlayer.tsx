@@ -74,7 +74,7 @@ function ActiveItemSlot({
         timer.current = null;
         setOutgoing(null);
       }, 120);
-    } else if (changed || !continuous) {
+    } else if (changed) {
       if (timer.current !== null) window.clearTimeout(timer.current);
       timer.current = null;
       setOutgoing(null);
@@ -337,7 +337,7 @@ export function FocusedPlayerCard({
         timer.current = null;
         setOutgoing(null);
       }, 140);
-    } else if (changedIdentity || !continuous) {
+    } else if (changedIdentity) {
       if (timer.current !== null) window.clearTimeout(timer.current);
       timer.current = null;
       setOutgoing(null);
