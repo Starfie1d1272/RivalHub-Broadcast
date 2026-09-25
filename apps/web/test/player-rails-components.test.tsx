@@ -193,7 +193,7 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('[data-equipment="c4"] [data-asset-id]')).not.toBeNull();
   });
 
-  it('gives removed equipment a short exit tail without retaining it as truth', () => {
+  it('gives equipment short exit/enter motion without retaining stale truth', () => {
     vi.useFakeTimers();
     const snapshot = getProgramFixture('player-rails-dead-observed');
     if (snapshot === null) throw new Error('fixture missing');
@@ -204,27 +204,11 @@ describe('Player Rails card presentation', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
+
     act(() => {
       root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
     });
     expect(container.querySelector('[data-equipment="kit"]')).not.toBeNull();
-
-    act(() => {
-      root?.render(
-
-    act(() => {
-      root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
-    });
-    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
-      'enter',
-    );
-
-    act(() => {
-      vi.advanceTimersByTime(110);
-    });
-    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
-      'steady',
-    );
 
     act(() => {
       root?.render(
@@ -242,6 +226,20 @@ describe('Player Rails card presentation', () => {
       vi.advanceTimersByTime(110);
     });
     expect(container.querySelector('[data-equipment="kit"]')).toBeNull();
+
+    act(() => {
+      root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
+      'enter',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(110);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
+      'steady',
+    );
   });
 
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
