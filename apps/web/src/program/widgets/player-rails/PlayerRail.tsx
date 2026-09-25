@@ -4,7 +4,7 @@ import { PlayerCard } from './PlayerCard';
 import { buildPlayerRailsPresentation } from './presentation';
 import { TeamSummary } from './TeamSummary';
 
-export function PlayerRail({ snapshot, widgetId }: HudWidgetRendererProps) {
+export function PlayerRail({ snapshot, widgetId, presentationRevision = 0 }: HudWidgetRendererProps) {
   const presentation = buildPlayerRailsPresentation(snapshot.payload);
   const physicalSide = widgetId === 'team-t-rail' ? 'right' : 'left';
   const rail = physicalSide === 'left' ? presentation.left : presentation.right;
@@ -24,7 +24,12 @@ export function PlayerRail({ snapshot, widgetId }: HudWidgetRendererProps) {
       </div>
       <div className="player-rail__players">
         {rail.players.slice(0, 5).map((player) => (
-          <PlayerCard key={player.sourcePlayerId} physicalSide={physicalSide} player={player} />
+          <PlayerCard
+            key={player.sourcePlayerId}
+            physicalSide={physicalSide}
+            player={player}
+            presentationRevision={presentationRevision}
+          />
         ))}
         {Array.from({ length: Math.max(0, 5 - rail.players.length) }, (_, index) => (
           <div aria-hidden="true" className="player-rail__empty-card" key={`empty-${index}`} />
