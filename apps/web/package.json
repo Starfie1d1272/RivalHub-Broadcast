@@ -3,6 +3,7 @@
   "private": true,
   "type": "module",
   "scripts": {
+    "predev": "pnpm --filter @rivalhub-broadcast/testkit build",
     "build": "vite build",
     "dev": "vite --host 127.0.0.1 --port 4173",
     "typecheck": "tsc -p tsconfig.json --noEmit"
