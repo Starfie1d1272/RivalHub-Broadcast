@@ -10,9 +10,11 @@ import {
   SMOKE_PRESENTATION_DURATION_SECONDS,
   isMultiLayerGeometry,
   layerOpacity,
+  radarPlayerMarkerKind,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
+import { drawContainedImage } from './draw-contained-image';
 import {
   RADAR_CANVAS_GEOMETRY,
   radarBroadcastPlacement,
@@ -349,7 +351,12 @@ export function Radar({
           marker: typeof model.grenades extends Map<string, infer V> ? V : never,
           alpha: number,
         ) => {
-          if (marker.source.kind !== 'inferno' || marker.source.flames.length === 0) return;
+          if (
+            !marker.positionAvailable ||
+            marker.source.kind !== 'inferno' ||
+            marker.source.flames.length === 0
+          )
+            return;
           let totalX = 0;
           let totalY = 0;
           let totalOpacity = 0;
@@ -494,7 +501,12 @@ export function Radar({
           ctx.restore();
         };
         for (const marker of model.grenades.values()) {
-          if (marker.phase !== 'effect' || marker.source.kind !== 'smoke') continue;
+          if (
+            !marker.positionAvailable ||
+            marker.phase !== 'effect' ||
+            marker.source.kind !== 'smoke'
+          )
+            continue;
           drawSmoke(
             marker,
             Math.min(
@@ -532,6 +544,7 @@ export function Radar({
           ctx.restore();
         };
         for (const exit of model.exits.values()) {
+          if (!exit.marker.positionAvailable) continue;
           const alpha = Math.max(0, (exit.until - now) / exit.durationMs);
           drawTrail(exit.marker, alpha);
           const exitPoint = pointAt(exit.marker.target);
@@ -543,7 +556,7 @@ export function Radar({
             ctx.globalAlpha = alpha * layerOpacity(exit.marker.target, model.layer);
             const icon =
               exit.includeProjectileIcon && exit.marker.iconUrl && imageFor(exit.marker.iconUrl);
-            if (icon) ctx.drawImage(icon, exitPoint.x - 14, exitPoint.y - 14, 28, 28);
+            if (icon) drawContainedImage(ctx, icon, exitPoint.x, exitPoint.y, 28, 28);
             ctx.restore();
           }
           if (exit.marker.phase === 'projectile' && (kind === 'frag' || kind === 'hegrenade')) {
@@ -593,12 +606,12 @@ export function Radar({
             const icon = exit.marker.iconUrl && imageFor(exit.marker.iconUrl);
             ctx.save();
             ctx.globalAlpha = alpha * layerOpacity(exit.marker.target, model.layer);
-            if (icon) ctx.drawImage(icon, exitPoint.x - 14, exitPoint.y - 14, 28, 28);
+            if (icon) drawContainedImage(ctx, icon, exitPoint.x, exitPoint.y, 28, 28);
             ctx.restore();
           }
         }
         for (const marker of model.grenades.values()) {
-          if (marker.phase !== 'projectile') continue;
+          if (!marker.positionAvailable || marker.phase !== 'projectile') continue;
           drawTrail(marker, 1);
           const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
           if (point === null) continue;
@@ -607,7 +620,7 @@ export function Radar({
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           const url = marker.iconUrl;
           const icon = url && imageFor(url);
-          if (icon) ctx.drawImage(icon, x - 14, y - 14, 28, 28);
+          if (icon) drawContainedImage(ctx, icon, x, y, 28, 28);
           else {
             ctx.fillStyle = '#ecedef';
             ctx.fillRect(x - 6, y - 6, 12, 12);
@@ -638,14 +651,21 @@ export function Radar({
         }
         for (const marker of model.players.values()) {
           const p = marker.source;
-          const point = pointAt({ ...marker.target, x: marker.x, y: marker.y });
+          const markerKind = radarPlayerMarkerKind(p.lifeState);
+          if (markerKind === null) continue;
+          const deathPosition = markerKind === 'dead' ? marker.deathPosition : null;
+          if (markerKind === 'dead' && deathPosition === null) continue;
+          const position =
+            deathPosition === null
+              ? { ...marker.target, x: marker.x, y: marker.y }
+              : { ...marker.target, ...deathPosition };
+          const point = pointAt(position);
           if (point === null) continue;
           const x = point.x;
           const y = point.y;
-          const alive = p.lifeState === 'alive';
           const color = sideColor(p.side);
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
-          if (!alive) {
+          if (markerKind === 'dead') {
             ctx.strokeStyle = color;
             ctx.lineWidth = 7;
             ctx.beginPath();
@@ -677,7 +697,7 @@ export function Radar({
             ctx.restore();
           }
           const flashRatio =
-            alive && p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
+            p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
           circle(x, y, 29, '#f3f6fa');
           circle(x, y, 25, color, '#0b1119', 2);
           if (flashRatio > 0) {

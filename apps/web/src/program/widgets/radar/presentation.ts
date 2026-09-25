@@ -16,6 +16,8 @@ export const RADAR_PRESENTATION = Object.freeze({
   correctionSmoothingMs: 80,
   maxExtrapolationMs: 100,
   utilityVelocityEpsilon: 0.01,
+  smokeStationaryWorldThreshold: 6,
+  smokeStationarySamples: 2,
   teleportBaseWorld: 160,
   teleportSpeedWorldPerSecond: 1100,
   sampleGapMs: 500,
@@ -64,6 +66,7 @@ export interface PlayerMarker extends Motion {
   source: Player;
   damageUntil: number;
   shootingUntil: number;
+  deathPosition: { readonly x: number; readonly y: number } | null;
 }
 export interface GrenadeMarker extends Motion {
   source: Grenade;
@@ -72,6 +75,9 @@ export interface GrenadeMarker extends Motion {
   phase: RadarUtilityPhase;
   phaseStartedAt: number;
   iconUrl: string | null;
+  previousPosition: Vector;
+  stationarySampleCount: number;
+  positionAvailable: boolean;
 }
 export interface GrenadeExit {
   marker: GrenadeMarker;
@@ -135,6 +141,11 @@ export function isMultiLayerGeometry(geometry: MapGeometry): boolean {
 export function layerOpacity(point: RadarProjectedPosition, primary: RadarLayer): number {
   if (point.layer === 'unknown' || primary === 'unknown') return 0.76;
   return point.layer === primary ? 0.88 : 0.62;
+}
+export function radarPlayerMarkerKind(lifeState: Player['lifeState']): 'alive' | 'dead' | null {
+  if (lifeState === 'alive') return 'alive';
+  if (lifeState === 'dead') return 'dead';
+  return null;
 }
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;
@@ -251,15 +262,13 @@ export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
   const moving = speed !== null && speed > RADAR_PRESENTATION.utilityVelocityEpsilon;
   switch (g.kind) {
     case 'smoke':
-      if (moving) return 'projectile';
-      return g.position !== null &&
-        speed !== null &&
-        speed <= RADAR_PRESENTATION.utilityVelocityEpsilon &&
+      if (
         g.effectTimeSeconds !== null &&
-        g.effectTimeSeconds >= 0 &&
-        g.effectTimeSeconds < SMOKE_PRESENTATION_DURATION_SECONDS
-        ? 'effect'
-        : 'terminal';
+        g.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
+      )
+        return 'terminal';
+      if (moving) return 'projectile';
+      return g.effectTimeSeconds !== null && g.effectTimeSeconds > 0 ? 'effect' : 'projectile';
     case 'firebomb':
       return moving ? 'projectile' : 'terminal';
     case 'inferno':
@@ -270,6 +279,43 @@ export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
 }
 export function isActiveSmoke(g: Grenade): boolean {
   return g.kind === 'smoke' && radarUtilityPhase(g) === 'effect';
+}
+
+function worldDisplacement(before: Vector, after: Vector): number {
+  return Math.hypot(after.x - before.x, after.y - before.y, after.z - before.z);
+}
+
+function transitionSmokePhase(
+  previousPhase: RadarUtilityPhase,
+  source: Grenade,
+  stationarySampleCount: number,
+): RadarUtilityPhase {
+  if (previousPhase === 'terminal') return 'terminal';
+  if (
+    source.effectTimeSeconds !== null &&
+    source.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
+  )
+    return 'terminal';
+  if (previousPhase === 'effect') return 'effect';
+  if (
+    (source.effectTimeSeconds !== null && source.effectTimeSeconds > 0) ||
+    stationarySampleCount >= RADAR_PRESENTATION.smokeStationarySamples
+  )
+    return 'effect';
+  return 'projectile';
+}
+
+function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): old is GrenadeMarker {
+  return (
+    source.kind === 'smoke' &&
+    old?.source.kind === 'smoke' &&
+    old.source.ownerSourceId === source.ownerSourceId &&
+    !(
+      old.source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds < old.source.lifetimeSeconds
+    )
+  );
 }
 
 function exitDuration(marker: GrenadeMarker): number {
@@ -397,29 +443,69 @@ export class RadarPresentation {
     const currentPlayers = new Set<string>();
     for (const source of snapshot.payload.players.slice(0, RADAR_PRESENTATION.maxPlayers)) {
       const point = projectWorldPosition(source.position, geometry);
-      if (!source.position || !point || point.outOfBounds) continue;
       const id = source.sourcePlayerId;
-      currentPlayers.add(id);
       const old = this.players.get(id);
+      const projectedPoint = point && !point.outOfBounds ? point : null;
+      if (source.lifeState === 'dead') {
+        const deathPosition =
+          old?.source.lifeState === 'dead' && old.deathPosition !== null
+            ? old.deathPosition
+            : projectedPoint
+              ? { x: projectedPoint.x, y: projectedPoint.y }
+              : old
+                ? { x: old.target.x, y: old.target.y }
+                : null;
+        if (deathPosition === null) continue;
+        currentPlayers.add(id);
+        if (old?.source.lifeState === 'dead' && old.deathPosition !== null) {
+          this.players.set(id, { ...old, source, deathPosition: old.deathPosition });
+          continue;
+        }
+        const world = source.position ?? old?.world;
+        const target = projectedPoint ?? old?.target;
+        if (world === undefined || target === undefined) continue;
+        const baseMotion = old ?? motion(world, target, direction(source), now);
+        this.players.set(id, {
+          ...baseMotion,
+          source,
+          x: deathPosition.x,
+          y: deathPosition.y,
+          previousTarget: { ...deathPosition },
+          target,
+          targetAngle: baseMotion.angle,
+          world,
+          previousSampleAt: now,
+          sampledAt: now,
+          velocity: { x: 0, y: 0 },
+          interpolationDurationMs: 0,
+          damageUntil: 0,
+          shootingUntil: 0,
+          deathPosition,
+        });
+        continue;
+      }
+      if (!source.position || !projectedPoint) continue;
+      currentPlayers.add(id);
       const angle = direction(source);
       const continuous =
         old &&
-        !discontinuous(old, source.position, point, now) &&
+        !discontinuous(old, source.position, projectedPoint, now) &&
         old.source.lifeState === source.lifeState &&
         old.source.side === source.side &&
         snapshot.payload.coverage.allPlayers === 'present' &&
         this.snapshot?.payload.coverage.allPlayers === 'present';
       const next: PlayerMarker = {
         ...(continuous
-          ? retarget(old, source.position, point, angle, now)
-          : motion(source.position, point, angle, now)),
+          ? retarget(old, source.position, projectedPoint, angle, now)
+          : motion(source.position, projectedPoint, angle, now)),
         source,
-        target: point,
+        target: projectedPoint,
         targetAngle: angle,
         world: source.position,
         sampledAt: now,
         damageUntil: continuous ? old.damageUntil : 0,
         shootingUntil: continuous ? old.shootingUntil : 0,
+        deathPosition: null,
       };
       if (
         continuous &&
@@ -441,15 +527,56 @@ export class RadarPresentation {
     );
     const currentGrenades = new Set<string>();
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
-      const world = presentationPosition(source);
-      const point = projectWorldPosition(world, geometry);
-      if (!world || !point || point.outOfBounds) continue;
       const id = source.sourceEntityId;
+      const old = this.grenades.get(id);
+      const world = presentationPosition(source);
+      if (world === null) {
+        if (sameSmokeLifecycle(old, source)) {
+          currentGrenades.add(id);
+          const phase = transitionSmokePhase(old.phase, source, 0);
+          if (old.phase !== phase) this.beginExit(id, old, now);
+          const activeExit = this.exits.get(id);
+          if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+          this.grenades.set(id, {
+            ...old,
+            source,
+            phase,
+            phaseStartedAt: old.phase === phase ? old.phaseStartedAt : now,
+            stationarySampleCount: 0,
+            positionAvailable: false,
+            trail: phase === 'projectile' ? old.trail : [],
+          });
+        }
+        continue;
+      }
+      const point = projectWorldPosition(world, geometry);
+      if (!point || point.outOfBounds) continue;
       currentGrenades.add(id);
       const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
       const side = owner?.side ?? 'unknown';
-      const old = this.grenades.get(id);
-      const phase = radarUtilityPhase(source);
+      const continuous =
+        old &&
+        old.source.kind === source.kind &&
+        old.source.ownerSourceId === source.ownerSourceId &&
+        old.positionAvailable &&
+        !discontinuous(old, world, point, now) &&
+        !(
+          old.source.lifetimeSeconds !== null &&
+          source.lifetimeSeconds !== null &&
+          source.lifetimeSeconds < old.source.lifetimeSeconds
+        );
+      const stationarySampleCount =
+        source.kind === 'smoke' &&
+        continuous &&
+        old.phase === 'projectile' &&
+        source.effectTimeSeconds !== null &&
+        worldDisplacement(old.previousPosition, world) <=
+          RADAR_PRESENTATION.smokeStationaryWorldThreshold
+          ? old.stationarySampleCount + 1
+          : 0;
+      const phase = sameSmokeLifecycle(old, source)
+        ? transitionSmokePhase(old.phase, source, stationarySampleCount)
+        : radarUtilityPhase(source);
       if (old && old.phase !== phase) {
         const infernoHandoff =
           old.source.kind === 'firebomb' &&
@@ -460,16 +587,6 @@ export class RadarPresentation {
       }
       const activeExit = this.exits.get(id);
       if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
-      const continuous =
-        old &&
-        old.source.kind === source.kind &&
-        old.source.ownerSourceId === source.ownerSourceId &&
-        !discontinuous(old, world, point, now) &&
-        !(
-          old.source.lifetimeSeconds !== null &&
-          source.lifetimeSeconds !== null &&
-          source.lifetimeSeconds < old.source.lifetimeSeconds
-        );
       const trail =
         continuous && old.phase === 'projectile' && phase === 'projectile' ? old.trail.slice() : [];
       const lastTrailPoint = trail.at(-1);
@@ -492,6 +609,9 @@ export class RadarPresentation {
         phaseStartedAt: continuous && old.phase === phase ? old.phaseStartedAt : now,
         iconUrl: grenadeIcon(source.kind, side),
         trail,
+        previousPosition: world,
+        stationarySampleCount: phase === 'projectile' ? stationarySampleCount : 0,
+        positionAvailable: true,
         target: point,
         targetAngle: 0,
         world,
@@ -545,7 +665,16 @@ export class RadarPresentation {
         marker.angle = marker.targetAngle;
       }
     };
-    for (const marker of this.players.values()) updateMotion(marker);
+    for (const marker of this.players.values()) {
+      if (marker.source.lifeState === 'dead') {
+        if (marker.deathPosition !== null) {
+          marker.x = marker.deathPosition.x;
+          marker.y = marker.deathPosition.y;
+        }
+        continue;
+      }
+      updateMotion(marker);
+    }
     for (const marker of this.grenades.values()) updateMotion(marker);
     for (const [id, exit] of this.exits) if (now >= exit.until) this.exits.delete(id);
     let x = 0.5;

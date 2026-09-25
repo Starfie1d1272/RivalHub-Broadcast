@@ -5,6 +5,7 @@ import {
   grenadeIcon,
   isActiveSmoke,
   RadarPresentation,
+  radarPlayerMarkerKind,
   radarUtilityPhase,
   shortestAngle,
   smokeRemaining,
@@ -126,6 +127,132 @@ describe('Radar renderer local lifecycle', () => {
     expect(radarUtilityPhase(stationarySmoke)).toBe('effect');
     expect(isActiveSmoke(stationarySmoke)).toBe(true);
     expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
+  });
+
+  it('latches smoke from projectile to effect and never returns on residual velocity', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: { x: 25, y: 0, z: 0 },
+        effectTimeSeconds: 0,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('projectile');
+
+    const started = next(before);
+    started.payload.grenades[0]!.effectTimeSeconds = 0.2;
+    model.accept(started, 100);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
+
+    const missingPosition = next(started);
+    missingPosition.payload.grenades[0]!.position = null;
+    missingPosition.payload.grenades[0]!.effectTimeSeconds = 0.4;
+    model.accept(missingPosition, 150);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      positionAvailable: false,
+    });
+
+    const residualVelocity = next(missingPosition);
+    residualVelocity.payload.grenades[0]!.position = { ...started.payload.grenades[0]!.position! };
+    residualVelocity.payload.grenades[0]!.velocity = { x: 25, y: 0, z: 0 };
+    residualVelocity.payload.grenades[0]!.position.x += 2;
+    residualVelocity.payload.grenades[0]!.effectTimeSeconds = 0.5;
+    model.accept(residualVelocity, 200);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      positionAvailable: true,
+    });
+
+    const expired = next(residualVelocity);
+    expired.payload.grenades[0]!.effectTimeSeconds = 20;
+    model.accept(expired, 300);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('terminal');
+    expect(model.exits.get('synthetic-projectile')?.marker.phase).toBe('effect');
+  });
+
+  it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: null,
+        effectTimeSeconds: 0,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+
+    const firstStationary = next(before);
+    firstStationary.payload.grenades[0]!.position!.x += 1;
+    model.accept(firstStationary, 100);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'projectile',
+      stationarySampleCount: 1,
+    });
+
+    const secondStationary = next(firstStationary);
+    secondStationary.payload.grenades[0]!.position!.x += 1;
+    model.accept(secondStationary, 200);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      stationarySampleCount: 0,
+    });
+  });
+
+  it('draw state omits unknown life and freezes death position until alive again', () => {
+    expect(radarPlayerMarkerKind('unknown')).toBeNull();
+    expect(radarPlayerMarkerKind('dead')).toBe('dead');
+
+    const before = single();
+    before.payload.players[0]!.lifeState = 'alive';
+    const playerId = before.payload.players[0]!.sourcePlayerId;
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+
+    const died = next(before);
+    died.payload.players[0]!.lifeState = 'dead';
+    died.payload.players[0]!.position!.x += 40;
+    model.accept(died, 100);
+    const marker = model.players.get(playerId)!;
+    expect(marker.deathPosition).toEqual({ x: marker.target.x, y: marker.target.y });
+    const deathPosition = marker.deathPosition;
+
+    const corpseMoved = next(died);
+    corpseMoved.payload.players[0]!.position!.x += 400;
+    model.accept(corpseMoved, 200);
+    model.tick(200, false);
+    expect(marker.deathPosition).toEqual(deathPosition);
+    expect({ x: marker.x, y: marker.y }).toEqual(deathPosition);
+
+    const aliveAgain = next(corpseMoved);
+    aliveAgain.payload.players[0]!.lifeState = 'alive';
+    aliveAgain.payload.players[0]!.position!.x += 20;
+    model.accept(aliveAgain, 300);
+    expect(model.players.get(playerId)?.deathPosition).toBeNull();
+  });
+
+  it('falls back to the last target when the first authoritative dead sample has no position', () => {
+    const before = single();
+    before.payload.players[0]!.lifeState = 'alive';
+    const playerId = before.payload.players[0]!.sourcePlayerId;
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    const lastTarget = model.players.get(playerId)!.target;
+
+    const died = next(before);
+    died.payload.players[0]!.lifeState = 'dead';
+    died.payload.players[0]!.position = null;
+    model.accept(died, 100);
+    expect(model.players.get(playerId)?.deathPosition).toEqual({
+      x: lastTarget.x,
+      y: lastTarget.y,
+    });
   });
 
   it('hands a terminal firebomb off to flame evidence without a second projectile presentation', () => {

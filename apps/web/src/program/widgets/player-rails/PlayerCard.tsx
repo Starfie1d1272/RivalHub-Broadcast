@@ -19,10 +19,12 @@ function MaskIcon({
   asset,
   className = '',
   label,
+  weaponVisual,
 }: {
   readonly asset: PlayerRailAsset | null;
   readonly className?: string;
   readonly label: string;
+  readonly weaponVisual?: 'firearm' | 'pistol';
 }) {
   if (asset === null) return null;
   const style = { '--player-rail-icon': `url("${asset.outputPath}")` } as CSSProperties;
@@ -31,24 +33,21 @@ function MaskIcon({
       aria-label={label}
       className={`player-rail__icon ${className}`.trim()}
       data-asset-id={asset.canonicalKey}
+      data-weapon-visual={weaponVisual}
       role="img"
       style={style}
     />
   );
 }
 
-function WeaponIcon({
-  weapon,
-  className,
-}: {
-  readonly weapon: PlayerRailWeapon | null;
-  readonly className: string;
-}) {
+function WeaponIcon({ weapon }: { readonly weapon: PlayerRailWeapon | null }) {
+  const visual = weapon?.item?.family === 'pistol' ? 'pistol' : 'firearm';
   return (
     <MaskIcon
       asset={weapon?.asset ?? null}
-      className={className}
+      className={`is-${visual}`}
       label={weapon?.name ?? 'Weapon'}
+      weaponVisual={visual}
     />
   );
 }
@@ -164,11 +163,29 @@ function StatGlyph({ kind }: { readonly kind: 'kills' | 'deaths' }) {
 
 function Kd({ player }: { readonly player: PlayerCardPresentation }) {
   return (
-    <span className="player-rail__kd" aria-label="Kills and deaths">
+    <span className="player-rail__kd" aria-label="Kills and deaths" data-player-rail-row-part="kd">
       <StatGlyph kind="kills" />
       <span>{displayNumber(player.stats.kills)}</span>
       <StatGlyph kind="deaths" />
       <span>{displayNumber(player.stats.deaths)}</span>
+    </span>
+  );
+}
+
+function RoundKillBadge({ kills }: { readonly kills: number }) {
+  return (
+    <span
+      aria-label={`Round kills ${kills}`}
+      className="player-rail__round-kill-badge"
+      data-round-kills={kills}
+      role="img"
+    >
+      <svg aria-hidden="true" viewBox="0 0 26 26">
+        <path d="M13 2v5M13 19v5M2 13h5M19 13h5" />
+        <text dominantBaseline="central" textAnchor="middle" x="13" y="13">
+          {kills}
+        </text>
+      </svg>
     </span>
   );
 }
@@ -203,59 +220,62 @@ function PlayerBody({
         </div>
       )}
 
-      {dead ? (
-        <div className="player-rail__dead-stats" data-dead-stats="true">
-          <span aria-hidden="true" className="player-rail__death-mark">
-            <DeathWatermark className="player-rail__death-watermark" />
-          </span>
-          {player.liveAdr === null ? null : (
-            <span className="player-rail__adr">
-              <small>ADR</small>
-              <b>{displayNumber(player.liveAdr)}</b>
-            </span>
-          )}
-          {player.currentRoundDamage === null ? null : (
-            <span className="player-rail__damage">
-              <small>DMG</small>
-              <b>{displayNumber(player.currentRoundDamage)}</b>
-            </span>
+      <div
+        className="player-rail__combat"
+        data-combat-row="true"
+        data-dead={dead}
+        data-phase={player.mode}
+        data-secondary={secondaryVisible}
+      >
+        <Kd player={player} />
+        <div className="player-rail__context" data-player-rail-row-part="context">
+          {dead ? (
+            <div className="player-rail__dead-stats" data-dead-stats="true">
+              <span aria-hidden="true" className="player-rail__death-mark">
+                <DeathWatermark className="player-rail__death-watermark" />
+              </span>
+              {player.liveAdr === null ? null : (
+                <span className="player-rail__adr">
+                  <small>ADR</small>
+                  <b>{displayNumber(player.liveAdr)}</b>
+                </span>
+              )}
+              {player.currentRoundDamage === null ? null : (
+                <span className="player-rail__damage">
+                  <small>DMG</small>
+                  <b>{displayNumber(player.currentRoundDamage)}</b>
+                </span>
+              )}
+            </div>
+          ) : (
+            <div className="player-rail__loadout">
+              <div className="player-rail__weapons">
+                <div className="player-rail__weapon-icons">
+                  <WeaponIcon weapon={player.primaryWeapon} />
+                  {secondaryVisible ? <WeaponIcon weapon={player.secondaryWeapon} /> : null}
+                </div>
+              </div>
+              <Equipment player={player} />
+              <UtilityIcons player={player} />
+            </div>
           )}
         </div>
-      ) : (
-        <div
-          className="player-rail__combat"
-          data-combat-row="true"
-          data-phase={player.mode}
-          data-secondary={secondaryVisible}
-        >
-          <Kd player={player} />
-          <div className="player-rail__weapons">
-            <WeaponIcon weapon={player.primaryWeapon} className="is-primary" />
-            {secondaryVisible ? (
-              <WeaponIcon weapon={player.secondaryWeapon} className="is-secondary" />
-            ) : null}
-          </div>
-          <Equipment player={player} />
-          <UtilityIcons player={player} />
-        </div>
-      )}
+      </div>
 
       <div className="player-rail__bottom">
         <span className="player-rail__money">{displayMoney(player.money)}</span>
         {player.mode === 'freezetime' && !dead ? (
           <span className="player-rail__spent">{displaySpent(player.roundMoneySpent)}</span>
         ) : null}
-        {!dead && player.roundKills !== null && player.roundKills > 0 ? (
-          <span
-            aria-label={`Round kills ${player.roundKills}`}
-            className="player-rail__round-kills"
-            data-round-kills={player.roundKills}
-          >
-            <StatGlyph kind="kills" />
-            <b>{player.roundKills}</b>
-          </span>
-        ) : null}
-        {dead ? <Kd player={player} /> : null}
+        <span
+          aria-hidden={player.roundKills === null || player.roundKills <= 0}
+          className="player-rail__round-kill-slot"
+          data-round-kill-slot="true"
+        >
+          {player.roundKills !== null && player.roundKills > 0 ? (
+            <RoundKillBadge kills={player.roundKills} />
+          ) : null}
+        </span>
       </div>
     </div>
   );
