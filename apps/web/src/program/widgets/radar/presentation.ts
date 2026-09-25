@@ -314,11 +314,6 @@ function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): ol
       old.source.lifetimeSeconds !== null &&
       source.lifetimeSeconds !== null &&
       source.lifetimeSeconds < old.source.lifetimeSeconds
-    ) &&
-    !(
-      old.source.effectTimeSeconds !== null &&
-      source.effectTimeSeconds !== null &&
-      source.effectTimeSeconds < old.source.effectTimeSeconds
     )
   );
 }
