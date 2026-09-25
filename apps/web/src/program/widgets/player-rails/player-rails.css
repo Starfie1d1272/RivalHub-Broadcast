@@ -407,24 +407,30 @@
   -webkit-mask-size: contain;
 }
 
-.player-rail__icon[data-weapon-visual] {
+.player-rail__icon[data-weapon-visual-role] {
   mask-position: left center;
   -webkit-mask-position: left center;
 }
 
-.player-rail__icon[data-weapon-visual='firearm'] {
+.player-rail__icon[data-weapon-visual-role='primary-firearm'] {
   width: 116px;
   max-width: 116px;
   height: 24px;
 }
 
 .player-rail__combat[data-phase='freezetime'][data-secondary='true']
-  .player-rail__icon[data-weapon-visual='firearm'] {
+  .player-rail__icon[data-weapon-visual-role='primary-firearm'] {
   width: 80px;
   max-width: 80px;
 }
 
-.player-rail__icon[data-weapon-visual='pistol'] {
+.player-rail__icon[data-weapon-visual-role='standalone-pistol'] {
+  width: 72px;
+  max-width: 72px;
+  height: 20px;
+}
+
+.player-rail__icon[data-weapon-visual-role='secondary-pistol'] {
   width: 28px;
   max-width: 28px;
   height: 14px;
@@ -440,7 +446,7 @@
   margin-left: auto;
 }
 
-.player-rail--right .player-rail__icon[data-weapon-visual] {
+.player-rail--right .player-rail__icon[data-weapon-visual-role] {
   mask-position: right center;
   -webkit-mask-position: right center;
 }
@@ -473,24 +479,6 @@
 .player-rail--right .player-rail__dead-stats {
   flex-direction: row-reverse;
   text-align: right;
-}
-
-.player-rail__death-mark {
-  position: absolute;
-  top: 50%;
-  right: 14px;
-  display: flex;
-  width: 46px;
-  height: 46px;
-  align-items: center;
-  justify-content: center;
-  opacity: 0.1;
-  transform: translateY(-50%);
-}
-
-.player-rail--right .player-rail__death-mark {
-  right: auto;
-  left: 14px;
 }
 
 .player-rail__adr,
@@ -897,7 +885,8 @@
   height: 26px;
 }
 
-.player-rail__round-kill-badge path {
+.player-rail__round-kill-badge path,
+.player-rail__round-kill-badge circle {
   fill: none;
   stroke: currentColor;
   stroke-linecap: round;
@@ -907,7 +896,7 @@
 .player-rail__round-kill-badge text {
   fill: currentColor;
   font-family: inherit;
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 900;
 }
 
@@ -922,32 +911,6 @@
   font-size: 12px;
   font-weight: 600;
   text-shadow: none;
-}
-
-.player-rail__death-mark {
-  right: 66px;
-  width: 66px;
-  height: 66px;
-  opacity: 0.2;
-}
-
-.player-rail--right .player-rail__death-mark {
-  right: auto;
-  left: 66px;
-}
-
-.player-rail__death-mark .player-rail__death-watermark {
-  width: 66px;
-  height: 66px;
-  flex: 0 0 66px;
-}
-
-.player-rail__death-watermark .death-watermark__body {
-  fill: #e0e2df;
-}
-
-.player-rail__death-watermark .death-watermark__cutout {
-  fill: #383d40;
 }
 
 .player-rail__dead-stats {

@@ -322,20 +322,6 @@
   grid-row: 1;
 }
 
-.focused-player__death-mark {
-  width: 78px;
-  height: 78px;
-  opacity: 0.18;
-}
-
-.focused-player__death-mark .death-watermark__body {
-  fill: #e0e2df;
-}
-
-.focused-player__death-mark .death-watermark__cutout {
-  fill: #303538;
-}
-
 .focused-player__vitals {
   display: flex;
   width: 360px;

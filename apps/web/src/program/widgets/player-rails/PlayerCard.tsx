@@ -1,7 +1,13 @@
 import type { CSSProperties } from 'react';
 
-import type { PlayerCardPresentation, PlayerRailAsset, PlayerRailWeapon } from './presentation';
-import { DeathWatermark } from './DeathWatermark';
+import { observerHotkeyLabel } from '../../observer-hotkey';
+import {
+  weaponVisualRole,
+  type PlayerCardPresentation,
+  type PlayerRailAsset,
+  type PlayerRailWeapon,
+  type WeaponVisualRole,
+} from './presentation';
 
 function displayNumber(value: number | null): string {
   return value === null ? '—' : String(Math.round(value));
@@ -19,12 +25,12 @@ function MaskIcon({
   asset,
   className = '',
   label,
-  weaponVisual,
+  weaponVisualRole,
 }: {
   readonly asset: PlayerRailAsset | null;
   readonly className?: string;
   readonly label: string;
-  readonly weaponVisual?: 'firearm' | 'pistol';
+  readonly weaponVisualRole?: WeaponVisualRole;
 }) {
   if (asset === null) return null;
   const style = { '--player-rail-icon': `url("${asset.outputPath}")` } as CSSProperties;
@@ -33,21 +39,27 @@ function MaskIcon({
       aria-label={label}
       className={`player-rail__icon ${className}`.trim()}
       data-asset-id={asset.canonicalKey}
-      data-weapon-visual={weaponVisual}
+      data-weapon-visual-role={weaponVisualRole}
       role="img"
       style={style}
     />
   );
 }
 
-function WeaponIcon({ weapon }: { readonly weapon: PlayerRailWeapon | null }) {
-  const visual = weapon?.item?.family === 'pistol' ? 'pistol' : 'firearm';
+function WeaponIcon({
+  weapon,
+  pairedWithFirearm,
+}: {
+  readonly weapon: PlayerRailWeapon | null;
+  readonly pairedWithFirearm: boolean;
+}) {
+  const visualRole = weapon === null ? undefined : weaponVisualRole(weapon, pairedWithFirearm);
   return (
     <MaskIcon
       asset={weapon?.asset ?? null}
-      className={`is-${visual}`}
+      className={visualRole === undefined ? '' : `is-${visualRole}`}
       label={weapon?.name ?? 'Weapon'}
-      weaponVisual={visual}
+      {...(visualRole === undefined ? {} : { weaponVisualRole: visualRole })}
     />
   );
 }
@@ -181,7 +193,8 @@ function RoundKillBadge({ kills }: { readonly kills: number }) {
       role="img"
     >
       <svg aria-hidden="true" viewBox="0 0 26 26">
-        <path d="M13 2v5M13 19v5M2 13h5M19 13h5" />
+        <path d="M13 1.5V5M13 21V24.5M1.5 13H5M21 13h3.5" />
+        <circle cx="13" cy="13" r="6" />
         <text dominantBaseline="central" textAnchor="middle" x="13" y="13">
           {kills}
         </text>
@@ -199,6 +212,10 @@ function PlayerBody({
 }) {
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
   const secondaryVisible = player.mode === 'freezetime' && player.secondaryWeapon !== null;
+  const pairedWithFirearm = [
+    player.primaryWeapon,
+    secondaryVisible ? player.secondaryWeapon : null,
+  ].some((weapon) => weapon?.item?.kind === 'firearm' && weapon.item.family !== 'pistol');
   return (
     <div className="player-rail__body" data-card-part="body" data-dead={dead}>
       <div className="player-rail__identity">
@@ -231,9 +248,6 @@ function PlayerBody({
         <div className="player-rail__context" data-player-rail-row-part="context">
           {dead ? (
             <div className="player-rail__dead-stats" data-dead-stats="true">
-              <span aria-hidden="true" className="player-rail__death-mark">
-                <DeathWatermark className="player-rail__death-watermark" />
-              </span>
               {player.liveAdr === null ? null : (
                 <span className="player-rail__adr">
                   <small>ADR</small>
@@ -251,8 +265,13 @@ function PlayerBody({
             <div className="player-rail__loadout">
               <div className="player-rail__weapons">
                 <div className="player-rail__weapon-icons">
-                  <WeaponIcon weapon={player.primaryWeapon} />
-                  {secondaryVisible ? <WeaponIcon weapon={player.secondaryWeapon} /> : null}
+                  <WeaponIcon pairedWithFirearm={pairedWithFirearm} weapon={player.primaryWeapon} />
+                  {secondaryVisible ? (
+                    <WeaponIcon
+                      pairedWithFirearm={pairedWithFirearm}
+                      weapon={player.secondaryWeapon}
+                    />
+                  ) : null}
                 </div>
               </div>
               <Equipment player={player} />
@@ -292,15 +311,17 @@ export function PlayerCard({
   const hasAvatar = player.avatarUrl !== null;
   const avatar = <Avatar dead={dead} player={player} />;
   const body = <PlayerBody dead={dead} player={player} />;
+  const hotkeyLabel = observerHotkeyLabel(player.observerSlot);
   const endcap = (
     <div
-      aria-label={`Observer ${player.observerSlot ?? 'unknown'}`}
+      aria-label={`Observer hotkey ${hotkeyLabel}`}
       className={`player-rail__endcap player-rail__endcap--${physicalSide}`}
       data-card-part="observer-endcap"
       data-observed={player.observed}
       data-side={player.side}
+      role="img"
     >
-      <strong>{player.observerSlot ?? '—'}</strong>
+      <strong>{hotkeyLabel}</strong>
     </div>
   );
 

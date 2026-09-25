@@ -4,6 +4,7 @@ import { projectWorldPosition, projectWorldRadius } from '@rivalhub-broadcast/ra
 import { getCs2Asset, getRadarMapAsset } from '@rivalhub-broadcast/cs2-assets';
 import type { LocalChannelClient } from '../../../realtime';
 import type { RadarHudWidgetRendererProps } from '../../hud-renderer-registry';
+import { observerHotkeyLabel } from '../../observer-hotkey';
 import {
   RadarPresentation,
   RADAR_PRESENTATION,
@@ -709,7 +710,7 @@ export function Radar({
           ctx.font = '800 28px Inter, sans-serif';
           ctx.textAlign = 'center';
           ctx.textBaseline = 'middle';
-          ctx.fillText(p.observerSlot === null ? '?' : String(p.observerSlot), x, y + 1);
+          ctx.fillText(observerHotkeyLabel(p.observerSlot), x, y + 1);
           if (marker.damageUntil > now) {
             const damageAlpha = Math.max(
               0,

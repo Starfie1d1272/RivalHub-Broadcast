@@ -10,8 +10,8 @@ import {
 import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
 import { consecutivePresentationSamples } from '../../presentation-sample';
+import { observerHotkeyLabel } from '../../observer-hotkey';
 import type { PlayerRailAsset } from '../player-rails/presentation';
-import { DeathWatermark } from '../player-rails/DeathWatermark';
 import {
   buildFocusedPlayerPresentation,
   type FocusedPlayerItemKind,
@@ -188,6 +188,7 @@ function FocusedPlayerFace({
   ]);
   const showAvatar =
     p.avatarUrl !== null && displayAvatarUrl === p.avatarUrl && failedAvatarUrl !== p.avatarUrl;
+  const hotkeyLabel = observerHotkeyLabel(p.observerSlot);
   return (
     <div
       aria-hidden={outgoing || pending || undefined}
@@ -223,11 +224,14 @@ function FocusedPlayerFace({
       <div className="focused-player__action" data-focused-action="true">
         <div
           aria-label={
-            showAvatar ? `${p.displayName} avatar` : `Observer ${p.observerSlot ?? 'unknown'}`
+            showAvatar
+              ? `${p.displayName} avatar, observer hotkey ${hotkeyLabel}`
+              : `Observer hotkey ${hotkeyLabel}`
           }
           className={`focused-player__media${showAvatar ? ' has-avatar' : ' is-observer-tile'}`}
           data-avatar-slot="true"
           data-side={p.side}
+          role="img"
         >
           {p.avatarUrl !== null && failedAvatarUrl !== p.avatarUrl ? (
             <img
@@ -247,11 +251,9 @@ function FocusedPlayerFace({
             />
           ) : null}
           {showAvatar ? (
-            <span className="focused-player__slot-badge">{p.observerSlot ?? '—'}</span>
+            <span className="focused-player__slot-badge">{hotkeyLabel}</span>
           ) : (
-            <strong className="focused-player__observer-tile-number">
-              {p.observerSlot ?? '—'}
-            </strong>
+            <strong className="focused-player__observer-tile-number">{hotkeyLabel}</strong>
           )}
         </div>
         <span
@@ -259,9 +261,7 @@ function FocusedPlayerFace({
           className="focused-player__action-gap focused-player__action-gap--a"
         />
         {p.dead ? (
-          <div aria-label="Dead" className="focused-player__dead-state">
-            <DeathWatermark className="focused-player__death-mark" />
-          </div>
+          <div aria-label="Dead" className="focused-player__dead-state"></div>
         ) : (
           <>
             <ActiveItemSlot

@@ -22,6 +22,17 @@ export interface PlayerRailWeapon {
   readonly ammoReserve: number | null;
 }
 
+export type WeaponVisualRole = 'primary-firearm' | 'standalone-pistol' | 'secondary-pistol';
+
+export function weaponVisualRole(
+  weapon: PlayerRailWeapon,
+  pairedWithFirearm: boolean,
+): WeaponVisualRole {
+  if (weapon.item?.family === 'pistol')
+    return pairedWithFirearm ? 'secondary-pistol' : 'standalone-pistol';
+  return 'primary-firearm';
+}
+
 export interface PlayerRailUtility extends PlayerRailWeapon {
   readonly family: 'smoke' | 'fire' | 'flash' | 'he';
   readonly count: number;
