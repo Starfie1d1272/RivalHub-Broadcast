@@ -823,12 +823,12 @@
 }
 
 .player-rail__card[data-physical-side='left'] .player-rail__utility-icons {
-  right: 34px;
+  right: 26px;
   justify-content: flex-end;
 }
 
 .player-rail__card[data-physical-side='right'] .player-rail__utility-icons {
-  left: 40px;
+  left: 26px;
   justify-content: flex-start;
 }
 
