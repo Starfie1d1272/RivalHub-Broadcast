@@ -309,11 +309,16 @@ function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): ol
   return (
     source.kind === 'smoke' &&
     old?.source.kind === 'smoke' &&
-    old.source.ownerSourceId === source.ownerSourceId &&
+    old.source.sourceEntityId === source.sourceEntityId &&
     !(
       old.source.lifetimeSeconds !== null &&
       source.lifetimeSeconds !== null &&
       source.lifetimeSeconds < old.source.lifetimeSeconds
+    ) &&
+    !(
+      old.source.effectTimeSeconds !== null &&
+      source.effectTimeSeconds !== null &&
+      source.effectTimeSeconds < old.source.effectTimeSeconds
     )
   );
 }
@@ -553,7 +558,10 @@ export class RadarPresentation {
       if (!point || point.outOfBounds) continue;
       currentGrenades.add(id);
       const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
-      const side = owner?.side ?? 'unknown';
+      const smokeLifecycleContinuous = sameSmokeLifecycle(old, source);
+      const side =
+        owner?.side ??
+        (smokeLifecycleContinuous && old?.side !== undefined ? old.side : 'unknown');
       const continuous =
         old &&
         old.source.kind === source.kind &&
@@ -574,7 +582,7 @@ export class RadarPresentation {
           RADAR_PRESENTATION.smokeStationaryWorldThreshold
           ? old.stationarySampleCount + 1
           : 0;
-      const phase = sameSmokeLifecycle(old, source)
+      const phase = smokeLifecycleContinuous
         ? transitionSmokePhase(old.phase, source, stationarySampleCount)
         : radarUtilityPhase(source);
       if (old && old.phase !== phase) {
