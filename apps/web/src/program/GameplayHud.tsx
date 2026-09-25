@@ -18,6 +18,7 @@ import './gameplay-hud.css';
 import './widgets/focused-player/focused-player.css';
 import './widgets/match-header/match-header.css';
 import './widgets/player-rails/player-rails.css';
+import './widgets/player-status-effects/player-status-effects.css';
 
 export interface GameplayHudProps {
   readonly radarClient?: RadarProps['client'];
