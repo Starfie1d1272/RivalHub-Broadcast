@@ -151,6 +151,19 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('.player-status-effects')?.getAttribute('data-anchor')).toBe(
       'left',
     );
+
+    act(() => {
+      root?.render(
+        <PlayerCard
+          player={{
+            ...smoked,
+            statusEffects: { ...smoked.statusEffects, smoked: 0 },
+          }}
+        />,
+      );
+    });
+    expect(container.querySelector('.player-status-effects')).not.toBeNull();
+    expect(container.querySelector('[data-smoked="false"]')).not.toBeNull();
   });
 
   it('keeps live armor, kit, and C4 owner equipment visible', () => {
