@@ -70,6 +70,24 @@ describe('Focused media and combat presentation lifecycle', () => {
     render({ ...player, avatarUrl: null });
     expect(media()).toBeNull();
   });
+  it('renders status effects across the focused player surface', () => {
+    const container = host();
+    const player = buildFocusedPlayerPresentation(getProgramFixture('real-live-rich')!.payload)!;
+    act(() =>
+      root!.render(
+        <FocusedPlayerCard
+          player={{
+            ...player,
+            statusEffects: { smoked: 255, burning: 0, flashed: 0 },
+          }}
+        />,
+      ),
+    );
+    expect(container.querySelector('[data-smoked="true"]')).not.toBeNull();
+    expect(container.querySelector('.player-status-effects')?.getAttribute('data-anchor')).toBe(
+      'left',
+    );
+  });
   it('keeps the fixed avatar slot while removing team identity duplication', () => {
     const container = host();
     const player = buildFocusedPlayerPresentation(getProgramFixture('focused-long-name')!.payload)!;
