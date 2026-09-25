@@ -1,4 +1,4 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
 
 import { observerHotkeyLabel } from '../../observer-hotkey';
 import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
@@ -19,7 +19,57 @@ function displayMoney(value: number | null): string {
 }
 
 function displaySpent(value: number | null): string {
-  return value === null ? '—' : `-$${Math.round(value).toLocaleString('en-US')}`;
+  return value === null ? '—' : `-${Math.round(value).toLocaleString('en-US')}`;
+}
+
+type PresencePhase = 'enter' | 'steady' | 'exit';
+
+type PresenceItem<T extends { readonly key: string }> = T & {
+  readonly motionPhase: PresencePhase;
+};
+
+function usePresenceItems<T extends { readonly key: string }>(
+  items: readonly T[],
+  signature: string,
+  presentationRevision: number,
+  exitMs = 110,
+): readonly PresenceItem<T>[] {
+  const itemsRef = useRef(items);
+  itemsRef.current = items;
+  const revisionRef = useRef(presentationRevision);
+  const [rendered, setRendered] = useState<readonly PresenceItem<T>[]>(() =>
+    items.map((item) => ({ ...item, motionPhase: 'steady' as const })),
+  );
+
+  useEffect(() => {
+    const current = itemsRef.current;
+    if (revisionRef.current !== presentationRevision) {
+      revisionRef.current = presentationRevision;
+      setRendered(current.map((item) => ({ ...item, motionPhase: 'steady' as const })));
+      return;
+    }
+
+    setRendered((previous) => {
+      const previousByKey = new Map(previous.map((item) => [item.key, item]));
+      const currentKeys = new Set(current.map((item) => item.key));
+      return [
+        ...current.map((item) => ({
+          ...item,
+          motionPhase: previousByKey.has(item.key) ? ('steady' as const) : ('enter' as const),
+        })),
+        ...previous
+          .filter((item) => !currentKeys.has(item.key) && item.motionPhase !== 'exit')
+          .map((item) => ({ ...item, motionPhase: 'exit' as const })),
+      ];
+    });
+
+    const timer = window.setTimeout(() => {
+      setRendered((previous) => previous.filter((item) => item.motionPhase !== 'exit'));
+    }, exitMs);
+    return () => window.clearTimeout(timer);
+  }, [exitMs, presentationRevision, signature]);
+
+  return rendered;
 }
 
 function MaskIcon({
@@ -93,29 +143,47 @@ function Avatar({
   );
 }
 
-function Equipment({ player }: { readonly player: PlayerCardPresentation }) {
+function Equipment({
+  player,
+  presentationRevision,
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly presentationRevision: number;
+}) {
   const slots = [
     { key: 'armor', label: 'Armor', asset: player.armorAsset },
     { key: 'kit', label: 'Defuse kit', asset: player.defuserAsset },
     { key: 'c4', label: 'C4', asset: player.c4Asset },
     { key: 'zeus', label: 'Zeus', asset: player.zeus?.asset ?? null },
-  ] as const;
+  ].filter((slot): slot is { key: string; label: string; asset: PlayerRailAsset } => slot.asset !== null);
+  const signature = slots.map((slot) => `${slot.key}:${slot.asset.canonicalKey}`).join('|');
+  const visibleSlots = usePresenceItems(slots, signature, presentationRevision);
+
   return (
     <div className="player-rail__equipment" data-player-equipment="true">
-      {slots
-        .filter((slot) => slot.asset !== null)
-        .map((slot) => (
-          <span className="player-rail__equipment-slot" data-equipment={slot.key} key={slot.key}>
-            <MaskIcon asset={slot.asset} label={slot.label} />
-          </span>
-        ))}
+      {visibleSlots.map((slot) => (
+        <span
+          className="player-rail__equipment-slot"
+          data-equipment={slot.key}
+          data-motion-phase={slot.motionPhase}
+          key={slot.key}
+        >
+          <MaskIcon asset={slot.asset} label={slot.label} />
+        </span>
+      ))}
     </div>
   );
 }
 
 const UTILITY_FAMILIES = ['smoke', 'flash', 'he', 'fire'] as const;
 
-function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
+function UtilityIcons({
+  player,
+  presentationRevision,
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly presentationRevision: number;
+}) {
   const counts = new Map<
     PlayerCardPresentation['utility'][number]['family'],
     { count: number; asset: PlayerRailAsset | null }
@@ -137,14 +205,17 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
       key: `${family}-${index}`,
     }));
   }).slice(0, 4);
+  const signature = icons.map((utility) => `${utility.key}:${utility.asset.canonicalKey}`).join('|');
+  const visibleIcons = usePresenceItems(icons, signature, presentationRevision);
 
   return (
     <div className="player-rail__utility-icons" data-utility-count={icons.length}>
-      {icons.map((utility) => (
+      {visibleIcons.map((utility) => (
         <span
           aria-label={utility.family}
           className="player-rail__utility-item"
           data-utility-family={utility.family}
+          data-motion-phase={utility.motionPhase}
           key={utility.key}
         >
           <MaskIcon asset={utility.asset} label={utility.family} />
@@ -207,9 +278,11 @@ function RoundKillBadge({ kills }: { readonly kills: number }) {
 function PlayerBody({
   player,
   dead,
+  presentationRevision,
 }: {
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
+  readonly presentationRevision: number;
 }) {
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
   const secondaryVisible = player.secondaryWeapon !== null;
@@ -275,8 +348,8 @@ function PlayerBody({
                   ) : null}
                 </div>
               </div>
-              <Equipment player={player} />
-              <UtilityIcons player={player} />
+              <Equipment player={player} presentationRevision={presentationRevision} />
+              <UtilityIcons player={player} presentationRevision={presentationRevision} />
             </div>
           )}
         </div>
@@ -293,7 +366,7 @@ function PlayerBody({
           data-round-kill-slot="true"
         >
           {player.roundKills !== null && player.roundKills > 0 ? (
-            <RoundKillBadge kills={player.roundKills} />
+            <RoundKillBadge key={player.roundKills} kills={player.roundKills} />
           ) : null}
         </span>
       </div>
@@ -313,7 +386,13 @@ export function PlayerCard({
   const dead = player.mode === 'dead';
   const hasAvatar = player.avatarUrl !== null;
   const avatar = <Avatar dead={dead} player={player} />;
-  const body = <PlayerBody dead={dead} player={player} />;
+  const body = (
+    <PlayerBody
+      dead={dead}
+      player={player}
+      presentationRevision={presentationRevision}
+    />
+  );
   const hotkeyLabel = observerHotkeyLabel(player.observerSlot);
   const endcap = (
     <div
