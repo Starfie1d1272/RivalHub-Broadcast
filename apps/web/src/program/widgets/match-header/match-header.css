@@ -421,11 +421,29 @@
 }
 
 .match-header__timeout-panel--a {
+  --match-header-panel-shift: -8px;
   left: 0;
 }
 
 .match-header__timeout-panel--b {
+  --match-header-panel-shift: 8px;
   left: 324px;
+}
+
+.match-header__timeout-panel[data-motion-phase='enter'] {
+  animation: match-header-panel-in 160ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.match-header__timeout-panel[data-motion-phase='exit'] {
+  animation: match-header-panel-out 160ms ease-in both;
+}
+
+.match-header__alive-matchup[data-motion-phase='enter'] {
+  animation: match-header-alive-in 150ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.match-header__alive-matchup[data-motion-phase='exit'] {
+  animation: match-header-alive-out 150ms ease-in both;
 }
 
 .match-header__timeout-label {
@@ -620,6 +638,54 @@
   color: #aab4c0;
 }
 
+@keyframes match-header-panel-in {
+  from {
+    opacity: 0;
+    transform: translateX(var(--match-header-panel-shift));
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+@keyframes match-header-panel-out {
+  from {
+    opacity: 1;
+    transform: translateX(0);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateX(var(--match-header-panel-shift));
+  }
+}
+
+@keyframes match-header-alive-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px) scale(0.96);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes match-header-alive-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-5px) scale(0.97);
+  }
+}
+
 @keyframes c4-plant-commit {
   0% {
     opacity: 0.7;
@@ -663,7 +729,9 @@
 @media (prefers-reduced-motion: reduce) {
   .objective-center__icon.is-planted-commit,
   .objective-center[data-planted-transition='true'] .objective-center__led,
-  .objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led {
+  .objective-center[data-objective-mode='planted'][data-danger='true'] .objective-center__led,
+  .match-header__timeout-panel,
+  .match-header__alive-matchup {
     animation: none;
   }
 
