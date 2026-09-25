@@ -73,8 +73,8 @@ export function TeamSummary({
   }, [phase]);
 
   const visible = phase === 'freezetime' || (phase === 'live' && carryoverActive);
-  const displayed = visible ? summary : null;
-  const utility = displayed?.utility ?? null;
+  const displayed = summary;
+  const utility = displayed.utility;
 
   return (
     <div
@@ -88,15 +88,15 @@ export function TeamSummary({
       <div className="player-rail__economy" data-summary-row="economy">
         <div>
           <span>MONEY</span>
-          <strong>{formatMoney(displayed?.money ?? null)}</strong>
+          <strong>{formatMoney(displayed.money)}</strong>
         </div>
         <div>
           <span>EQUIP</span>
-          <strong>{formatMoney(displayed?.equip ?? null)}</strong>
+          <strong>{formatMoney(displayed.equip)}</strong>
         </div>
         <div>
           <span>LOSS</span>
-          <strong>{formatMoney(displayed?.lossBonus ?? null)}</strong>
+          <strong>{formatMoney(displayed.lossBonus)}</strong>
         </div>
       </div>
       <div className="player-rail__utility" data-summary-row="utility">
@@ -108,7 +108,7 @@ export function TeamSummary({
             key={family}
           >
             <UtilityAsset family={family} label={label} side={side} />
-            <b>{formatUtility(utility?.[family] ?? null)}</b>
+            <b>{formatUtility(utility[family])}</b>
           </span>
         ))}
       </div>
