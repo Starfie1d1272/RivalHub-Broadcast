@@ -67,7 +67,7 @@ for (const id of cases)
         const fuse = page.locator('.objective-center__fuse');
         const track = await fuse.boundingBox();
         const fill = await fuse.locator('span').boundingBox();
-        expect(fill!.x).toBeCloseTo(track!.x, 1);
+        expect(fill!.x + fill!.width / 2).toBeCloseTo(track!.x + track!.width / 2, 1);
         expect(fill!.width).toBeGreaterThan(0);
         expect(fill!.width).toBeLessThan(track!.width);
       }

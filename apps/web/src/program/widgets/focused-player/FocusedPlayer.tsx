@@ -1,4 +1,12 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type CSSProperties } from 'react';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react';
 import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
 import { consecutivePresentationSamples } from '../../presentation-sample';
@@ -129,12 +137,16 @@ function FocusedPlayerFace({
   player: p,
   cursor,
   presentationRevision,
+  avatarIdentityKey,
+  onAvatarReady,
   outgoing = false,
   incoming = false,
 }: {
   readonly player: FocusedPlayerPresentation;
   readonly cursor: ProjectionCursor | null;
   readonly presentationRevision: number;
+  readonly avatarIdentityKey: string;
+  readonly onAvatarReady: (avatarIdentityKey: string) => void;
   readonly outgoing?: boolean;
   readonly incoming?: boolean;
 }) {
@@ -150,6 +162,7 @@ function FocusedPlayerFace({
       if (!active) return;
       setDisplayAvatarUrl(avatarUrl);
       setFailedAvatarUrl(null);
+      onAvatarReady(avatarIdentityKey);
     };
     image.onerror = () => {
       if (!active) return;
@@ -160,7 +173,7 @@ function FocusedPlayerFace({
     return () => {
       active = false;
     };
-  }, [p.avatarUrl, displayAvatarUrl, failedAvatarUrl]);
+  }, [avatarIdentityKey, displayAvatarUrl, failedAvatarUrl, onAvatarReady, p.avatarUrl]);
   const showAvatar =
     p.avatarUrl !== null && displayAvatarUrl === p.avatarUrl && failedAvatarUrl !== p.avatarUrl;
   return (
@@ -212,6 +225,7 @@ function FocusedPlayerFace({
               onLoad={() => {
                 setDisplayAvatarUrl(p.avatarUrl);
                 setFailedAvatarUrl(null);
+                onAvatarReady(avatarIdentityKey);
               }}
               onError={() => {
                 setDisplayAvatarUrl(null);
@@ -310,6 +324,11 @@ export function FocusedPlayerCard({
   readonly cursor?: ProjectionCursor | null;
   readonly presentationRevision?: number;
 }) {
+  const currentAvatarIdentityKey = `${player.sourcePlayerId}:${player.avatarUrl ?? ''}`;
+  const [loadedAvatarIdentityKey, setLoadedAvatarIdentityKey] = useState<string | null>(null);
+  const onAvatarReady = useCallback((avatarIdentityKey: string) => {
+    setLoadedAvatarIdentityKey(avatarIdentityKey);
+  }, []);
   const previous = useRef<{
     readonly player: FocusedPlayerPresentation;
     readonly cursor: ProjectionCursor | null;
@@ -365,6 +384,7 @@ export function FocusedPlayerCard({
       aria-label="Focused player"
       className="focused-player"
       data-focused-player={player.sourcePlayerId}
+      data-avatar={loadedAvatarIdentityKey === currentAvatarIdentityKey ? true : undefined}
       data-side={player.side}
       data-dead={player.dead}
       data-observer-transition={outgoing !== null}
@@ -372,7 +392,9 @@ export function FocusedPlayerCard({
       {outgoing === null ? null : (
         <FocusedPlayerFace
           key={`outgoing:${outgoing.sourcePlayerId}:${outgoing.avatarUrl ?? ''}`}
+          avatarIdentityKey={`${outgoing.sourcePlayerId}:${outgoing.avatarUrl ?? ''}`}
           cursor={null}
+          onAvatarReady={onAvatarReady}
           outgoing
           player={outgoing}
           presentationRevision={presentationRevision}
@@ -380,8 +402,10 @@ export function FocusedPlayerCard({
       )}
       <FocusedPlayerFace
         key={`current:${player.sourcePlayerId}:${player.avatarUrl ?? ''}`}
+        avatarIdentityKey={currentAvatarIdentityKey}
         cursor={cursor}
         incoming={outgoing !== null}
+        onAvatarReady={onAvatarReady}
         player={player}
         presentationRevision={presentationRevision}
       />
