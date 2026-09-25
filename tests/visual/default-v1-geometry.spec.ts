@@ -191,12 +191,12 @@ async function assertHudGeometry(page: Page, requireBothUtilitySides = false) {
       return { top: rect.top, height: rect.height };
     });
   });
-  expect(bodyRows.map(({ height }) => height)).toEqual([32, 3, 25, 18]);
+  expect(bodyRows.map(({ height }) => height)).toEqual([24, 3, 25, 26]);
   expect(bodyRows.map(({ top }) => top)).toEqual([
     bodyRows[0]!.top,
-    bodyRows[0]!.top + 32,
-    bodyRows[0]!.top + 35,
-    bodyRows[0]!.top + 60,
+    bodyRows[0]!.top + 24,
+    bodyRows[0]!.top + 27,
+    bodyRows[0]!.top + 52,
   ]);
 
   await assertBox(page.locator('.focused-player__identity'), {
@@ -408,7 +408,7 @@ test('Default V1 composite matrix uses the frozen 1920 by 1080 geometry', async 
       await expect(firstDead.locator('[data-dead-stats]')).toContainText('ADR');
       await expect(firstDead.locator('[data-dead-stats]')).toContainText('DMG');
       await expect(firstDead.locator('.player-rail__kd')).toHaveCount(1);
-      await expect(firstDead.locator('.player-rail__combat')).toHaveCount(0);
+      await expect(firstDead.locator('.player-rail__combat[data-dead="true"]')).toHaveCount(1);
       await expect(firstDead.locator('.player-rail__kad')).toHaveCount(0);
     }
     if (fixtureId === 'default-low-hp') {

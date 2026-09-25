@@ -32,8 +32,18 @@ describe('changed-surface CI planner', () => {
       },
     ],
     [
-      'web HUD/CSS',
+      'web HUD/CSS only',
       ['apps/web/src/program/program.css'],
+      {
+        runQuality: true,
+        runAcceptance: false,
+        runPlatform: false,
+        runQualification: false,
+      },
+    ],
+    [
+      'web HUD behavior',
+      ['apps/web/src/program/widgets/player-rails/PlayerCard.tsx'],
       {
         runQuality: true,
         runAcceptance: true,

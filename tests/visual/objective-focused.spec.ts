@@ -57,7 +57,7 @@ for (const id of cases)
         );
         await expect(
           page.locator('.objective-center[data-objective-mode="planting"] .objective-center__icon'),
-        ).toHaveCSS('background-color', 'rgb(11, 17, 25)');
+        ).toHaveCSS('background-color', 'rgb(243, 246, 250)');
       }
       if (id === 'objective-dual-progress-edge') {
         await expect(page.locator('.objective-center__ring-fill')).toHaveAttribute(

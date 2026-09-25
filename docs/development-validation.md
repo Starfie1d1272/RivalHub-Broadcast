@@ -110,7 +110,7 @@ planner + ci-gate
 
 ### 普通代码
 
-`apps/`、`packages/`、`tests/`、`scripts/` 的已知路径至少进入 quality。Web / Program、Replay 和 acceptance test 路径额外运行 browser acceptance；Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
+`apps/`、`packages/`、`tests/`、`scripts/` 的已知路径至少进入 quality。Web 的语义源码（`.ts` / `.tsx` / `.js` / `.jsx` / `.html`）、Replay 和 acceptance test 路径额外运行 browser acceptance；Web CSS-only 改动只运行 quality。Companion、telemetry 和 scripts 等平台敏感路径运行 platform。
 
 ### 现场验收敏感路径
 

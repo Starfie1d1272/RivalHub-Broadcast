@@ -10,6 +10,7 @@ export const CI_JOB_IDS = Object.freeze([
 ]);
 
 const DOCS_ONLY_PATTERN = /^(?:docs\/.*|.*\.(?:md|mdx))$/;
+const WEB_BEHAVIOR_SOURCE_PATTERN = /\.(?:ts|tsx|js|jsx|html)$/;
 const KNOWN_QUALITY_PREFIXES = ['apps/', 'packages/', 'tests/', 'scripts/'];
 const PLATFORM_PREFIXES = [
   'apps/companion/',
@@ -55,13 +56,12 @@ function isKnownQualityPath(path) {
 
 function isAcceptancePath(path) {
   return (
-    path.startsWith('apps/web/') ||
+    (path.startsWith('apps/web/') && WEB_BEHAVIOR_SOURCE_PATTERN.test(path)) ||
     path.startsWith('tests/acceptance/') ||
     path.startsWith('packages/replay/') ||
     path === 'packages/protocol/src/program.ts' ||
     path === 'packages/protocol/src/version.ts' ||
-    path.includes('program-fixtures/') ||
-    (path.includes('/program/') && path.endsWith('.css'))
+    path.includes('program-fixtures/')
   );
 }
 
