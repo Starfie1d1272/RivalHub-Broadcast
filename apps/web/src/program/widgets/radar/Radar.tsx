@@ -59,6 +59,7 @@ export function Radar({
     let lastStatic: RadarSnapshot | null | undefined;
     let lastConnection: unknown;
     let lastPresentationRevision = currentPresentationRevision.current;
+    let restoreStaticBoundary = false;
     const updateUtilityPhaseDataset = () => {
       let phases = '';
       let projectiles = '';
@@ -93,14 +94,14 @@ export function Radar({
     const render = (now: number) => {
       if (disposed) return;
       if (!client && lastPresentationRevision !== currentPresentationRevision.current) {
-        model.reset();
         lastPresentationRevision = currentPresentationRevision.current;
         lastStatic = undefined;
-        updateUtilityPhaseDataset();
+        restoreStaticBoundary = true;
       }
       if (!client && lastStatic !== currentSnapshot.current) {
         lastStatic = currentSnapshot.current;
-        model.accept(lastStatic ?? null, now);
+        model.accept(lastStatic ?? null, now, restoreStaticBoundary);
+        restoreStaticBoundary = false;
         updateUtilityPhaseDataset();
       }
       model.tick(now, zoomMode === 'auto');
