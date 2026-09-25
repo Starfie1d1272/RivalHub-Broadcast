@@ -496,7 +496,7 @@ export function Radar({
             ctx.beginPath();
             ctx.arc(x, y, timerRadius, startAngle, endAngle);
             ctx.strokeStyle = sideColor(marker.side);
-            ctx.lineWidth = 5.5;
+            ctx.lineWidth = 7.5;
             ctx.lineCap = 'round';
             ctx.stroke();
           }
