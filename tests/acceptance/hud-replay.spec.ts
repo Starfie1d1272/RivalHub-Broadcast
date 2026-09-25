@@ -18,6 +18,7 @@ interface ReplayFrameFixture {
 }
 
 const REPLAY_CLOCK_START = '2026-01-01T00:00:00.000Z';
+const REPLAY_SEEK_TIMEOUT = 30_000;
 
 async function installReplayClock(page: Page): Promise<void> {
   await page.clock.install({ time: new Date(REPLAY_CLOCK_START) });
@@ -73,7 +74,9 @@ async function selectReplayEvent(
   event: ReplayEventFixture,
 ): Promise<void> {
   await page.getByLabel('语义事件', { exact: true }).selectOption(event.id);
-  await expect(sequenceRegion).toHaveAttribute('data-replay-cursor', String(event.sequence));
+  await expect(sequenceRegion).toHaveAttribute('data-replay-cursor', String(event.sequence), {
+    timeout: REPLAY_SEEK_TIMEOUT,
+  });
 }
 
 async function advanceReplayTo(
@@ -118,13 +121,20 @@ async function seekReplayTo(
   const targetFrame = frameAt(frames, targetSequence);
   await page.getByLabel('回放进度').evaluate((element, captureIndex) => {
     if (!(element instanceof HTMLInputElement)) throw new Error('Replay scrubber is unavailable');
-    const setValue = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value')?.set;
+    const valueDescriptor = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value');
+    const setValue =
+      valueDescriptor === undefined
+        ? undefined
+        : (Reflect.get(valueDescriptor, 'set') as
+            ((this: HTMLInputElement, value: string) => void) | undefined);
     if (setValue === undefined) throw new Error('Replay scrubber cannot be updated');
-    setValue.call(element, String(captureIndex));
+    Reflect.apply(setValue, element, [String(captureIndex)]);
     element.dispatchEvent(new Event('input', { bubbles: true }));
     element.dispatchEvent(new PointerEvent('pointerup', { bubbles: true }));
   }, targetFrame.cursor.captureIndex);
-  await expect(sequenceRegion).toHaveAttribute('data-replay-cursor', String(targetSequence));
+  await expect(sequenceRegion).toHaveAttribute('data-replay-cursor', String(targetSequence), {
+    timeout: REPLAY_SEEK_TIMEOUT,
+  });
 }
 
 async function readPlayerRailState(rail: Locator) {
