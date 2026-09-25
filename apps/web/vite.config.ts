@@ -153,6 +153,14 @@ function replayPublicAssets() {
 export default defineConfig({
   plugins: [react(), replayPublicAssets(), replayPrefixDevelopmentApi()],
   publicDir: cs2AssetsPublicDir,
+  resolve: {
+    alias: {
+      // The replay-prefix API is development-only and loads test support through Vite SSR.
+      // Bind it to the current worktree source so seek cannot consume a stale testkit dist
+      // or dependency-cache entry after fixture provenance/schema changes.
+      '@rivalhub-broadcast/testkit': resolve(repositoryRoot, 'packages/testkit/src/index.ts'),
+    },
+  },
   server: {
     proxy: {
       '/debug/runtime': 'http://127.0.0.1:3000',
