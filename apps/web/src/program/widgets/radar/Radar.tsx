@@ -492,11 +492,12 @@ export function Radar({
               ctx.fill();
             }
 
-            ctx.globalAlpha = opacity * 0.94;
+            ctx.globalAlpha = opacity * 0.96;
             ctx.beginPath();
             ctx.arc(x, y, timerRadius, startAngle, endAngle);
             ctx.strokeStyle = sideColor(marker.side);
-            ctx.lineWidth = 3.5;
+            ctx.lineWidth = 5.5;
+            ctx.lineCap = 'round';
             ctx.stroke();
           }
           ctx.restore();
