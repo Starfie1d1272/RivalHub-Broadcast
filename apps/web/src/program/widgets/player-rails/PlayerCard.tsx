@@ -212,7 +212,7 @@ function PlayerBody({
   readonly dead: boolean;
 }) {
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
-  const secondaryVisible = player.mode === 'freezetime' && player.secondaryWeapon !== null;
+  const secondaryVisible = player.secondaryWeapon !== null;
   const pairedWithFirearm = [
     player.primaryWeapon,
     secondaryVisible ? player.secondaryWeapon : null,
