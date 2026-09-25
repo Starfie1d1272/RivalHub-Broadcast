@@ -137,6 +137,26 @@ describe('Radar renderer local lifecycle', () => {
     expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
   });
 
+  it('restores a mature smoke effect without replaying its enter animation', () => {
+    const restored = single();
+    restored.payload.grenades = [
+      {
+        ...restored.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(restored, 1_000, true);
+
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
+    });
+  });
+
   it('latches smoke from projectile to effect and never returns on residual velocity', () => {
     const before = single();
     before.payload.grenades = [
