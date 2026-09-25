@@ -175,6 +175,46 @@ describe('Radar renderer local lifecycle', () => {
     expect(model.exits.get('synthetic-projectile')?.marker.phase).toBe('effect');
   });
 
+  it('keeps an established smoke effect latched when owner identity drifts', () => {
+    const before = single();
+    const owner = before.payload.players[0]!.sourcePlayerId;
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        kind: 'smoke',
+        ownerSourceId: owner,
+        velocity: { x: 22.894, y: 0, z: 0 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'projectile',
+      side: before.payload.players[0]!.side,
+    });
+
+    const started = next(before);
+    started.payload.grenades[0]!.effectTimeSeconds = 15.406;
+    started.payload.grenades[0]!.lifetimeSeconds = 17.857;
+    started.payload.grenades[0]!.velocity = { x: 0, y: 0, z: 0 };
+    model.accept(started, 100);
+    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
+
+    const ownerDrift = next(started);
+    ownerDrift.payload.grenades[0]!.ownerSourceId = '263';
+    ownerDrift.payload.grenades[0]!.effectTimeSeconds = 15.656;
+    ownerDrift.payload.grenades[0]!.lifetimeSeconds = 18.111;
+    ownerDrift.payload.grenades[0]!.velocity = { x: 22.894, y: 0, z: 0 };
+    model.accept(ownerDrift, 200);
+
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      side: before.payload.players[0]!.side,
+    });
+  });
+
   it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
     const before = single();
     before.payload.grenades = [
