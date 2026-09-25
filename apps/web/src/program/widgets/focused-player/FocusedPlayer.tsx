@@ -12,6 +12,7 @@ import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
 import { consecutivePresentationSamples } from '../../presentation-sample';
 import { observerHotkeyLabel } from '../../observer-hotkey';
 import type { PlayerRailAsset } from '../player-rails/presentation';
+import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
 import {
   buildFocusedPlayerPresentation,
   type FocusedPlayerItemKind,
@@ -324,6 +325,7 @@ function FocusedPlayerFace({
           </div>
         )}
       </div>
+      <PlayerStatusEffects state={p.statusEffects} />
     </div>
   );
 }
