@@ -64,7 +64,15 @@ function usePresenceItems<T extends { readonly key: string }>(
     });
 
     const timer = window.setTimeout(() => {
-      setRendered((previous) => previous.filter((item) => item.motionPhase !== 'exit'));
+      setRendered((previous) =>
+        previous
+          .filter((item) => item.motionPhase !== 'exit')
+          .map((item) =>
+            item.motionPhase === 'enter'
+              ? { ...item, motionPhase: 'steady' as const }
+              : item,
+          ),
+      );
     }, exitMs);
     return () => window.clearTimeout(timer);
   }, [exitMs, presentationRevision, signature]);
