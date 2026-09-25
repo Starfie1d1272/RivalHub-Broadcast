@@ -607,12 +607,25 @@ export class RadarPresentation {
       }
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
+      const restoredEffectEnterMs =
+        reconnect && phase === 'effect'
+          ? source.kind === 'smoke'
+            ? RADAR_PRESENTATION.smokeEnterMs
+            : source.kind === 'inferno'
+              ? RADAR_PRESENTATION.infernoEnterMs
+              : 0
+          : 0;
       this.grenades.set(id, {
         ...(continuous ? retarget(old, world, point, 0, now) : motion(world, point, 0, now)),
         source,
         side,
         phase,
-        phaseStartedAt: continuous && old.phase === phase ? old.phaseStartedAt : now,
+        phaseStartedAt:
+          restoredEffectEnterMs > 0
+            ? now - restoredEffectEnterMs
+            : continuous && old.phase === phase
+              ? old.phaseStartedAt
+              : now,
         iconUrl: grenadeIcon(source.kind, side),
         trail,
         previousPosition: world,
