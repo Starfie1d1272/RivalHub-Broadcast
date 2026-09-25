@@ -325,7 +325,7 @@ function FocusedPlayerFace({
           </div>
         )}
       </div>
-      <PlayerStatusEffects state={p.statusEffects} />
+      <PlayerStatusEffects key={`status:${presentationRevision}`} state={p.statusEffects} />
     </div>
   );
 }
