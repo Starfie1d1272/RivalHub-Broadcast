@@ -267,8 +267,11 @@ export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
         g.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
       )
         return 'terminal';
-      if (moving) return 'projectile';
-      return g.effectTimeSeconds !== null && g.effectTimeSeconds > 0 ? 'effect' : 'projectile';
+      // effectTime is authoritative lifecycle evidence. Real GSI captures can retain a
+      // stale non-zero grenade velocity long after the smoke has settled; this matters
+      // especially on seek/reconnect where renderer-local phase history is intentionally reset.
+      if (g.effectTimeSeconds !== null && g.effectTimeSeconds > 0) return 'effect';
+      return moving ? 'projectile' : 'projectile';
     case 'firebomb':
       return moving ? 'projectile' : 'terminal';
     case 'inferno':
