@@ -4,9 +4,8 @@ import type { PlayerStatusEffectState } from './presentation';
 
 function effectStrength(value: number | null): number {
   if (value === null || !Number.isFinite(value) || value <= 0) return 0;
-  // GSI exposes these effects as intensities; normalize the common 0..255 range.
   const normalized = value <= 1 ? value : value / 255;
-  return Math.max(0.42, Math.min(1, normalized));
+  return Math.max(0, Math.min(1, Math.pow(normalized, 0.72)));
 }
 
 export function PlayerStatusEffects({
@@ -19,7 +18,6 @@ export function PlayerStatusEffects({
   const smoke = effectStrength(state.smoked);
   const burning = effectStrength(state.burning);
   const flashed = effectStrength(state.flashed);
-  if (smoke === 0 && burning === 0 && flashed === 0) return null;
 
   const style = {
     '--rh-player-status-smoke': smoke,
@@ -32,9 +30,9 @@ export function PlayerStatusEffects({
       aria-hidden="true"
       className="player-status-effects"
       data-anchor={anchor}
-      data-burning={burning > 0 || undefined}
-      data-flashed={flashed > 0 || undefined}
-      data-smoked={smoke > 0 || undefined}
+      data-burning={burning > 0}
+      data-flashed={flashed > 0}
+      data-smoked={smoke > 0}
       style={style}
     >
       <span className="player-status-effects__smoke" />
