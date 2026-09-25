@@ -193,6 +193,40 @@ describe('Player Rails card presentation', () => {
     expect(container.querySelector('[data-equipment="c4"] [data-asset-id]')).not.toBeNull();
   });
 
+  it('gives removed equipment a short exit tail without retaining it as truth', () => {
+    vi.useFakeTimers();
+    const snapshot = getProgramFixture('player-rails-dead-observed');
+    if (snapshot === null) throw new Error('fixture missing');
+    const presentation = buildPlayerRailsPresentation(snapshot.payload);
+    const carrier = presentation.ct.players.find((player) => player.defuserAsset !== null);
+    if (carrier === undefined) throw new Error('kit carrier missing');
+
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+    act(() => {
+      root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')).not.toBeNull();
+
+    act(() => {
+      root?.render(
+        <PlayerCard
+          player={{ ...carrier, defuserAsset: null, hasDefuser: false }}
+          presentationRevision={0}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
+      'exit',
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(110);
+    });
+    expect(container.querySelector('[data-equipment="kit"]')).toBeNull();
+  });
+
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
     const snapshot = getProgramFixture('player-rails-freezetime');
     if (snapshot === null) throw new Error('fixture missing');
