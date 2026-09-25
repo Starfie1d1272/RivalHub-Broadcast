@@ -124,6 +124,14 @@ describe('Radar renderer local lifecycle', () => {
 
     expect(radarUtilityPhase(movingSmoke)).toBe('projectile');
     expect(isActiveSmoke(movingSmoke)).toBe(false);
+    expect(
+      radarUtilityPhase({
+        ...movingSmoke,
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      }),
+    ).toBe('effect');
     expect(radarUtilityPhase(stationarySmoke)).toBe('effect');
     expect(isActiveSmoke(stationarySmoke)).toBe(true);
     expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
@@ -191,7 +199,7 @@ describe('Radar renderer local lifecycle', () => {
     const model = new RadarPresentation();
     model.accept(before, 0);
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
-      phase: 'projectile',
+      phase: 'effect',
       side: before.payload.players[0]!.side,
     });
 
