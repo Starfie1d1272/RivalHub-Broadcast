@@ -44,7 +44,6 @@ function replayPrefixDevelopmentApi() {
           readonly radarSnapshot: unknown;
         }>;
       };
-      let replayModulePromise: Promise<ReplayModule> | null = null;
       server.middlewares.use('/__local/replay-prefix', (request, response, next) => {
         if (request.method !== 'POST') return next();
         void (async () => {
@@ -68,12 +67,11 @@ function replayPrefixDevelopmentApi() {
           if (targetSequence < source.firstSequence || targetSequence > source.lastSequence) {
             throw new Error('Replay sequence is outside the fixed source selection');
           }
-          replayModulePromise ??= server.ssrLoadModule(
+          const { replayRealProgram } = (await server.ssrLoadModule(
             `/@fs/${resolve(repositoryRoot, 'apps/companion/test/support/real-program-replay.ts')
               .split(sep)
               .join('/')}`,
-          ) as unknown as Promise<ReplayModule>;
-          const { replayRealProgram } = await replayModulePromise;
+          )) as unknown as ReplayModule;
           const result = await replayRealProgram({
             capturePath: source.capturePath,
             targetSequence,
