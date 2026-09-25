@@ -1,7 +1,7 @@
 // @vitest-environment jsdom
 import { act } from 'react';
 import { createRoot, type Root } from 'react-dom/client';
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getProgramFixture } from '../src/program/fixtures';
 import {
   buildFocusedPlayerPresentation,
@@ -16,6 +16,7 @@ let root: Root | undefined;
 afterEach(() => {
   act(() => root?.unmount());
   root = undefined;
+  vi.useRealTimers();
 });
 function host() {
   const container = document.createElement('div');
@@ -169,6 +170,46 @@ describe('Focused media and combat presentation lifecycle', () => {
     );
     expect(container.querySelector('.focused-player__metrics')?.textContent).toBe('K—A4D11ADR82.3');
   });
+  it('keeps timeout exit motion presentation-local and clears it on a new revision', () => {
+    vi.useFakeTimers();
+    const container = host();
+    const placement = BUILTIN_RESOLVED_PRESET.layout.widgets['top-score-bar'];
+    const common = {
+      resolvedPreset: BUILTIN_RESOLVED_PRESET,
+      widgetId: 'top-score-bar' as const,
+      placement,
+      box: placementToBox('top-score-bar', placement),
+      settings: BUILTIN_RESOLVED_PRESET.widgets['top-score-bar'],
+    };
+    const timeout = getProgramFixture('real-timeout-ct')!;
+    const live = getProgramFixture('real-live-rich')!;
+
+    act(() => {
+      root!.render(<TopScoreBar {...common} snapshot={timeout} presentationRevision={0} />);
+    });
+    expect(container.querySelector('[data-timeout-panel="true"]')).not.toBeNull();
+
+    act(() => {
+      root!.render(<TopScoreBar {...common} snapshot={live} presentationRevision={0} />);
+    });
+    expect(
+      container.querySelector('[data-timeout-panel="true"]')?.getAttribute('data-motion-phase'),
+    ).toBe('exit');
+
+    act(() => {
+      vi.advanceTimersByTime(160);
+    });
+    expect(container.querySelector('[data-timeout-panel="true"]')).toBeNull();
+
+    act(() => {
+      root!.render(<TopScoreBar {...common} snapshot={timeout} presentationRevision={0} />);
+    });
+    act(() => {
+      root!.render(<TopScoreBar {...common} snapshot={live} presentationRevision={1} />);
+    });
+    expect(container.querySelector('[data-timeout-panel="true"]')).toBeNull();
+  });
+
   it('objective defaults never reveal exact objective seconds, and phase fallback has no fake dual tracks', () => {
     const container = host();
     for (const id of [
