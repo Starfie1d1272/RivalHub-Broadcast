@@ -72,10 +72,27 @@ function replayPrefixDevelopmentApi() {
               .split(sep)
               .join('/')}`,
           )) as unknown as ReplayModule;
-          const result = await replayRealProgram({
-            capturePath: source.capturePath,
-            targetSequence,
-          });
+          let result: Awaited<ReturnType<ReplayModule['replayRealProgram']>>;
+          try {
+            result = await replayRealProgram({
+              capturePath: source.capturePath,
+              targetSequence,
+            });
+          } catch (error) {
+            let sanitizerVersion: unknown = 'unreadable';
+            try {
+              const manifest = JSON.parse(
+                await readFile(resolve(source.capturePath, 'manifest.json'), 'utf8'),
+              ) as { readonly provenance?: { readonly sanitizerVersion?: unknown } };
+              sanitizerVersion = manifest.provenance?.sanitizerVersion ?? 'missing';
+            } catch {
+              // Keep the original replay error authoritative; diagnostics are best-effort.
+            }
+            const message = error instanceof Error ? error.message : 'Replay rebuild failed';
+            throw new Error(
+              `current-worktree testkit source · capture sanitizer v${String(sanitizerVersion)} · ${message}`,
+            );
+          }
           response.statusCode = 200;
           response.setHeader('Content-Type', 'application/json; charset=utf-8');
           response.setHeader('Cache-Control', 'no-store');
