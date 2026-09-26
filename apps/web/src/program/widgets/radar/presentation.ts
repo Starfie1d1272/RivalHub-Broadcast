@@ -313,7 +313,12 @@ function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): ol
   return (
     source.kind === 'smoke' &&
     old?.source.kind === 'smoke' &&
-    old.source.sourceEntityId === source.sourceEntityId
+    old.source.sourceEntityId === source.sourceEntityId &&
+    !(
+      old.source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds !== null &&
+      source.lifetimeSeconds < old.source.lifetimeSeconds
+    )
   );
 }
 
