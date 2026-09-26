@@ -38,4 +38,15 @@ export type {
   ProgramVetoStep,
 } from './program.js';
 export { projectBp } from './bp.js';
-export type { BpProjection, BpCard, BpEntrant, BpStep } from './bp.js';
+export { inspectBp } from './bp.js';
+export type {
+  BpProjection,
+  BpCard,
+  BpEntrant,
+  BpSideChoice,
+  BpStep,
+  BpProjectionReadiness,
+  BpProjectionResult,
+} from './bp.js';
+export { DEFAULT_LOCAL_BP_MAP_POOL, LOCAL_BP_MAP_CATALOG, localBpSequence } from './bp-sequence.js';
+export type { BpSequenceAction } from './bp-sequence.js';

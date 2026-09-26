@@ -15,90 +15,196 @@ export interface BpEntrant {
   readonly name: string;
   readonly logoUrl: string | null;
 }
+export interface BpSideChoice {
+  readonly entrant: 'a' | 'b';
+  readonly side: 'CT' | 'T';
+}
 export interface BpCard {
   readonly mapName: string;
   readonly kind: 'ban' | 'pick' | 'decider';
   readonly entrant: 'a' | 'b' | null;
-  readonly startSides: { readonly a: 'CT' | 'T'; readonly b: 'CT' | 'T' } | null;
+  readonly sideChoice: BpSideChoice | null;
 }
 export interface BpStep {
   readonly cardIndex: number;
-  readonly kind: 'card' | 'start-side';
+  readonly kind: 'card' | 'side-choice';
 }
+export type BpProjectionReadiness = 'ready' | 'incomplete' | 'conflict';
+export interface BpProjectionResult {
+  readonly readiness: BpProjectionReadiness;
+  readonly projection: BpProjection | null;
+}
+
 const opposite = (side: 'CT' | 'T') => (side === 'CT' ? 'T' : 'CT');
 const mapKey = (name: string) => canonicalizeCs2MapName(name) ?? name.trim().toLowerCase();
 
-/** Finite presentation of canonical veto facts; no gameplay or provider state. */
-export function projectBp(context: MatchContext | undefined): BpProjection | null {
+interface SideEvidence {
+  readonly explicit: BpSideChoice[];
+  readonly legacy: BpSideChoice[];
+}
+
+/** Normalize current legacy embedded sides and explicit SIDE_PICK to one on-air fact. */
+export function inspectBp(context: MatchContext | undefined): BpProjectionResult {
+  if (!context) return { readiness: 'incomplete', projection: null };
+  if (context.veto.length === 0) return { readiness: 'incomplete', projection: null };
   if (
-    !context ||
-    context.veto.length === 0 ||
     context.veto.length > 32 ||
-    context.entrants.a.entryId === context.entrants.b.entryId
+    context.entrants.a.entryId === context.entrants.b.entryId ||
+    new Set(context.maps.map((map) => mapKey(map.mapName))).size !== context.maps.length
   )
-    return null;
-  const entrant = (id: string | null) =>
+    return { readiness: 'conflict', projection: null };
+
+  const entrantFor = (id: string | null) =>
     id === context.entrants.a.entryId
       ? ('a' as const)
       : id === context.entrants.b.entryId
         ? ('b' as const)
         : null;
-  const veto = [...context.veto].sort((a, b) => a.stepOrder - b.stepOrder);
-  if (new Set(veto.map((v) => v.stepOrder)).size !== veto.length) return null;
+  const ordered = [...context.veto].sort((a, b) => a.stepOrder - b.stepOrder);
+  if (new Set(ordered.map((step) => step.stepOrder)).size !== ordered.length)
+    return { readiness: 'conflict', projection: null };
+
   const cards: BpCard[] = [];
-  const steps: BpStep[] = [];
-  for (const v of veto) {
-    const name = mapKey(v.mapName);
-    if (v.actionType === 'side_pick') {
-      const index = cards.findIndex((c) => c.mapName === name && c.kind !== 'ban');
-      const owner = entrant(v.entryId);
+  const cardIndexByMap = new Map<string, number>();
+  const evidence = new Map<number, SideEvidence>();
+  const explicitStepIndex = new Map<number, number>();
+
+  for (const [orderedIndex, step] of ordered.entries()) {
+    const name = mapKey(step.mapName);
+    if (step.actionType === 'side_pick') {
+      const index = cardIndexByMap.get(name);
+      const actor = entrantFor(step.entryId);
+      const previous = ordered[orderedIndex - 1];
       if (
-        index < 0 ||
-        owner === null ||
-        v.side === null ||
-        steps.some((s) => s.cardIndex === index && s.kind === 'start-side')
+        index === undefined ||
+        cards[index]?.kind === 'ban' ||
+        (cards[index]?.kind === 'decider' && context.format === 'bo5') ||
+        actor === null ||
+        step.side === null ||
+        previous === undefined ||
+        previous.actionType === 'side_pick' ||
+        mapKey(previous.mapName) !== name ||
+        explicitStepIndex.has(index)
       )
-        return null;
-      const a = owner === 'a' ? v.side : opposite(v.side);
-      const existing = cards[index]!.startSides;
-      if (existing !== null && existing.a !== a) return null;
-      cards[index] = { ...cards[index]!, startSides: { a, b: opposite(a) } };
-      steps.push({ cardIndex: index, kind: 'start-side' });
+        return { readiness: 'conflict', projection: null };
+      const cardEvidence = evidence.get(index) ?? { explicit: [], legacy: [] };
+      cardEvidence.explicit.push({ entrant: actor, side: step.side });
+      evidence.set(index, cardEvidence);
+      explicitStepIndex.set(index, orderedIndex);
       continue;
     }
-    if (cards.length >= 7 || cards.some((c) => c.mapName === name)) return null;
-    const owner = v.actionType === 'decider' ? null : entrant(v.entryId);
-    if (v.actionType !== 'decider' && owner === null) return null;
-    const map = context.maps.find((m) => mapKey(m.mapName) === name);
-    const side = v.actionType === 'ban' ? null : (map?.teamAStartSide ?? null);
+
+    if (cards.length >= 7 || cardIndexByMap.has(name))
+      return { readiness: 'conflict', projection: null };
+    if (step.actionType === 'ban' && step.side !== null)
+      return { readiness: 'conflict', projection: null };
+    const owner = step.actionType === 'decider' ? null : entrantFor(step.entryId);
+    if (step.actionType !== 'decider' && owner === null)
+      return { readiness: 'conflict', projection: null };
+
     const index = cards.length;
-    cards.push({
-      mapName: name,
-      kind: v.actionType,
-      entrant: owner,
-      startSides: side === null ? null : { a: side, b: opposite(side) },
-    });
-    steps.push({ cardIndex: index, kind: 'card' });
-    // Embedded pick.side is not a side-choice owner. Only canonical map sides
-    // or an explicit side_pick can establish starting sides.
-    if (
-      side !== null &&
-      !veto.some((s) => s.actionType === 'side_pick' && mapKey(s.mapName) === name)
-    ) {
-      steps.push({ cardIndex: index, kind: 'start-side' });
+    cardIndexByMap.set(name, index);
+    cards.push({ mapName: name, kind: step.actionType, entrant: owner, sideChoice: null });
+
+    if (step.side !== null) {
+      const actor =
+        step.actionType === 'pick'
+          ? owner === 'a'
+            ? 'b'
+            : owner === 'b'
+              ? 'a'
+              : null
+          : step.actionType === 'decider'
+            ? entrantFor(step.entryId)
+            : null;
+      if (actor === null) return { readiness: 'conflict', projection: null };
+      const cardEvidence = evidence.get(index) ?? { explicit: [], legacy: [] };
+      cardEvidence.legacy.push({ entrant: actor, side: step.side });
+      evidence.set(index, cardEvidence);
+    } else if (step.actionType === 'decider' && step.entryId !== null) {
+      // Legacy deciders identify the side chooser in entryId. Without a side it
+      // is incomplete evidence and must not be converted into an on-air choice.
     }
   }
+
+  const expectedKinds: Readonly<Record<MatchContext['format'], readonly BpCard['kind'][]>> = {
+    bo1: [...Array<BpCard['kind']>(6).fill('ban'), 'decider'],
+    bo3: ['ban', 'ban', 'pick', 'pick', 'ban', 'ban', 'decider'],
+    bo5: ['ban', 'ban', 'pick', 'pick', 'pick', 'pick', 'decider'],
+  };
+  const expected = expectedKinds[context.format];
+  if (cards.length < expected.length) return { readiness: 'incomplete', projection: null };
+  if (
+    cards.length !== expected.length ||
+    cards.some((card, index) => card.kind !== expected[index])
+  )
+    return { readiness: 'conflict', projection: null };
+
+  const mapByName = new Map(context.maps.map((map) => [mapKey(map.mapName), map]));
+  for (let index = 0; index < cards.length; index += 1) {
+    const card = cards[index]!;
+    const cardEvidence = evidence.get(index) ?? { explicit: [], legacy: [] };
+    if (cardEvidence.explicit.length > 1 || cardEvidence.legacy.length > 1)
+      return { readiness: 'conflict', projection: null };
+    const explicit = cardEvidence.explicit[0];
+    const legacy = cardEvidence.legacy[0];
+    if (
+      explicit !== undefined &&
+      legacy !== undefined &&
+      (explicit.entrant !== legacy.entrant || explicit.side !== legacy.side)
+    )
+      return { readiness: 'conflict', projection: null };
+    const choice = explicit ?? legacy ?? null;
+    if (context.format === 'bo5' && card.kind === 'decider' && choice !== null)
+      return { readiness: 'conflict', projection: null };
+    const map = mapByName.get(card.mapName);
+    if (choice !== null && map?.teamAStartSide !== null && map?.teamAStartSide !== undefined) {
+      const expectedTeamA = choice.entrant === 'a' ? choice.side : opposite(choice.side);
+      if (expectedTeamA !== map.teamAStartSide) return { readiness: 'conflict', projection: null };
+    }
+    cards[index] = { ...card, sideChoice: choice };
+  }
+
+  const steps: BpStep[] = [];
+  for (const [orderedIndex, step] of ordered.entries()) {
+    if (step.actionType === 'side_pick') {
+      const index = cardIndexByMap.get(mapKey(step.mapName));
+      if (index === undefined) return { readiness: 'conflict', projection: null };
+      steps.push({ cardIndex: index, kind: 'side-choice' });
+      continue;
+    }
+    const index = cardIndexByMap.get(mapKey(step.mapName));
+    if (index === undefined) return { readiness: 'conflict', projection: null };
+    steps.push({ cardIndex: index, kind: 'card' });
+    const evidenceForCard = evidence.get(index);
+    if (
+      evidenceForCard?.legacy.length === 1 &&
+      !explicitStepIndex.has(index) &&
+      explicitStepIndex.get(index) !== orderedIndex
+    ) {
+      steps.push({ cardIndex: index, kind: 'side-choice' });
+    }
+  }
+
   const team = (key: 'a' | 'b'): BpEntrant => {
     const { entryId, name, logoUrl } = context.entrants[key];
     return { entryId, name, logoUrl };
   };
   return {
-    matchId: context.matchId,
-    competition: context.competition.name,
-    stage: context.stage,
-    format: context.format,
-    entrants: { a: team('a'), b: team('b') },
-    cards,
-    steps,
+    readiness: 'ready',
+    projection: {
+      matchId: context.matchId,
+      competition: context.competition.name,
+      stage: context.stage,
+      format: context.format,
+      entrants: { a: team('a'), b: team('b') },
+      cards,
+      steps,
+    },
   };
+}
+
+/** Finite, Program-safe presentation derived from the canonical MatchContext. */
+export function projectBp(context: MatchContext | undefined): BpProjection | null {
+  return inspectBp(context).projection;
 }
