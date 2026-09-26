@@ -40,6 +40,7 @@ export const RADAR_PRESENTATION = Object.freeze({
 });
 
 type Player = RadarSnapshot['payload']['players'][number];
+type Bomb = RadarSnapshot['payload']['bomb'];
 type Grenade = RadarSnapshot['payload']['grenades'][number];
 type Vector = NonNullable<Player['position']>;
 export type RadarSide = Player['side'];
@@ -147,6 +148,16 @@ export function radarPlayerMarkerKind(lifeState: Player['lifeState']): 'alive' |
   if (lifeState === 'alive') return 'alive';
   if (lifeState === 'dead') return 'dead';
   return null;
+}
+
+export function radarPlayerMarkerVisualRole(
+  sourcePlayerId: string,
+  bomb: Bomb,
+): 'side' | 'bomb-carrier' {
+  return bomb?.sourcePlayerId === sourcePlayerId &&
+    (bomb.state === 'carried' || bomb.state === 'planting')
+    ? 'bomb-carrier'
+    : 'side';
 }
 function direction(player: Player): number {
   const d = player.lifeState === 'alive' ? projectWorldDirection(player.forward) : null;

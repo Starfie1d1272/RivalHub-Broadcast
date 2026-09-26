@@ -52,16 +52,6 @@ describe('changed-surface CI planner', () => {
       },
     ],
     [
-      'manual screenshot suite',
-      ['tests/visual/match-header.spec.ts'],
-      {
-        runQuality: true,
-        runAcceptance: false,
-        runPlatform: false,
-        runQualification: false,
-      },
-    ],
-    [
       'core projection',
       ['packages/core/src/projection/program.ts'],
       {

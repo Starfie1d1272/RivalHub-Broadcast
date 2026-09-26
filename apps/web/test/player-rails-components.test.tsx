@@ -36,7 +36,7 @@ describe('Player Rails summary lifecycle', () => {
     vi.useRealTimers();
   });
 
-  it('holds the observed freezetime summary for five seconds across live snapshots', () => {
+  it('holds economy for five seconds across live snapshots while keeping utility visible', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -61,20 +61,26 @@ describe('Player Rails summary lifecycle', () => {
     act(() => {
       vi.advanceTimersByTime(1);
     });
-    expect(container.querySelector('[data-summary-visible="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-mode="utility-only"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-economy-visible="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-utility-visible="true"]')).not.toBeNull();
   });
 
-  it('does not carry a summary into a direct live mount', () => {
+  it('shows utility without economy on a direct live mount', () => {
     const container = document.createElement('div');
     document.body.appendChild(container);
     root = createRoot(container);
     act(() => {
       root?.render(<TeamSummary phase="live" side="CT" summary={summary(4_200)} />);
     });
-    expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+    expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-mode="utility-only"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-economy-visible="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-utility-visible="true"]')).not.toBeNull();
   });
 
-  it('clears the carryover when the presentation boundary remounts', () => {
+  it('clears economy carryover when the presentation boundary remounts', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -93,10 +99,12 @@ describe('Player Rails summary lifecycle', () => {
         <TeamSummary key="new-boundary" phase="live" side="CT" summary={summary(1_000)} />,
       );
     });
-    expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+    expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-mode="utility-only"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-economy-visible="false"]')).not.toBeNull();
   });
 
-  it('clears carryover when an unknown phase interrupts the transition', () => {
+  it('clears economy carryover when an unknown phase interrupts the transition', () => {
     vi.useFakeTimers();
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -118,7 +126,10 @@ describe('Player Rails summary lifecycle', () => {
     act(() => {
       root?.render(<TeamSummary phase="live" side="CT" summary={summary(800)} />);
     });
-    expect(container.querySelector('[data-summary-visible="true"]')).toBeNull();
+    expect(container.querySelector('[data-summary-visible="true"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-mode="utility-only"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-economy-visible="false"]')).not.toBeNull();
+    expect(container.querySelector('[data-summary-utility-visible="true"]')).not.toBeNull();
   });
 });
 

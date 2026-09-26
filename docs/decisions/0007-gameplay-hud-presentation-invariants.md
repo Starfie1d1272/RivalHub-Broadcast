@@ -36,6 +36,8 @@ Top Score、Series Strip、Player Rails、Focused Player 与 Radar 可以共享�
 
 alive 时优先显示仍能影响当前回合的战术信息；dead state 可以把稳定统计提升为主要信息。Focused Player 只强化当前 POV 的独有信息，不复制完整 team/inventory 面板。
 
+Team Summary 的经济信息属于回合开始决策上下文：freezetime 完整显示，并在进入 live 后保留 5 秒；剩余道具属于持续战术信息，live 回合中常驻显示。live 道具总数只聚合当前存活且 weapons evidence 可用的选手；life state 或存活选手 inventory 证据不完整时 fail closed。
+
 ### 5. Transient presentation 使用预留 slot，不参与重排
 
 Team Summary、timeout、objective progress、alive XvY 等 transient presentation 必须使用已经预算的稳定区域，显示/隐藏不能导致其它核心组件跳位。
@@ -43,6 +45,8 @@ Team Summary、timeout、objective progress、alive XvY 等 transient presentati
 ### 6. Radar 只有一套坐标 owner
 
 `packages/radar` 的 canonical world-to-overview calibration 是唯一坐标真值。Web Renderer 可以做 presentation viewport / composition，但 map artwork、player、C4、utility 与 transient 必须共享同一 transform。
+
+C4 的 Radar presentation 保持单一主要视觉 owner：`carried / planting` 通过 carrier player marker 的 objective 色表达，不再在选手圆点旁追加第二个 C4 图标；`dropped / planted` 才使用独立 world-space C4 marker。阵营方向箭头继续保留 side 色，objective ownership 不覆盖 side identity。
 
 明确不采用：
 

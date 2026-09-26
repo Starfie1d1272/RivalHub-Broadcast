@@ -6,6 +6,7 @@ import {
   isActiveSmoke,
   RadarPresentation,
   radarPlayerMarkerKind,
+  radarPlayerMarkerVisualRole,
   radarUtilityPhase,
   shortestAngle,
   smokeRemaining,
@@ -76,6 +77,29 @@ describe('Radar renderer local lifecycle', () => {
         .success,
     ).toBe(false);
   });
+  it('encodes carried and planting C4 ownership on the player marker only', () => {
+    const snapshot = single();
+    const playerId = snapshot.payload.players[0]!.sourcePlayerId;
+
+    for (const state of ['carried', 'planting'] as const) {
+      snapshot.payload.bomb = {
+        state,
+        sourcePlayerId: playerId,
+        position: null,
+      };
+      expect(radarPlayerMarkerVisualRole(playerId, snapshot.payload.bomb)).toBe('bomb-carrier');
+      expect(radarPlayerMarkerVisualRole('other-player', snapshot.payload.bomb)).toBe('side');
+    }
+
+    snapshot.payload.bomb = {
+      state: 'dropped',
+      sourcePlayerId: null,
+      position: { x: -1000, y: 0, z: 0 },
+    };
+    expect(radarPlayerMarkerVisualRole(playerId, snapshot.payload.bomb)).toBe('side');
+    expect(radarPlayerMarkerVisualRole(playerId, null)).toBe('side');
+  });
+
   it('keeps procedural effect geometry deterministic and bounded', () => {
     const a = smokeLobes('smoke-188', 30);
     const b = smokeLobes('smoke-188', 30);

@@ -72,20 +72,32 @@ export function TeamSummary({
     return () => window.clearTimeout(timer);
   }, [phase]);
 
-  const visible = phase === 'freezetime' || (phase === 'live' && carryoverActive);
+  const economyVisible = phase === 'freezetime' || (phase === 'live' && carryoverActive);
+  const utilityVisible = phase === 'freezetime' || phase === 'live';
+  const visible = economyVisible || utilityVisible;
+  const utilityOnly = utilityVisible && !economyVisible;
   const displayed = summary;
   const utility = displayed.utility;
 
   return (
     <div
       aria-hidden={!visible}
-      className={`player-rail__summary${visible ? ' is-visible' : ''}`}
+      className={`player-rail__summary${visible ? ' is-visible' : ''}${
+        utilityOnly ? ' is-utility-only' : ''
+      }`}
       data-summary-carryover={carryoverActive}
+      data-summary-economy-visible={economyVisible}
+      data-summary-mode={visible ? (utilityOnly ? 'utility-only' : 'full') : 'hidden'}
       data-summary-phase={phase}
+      data-summary-utility-visible={utilityVisible}
       data-summary-visible={visible}
       data-team-summary={side}
     >
-      <div className="player-rail__economy" data-summary-row="economy">
+      <div
+        aria-hidden={!economyVisible}
+        className={`player-rail__economy${economyVisible ? ' is-visible' : ''}`}
+        data-summary-row="economy"
+      >
         <div>
           <span>MONEY</span>
           <strong>{formatMoney(displayed.money)}</strong>
@@ -99,7 +111,13 @@ export function TeamSummary({
           <strong>{formatMoney(displayed.lossBonus)}</strong>
         </div>
       </div>
-      <div className="player-rail__utility" data-summary-row="utility">
+      <div
+        aria-hidden={!utilityVisible}
+        className={`player-rail__utility${utilityVisible ? ' is-visible' : ''}${
+          utilityOnly ? ' is-live-only' : ''
+        }`}
+        data-summary-row="utility"
+      >
         {UTILITY_SLOTS.map(({ family, label }) => (
           <span
             aria-label={`${label} ${utility === null ? 'unavailable' : utility[family]}`}
