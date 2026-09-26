@@ -250,9 +250,9 @@ export async function loadReplayFixture(id: ReplaySourceId): Promise<LoadedRepla
           body: JSON.stringify({ sourceId: id, targetSequence: expected.cursor.sequence }),
         });
         if (!response.ok) {
-          const body = (await response.json().catch(() => null)) as
-            | { readonly error?: unknown }
-            | null;
+          const body = (await response.json().catch(() => null)) as {
+            readonly error?: unknown;
+          } | null;
           const detail =
             typeof body?.error === 'string' && body.error.trim().length > 0
               ? `: ${body.error}`
