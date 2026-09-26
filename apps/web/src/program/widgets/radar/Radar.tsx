@@ -12,7 +12,6 @@ import {
   isMultiLayerGeometry,
   layerOpacity,
   radarPlayerMarkerKind,
-  smokeEnterProgress,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
@@ -513,7 +512,10 @@ export function Radar({
             continue;
           drawSmoke(
             marker,
-            smokeEnterProgress(marker.source.effectTimeSeconds, marker.phaseStartedAt, now),
+            Math.min(
+              1,
+              Math.max(0, (now - marker.phaseStartedAt) / RADAR_PRESENTATION.smokeEnterMs),
+            ),
           );
         }
         for (const exit of model.exits.values()) {
