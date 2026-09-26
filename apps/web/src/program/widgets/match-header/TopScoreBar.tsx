@@ -14,6 +14,7 @@ const PANEL_EXIT_MS = 160;
 
 type PanelMotionPhase = 'enter' | 'steady' | 'exit';
 
+/* eslint-disable react-hooks/set-state-in-effect -- Renderer-local presence state intentionally snapshots the last visible panel so its exit motion can complete. */
 function usePanelPresence<T>(value: T | null, exitMs = PANEL_EXIT_MS) {
   const [rendered, setRendered] = useState<T | null>(value);
   const [phase, setPhase] = useState<PanelMotionPhase>(value === null ? 'steady' : 'enter');
@@ -51,6 +52,7 @@ function usePanelPresence<T>(value: T | null, exitMs = PANEL_EXIT_MS) {
 
   return { phase, value: rendered } as const;
 }
+/* eslint-enable react-hooks/set-state-in-effect */
 
 function TeamLogo({ team }: { readonly team: MatchHeaderTeamPresentation }) {
   const [failed, setFailed] = useState(false);
