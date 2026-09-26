@@ -54,9 +54,9 @@
 
 Browser acceptance uses real-derived Program fixtures whenever committed capture evidence exists. Synthetic fixtures are reserved for explicit edge/fail-closed or presentation stress and must declare provenance/reason. Browser acceptance checks behavior and semantic state; diagnostic screenshots may be attached, but do not determine pass/fail.
 
-Screenshot/pixel regression is a manual release-time tool, not an ordinary PR gate. `pnpm visual:test`, `pnpm visual:update`, and `tests/visual/__screenshots__/linux/` remain available when a release is ready for visual freeze. Only Linux / Chromium output is canonical; local Darwin / Windows screenshots are previews and should not be committed as baselines.
+1.0.0 前不维护 screenshot / pixel baseline。HUD 视觉调整通过本地 fixture 页面、真实回放和 Browser acceptance 的语义/结构断言人工验收；诊断截图可以作为临时证据，但不进入仓库，也不决定 CI pass/fail。
 
-真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。#76 的连续 replay artifact 通过 `pnpm fixtures:replay:generate` 从固定 Ancient 第 3 回合与第 11 回合 capture 生成；Program、Radar、cursor 和 semantic event index 来自同一 production composition，并由 `pnpm fixtures:replay:verify` 检查 hash 与内容漂移。HUD Editor 只消费本地生成并校验过的 Program/Radar projection；seek 由 Vite 开发期 local-only harness 从 capture 起点重建 production composition 前缀，再返回同一 cursor 的 projection pair 核对 artifact。Web 与 testkit 共用 `packages/replay` 中 framework-neutral 的离散 cursor/scheduler；capture 读取、Raw GSI adapter 与 replay prefix composition 留在 Companion/testkit 边界，不能进入 Web runtime。HUD Replay browser acceptance 使用固定真实 capture，检查语义事件 seek/play、utility handoff、objective progress 和 observer identity handoff。截图/pixel baseline 只在正式版视觉冻结时人工运行和审查；普通 PR 不自动生成、提交或推送 baseline。合成展示压力测试使用确定性本地/data-URI 图片；#76 的真实头像仅由本机可选导入步骤 materialize 为本地、带来源与 SHA-256 的 fixture asset。导入脚本只从 `STEAM_WEB_API_KEY` 环境变量读取，Replay、HUD editor、acceptance test 与 CI 不访问 Steam。团队名称来自 capture，team logo 单独通过 fixture-local MatchContext presentation enrichment 绑定；无可验证素材时保持 unavailable。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
+真实 Program fixture 经 production adapter、ProgramRuntime 和 ProjectionCoordinator 生成，包含 capture 路径、目标 sequence 和来源 hash。数据更新流程仍为：提交 capture → `pnpm fixtures:program:generate` → 审查 Program snapshot diff。#76 的连续 replay artifact 通过 `pnpm fixtures:replay:generate` 从固定 Ancient 第 3 回合与第 11 回合 capture 生成；Program、Radar、cursor 和 semantic event index 来自同一 production composition，并由 `pnpm fixtures:replay:verify` 检查 hash 与内容漂移。HUD Editor 只消费本地生成并校验过的 Program/Radar projection；seek 由 Vite 开发期 local-only harness 从 capture 起点重建 production composition 前缀，再返回同一 cursor 的 projection pair 核对 artifact。Web 与 testkit 共用 `packages/replay` 中 framework-neutral 的离散 cursor/scheduler；capture 读取、Raw GSI adapter 与 replay prefix composition 留在 Companion/testkit 边界，不能进入 Web runtime。HUD Replay browser acceptance 使用固定真实 capture，检查语义事件 seek/play、utility handoff、objective progress 和 observer identity handoff。1.0.0 前不生成、提交或比较截图 baseline。合成展示压力测试使用确定性本地/data-URI 图片；#76 的真实头像仅由本机可选导入步骤 materialize 为本地、带来源与 SHA-256 的 fixture asset。导入脚本只从 `STEAM_WEB_API_KEY` 环境变量读取，Replay、HUD editor、acceptance test 与 CI 不访问 Steam。团队名称来自 capture，team logo 单独通过 fixture-local MatchContext presentation enrichment 绑定；无可验证素材时保持 unavailable。CI 使用 `pnpm fixtures:program:verify` 检测生成产物漂移，验证命令不写入文件。
 
 HUD 编辑器的日常场景列表只露出少量真实遥测回放与必要展示边界；完整 fixture 注册表继续服务回归测试。`bp-rivals-*` 使用生产 RivalHub 中 2026 NJU Rivals 总决赛、胜者组半决赛的公开 BP 与赛果生成系列图条切面；背景 GSI 来自另一场已提交的真实回放，**不能作为这些赛事的游戏过程证据**。未进行地图没有赛果，未确认的起始边保持缺失，决胜图不伪造选图方。
 
@@ -150,7 +150,7 @@ pnpm acceptance:test
 pnpm local-web:production-smoke
 ```
 
-`pnpm visual:update` 与 `pnpm visual:test` 仅在正式版视觉冻结时手动使用，不属于普通 PR CI。
+视觉验收使用开发期 fixture 页面与真实回放人工检查；自动化只验证行为、语义、结构与运行时边界。
 
 现场验收工具：
 
@@ -163,7 +163,7 @@ pnpm qualification:verify <evidence-dir-or-zip>
 
 具体 PR 由 planner 选择子集；手工排查时可直接运行需要的完整命令。
 
-HUD 编辑器的浏览器验收覆盖样例、确定性重放与实时来源切换；实时来源失效时保持选择并安全隐藏，恢复后继续读取当前状态。验证已实现组件的显隐、拖动、Radar 尺寸与视野、保存/启用和冲突语义。普通 UI 不提供外观工作区、外观选择或未实现组件的占位与交互，既有 theme/placement schema 继续兼容。Program 保持透明且不包含产品导航或编辑辅助层。严格截图比较使用 canonical Linux / Chromium baseline，其它平台仅做临时预览与浏览器冒烟。
+HUD 编辑器的浏览器验收覆盖样例、确定性重放与实时来源切换；实时来源失效时保持选择并安全隐藏，恢复后继续读取当前状态。验证已实现组件的显隐、拖动、Radar 尺寸与视野、保存/启用和冲突语义。普通 UI 不提供外观工作区、外观选择或未实现组件的占位与交互，既有 theme/placement schema 继续兼容。Program 保持透明且不包含产品导航或编辑辅助层。1.0.0 前不维护严格截图断言或 canonical pixel baseline；各平台只做本地预览、浏览器冒烟与语义/结构验收。
 
 ## 5. Windows 便携产品与现场验收
 

@@ -1207,7 +1207,7 @@ export const SYNTHETIC_FIXTURE_PROVENANCE = {
   },
   'player-rails-carryover': {
     kind: 'synthetic-edge',
-    reason: '精确控制 freezetime 到 live 的五秒展示生命周期。',
+    reason: '精确控制 freezetime 到 live 的五秒经济延续与常驻道具生命周期。',
   },
   'series-bo1': {
     kind: 'synthetic-presentation',

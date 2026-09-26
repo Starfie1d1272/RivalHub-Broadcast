@@ -323,12 +323,19 @@ function numericValues(
 
 function teamUtility(
   players: readonly ProgramPayload['players'][number][],
+  phase: PlayerRailsPhase,
 ): TeamUtilitySummary | null {
-  if (!completeCurrentLineup(players) || !players.every((player) => player.weaponsAvailable)) {
+  if (!completeCurrentLineup(players)) return null;
+
+  const contributors =
+    phase === 'live' ? players.filter((player) => player.lifeState === 'alive') : players;
+  if (phase === 'live' && players.some((player) => player.lifeState === 'unknown')) {
     return null;
   }
+  if (!contributors.every((player) => player.weaponsAvailable)) return null;
+
   const total = { ...EMPTY_UTILITY };
-  for (const player of players) {
+  for (const player of contributors) {
     for (const utility of utilityPresentation(knownWeapons(player)))
       total[utility.family] += utility.count;
   }
@@ -339,8 +346,9 @@ function teamSummary(
   side: PlayerRailSide,
   players: readonly ProgramPayload['players'][number][],
   payload: ProgramPayload,
+  phase: PlayerRailsPhase,
 ): TeamSummaryPresentation {
-  const utility = teamUtility(players);
+  const utility = teamUtility(players, phase);
   return {
     side,
     money: numericValues(players, (player) => player.state?.money ?? null),
@@ -393,7 +401,7 @@ function buildRail(
     entrantKey,
     entrantName: null,
     players: sorted.map((player) => playerPresentation(player, phase, payload)),
-    summary: teamSummary(side, sorted, payload),
+    summary: teamSummary(side, sorted, payload, phase),
   };
 }
 

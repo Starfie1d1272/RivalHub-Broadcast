@@ -12,6 +12,7 @@ import {
   isMultiLayerGeometry,
   layerOpacity,
   radarPlayerMarkerKind,
+  radarPlayerMarkerVisualRole,
   smokeRemaining,
   type RadarSide,
 } from './presentation';
@@ -124,6 +125,8 @@ export function Radar({
           : side === 'T'
             ? style.getPropertyValue('--rh-hud-side-t').trim() || '#f2bd4f'
             : '#aab4c0';
+      const bombCarrierColor =
+        style.getPropertyValue('--rh-hud-objective-bomb').trim() || '#f06f6f';
       const circle = (
         x: number,
         y: number,
@@ -667,6 +670,10 @@ export function Radar({
           const x = point.x;
           const y = point.y;
           const color = sideColor(p.side);
+          const markerFill =
+            radarPlayerMarkerVisualRole(p.sourcePlayerId, bomb) === 'bomb-carrier'
+              ? bombCarrierColor
+              : color;
           ctx.globalAlpha = layerOpacity(marker.target, model.layer);
           if (markerKind === 'dead') {
             ctx.strokeStyle = color;
@@ -702,7 +709,7 @@ export function Radar({
           const flashRatio =
             p.flashAmount !== null ? Math.min(1, Math.max(0, p.flashAmount / 255)) : 0;
           circle(x, y, 29, '#f3f6fa');
-          circle(x, y, 25, color, '#0b1119', 2);
+          circle(x, y, 25, markerFill, '#0b1119', 2);
           if (flashRatio > 0) {
             ctx.globalAlpha = flashRatio * 0.9;
             circle(x, y, 24, '#ffffff');
@@ -729,12 +736,6 @@ export function Radar({
             ctx.arc(0, 0, 31, Math.PI * 0.72, Math.PI * 1.28);
             ctx.stroke();
             ctx.restore();
-          }
-          if (
-            bomb?.sourcePlayerId === p.sourcePlayerId &&
-            (bomb.state === 'carried' || bomb.state === 'planting')
-          ) {
-            if (bombIcon) ctx.drawImage(bombIcon, x + 18, y + 18, 28, 28);
           }
           ctx.globalAlpha = 1;
         }

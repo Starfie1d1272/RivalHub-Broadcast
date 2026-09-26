@@ -96,6 +96,55 @@ describe('Player Rails presentation selector', () => {
     });
   });
 
+  it('counts live utility from alive inventories and fails closed on uncertain live truth', () => {
+    const snapshot = getProgramFixture('player-rails-freezetime');
+    if (snapshot === null) throw new Error('fixture missing');
+    const livePayload = {
+      ...structuredClone(snapshot.payload),
+      round: { phase: 'live' as const, winnerSide: 'unknown' as const },
+      clock: { phase: 'live' as const, endsInSeconds: 90 },
+    };
+    const baseline = buildPlayerRailsPresentation(livePayload);
+    const utility = baseline.ct.summary.utility;
+    if (utility === null) throw new Error('live utility baseline missing');
+    const carrier = baseline.ct.players.find((player) => player.utility.length > 0);
+    if (carrier === undefined) throw new Error('utility carrier missing');
+
+    const expected = { ...utility };
+    for (const item of carrier.utility) expected[item.family] -= item.count;
+
+    const deadPayload = structuredClone(livePayload);
+    const dead = deadPayload.players.find(
+      (player) => player.sourcePlayerId === carrier.sourcePlayerId,
+    );
+    if (dead === undefined) throw new Error('dead target missing');
+    dead.lifeState = 'dead';
+    dead.weaponsAvailable = false;
+    expect(buildPlayerRailsPresentation(deadPayload).ct.summary.utility).toEqual(expected);
+
+    const unknownPayload = structuredClone(livePayload);
+    const unknown = unknownPayload.players.find(
+      (player) => player.sourcePlayerId === carrier.sourcePlayerId,
+    );
+    if (unknown === undefined) throw new Error('unknown target missing');
+    unknown.lifeState = 'unknown';
+    expect(buildPlayerRailsPresentation(unknownPayload).ct.summary).toMatchObject({
+      utility: null,
+      utilityAvailable: false,
+    });
+
+    const missingAlivePayload = structuredClone(livePayload);
+    const missingAlive = missingAlivePayload.players.find(
+      (player) => player.side === 'CT' && player.sourcePlayerId !== carrier.sourcePlayerId,
+    );
+    if (missingAlive === undefined) throw new Error('alive target missing');
+    missingAlive.weaponsAvailable = false;
+    expect(buildPlayerRailsPresentation(missingAlivePayload).ct.summary).toMatchObject({
+      utility: null,
+      utilityAvailable: false,
+    });
+  });
+
   it('withholds team subtotals until the current five-player lineup is complete', () => {
     const current = payload();
     const incomplete = buildPlayerRailsPresentation({

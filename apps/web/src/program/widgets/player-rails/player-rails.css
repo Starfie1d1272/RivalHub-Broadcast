@@ -693,10 +693,36 @@
   display: grid;
   width: 440px;
   height: 24px;
+  opacity: 0;
+  transition:
+    opacity 140ms ease-in,
+    transform 180ms cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 180ms;
+  visibility: hidden;
 }
 
 .player-rail__economy {
   grid-template-columns: repeat(3, 1fr);
+  transform: translateY(-4px);
+}
+
+.player-rail__utility {
+  transform: translateY(4px);
+}
+
+.player-rail__economy.is-visible,
+.player-rail__utility.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  transition:
+    opacity 120ms ease-out,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
+  visibility: visible;
+}
+
+.player-rail__utility.is-live-only {
+  transform: translateY(-12px);
 }
 
 .player-rail__economy div {
@@ -1033,6 +1059,14 @@
   border: 0;
 }
 
+.player-rail__summary.is-utility-only {
+  background: transparent;
+}
+
+.player-rail__summary.is-utility-only .player-rail__utility {
+  background: rgba(12, 17, 24, 0.9);
+}
+
 .player-rail__economy div {
   justify-content: center;
   gap: 7px;
@@ -1126,6 +1160,8 @@
 
 @media (prefers-reduced-motion: reduce) {
   .player-rail__summary,
+  .player-rail__economy,
+  .player-rail__utility,
   .player-rail__header::before,
   .player-rail__card::after,
   .player-rail__endcap,
