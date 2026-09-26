@@ -259,7 +259,7 @@ describe('Radar renderer local lifecycle', () => {
     const initial = model.grenades.get('160')!;
     expect(initial).toMatchObject({
       phase: 'effect',
-      side: before.payload.players[0]!.side,
+      side: before.payload.players[0].side,
     });
     const initialPhaseStartedAt = initial.phaseStartedAt;
     const initialAnchor = {
@@ -279,7 +279,7 @@ describe('Radar renderer local lifecycle', () => {
     const drifted = model.grenades.get('160')!;
     expect(drifted).toMatchObject({
       phase: 'effect',
-      side: before.payload.players[0]!.side,
+      side: before.payload.players[0].side,
       phaseStartedAt: initialPhaseStartedAt,
       x: initialAnchor.x,
       y: initialAnchor.y,
@@ -301,6 +301,40 @@ describe('Radar renderer local lifecycle', () => {
       target: initialAnchor.target,
       phaseStartedAt: initialPhaseStartedAt,
     });
+  });
+
+  it('starts a fresh smoke lifecycle when the same entity id is reused after lifetime rewind', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        sourceEntityId: '160',
+        kind: 'smoke',
+        position: { x: -2071.5, y: 377.1, z: 75.9 },
+        lifetimeSeconds: 19.11,
+        effectTimeSeconds: 16.656,
+      },
+    ];
+
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    const previous = model.grenades.get('160');
+    expect(previous?.phase).toBe('effect');
+
+    const reused = next(before);
+    reused.payload.grenades[0]!.position = { x: -1200, y: 900, z: 75.9 };
+    reused.payload.grenades[0]!.velocity = { x: 300, y: 0, z: 0 };
+    reused.payload.grenades[0]!.lifetimeSeconds = 0.2;
+    reused.payload.grenades[0]!.effectTimeSeconds = 0;
+    model.accept(reused, 250);
+
+    const fresh = model.grenades.get('160');
+    expect(fresh).toMatchObject({
+      phase: 'projectile',
+      positionAvailable: true,
+    });
+    expect(fresh?.target).not.toEqual(previous?.target);
+    expect(fresh?.phaseStartedAt).toBe(250);
   });
 
   it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
