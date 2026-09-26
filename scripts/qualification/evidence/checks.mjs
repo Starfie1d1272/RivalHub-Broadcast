@@ -252,9 +252,10 @@ export function checksFrom({
         .filter((e) => typeof e?.sequence === 'number' && e.sequence > baselineSequence)
         .sort((left, right) => left.sequence - right.sequence);
       if (newEvents.length === 0) return true;
-      if (newEvents[0].sequence !== baselineSequence + 1) return false;
-      for (let index = 1; index < newEvents.length; index++) {
-        if (newEvents[index].sequence !== newEvents[index - 1].sequence + 1) return false;
+      let expectedSequence = baselineSequence + 1;
+      for (const event of newEvents) {
+        if (event.sequence !== expectedSequence) return false;
+        expectedSequence++;
       }
       return !newEvents.some(
         (e) => e.host === host && e.channel === channel && e.action === 'disconnected',
