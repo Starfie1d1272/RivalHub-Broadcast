@@ -12,7 +12,7 @@ import type { MatchContext } from '@rivalhub-broadcast/core/match-context';
 import { replaceDurableJson, type DurableJsonFaultInjector } from './durable-json.js';
 import { SerialCommitQueue } from './serial-commit.js';
 
-export type ContextOrigin = 'online' | 'fixture' | 'cache';
+export type ContextOrigin = 'online' | 'local' | 'fixture' | 'cache';
 export type ContextFreshness = 'fresh' | 'stale';
 
 const MATCH_MANIFEST_CACHE_VERSION = 'rivalhub.broadcast-match-context-cache.v1' as const;
@@ -76,7 +76,7 @@ interface MatchManifestCacheEnvelope {
 }
 
 function isSourceOrigin(value: unknown): value is Exclude<ContextOrigin, 'cache'> {
-  return value === 'online' || value === 'fixture';
+  return value === 'online' || value === 'local' || value === 'fixture';
 }
 
 function isRecord(value: unknown): value is Record<string, unknown> {
@@ -270,5 +270,40 @@ export class MatchManifestLkgStore {
         },
       };
     }
+  }
+
+  async readLatest(): Promise<MatchContextStoreResult<MatchContextBinding>> {
+    let contents: string;
+    try {
+      contents = await readFile(this.filePath, 'utf8');
+    } catch (error: unknown) {
+      if (
+        typeof error === 'object' &&
+        error !== null &&
+        'code' in error &&
+        error.code === 'ENOENT'
+      ) {
+        return {
+          ok: false,
+          issue: { code: 'lkg_not_found', message: '没有可用的 Manifest LKG。' },
+        };
+      }
+      return {
+        ok: false,
+        issue: { code: 'lkg_read_failed', message: 'Manifest LKG 读取失败。' },
+      };
+    }
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(contents) as unknown;
+    } catch {
+      return {
+        ok: false,
+        issue: { code: 'lkg_invalid_json', message: 'Manifest LKG 不是有效 JSON。' },
+      };
+    }
+    const envelope = parseEnvelope(parsed);
+    if (envelope === undefined) return invalidEnvelope();
+    return this.read(envelope.metadata.matchId);
   }
 }
