@@ -37,3 +37,5 @@ export type {
   ProgramWeaponProjection,
   ProgramVetoStep,
 } from './program.js';
+export { projectBp } from './bp.js';
+export type { BpProjection, BpCard, BpEntrant, BpStep } from './bp.js';

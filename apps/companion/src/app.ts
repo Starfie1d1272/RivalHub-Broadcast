@@ -1,3 +1,6 @@
+import { registerBpImportRoute } from './bp/import-controller.js';
+import { MatchContextController, MatchManifestLkgStore } from './match-context/index.js';
+import { registerBpRoutes } from './bp/controller.js';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 
@@ -69,6 +72,7 @@ export interface CompanionAppOptions {
   readonly projectionCoordinator?: ProjectionCoordinator;
   readonly programCueCoordinator?: ProgramCueCoordinator;
   readonly matchContextBinding?: MatchContextBinding;
+  readonly matchManifestPath?: string;
   readonly projectionNowMonotonicMs?: () => number;
   readonly debugEvidenceStore?: DebugEvidenceStore;
   readonly debugClock?: DebugRuntimeClock;
@@ -268,6 +272,29 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
   registerHudConfigRoutes(app, {
     store: hudConfigStore,
     originPolicy: localWebTransport.getOriginPolicy(),
+  });
+  const bpSession = registerBpRoutes(app, {
+    originPolicy: localWebTransport.getOriginPolicy(),
+    getProjection: () => projectionCoordinator.getBpProjection(),
+  });
+  const matchImport =
+    options.matchManifestPath === undefined
+      ? null
+      : new MatchContextController({
+          lkgStore: new MatchManifestLkgStore({ filePath: options.matchManifestPath }),
+          onBindingChanged: (binding) => {
+            projectionCoordinator.setMatchContextBinding(binding);
+            programCueCoordinator.afterRuntimeMutation();
+          },
+        });
+  registerBpImportRoute(app, {
+    originPolicy: localWebTransport.getOriginPolicy(),
+    controller: matchImport,
+    session: bpSession,
+    clear: () => {
+      projectionCoordinator.setMatchContextBinding(undefined);
+      programCueCoordinator.afterRuntimeMutation();
+    },
   });
   const qualificationMode = options.qualificationMode ?? false;
 

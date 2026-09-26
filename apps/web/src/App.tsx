@@ -1,3 +1,4 @@
+import { BpPage } from './bp/BpPage';
 import { OperatorShell } from './operator/OperatorShell';
 import { useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 
@@ -555,6 +556,8 @@ export function App() {
     );
   }
 
+  if (pathname === '/program/bp') return <BpPage />;
+  if (pathname === '/operator/bp') return <BpPage operator />;
   const surface = surfaceForPath(pathname);
   if (surface === undefined)
     return (

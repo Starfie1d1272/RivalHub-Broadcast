@@ -64,6 +64,8 @@ CS2 数据源 → RuntimeState
 
 ```text
 /program   播出画面
+/program/bp  BP 透明播出画面
+/operator/bp  BP 控制与预览
 /operator  制作控制
 /operator/hud  Gameplay HUD 控制台
 /debug     运行诊断
@@ -151,3 +153,7 @@ RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only（AGPL-3
 ## 致谢与第三方说明
 
 - Counter-Strike 2 官方矢量资产与元数据管道基于开源工具 [ValveResourceFormat / Source 2 Viewer](https://github.com/ValveResourceFormat/ValveResourceFormat) 提取并反编译生成。详细许可证与版权信息参见 `THIRD-PARTY-NOTICES.md`。
+
+## BP 播放
+
+制作控制首页的“地图禁选”提供播放/收起；打开 BP 预览后，可导入 RivalHub Broadcast Manifest JSON，核对双方与地图后播放。系统每 1.6 秒逐项揭示，最终完整 BP 保持显示。OBS 添加 `http://127.0.0.1:3000/program/bp`，宽 1920、高 1080，透明输出；该浏览器源与 `/program` Gameplay 分开装载。重启服务后重新导入清单，播放不会自动恢复。

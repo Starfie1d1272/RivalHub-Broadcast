@@ -414,3 +414,9 @@ capture 写盘失败不能阻塞 GSI request hot path。`packages/testkit` 消�
 - 新可靠上行 → 独立 reliable message，不把 snapshot 改成 FIFO。
 
 只有出现第二个真实 consumer、真实 provider 或独立发行需求，并且现有边界造成明确摩擦时，才增加新的 public abstraction 或物理拆分。
+
+## BP presentation
+
+Core `projectBp` 从 canonical MatchContext 的 maps/veto 派生最多 7 cards、14 steps；开局边与选图分别表达，决胜图不归 entrant。`ProjectionCoordinator.getBpProjection` 隔离明确 identity mismatch。Companion 内存 `BpSession` 仅拥有播放状态，使用 monotonic clock 推进；Web 共用 `BpPresentation`，由 `/program/bp` 透明输出和 `/operator/bp` 预览承载。制作首页提供播放/收起。具体 Host、恢复和控制面见 ADR-0009 与 protocol 的 BP control-plane。
+
+制作端清单导入沿用 MatchContextController 与现有本机 LKG store，并更新同一个 ProjectionCoordinator/SeriesProgress；不会建立第二份 BP truth。生产启动把清单缓存放在 capture 根目录旁的 `match-context.json`，与便携产品可写 state 一同管理。

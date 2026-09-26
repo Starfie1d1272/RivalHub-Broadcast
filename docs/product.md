@@ -75,7 +75,7 @@ Break / Emergency
 
 节目状态与 RivalHub 官方事实分离：播放 BP、切换节目场景或手动覆盖展示状态，不应修改赛事后台的 canonical BP、赛果或比赛生命周期。
 
-BP / Veto 的节目播放只消费已经确认的赛事事实，并转换成 presentation timeline。制作人员至少应能够播放、暂停、上一步、下一步、重播和直接展示完整 BP；这些操作只改变节目呈现，不修改 canonical BP。
+BP / Veto 只消费已确认赛事事实：制作人员点击“播放 BP”，系统按固定间隔逐项累积展示，完整 BP 保持显示，点击“收起 BP”后统一退场。不提供暂停、上一步、下一步或跳转。制作控制首页提供操作与预览入口，独立透明 `/program/bp` 供 OBS 装载；播放会话由 Companion 持有，不修改 canonical BP。Host 与恢复规则见 ADR-0009。
 
 ### 5.1 Gameplay HUD
 

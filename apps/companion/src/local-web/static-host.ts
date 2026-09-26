@@ -5,10 +5,19 @@ import { fileURLToPath } from 'node:url';
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-const SURFACE_ROUTES = ['/program', '/operator', '/operator/hud', '/debug'] as const;
+const SURFACE_ROUTES = [
+  '/program',
+  '/program/bp',
+  '/operator',
+  '/operator/bp',
+  '/operator/hud',
+  '/debug',
+] as const;
 const RESERVED_PREFIXES = [
   '/debug',
   '/operator/series',
+  '/operator/bp-command',
+  '/operator/bp-manifest',
   '/gsi',
   '/health',
   '/local/v1',

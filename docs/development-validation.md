@@ -264,3 +264,5 @@ INCONCLUSIVE
 平台验证者负责提供真实环境证据，不因此成为整个 telemetry/runtime 模块的代码 owner。
 
 只有 installer、Windows packaging、topmost/click-through window 等平台本身就是功能语义的工作，才适合把实现 ownership 整体交给 Windows-specific contributor。
+
+BP 浏览器验收从已提交 NJU Rivals BO3/BO5 记录构造 Manifest 测试封装，经过生产 validator、MatchContextController、Core projection、Companion session 和共享 Web renderer。只补 fixture-local transport map ID，缺失名单保持空，不伪造 gameplay evidence。覆盖清单导入、双 Host 同步、累积 reveal、具名开局边、最终停留、reload/断连恢复不重播、收起与重复播放。单测覆盖缺失/冲突 side、decider ownership、非法来源、LAN、并发旧请求和会话重置。Windows + OBS 的实际透明合成仍属于真实环境验收。

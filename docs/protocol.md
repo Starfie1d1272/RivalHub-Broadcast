@@ -316,7 +316,7 @@ Program payload 只包含正式节目允许显示的信息：
 - `lineupEvidence: current | retained`，表达当前 entry 是否来自本帧或稳定 baseline；`retained` 不等于已确认掉线；
 - `liveAdr`，由 Core 的 map-scoped accumulator 按已完成 counted rounds 与当前 eligible round 的 damage / rounds 计算；没有可计入分母时为 `null`；
 - `completedAdr`，只按已完成 counted rounds 的 damage / rounds 计算；在当前回合进行中保持稳定，尚无 counted round 时为 `null`；
-- ``lifeState: alive | dead | unknown``；
+- `lifeState: alive | dead | unknown`；
 - C4 的状态、爆炸时钟和当前 plant/defuse action；爆炸时钟只来自 Core 保留的 planted countdown anchor，defusing frame 的 overloaded countdown 不会覆盖它；
 - 数据覆盖状态。
 
@@ -357,7 +357,7 @@ Program 不包含：
 - LKG metadata；
 - Lookahead / future 信息。
 
-``lifeState`` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
+`lifeState` 由 Core 的共享领域 helper 推导，Program 与 Radar 不各自重复根据 health 猜测。
 
 `ProgramProjection` 不从 renderer 侧推断 active player，也不累计 ADR。Active lineup 只有在 `coverage.allPlayers = present`、10 个唯一稳定 Steam64、CT 5 人 + T 5 人且无歧义时才建立或替换 baseline；稳定 baseline 遇到 transient missing/extra 或 `degraded` evidence 时可以保留并标记 `retained` / `degraded`。没有 previous baseline 时，degraded 的 clean-looking 5+5 仍不得晋升。same-map source generation 变化时，retained membership 重新挂到当前 generation；generation continuity 由 resolution cursor 表达，证据质量由 `lineupEvidence` 表达。RivalHub roster 是 connected mode 的 strongest prior，但未知 Steam64 的稳定 active player 仍可进入节目，canonical identity 保留为 `null` 并通过 Operator/diagnostics 报告 warning。
 
@@ -468,3 +468,11 @@ reset 都从当前时刻重新开始，不补播旧动画。
 - Local Protocol 不承担 RivalHub API 的 authority；
 - Raw GSI、第三方 CSTV parser shape 和整个 RuntimeState 都不能直接成为 wire contract；
 - 用户界面本地化不改变协议精确字符串。
+
+### BP presentation control-plane
+
+`GET /local/v1/bp` 使用独立 `rivalhub.bp.v1` schema：有限 cards/steps、公开参赛实体、比赛标题，以及 hidden/revealing/shown/hiding、revealedCount 与 revision。仅包含 Program-safe 比赛事实；没有 roster、Raw GSI、Lookahead 或诊断。ETag 覆盖 revision、当前状态与 reveal 数量。每个浏览器串行 250 ms conditional polling，1.5 s 请求超时后隐藏；恢复只应用当前 baseline，不重演已显示步骤。此 HTTP 资源不改变现有 snapshot channel schema。
+
+`POST /operator/bp-command` 接收 `{kind: "play" | "hide", expectedRevision}`。revision 在命令、比赛/BP 变更和回到 hidden 时变化；自动 reveal 仅改变 ETag，避免正常推进导致收起请求冲突。只允许 loopback 与有效 Origin，旧 revision 返回 409；不自动重试或排队。
+
+`POST /operator/bp-manifest` 接收 `{manifest, expectedRevision}`，通过既有 Manifest validator → MatchContextController → ProjectionCoordinator 切换比赛。请求体最多 256 KiB，使用相同本机来源校验和 revision 冲突保护。开始导入后清空旧 binding，非法清单不留下上一场画面。它导入完整既有契约，不是独立 BP 数据模型或 standalone authoring 表单。缓存写入失败会显式告知；服务重启仍需主动重新导入，BP 从 hidden 开始。该入口不会写 RivalHub 官方数据。
