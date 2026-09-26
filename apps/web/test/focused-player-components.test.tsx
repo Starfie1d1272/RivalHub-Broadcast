@@ -127,7 +127,7 @@ describe('Focused media and combat presentation lifecycle', () => {
     expect(container.querySelector('.focused-player__reserve-magazine-icon')).toBeNull();
     expect(container.textContent).not.toContain('MAG');
     act(() => root!.render(<FocusedPlayerCard player={{ ...player, dead: true }} />));
-    expect(container.textContent).not.toContain('DEAD');
+    expect(container.textContent).toContain('DEAD');
     expect(container.querySelector('.focused-player__dead-state')).not.toBeNull();
     expect(container.querySelector('.focused-player__death-mark')).toBeNull();
     expect(container.querySelector('.focused-player__active')).toBeNull();
@@ -135,6 +135,40 @@ describe('Focused media and combat presentation lifecycle', () => {
     expect(container.querySelector('.focused-player__utility')).toBeNull();
     expect(container.querySelector('.focused-player__vitals')?.textContent).toBe('');
   });
+  it('shows a trailing damage ghost for continuous focused-player HP loss', () => {
+    const container = host();
+    const snapshot = getProgramFixture('real-live-rich')!;
+    const player = buildFocusedPlayerPresentation(snapshot.payload)!;
+    const baseCursor = snapshot.cursor;
+    const nextCursor = {
+      ...baseCursor,
+      runtimeSeq: baseCursor.runtimeSeq + 1,
+      programReceiveSequence: (baseCursor.programReceiveSequence ?? baseCursor.runtimeSeq) + 1,
+    };
+
+    act(() =>
+      root!.render(
+        <FocusedPlayerCard
+          cursor={baseCursor}
+          player={{ ...player, health: 100, healthFill: 100 }}
+        />,
+      ),
+    );
+    act(() =>
+      root!.render(
+        <FocusedPlayerCard
+          cursor={nextCursor}
+          player={{ ...player, health: 38, healthFill: 38 }}
+        />,
+      ),
+    );
+
+    expect(container.querySelector('.focused-player__hp')?.textContent).toBe('38');
+    const ghost = container.querySelector<HTMLElement>('[data-damage-ghost="true"]');
+    expect(ghost?.style.getPropertyValue('--rh-damage-from')).toBe('100%');
+    expect(ghost?.style.getPropertyValue('--rh-damage-to')).toBe('38%');
+  });
+
   it('keeps shell and reserve-round counts textual and fails closed without the magazine icon', () => {
     const magazineAsset = { canonicalKey: 'ammo.magazine', outputPath: '/unused.svg' };
     expect(buildReserveAmmoPresentation('shells', 12, magazineAsset)).toEqual({

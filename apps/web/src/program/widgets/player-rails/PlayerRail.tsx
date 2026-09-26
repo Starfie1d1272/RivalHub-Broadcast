@@ -30,6 +30,7 @@ export function PlayerRail({
         {rail.players.slice(0, 5).map((player) => (
           <PlayerCard
             key={player.sourcePlayerId}
+            cursor={snapshot.cursor}
             physicalSide={physicalSide}
             player={player}
             presentationRevision={presentationRevision}

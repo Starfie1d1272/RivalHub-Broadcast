@@ -150,15 +150,14 @@ function ProgramRoute() {
   }, [cueClient, programClient]);
 
   return (
-    <>
-      <ProgramCueRendererBridge client={cueClient} />
+    <ProgramCueRendererBridge client={cueClient}>
       <ProgramPage
         radarClient={radarClient}
         connectionState={programConnection.state}
         resolvedPreset={hudConfig.current}
         snapshot={programConnection.current}
       />
-    </>
+    </ProgramCueRendererBridge>
   );
 }
 

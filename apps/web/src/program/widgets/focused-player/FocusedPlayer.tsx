@@ -12,6 +12,13 @@ import type { HudWidgetRendererProps } from '../../hud-renderer-registry';
 import { consecutivePresentationSamples } from '../../presentation-sample';
 import { observerHotkeyLabel } from '../../observer-hotkey';
 import type { PlayerRailAsset } from '../player-rails/presentation';
+import {
+  CombatTransitionEffects,
+  DamageGhost,
+  PlayerImpactEffects,
+  type CombatFeedbackState,
+  useCombatFeedback,
+} from '../player-status-effects/combat-feedback';
 import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
 import {
   buildFocusedPlayerPresentation,
@@ -144,6 +151,7 @@ function FocusedPlayerFace({
   outgoing = false,
   incoming = false,
   pending = false,
+  combatFeedback = null,
 }: {
   readonly player: FocusedPlayerPresentation;
   readonly cursor: ProjectionCursor | null;
@@ -154,6 +162,7 @@ function FocusedPlayerFace({
   readonly outgoing?: boolean;
   readonly incoming?: boolean;
   readonly pending?: boolean;
+  readonly combatFeedback?: CombatFeedbackState | null;
 }) {
   const [displayAvatarUrl, setDisplayAvatarUrl] = useState<string | null>(null);
   const [failedAvatarUrl, setFailedAvatarUrl] = useState<string | null>(null);
@@ -262,7 +271,9 @@ function FocusedPlayerFace({
           className="focused-player__action-gap focused-player__action-gap--a"
         />
         {p.dead ? (
-          <div aria-label="Dead" className="focused-player__dead-state"></div>
+          <div aria-label="Dead" className="focused-player__dead-state">
+            <span>DEAD</span>
+          </div>
         ) : (
           <>
             <ActiveItemSlot
@@ -316,6 +327,7 @@ function FocusedPlayerFace({
               <strong className="focused-player__hp">{p.health ?? '—'}</strong>
               <span className="focused-player__health-track">
                 {p.healthFill === null ? null : <span style={{ width: `${p.healthFill}%` }} />}
+                <DamageGhost state={combatFeedback?.damageGhost ?? null} />
               </span>
             </span>
             <span className="focused-player__armor">
@@ -345,6 +357,13 @@ export function FocusedPlayerCard({
   readonly cursor?: ProjectionCursor | null;
   readonly presentationRevision?: number;
 }) {
+  const combatFeedback = useCombatFeedback({
+    sourcePlayerId: player.sourcePlayerId,
+    health: player.health,
+    dead: player.dead,
+    cursor,
+    presentationRevision,
+  });
   const currentAvatarIdentityKey = `${player.sourcePlayerId}:${player.avatarUrl ?? ''}`;
   const [loadedAvatarIdentityKey, setLoadedAvatarIdentityKey] = useState<string | null>(null);
   const [unavailableAvatarIdentityKey, setUnavailableAvatarIdentityKey] = useState<string | null>(
@@ -459,6 +478,7 @@ export function FocusedPlayerCard({
       <FocusedPlayerFace
         key={`current:${player.sourcePlayerId}:${player.avatarUrl ?? ''}`}
         avatarIdentityKey={currentAvatarIdentityKey}
+        combatFeedback={combatFeedback}
         cursor={cursor}
         incoming={crossfadeActive}
         onAvatarReady={onAvatarReady}
@@ -467,6 +487,8 @@ export function FocusedPlayerCard({
         player={player}
         presentationRevision={presentationRevision}
       />
+      <PlayerImpactEffects sourcePlayerId={player.sourcePlayerId} surface="focused" />
+      <CombatTransitionEffects feedback={combatFeedback} surface="focused" />
     </article>
   );
 }

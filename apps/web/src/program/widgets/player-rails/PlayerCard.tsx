@@ -1,6 +1,14 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 
 import { observerHotkeyLabel } from '../../observer-hotkey';
+import {
+  CombatTransitionEffects,
+  DamageGhost,
+  PlayerImpactEffects,
+  type DamageGhostState,
+  useCombatFeedback,
+} from '../player-status-effects/combat-feedback';
 import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
 import {
   weaponVisualRole,
@@ -294,10 +302,12 @@ function PlayerBody({
   player,
   dead,
   presentationRevision,
+  damageGhost,
 }: {
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
   readonly presentationRevision: number;
+  readonly damageGhost: DamageGhostState | null;
 }) {
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
   const secondaryVisible = player.secondaryWeapon !== null;
@@ -311,7 +321,11 @@ function PlayerBody({
         <span className="player-rail__name" title={player.displayName ?? undefined}>
           {player.displayName ?? 'PLAYER'}
         </span>
-        {dead ? null : (
+        {dead ? (
+          <span className="player-rail__life-state" data-life-state-label="dead">
+            DEAD
+          </span>
+        ) : (
           <strong className="player-rail__health-value" data-health-value="true">
             {displayNumber(player.health)}
           </strong>
@@ -319,10 +333,13 @@ function PlayerBody({
       </div>
 
       {dead ? (
-        <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true" />
+        <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true">
+          <DamageGhost state={damageGhost} />
+        </div>
       ) : (
         <div className="player-rail__health-bar" data-health-bar="true">
           <span style={healthStyle} />
+          <DamageGhost state={damageGhost} />
         </div>
       )}
 
@@ -391,18 +408,32 @@ function PlayerBody({
 
 export function PlayerCard({
   player,
+  cursor = null,
   physicalSide = 'left',
   presentationRevision = 0,
 }: {
   readonly player: PlayerCardPresentation;
+  readonly cursor?: ProjectionCursor | null;
   readonly physicalSide?: 'left' | 'right';
   readonly presentationRevision?: number;
 }) {
   const dead = player.mode === 'dead';
+  const combatFeedback = useCombatFeedback({
+    sourcePlayerId: player.sourcePlayerId,
+    health: player.health,
+    dead,
+    cursor,
+    presentationRevision,
+  });
   const hasAvatar = player.avatarUrl !== null;
   const avatar = <Avatar dead={dead} player={player} />;
   const body = (
-    <PlayerBody dead={dead} player={player} presentationRevision={presentationRevision} />
+    <PlayerBody
+      damageGhost={combatFeedback.damageGhost}
+      dead={dead}
+      player={player}
+      presentationRevision={presentationRevision}
+    />
   );
   const hotkeyLabel = observerHotkeyLabel(player.observerSlot);
   const endcap = (
@@ -438,6 +469,12 @@ export function PlayerCard({
         anchor={physicalSide}
         state={player.statusEffects}
       />
+      <PlayerImpactEffects
+        anchor={physicalSide}
+        sourcePlayerId={player.sourcePlayerId}
+        surface="rail"
+      />
+      <CombatTransitionEffects feedback={combatFeedback} surface="rail" />
       {endcap}
     </article>
   );
