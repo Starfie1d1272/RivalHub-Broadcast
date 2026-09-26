@@ -337,7 +337,6 @@ describe('Player Rails card presentation', () => {
     ).not.toBeNull();
   });
 
-
   it('shows immediate HP truth with a trailing ghost only across continuous samples', () => {
     const snapshot = getProgramFixture('player-rails-freezetime');
     if (snapshot === null) throw new Error('fixture missing');
@@ -391,6 +390,58 @@ describe('Player Rails card presentation', () => {
     });
     expect(container.querySelector('[data-health-value="true"]')?.textContent).toBe('40');
     expect(container.querySelector('[data-damage-ghost="true"]')).toBeNull();
+  });
+
+  it('clears a pending damage ghost when health is restored in a new life', () => {
+    const snapshot = getProgramFixture('player-rails-freezetime');
+    if (snapshot === null) throw new Error('fixture missing');
+    const player = buildPlayerRailsPresentation(snapshot.payload).ct.players[0];
+    if (player === undefined) throw new Error('player missing');
+    const baseCursor = snapshot.cursor;
+    const damagedCursor = {
+      ...baseCursor,
+      runtimeSeq: baseCursor.runtimeSeq + 1,
+      programReceiveSequence: (baseCursor.programReceiveSequence ?? baseCursor.runtimeSeq) + 1,
+    };
+    const restoredCursor = {
+      ...damagedCursor,
+      runtimeSeq: damagedCursor.runtimeSeq + 1,
+      programReceiveSequence:
+        (damagedCursor.programReceiveSequence ?? damagedCursor.runtimeSeq) + 1,
+    };
+    const container = document.createElement('div');
+    document.body.appendChild(container);
+    root = createRoot(container);
+
+    act(() => {
+      root?.render(
+        <PlayerCard
+          cursor={baseCursor}
+          player={{ ...player, mode: 'live', health: 100, healthPercent: 100 }}
+        />,
+      );
+    });
+    act(() => {
+      root?.render(
+        <PlayerCard
+          cursor={damagedCursor}
+          player={{ ...player, mode: 'live', health: 45, healthPercent: 45 }}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-damage-ghost="true"]')).not.toBeNull();
+
+    act(() => {
+      root?.render(
+        <PlayerCard
+          cursor={restoredCursor}
+          player={{ ...player, mode: 'live', health: 100, healthPercent: 100 }}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-health-value="true"]')?.textContent).toBe('100');
+    expect(container.querySelector('[data-damage-ghost="true"]')).toBeNull();
+    expect(container.querySelector('[data-combat-transition]')).toBeNull();
   });
 
   it('hands continuous lethal damage into a restrained dead state', () => {

@@ -1,10 +1,4 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-  type CSSProperties,
-} from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties } from 'react';
 import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 
 import { useProgramCueEffectsForPlayer } from '../../ProgramCueRendererBridge';
@@ -89,13 +83,24 @@ export function useCombatFeedback({
       currentHealth !== null &&
       previousHealth > 25 &&
       currentHealth <= 25;
-
-    let damageGhost: DamageGhostState | null = null;
-    if (
+    const healthRestored =
+      !dead &&
       previousHealth !== null &&
       currentHealth !== null &&
-      currentHealth < previousHealth
-    ) {
+      currentHealth > previousHealth;
+
+    if (healthRestored || (prior.dead && !dead)) {
+      if (damageTimer.current !== null) window.clearTimeout(damageTimer.current);
+      damageTimer.current = null;
+      activeGhost.current = null;
+      // A new life/round must not inherit damage presentation from the previous one.
+      // eslint-disable-next-line react-hooks/set-state-in-effect
+      setFeedback((value) => (value === EMPTY_FEEDBACK ? value : EMPTY_FEEDBACK));
+      return;
+    }
+
+    let damageGhost: DamageGhostState | null = null;
+    if (previousHealth !== null && currentHealth !== null && currentHealth < previousHealth) {
       damageGhost = {
         key: ++sequence.current,
         fromPercent: Math.max(activeGhost.current?.fromPercent ?? previousHealth, previousHealth),

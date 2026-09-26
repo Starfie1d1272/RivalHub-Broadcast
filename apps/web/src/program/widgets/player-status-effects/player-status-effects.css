@@ -290,7 +290,6 @@
   }
 }
 
-
 /*
  * Combat feedback keeps gameplay truth immediate. These layers only expose
  * the magnitude/source of a change and never own gameplay timing.
@@ -330,9 +329,18 @@
   animation: combat-damage-ghost-catchup 380ms cubic-bezier(0.2, 0.72, 0.2, 1) both;
 }
 
+.player-rail__card[data-physical-side] .player-rail__health-bar > .combat-damage-ghost,
+.player-rail__card[data-physical-side] .player-rail__health-spacer > .combat-damage-ghost,
+.focused-player__health-track > .combat-damage-ghost {
+  width: calc(var(--rh-damage-from) - var(--rh-damage-to));
+  margin: 0;
+  background: rgba(240, 111, 111, 0.52);
+}
+
 .player-rail__card[data-physical-side='right'] .combat-damage-ghost {
   right: var(--rh-damage-to);
   left: auto;
+  margin: 0;
   transform-origin: right center;
 }
 

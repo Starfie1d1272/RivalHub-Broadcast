@@ -15,18 +15,14 @@ import {
 } from './program-cue-effects';
 
 const EMPTY_PROGRAM_CUE_EFFECTS: ProgramCueEffectSnapshot = Object.freeze({ effects: [] });
-const ProgramCueEffectContext =
-  createContext<ProgramCueEffectSnapshot>(EMPTY_PROGRAM_CUE_EFFECTS);
+const ProgramCueEffectContext = createContext<ProgramCueEffectSnapshot>(EMPTY_PROGRAM_CUE_EFFECTS);
 
 export interface ProgramCueEffectProviderProps {
   readonly snapshot: ProgramCueEffectSnapshot;
   readonly children?: ReactNode;
 }
 
-export function ProgramCueEffectProvider({
-  snapshot,
-  children,
-}: ProgramCueEffectProviderProps) {
+export function ProgramCueEffectProvider({ snapshot, children }: ProgramCueEffectProviderProps) {
   return (
     <ProgramCueEffectContext.Provider value={snapshot}>
       {children}
