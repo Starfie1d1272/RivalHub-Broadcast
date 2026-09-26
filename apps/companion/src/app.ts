@@ -1,6 +1,6 @@
-import { registerBpImportRoute } from './bp/import-controller.js';
 import { MatchContextController, MatchManifestLkgStore } from './match-context/index.js';
 import { registerBpRoutes } from './bp/controller.js';
+import { registerBpWorkspaceRoutes } from './bp/workspace-controller.js';
 import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 
@@ -273,29 +273,33 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     store: hudConfigStore,
     originPolicy: localWebTransport.getOriginPolicy(),
   });
-  const bpSession = registerBpRoutes(app, {
+  registerBpRoutes(app, {
     originPolicy: localWebTransport.getOriginPolicy(),
     getProjection: () => projectionCoordinator.getBpProjection(),
   });
-  const matchImport =
+  const matchContextController =
     options.matchManifestPath === undefined
       ? null
       : new MatchContextController({
           lkgStore: new MatchManifestLkgStore({ filePath: options.matchManifestPath }),
+          ...(options.matchContextBinding === undefined
+            ? {}
+            : { initialBinding: options.matchContextBinding }),
           onBindingChanged: (binding) => {
             projectionCoordinator.setMatchContextBinding(binding);
             programCueCoordinator.afterRuntimeMutation();
           },
         });
-  registerBpImportRoute(app, {
+  registerBpWorkspaceRoutes(app, {
     originPolicy: localWebTransport.getOriginPolicy(),
-    controller: matchImport,
-    session: bpSession,
-    clear: () => {
-      projectionCoordinator.setMatchContextBinding(undefined);
-      programCueCoordinator.afterRuntimeMutation();
-    },
+    controller: matchContextController,
+    projections: projectionCoordinator,
   });
+  if (matchContextController !== null) {
+    app.addHook('onReady', async () => {
+      await matchContextController.restoreLatest();
+    });
+  }
   const qualificationMode = options.qualificationMode ?? false;
 
   app.get('/health', () => {

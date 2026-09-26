@@ -15,11 +15,13 @@ const projection: BpProjection = {
     a: { entryId: 'a', name: '左队', logoUrl: null },
     b: { entryId: 'b', name: '右队', logoUrl: null },
   },
-  cards: [{ mapName: 'de_nuke', kind: 'decider', entrant: null, startSides: { a: 'CT', b: 'T' } }],
-  steps: [
-    { cardIndex: 0, kind: 'card' },
-    { cardIndex: 0, kind: 'start-side' },
-  ],
+  cards: Array.from({ length: 7 }, (_, index) => ({
+    mapName: `de_map_${index}`,
+    kind: index === 6 ? ('decider' as const) : ('ban' as const),
+    entrant: index === 6 ? null : ('a' as const),
+    sideChoice: null,
+  })),
+  steps: Array.from({ length: 7 }, (_, cardIndex) => ({ cardIndex, kind: 'card' as const })),
 };
 
 describe('BP presentation session', () => {
@@ -35,7 +37,7 @@ describe('BP presentation session', () => {
     expect(session.command('play', initial.revision)).toBeNull();
     time = 1599;
     expect(session.get().revealedCount).toBe(1);
-    time = 1600;
+    time = 1600 * 6;
     expect(session.get().state).toBe('shown');
     time = 9e9;
     expect(session.get().state).toBe('shown');

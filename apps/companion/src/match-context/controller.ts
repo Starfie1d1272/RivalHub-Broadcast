@@ -1,3 +1,5 @@
+import { randomUUID } from 'node:crypto';
+
 import {
   BroadcastManifestConversionError,
   toMatchContext,
@@ -32,6 +34,7 @@ export type MatchContextControllerIssueCode =
   | 'memory_fallback'
   | 'lkg_unavailable'
   | 'lkg_persistence_failed'
+  | 'rivalhub_candidate_pending'
   | 'selection_stale';
 
 export interface MatchContextControllerIssue {
@@ -58,6 +61,7 @@ export type MatchContextSelectionResult =
 
 export interface MatchContextControllerOptions {
   readonly lkgStore: MatchManifestLkgStore;
+  readonly initialBinding?: MatchContextBinding;
   readonly onBindingChanged?: (binding: MatchContextBinding | undefined) => void;
 }
 
@@ -75,30 +79,46 @@ export class MatchContextController {
     ((binding: MatchContextBinding | undefined) => void) | undefined;
   private readonly commitQueue = new SerialCommitQueue();
   private activeBinding: MatchContextBinding | undefined;
+  private pendingOnlineBinding: MatchContextBinding | undefined;
+  private bindingRevision = 0;
+  private readonly revisionEpoch = randomUUID();
   private selectionGeneration = 0;
 
   constructor(options: MatchContextControllerOptions) {
     this.lkgStore = options.lkgStore;
     this.onBindingChanged = options.onBindingChanged;
+    this.activeBinding = options.initialBinding;
+    this.bindingRevision = options.initialBinding === undefined ? 0 : 1;
   }
 
   getActiveBinding(): MatchContextBinding | undefined {
     return this.activeBinding;
   }
 
+  getActiveRevision(): string {
+    return `${this.revisionEpoch}:${this.bindingRevision}`;
+  }
+
+  getPendingOnlineBinding(): MatchContextBinding | undefined {
+    return this.pendingOnlineBinding;
+  }
+
   clearActive(): void {
     this.selectionGeneration += 1;
+    this.pendingOnlineBinding = undefined;
     this.clearActiveBinding();
   }
 
   private clearActiveBinding(): void {
     if (this.activeBinding === undefined) return;
     this.activeBinding = undefined;
+    this.bindingRevision += 1;
     this.onBindingChanged?.(undefined);
   }
 
   private setActive(binding: MatchContextBinding): void {
     this.activeBinding = binding;
+    this.bindingRevision += 1;
     this.onBindingChanged?.(binding);
   }
 
@@ -106,6 +126,9 @@ export class MatchContextController {
     requestedMatchId: string,
     source: MatchContextSource,
   ): Promise<MatchContextSelectionResult> {
+    if (source.kind === 'online' && this.hasLocalOverride()) {
+      return this.stageOnlineCandidate(requestedMatchId, source);
+    }
     const generation = ++this.selectionGeneration;
     const isCurrent = () => generation === this.selectionGeneration;
     if (this.activeBinding?.context.matchId !== requestedMatchId) this.clearActiveBinding();
@@ -182,6 +205,199 @@ export class MatchContextController {
       };
       this.setActive(binding);
       return { ok: true, binding, diagnostics };
+    });
+  }
+
+  async selectLocalMatch(
+    candidate: unknown,
+    expectedBindingRevision: string,
+  ): Promise<MatchContextSelectionResult> {
+    const validated = validateBroadcastManifest(candidate);
+    if (!validated.ok) {
+      return {
+        ok: false,
+        requestedMatchId: '',
+        diagnostics: [
+          controllerIssue('source_invalid', '本地 BP 未通过 Manifest validation。', {
+            diagnostics: validated.diagnostics,
+          }),
+        ],
+      };
+    }
+    let context;
+    try {
+      context = toMatchContext(validated.value);
+    } catch (error: unknown) {
+      if (!(error instanceof BroadcastManifestConversionError)) throw error;
+      return {
+        ok: false,
+        requestedMatchId: validated.value.match.matchId,
+        diagnostics: [
+          controllerIssue('source_conversion_failed', '本地 BP 无法转换为比赛上下文。', {
+            diagnostics: error.diagnostics,
+          }),
+        ],
+      };
+    }
+
+    return this.commitQueue.run(async () => {
+      if (expectedBindingRevision !== this.getActiveRevision())
+        return this.staleSelectionResult(validated.value.match.matchId);
+      const generation = ++this.selectionGeneration;
+      const isCurrent = () =>
+        generation === this.selectionGeneration &&
+        expectedBindingRevision === this.getActiveRevision();
+      const saved = await this.lkgStore.save(validated.value, 'local', { canCommit: isCurrent });
+      if (!isCurrent() || (!saved.ok && saved.issue.code === 'lkg_commit_stale'))
+        return this.staleSelectionResult(validated.value.match.matchId);
+      if (!saved.ok) {
+        return {
+          ok: false,
+          requestedMatchId: validated.value.match.matchId,
+          diagnostics: [
+            controllerIssue('lkg_persistence_failed', '本地 BP 未能安全保存，当前比赛保持不变。', {
+              storeIssue: saved.issue,
+            }),
+          ],
+        };
+      }
+      const binding: MatchContextBinding = {
+        manifest: validated.value,
+        context,
+        origin: 'local',
+        freshness: 'fresh',
+        diagnostics: validated.diagnostics,
+      };
+      this.pendingOnlineBinding = undefined;
+      this.setActive(binding);
+      return { ok: true, binding, diagnostics: [] };
+    });
+  }
+
+  async restoreLatest(): Promise<MatchContextBinding | undefined> {
+    const generation = ++this.selectionGeneration;
+    return this.commitQueue.run(async () => {
+      if (this.activeBinding !== undefined) return this.activeBinding;
+      const cached = await this.lkgStore.readLatest();
+      if (generation !== this.selectionGeneration || !cached.ok) return undefined;
+      this.setActive(cached.value);
+      return cached.value;
+    });
+  }
+
+  async activatePendingOnlineMatch(
+    expectedBindingRevision: string,
+  ): Promise<MatchContextSelectionResult> {
+    return this.commitQueue.run(async () => {
+      const pending = this.pendingOnlineBinding;
+      if (
+        pending === undefined ||
+        expectedBindingRevision !== this.getActiveRevision() ||
+        !this.hasLocalOverride()
+      )
+        return this.staleSelectionResult(pending?.context.matchId ?? '');
+      const generation = ++this.selectionGeneration;
+      const isCurrent = () =>
+        generation === this.selectionGeneration &&
+        expectedBindingRevision === this.getActiveRevision();
+      const saved = await this.lkgStore.save(pending.manifest, 'online', { canCommit: isCurrent });
+      if (!isCurrent() || (!saved.ok && saved.issue.code === 'lkg_commit_stale'))
+        return this.staleSelectionResult(pending.context.matchId);
+      if (!saved.ok) {
+        return {
+          ok: false,
+          requestedMatchId: pending.context.matchId,
+          diagnostics: [
+            controllerIssue(
+              'lkg_persistence_failed',
+              '无法安全切回 RivalHub BP，本地比赛保持不变。',
+              {
+                storeIssue: saved.issue,
+              },
+            ),
+          ],
+        };
+      }
+      this.pendingOnlineBinding = undefined;
+      this.setActive(pending);
+      return { ok: true, binding: pending, diagnostics: [] };
+    });
+  }
+
+  private hasLocalOverride(): boolean {
+    return (
+      this.activeBinding?.origin === 'local' ||
+      (this.activeBinding?.origin === 'cache' && this.activeBinding.cachedFrom === 'local')
+    );
+  }
+
+  private async stageOnlineCandidate(
+    requestedMatchId: string,
+    source: MatchContextSource,
+  ): Promise<MatchContextSelectionResult> {
+    let candidate: unknown;
+    try {
+      candidate = await source.load();
+    } catch (error: unknown) {
+      if (!(error instanceof SourceLoadError)) throw error;
+      return {
+        ok: false,
+        requestedMatchId,
+        diagnostics: [
+          controllerIssue('source_load_failed', 'RivalHub BP 当前不可用，本地比赛仍保持。'),
+        ],
+      };
+    }
+    const validated = validateBroadcastManifest(candidate);
+    if (!validated.ok || validated.value.match.matchId !== requestedMatchId) {
+      return {
+        ok: false,
+        requestedMatchId,
+        diagnostics: [
+          controllerIssue(
+            validated.ok ? 'source_match_mismatch' : 'source_invalid',
+            'RivalHub BP 暂不可用，本地比赛仍保持。',
+            validated.ok ? {} : { diagnostics: validated.diagnostics },
+          ),
+        ],
+      };
+    }
+    let context;
+    try {
+      context = toMatchContext(validated.value);
+    } catch (error: unknown) {
+      if (!(error instanceof BroadcastManifestConversionError)) throw error;
+      return {
+        ok: false,
+        requestedMatchId,
+        diagnostics: [
+          controllerIssue('source_conversion_failed', 'RivalHub BP 无法转换，本地比赛仍保持。', {
+            diagnostics: error.diagnostics,
+          }),
+        ],
+      };
+    }
+    return this.commitQueue.run(() => {
+      if (!this.hasLocalOverride() || this.activeBinding === undefined)
+        return this.staleSelectionResult(requestedMatchId);
+      const binding: MatchContextBinding = {
+        manifest: validated.value,
+        context,
+        origin: 'online',
+        freshness: 'fresh',
+        diagnostics: validated.diagnostics,
+      };
+      this.pendingOnlineBinding = binding;
+      return {
+        ok: true,
+        binding: this.activeBinding,
+        diagnostics: [
+          controllerIssue(
+            'rivalhub_candidate_pending',
+            'RivalHub BP 已恢复，等待制作人员确认切回。',
+          ),
+        ],
+      };
     });
   }
 
