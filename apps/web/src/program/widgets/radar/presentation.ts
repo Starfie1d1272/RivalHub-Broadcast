@@ -418,6 +418,9 @@ export class RadarPresentation {
     this.diagnosticReason = null;
     const boundary = radarBoundary(snapshot);
     const layer = selectLayer(snapshot, geometry);
+    const sameBoundary = this.boundary === boundary;
+    if (!reconnect && sameBoundary && this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq)
+      return;
     const previousSequence = this.snapshot?.cursor.programReceiveSequence;
     const nextSequence = snapshot.cursor.programReceiveSequence;
     const skippedSample =
@@ -426,13 +429,21 @@ export class RadarPresentation {
       nextSequence !== undefined &&
       nextSequence !== null &&
       nextSequence !== previousSequence + 1;
-    const restoringPresentationHistory =
-      reconnect ||
-      this.boundary !== boundary ||
-      skippedSample ||
-      (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs);
-    if (restoringPresentationHistory) this.reset();
-    if (this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq) return;
+    const sampleGap =
+      this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs;
+    const hardBoundaryReset = reconnect || !sameBoundary;
+    const samplingDiscontinuity = skippedSample || sampleGap;
+    const restoringPresentationHistory = hardBoundaryReset || samplingDiscontinuity;
+    const preservedSmokeEffects =
+      samplingDiscontinuity && !hardBoundaryReset
+        ? [...this.grenades.entries()].filter(
+            ([, marker]) => marker.source.kind === 'smoke' && marker.phase === 'effect',
+          )
+        : [];
+    if (restoringPresentationHistory) {
+      this.reset();
+      for (const [id, marker] of preservedSmokeEffects) this.grenades.set(id, marker);
+    }
     // Runtime-only publications do not constitute a new GSI HP/ammo/trail sample.
     if (this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence) {
       this.snapshot = snapshot;
