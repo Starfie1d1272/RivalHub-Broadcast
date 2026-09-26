@@ -348,11 +348,15 @@ describe('Player Rails card presentation', () => {
       runtimeSeq: baseCursor.runtimeSeq + 1,
       programReceiveSequence: (baseCursor.programReceiveSequence ?? baseCursor.runtimeSeq) + 1,
     };
-    const skippedCursor = {
+    const runtimeOnlyCursor = {
       ...nextCursor,
-      runtimeSeq: nextCursor.runtimeSeq + 2,
+      runtimeSeq: nextCursor.runtimeSeq + 1,
+    };
+    const skippedCursor = {
+      ...runtimeOnlyCursor,
+      runtimeSeq: runtimeOnlyCursor.runtimeSeq + 1,
       programReceiveSequence:
-        (nextCursor.programReceiveSequence ?? nextCursor.runtimeSeq) + 2,
+        (runtimeOnlyCursor.programReceiveSequence ?? runtimeOnlyCursor.runtimeSeq) + 2,
     };
     const container = document.createElement('div');
     document.body.appendChild(container);
@@ -379,6 +383,16 @@ describe('Player Rails card presentation', () => {
     const ghost = container.querySelector<HTMLElement>('[data-damage-ghost="true"]');
     expect(ghost?.style.getPropertyValue('--rh-damage-from')).toBe('100%');
     expect(ghost?.style.getPropertyValue('--rh-damage-to')).toBe('61%');
+
+    act(() => {
+      root?.render(
+        <PlayerCard
+          cursor={runtimeOnlyCursor}
+          player={{ ...player, mode: 'live', health: 61, healthPercent: 61 }}
+        />,
+      );
+    });
+    expect(container.querySelector('[data-damage-ghost="true"]')).not.toBeNull();
 
     act(() => {
       root?.render(

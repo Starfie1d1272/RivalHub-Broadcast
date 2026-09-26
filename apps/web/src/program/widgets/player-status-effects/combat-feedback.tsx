@@ -54,6 +54,23 @@ export function useCombatFeedback({
     previous.current = current;
     if (prior === null) return;
 
+    const previousSequence =
+      prior.cursor?.programReceiveSequence ?? prior.cursor?.runtimeSeq ?? null;
+    const currentSequence = cursor?.programReceiveSequence ?? cursor?.runtimeSeq ?? null;
+    const samePresentationSample =
+      prior.sourcePlayerId === sourcePlayerId &&
+      prior.health === health &&
+      prior.dead === dead &&
+      prior.presentationRevision === presentationRevision &&
+      prior.cursor !== null &&
+      cursor !== null &&
+      prior.cursor.producerInstanceId === cursor.producerInstanceId &&
+      prior.cursor.liveSessionId === cursor.liveSessionId &&
+      prior.cursor.programSourceGeneration === cursor.programSourceGeneration &&
+      prior.cursor.mapEpoch === cursor.mapEpoch &&
+      previousSequence === currentSequence;
+    if (samePresentationSample) return;
+
     const continuous =
       prior.sourcePlayerId === sourcePlayerId &&
       cursor !== null &&
