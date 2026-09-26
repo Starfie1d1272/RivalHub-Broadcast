@@ -527,6 +527,35 @@ export class RadarPresentation {
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
       const id = source.sourceEntityId;
       const old = this.grenades.get(id);
+      const smokeLifecycleContinuous = sameSmokeLifecycle(old, source);
+      const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
+      const smokeSide =
+        smokeLifecycleContinuous && old.side !== 'unknown'
+          ? old.side
+          : (owner?.side ?? (smokeLifecycleContinuous ? old.side : 'unknown'));
+
+      // A settled smoke is a stationary area effect, not a moving grenade marker.
+      // Once its effect anchor exists, later source position/velocity cannot move,
+      // hide, or restart it. Only lifecycle phase and metadata continue to update.
+      if (smokeLifecycleContinuous && old.phase === 'effect') {
+        currentGrenades.add(id);
+        const phase = transitionSmokePhase(old.phase, source, 0);
+        if (phase !== old.phase) this.beginExit(id, old, now);
+        const activeExit = this.exits.get(id);
+        if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+        this.grenades.set(id, {
+          ...old,
+          source,
+          side: smokeSide,
+          phase,
+          iconUrl: grenadeIcon(source.kind, smokeSide),
+          trail: [],
+          stationarySampleCount: 0,
+          positionAvailable: phase === 'effect' ? old.positionAvailable : false,
+        });
+        continue;
+      }
+
       const world = presentationPosition(source);
       if (world === null) {
         if (sameSmokeLifecycle(old, source)) {
@@ -553,12 +582,7 @@ export class RadarPresentation {
       const point = projectWorldPosition(world, geometry);
       if (!point || point.outOfBounds) continue;
       currentGrenades.add(id);
-      const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
-      const smokeLifecycleContinuous = sameSmokeLifecycle(old, source);
-      const side =
-        smokeLifecycleContinuous && old.side !== 'unknown'
-          ? old.side
-          : (owner?.side ?? (smokeLifecycleContinuous ? old.side : 'unknown'));
+      const side = smokeSide;
 
       // Motion continuity answers only "may this moving marker interpolate?".
       // It does not own utility lifecycle or effect entrance timing.
@@ -601,27 +625,6 @@ export class RadarPresentation {
       }
       const activeExit = this.exits.get(id);
       if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
-
-      // Once smoke becomes an area effect it is spatially stationary. Capture the
-      // first authoritative effect anchor and keep it for the lifecycle; later
-      // owner/velocity/position noise may update metadata and countdown only.
-      if (
-        source.kind === 'smoke' &&
-        smokeLifecycleContinuous &&
-        old.phase === 'effect' &&
-        phase === 'effect'
-      ) {
-        this.grenades.set(id, {
-          ...old,
-          source,
-          side,
-          iconUrl: grenadeIcon(source.kind, side),
-          trail: [],
-          stationarySampleCount: 0,
-          positionAvailable: true,
-        });
-        continue;
-      }
 
       const trail =
         motionContinuous && old.phase === 'projectile' && phase === 'projectile'
