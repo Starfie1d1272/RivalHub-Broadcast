@@ -10,6 +10,7 @@ import {
   type DebugFreshness,
   type DebugRuntimeResponse,
 } from './debug/runtime';
+import { useBrowserHostDiagnostics } from './debug/host-diagnostics';
 import { ProgramCueRendererBridge } from './program/ProgramCueRendererBridge';
 import { RadarVisualFixturePage } from './program/testing/RadarVisualFixturePage';
 import { ProgramPage } from './program/ProgramPage';
@@ -296,7 +297,13 @@ function DebugEvidencePanel({
   );
 }
 
-function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
+function DebugContent({
+  data,
+  hosts,
+}: {
+  readonly data: DebugRuntimeResponse;
+  readonly hosts: ReturnType<typeof useBrowserHostDiagnostics>;
+}) {
   const runtime = data.runtime.current;
   const map = recordValue(runtime, 'map');
   const recorder = data.recorderHealth;
@@ -338,6 +345,39 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
                 ? '尚无消费者'
                 : '投递正常'
           }
+        />
+        <DebugMetric
+          label="OBS 浏览器源"
+          note={
+            hosts === null
+              ? '正在读取本地连接状态'
+              : hosts.active.obsVersions.length > 0
+                ? `识别版本 ${hosts.active.obsVersions.join('、')}`
+                : '按浏览器连接标识统计通道'
+          }
+          value={
+            hosts === null
+              ? '暂不可用'
+              : hosts.active.obs === 0
+                ? '未连接'
+                : `已连接 ${hosts.active.obs} 个通道`
+          }
+        />
+        <DebugMetric
+          label="普通浏览器"
+          note="按本地实时通道连接数统计"
+          value={
+            hosts === null
+              ? '暂不可用'
+              : hosts.active.browser === 0
+                ? '未连接'
+                : `已连接 ${hosts.active.browser} 个通道`
+          }
+        />
+        <DebugMetric
+          label="未识别连接"
+          note="浏览器未提供可识别标识时会归入此项"
+          value={hosts === null ? '暂不可用' : `${hosts.active.unknown} 个通道`}
         />
       </section>
       <details className="debug-advanced">
@@ -384,6 +424,38 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
             tone={data.recentRuntimeDiagnostics.length === 0 ? 'neutral' : 'warning'}
             value={data.recentRuntimeDiagnostics}
           />
+          <DebugEvidencePanel
+            eyebrow="08 / 浏览器接入"
+            title="连接与重连记录"
+            value={
+              hosts === null
+                ? '当前无法读取浏览器连接诊断'
+                : {
+                    totals: hosts.totals,
+                    recentEvents: hosts.recentEvents.map((event) => ({
+                      at: event.at,
+                      state: event.action === 'connected' ? '已连接' : '已断开',
+                      host:
+                        event.host === 'obs'
+                          ? 'OBS 浏览器源'
+                          : event.host === 'browser'
+                            ? '普通浏览器'
+                            : '未识别连接',
+                      channel:
+                        event.channel === 'program-cue'
+                          ? '播出提示'
+                          : event.channel === 'program'
+                            ? '播出画面'
+                            : event.channel === 'radar'
+                              ? 'Radar'
+                              : event.channel === 'operator'
+                                ? '制作控制'
+                                : '辅助信息',
+                      ...(event.obsVersion === undefined ? {} : { obsVersion: event.obsVersion }),
+                    })),
+                  }
+            }
+          />
         </section>
 
         <p className="debug-footer-note">
@@ -398,6 +470,7 @@ function DebugContent({ data }: { readonly data: DebugRuntimeResponse }) {
 
 export function DebugPage() {
   const state = useDebugRuntime();
+  const hosts = useBrowserHostDiagnostics();
 
   return (
     <OperatorShell active="/debug">
@@ -435,7 +508,7 @@ export function DebugPage() {
           </section>
         ) : null}
 
-        {state.kind === 'ready' ? <DebugContent data={state.data} /> : null}
+        {state.kind === 'ready' ? <DebugContent data={state.data} hosts={hosts} /> : null}
       </main>
     </OperatorShell>
   );
@@ -443,7 +516,6 @@ export function DebugPage() {
 
 export function App() {
   const pathname = window.location.pathname;
-  if (pathname === '/') window.history.replaceState(null, '', '/operator' + window.location.search);
   if (pathname === '/qualification')
     return (
       <OperatorShell active="/qualification">

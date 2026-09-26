@@ -3,11 +3,14 @@ import { basename, join, relative, resolve } from 'node:path';
 
 import {
   QUALIFICATION_CHECK_KEYS,
+  QUALIFICATION_PROFILES,
   QUALIFICATION_RESULT_VALUES,
   QUALIFICATION_SCHEMA_VERSION,
+  RELEASE_CHECK_KEYS,
   SHA256_PATTERN,
   QualificationEvidenceError,
 } from './contract.mjs';
+import { readHostCheckpoints } from './host-checkpoints.mjs';
 import { verifyCaptureDirectory } from './capture.mjs';
 import { checksFrom, resultFromChecks } from './checks.mjs';
 import {
@@ -30,7 +33,7 @@ import {
 } from './objective-timing.mjs';
 import { renderReport } from './report.mjs';
 
-export const QUALIFICATION_PROFILE_VALUES = new Set(['base', 'objective-timing']);
+export const QUALIFICATION_PROFILE_VALUES = QUALIFICATION_PROFILES;
 
 function qualificationProfile(value, name) {
   const profile = value === undefined ? 'base' : requireString(value, name);
@@ -113,16 +116,20 @@ export async function readQualificationEvidence(runDir) {
   if (!QUALIFICATION_RESULT_VALUES.has(qualification.result)) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收结果无效');
   }
+  const expectedCheckKeys =
+    profile === 'release'
+      ? [...QUALIFICATION_CHECK_KEYS, ...RELEASE_CHECK_KEYS]
+      : QUALIFICATION_CHECK_KEYS;
   if (
     !isRecord(qualification.checks) ||
-    QUALIFICATION_CHECK_KEYS.some((key) => {
+    expectedCheckKeys.some((key) => {
       const check = qualification.checks[key];
       return !isRecord(check) && typeof check !== 'string';
     })
   ) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收检查不完整');
   }
-  for (const key of QUALIFICATION_CHECK_KEYS) {
+  for (const key of expectedCheckKeys) {
     const check = qualification.checks[key];
     const status = typeof check === 'string' ? check : check.status;
     if (!QUALIFICATION_RESULT_VALUES.has(status)) {
@@ -143,9 +150,13 @@ export async function readQualificationEvidence(runDir) {
       '场景记录的验收轮次编号与现场验收结果的编号不一致',
     );
   }
+  const hostCheckpoints = await readHostCheckpoints(resolvedRunDir, runId, artifact);
   scanJsonForSecrets(qualification, '$.qualification');
   scanJsonForSecrets(artifact, '$.artifact');
   scenario.markers.forEach((marker, index) => scanJsonForSecrets(marker, `$.scenario[${index}]`));
+  hostCheckpoints.checkpoints.forEach((cp, index) =>
+    scanJsonForSecrets(cp, `$.hostCheckpoints[${index}]`),
+  );
   const environment = await readJson(join(resolvedRunDir, 'environment.json'));
   if (!isRecord(environment))
     throw new QualificationEvidenceError('INVALID_EVIDENCE', 'environment.json 必须是对象');
@@ -191,15 +202,18 @@ export async function readQualificationEvidence(runDir) {
     objectiveTimingCoverage,
     objectiveTiming,
     qualificationProfile: profile,
+    hostCheckpoints: hostCheckpoints.checkpoints,
     checks: checksFrom({
       markers: scenario.markers,
       finalRuntime,
       captureResults,
       captureErrors,
       artifact,
+      qualificationProfile: profile,
+      hostCheckpoints: hostCheckpoints.checkpoints,
     }),
   };
-  for (const key of QUALIFICATION_CHECK_KEYS) {
+  for (const key of expectedCheckKeys) {
     const stored =
       typeof qualification.checks[key] === 'string'
         ? qualification.checks[key]
@@ -242,6 +256,11 @@ export async function writeQualificationEvidence({
   const resolvedRunDir = resolve(runDir);
   validateArtifact(artifact);
   const scenario = await readScenario(resolvedRunDir);
+  const hostCheckpoints = await readHostCheckpoints(
+    resolvedRunDir,
+    scenario.runId ?? environment.runId,
+    artifact,
+  );
   const finalRuntime = await readOptionalJson(join(resolvedRunDir, 'debug', 'final-runtime.json'));
   const { captureResults, captureErrors, objectiveTimingCoverage, objectiveTiming } =
     await readCaptureResults(resolvedRunDir, scenario.markers, {
@@ -261,6 +280,8 @@ export async function writeQualificationEvidence({
     captureResults,
     captureErrors,
     artifact,
+    qualificationProfile: profile,
+    hostCheckpoints: hostCheckpoints.checkpoints,
   });
   const result = resultForProfile(profile, checks, objectiveTiming);
   const artifactSha256 =
@@ -268,21 +289,53 @@ export async function writeQualificationEvidence({
   if (!SHA256_PATTERN.test(artifactSha256)) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包摘要必须是小写 SHA-256 值');
   }
+  const allObsVersions = new Set();
+  for (const cp of hostCheckpoints.checkpoints) {
+    if (Array.isArray(cp.host?.obsVersions)) {
+      for (const v of cp.host.obsVersions) {
+        if (typeof v === 'string' && v.trim()) allObsVersions.add(v.trim());
+      }
+    }
+  }
+  const aggregatedObsVersions = Array.from(allObsVersions).sort();
+  const finishedAt = new Date().toISOString();
+
+  const updatedEnvironment = {
+    ...environment,
+    finishedAt,
+    ...(aggregatedObsVersions.length > 0 ? { obsVersions: aggregatedObsVersions } : {}),
+  };
+  await writeFile(
+    join(resolvedRunDir, 'environment.json'),
+    `${JSON.stringify(updatedEnvironment, null, 2)}\n`,
+    'utf8',
+  );
+
   const qualification = {
     schemaVersion: QUALIFICATION_SCHEMA_VERSION,
     runId:
-      scenario.runId ?? (typeof environment.runId === 'string' ? environment.runId : 'unknown'),
+      scenario.runId ??
+      (typeof updatedEnvironment.runId === 'string' ? updatedEnvironment.runId : 'unknown'),
     artifact: {
       gitSha: artifact.gitSha,
       artifactSha256,
     },
     environment: {
       runId:
-        typeof environment.runId === 'string' ? environment.runId : (scenario.runId ?? 'unknown'),
+        typeof updatedEnvironment.runId === 'string'
+          ? updatedEnvironment.runId
+          : (scenario.runId ?? 'unknown'),
       windowsVersion:
-        typeof environment.windowsVersion === 'string' ? environment.windowsVersion : 'unknown',
-      cs2Version: typeof environment.cs2Version === 'string' ? environment.cs2Version : 'unknown',
+        typeof updatedEnvironment.windowsVersion === 'string'
+          ? updatedEnvironment.windowsVersion
+          : 'unknown',
+      cs2Version:
+        typeof updatedEnvironment.cs2Version === 'string'
+          ? updatedEnvironment.cs2Version
+          : 'unknown',
       qualificationProfile: profile,
+      finishedAt,
+      ...(aggregatedObsVersions.length > 0 ? { obsVersions: aggregatedObsVersions } : {}),
     },
     profile,
     result,
@@ -302,6 +355,7 @@ export async function writeQualificationEvidence({
     objectiveTiming,
     qualificationProfile: profile,
     checks,
+    hostCheckpoints: hostCheckpoints.checkpoints,
   });
   await writeFile(join(resolvedRunDir, 'REPORT.md'), report, 'utf8');
   const files = await walkFiles(resolvedRunDir);

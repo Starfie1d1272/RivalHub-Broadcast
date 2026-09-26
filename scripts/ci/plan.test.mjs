@@ -102,12 +102,42 @@ describe('changed-surface CI planner', () => {
       },
     ],
     [
-      'qualification script',
+      'qualification verifier only',
       ['scripts/qualification/offline.mjs'],
       {
         runQuality: true,
         runAcceptance: false,
-        runPlatform: true,
+        runPlatform: false,
+        runQualification: false,
+      },
+    ],
+    [
+      'portable bundle script',
+      ['scripts/qualification/bundle/start.ps1'],
+      {
+        runQuality: true,
+        runAcceptance: false,
+        runPlatform: false,
+        runQualification: true,
+      },
+    ],
+    [
+      'portable launcher',
+      ['scripts/qualification/launcher/Program.cs'],
+      {
+        runQuality: true,
+        runAcceptance: false,
+        runPlatform: false,
+        runQualification: true,
+      },
+    ],
+    [
+      'portable product runtime',
+      ['scripts/qualification/product-runtime.mjs'],
+      {
+        runQuality: true,
+        runAcceptance: false,
+        runPlatform: false,
         runQualification: true,
       },
     ],

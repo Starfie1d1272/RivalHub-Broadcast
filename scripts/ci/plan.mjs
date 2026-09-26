@@ -16,9 +16,22 @@ const PLATFORM_PREFIXES = [
   'apps/companion/',
   'packages/telemetry-gsi/',
   'packages/telemetry-cstv/',
-  'scripts/',
 ];
-const QUALIFICATION_PREFIXES = ['scripts/qualification/', 'apps/companion/src/qualification/'];
+const PORTABLE_SMOKE_PREFIXES = [
+  'scripts/qualification/bundle/',
+  'scripts/qualification/launcher/',
+];
+
+export function isPortableSmokePath(path) {
+  return (
+    PORTABLE_SMOKE_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
+    path === 'scripts/qualification/build.mjs' ||
+    path === 'scripts/qualification/product-runtime.mjs' ||
+    path === 'scripts/qualification/product-smoke.mjs' ||
+    path === 'scripts/qualification/supervisor.mjs' ||
+    /(?:^|\/)gamestate_integration[^/]*\.cfg(?:\.template)?$/.test(path)
+  );
+}
 
 function normalizePath(path) {
   return typeof path === 'string' ? path.replaceAll('\\', '/').replace(/^\.\//, '') : '';
@@ -70,10 +83,7 @@ function isPlatformPath(path) {
 }
 
 function isQualificationPath(path) {
-  return (
-    QUALIFICATION_PREFIXES.some((prefix) => path.startsWith(prefix)) ||
-    /(?:^|\/)gamestate_integration[^/]*\.cfg(?:\.template)?$/.test(path)
-  );
+  return isPortableSmokePath(path);
 }
 
 function isUnsafeChangeStatus(status) {

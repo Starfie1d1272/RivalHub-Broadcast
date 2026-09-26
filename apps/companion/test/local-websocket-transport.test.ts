@@ -8,6 +8,7 @@ import type {
 } from '../src/local-protocol/channel-publisher.js';
 import {
   createLocalWebSocketTransport,
+  MAX_LOCAL_WS_CONNECTIONS,
   type LocalWebSocketLike,
   type LocalWebSocketTransport,
 } from '../src/local-web/websocket-transport.js';
@@ -179,11 +180,87 @@ function createTransport(
   return transport;
 }
 
-function attach(transport: LocalWebSocketTransport, socket: FakeSocket): void {
-  transport.attach('program', socket as unknown as LocalWebSocketLike, 'http://localhost:4173');
+function attach(transport: LocalWebSocketTransport, socket: FakeSocket, userAgent?: string): void {
+  transport.attach(
+    'program',
+    socket as unknown as LocalWebSocketLike,
+    'http://localhost:4173',
+    userAgent,
+  );
 }
 
 describe('local WebSocket transport lifecycle', () => {
+  it('classifies observed browser hosts without retaining their raw user-agent strings', async () => {
+    const publisher = new FakePublisher();
+    const transport = createTransport(publisher);
+    const obsSocket = new FakeSocket();
+    const browserSocket = new FakeSocket();
+    const unknownSocket = new FakeSocket();
+    const obsUserAgent = 'Mozilla/5.0 OBS/32.0.2.4 private-agent-marker';
+
+    attach(transport, obsSocket, obsUserAgent);
+    attach(transport, browserSocket, 'Mozilla/5.0 Chrome/140.0.0.0 Safari/537.36');
+    attach(transport, unknownSocket, 'unrecognized-client private-agent-marker');
+
+    expect(transport.getHostDiagnostics()).toMatchObject({
+      active: {
+        obs: 1,
+        browser: 1,
+        unknown: 1,
+        byChannel: { program: 3 },
+        obsVersions: ['32.0.2'],
+      },
+      totals: { connected: 3, disconnected: 0 },
+      recentEvents: [
+        { action: 'connected', host: 'obs', obsVersion: '32.0.2' },
+        { action: 'connected', host: 'browser' },
+        { action: 'connected', host: 'unknown' },
+      ],
+    });
+    expect(JSON.stringify(transport.getHostDiagnostics())).not.toContain('private-agent-marker');
+
+    obsSocket.emit('close', 1000, Buffer.from('normal close'));
+    await flushMicrotasks();
+    const afterClose = transport.getHostDiagnostics();
+    expect(afterClose).toMatchObject({
+      active: { obs: 0 },
+      totals: { connected: 3, disconnected: 1 },
+    });
+    expect(afterClose.recentEvents.at(-1)).toMatchObject({
+      action: 'disconnected',
+      host: 'obs',
+      obsVersion: '32.0.2',
+    });
+  });
+
+  it('bounds host history and rejects connections after the transport capacity', async () => {
+    const publisher = new FakePublisher();
+    const transport = createTransport(publisher);
+    const sockets: FakeSocket[] = [];
+    for (let index = 0; index < MAX_LOCAL_WS_CONNECTIONS; index += 1) {
+      const socket = new FakeSocket();
+      sockets.push(socket);
+      attach(transport, socket, 'Chrome/140.0');
+    }
+
+    const rejected = new FakeSocket();
+    attach(transport, rejected, 'OBS/32.0.2');
+    expect(rejected.closeCalls[0]).toEqual({
+      code: 1013,
+      reason: 'local connection limit reached',
+    });
+    expect(transport.getHostDiagnostics()).toMatchObject({
+      active: { browser: MAX_LOCAL_WS_CONNECTIONS, obs: 0 },
+      totals: { connected: MAX_LOCAL_WS_CONNECTIONS, connectionLimitRejected: 1 },
+    });
+
+    for (const socket of sockets.slice(0, 20)) socket.emit('close', 1000, Buffer.from('closed'));
+    await flushMicrotasks();
+    const diagnostics = transport.getHostDiagnostics();
+    expect(diagnostics.recentEvents).toHaveLength(32);
+    expect(diagnostics.recentEvents[0]?.sequence).toBe(MAX_LOCAL_WS_CONNECTIONS + 20 - 32 + 1);
+  });
+
   it.each([undefined, null])(
     'accepts successful send callback %s and keeps forwarding snapshots',
     async (success) => {

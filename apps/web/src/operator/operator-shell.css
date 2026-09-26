@@ -1,23 +1,23 @@
 .product-shell {
-  --product-bg: #0b0d14;
-  --product-panel: #131722;
-  --product-raised: #181d2a;
-  --product-raised-hover: #1f2637;
-  --product-line: rgba(255, 255, 255, 0.08);
-  --product-line-subtle: rgba(255, 255, 255, 0.04);
-  --product-ink: #f8fafc;
-  --product-muted: #94a3b8;
-  --product-faint: #64748b;
-  --product-accent: #38bdf8;
-  --product-accent-hover: #7dd3fc;
+  --product-bg: var(--broadcast-shell-bg);
+  --product-panel: var(--broadcast-shell-panel);
+  --product-raised: var(--broadcast-shell-raised);
+  --product-raised-hover: var(--broadcast-shell-raised-hover);
+  --product-line: var(--broadcast-shell-line);
+  --product-line-subtle: var(--broadcast-shell-line-subtle);
+  --product-ink: var(--broadcast-shell-ink);
+  --product-muted: var(--broadcast-shell-muted);
+  --product-faint: var(--broadcast-shell-faint);
+  --product-accent: var(--broadcast-shell-accent);
+  --product-accent-hover: var(--broadcast-shell-accent-hover);
   --product-accent-glow: rgba(56, 189, 248, 0.15);
-  --product-good: #10b981;
-  --product-warning: #f59e0b;
-  --product-danger: #f43f5e;
+  --product-good: var(--broadcast-shell-good);
+  --product-warning: var(--broadcast-shell-warning);
+  --product-danger: var(--broadcast-shell-danger);
   color: var(--product-ink);
   background: var(--product-bg);
   min-height: 100dvh;
-  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'PingFang SC', sans-serif;
+  font-family: var(--broadcast-shell-font-sans);
   display: flex;
   flex-direction: column;
   font-size: 14px;
@@ -29,106 +29,6 @@
 .product-shell a {
   color: inherit;
 }
-.product-topbar {
-  height: 60px;
-  min-height: 60px;
-  padding: 0 32px;
-  display: flex;
-  align-items: center;
-  gap: 36px;
-  border-bottom: 1px solid var(--product-line);
-  background: rgba(11, 13, 20, 0.88);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  position: sticky;
-  top: 0;
-  z-index: 50;
-}
-.product-brand {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  text-decoration: none;
-  white-space: nowrap;
-  font-size: 15px;
-  font-weight: 600;
-  letter-spacing: -0.02em;
-}
-.product-brand b {
-  color: var(--product-muted);
-  font-weight: 400;
-  margin-left: 3px;
-}
-.product-brand__mark {
-  width: 32px;
-  height: 32px;
-  background: linear-gradient(135deg, #0284c7 0%, #38bdf8 100%);
-  border-radius: 8px;
-  display: grid;
-  place-items: center;
-  color: #ffffff;
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.35);
-}
-.product-topbar nav {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-}
-.product-topbar nav a {
-  display: inline-flex;
-  align-items: center;
-  padding: 6px 14px;
-  border-radius: 6px;
-  text-decoration: none;
-  color: var(--product-muted);
-  font-weight: 500;
-  font-size: 13px;
-  transition: all 140ms ease;
-}
-.product-topbar nav a:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.05);
-}
-.product-topbar nav a[aria-current='page'] {
-  color: #38bdf8;
-  background: rgba(56, 189, 248, 0.1);
-  font-weight: 600;
-}
-.product-topbar__actions {
-  margin-left: auto;
-  display: flex;
-  gap: 20px;
-  align-items: center;
-  white-space: nowrap;
-}
-.product-topbar__actions a {
-  text-decoration: none;
-  color: var(--product-muted);
-  font-size: 13px;
-  transition: color 140ms ease;
-}
-.product-topbar__actions a:hover {
-  color: #ffffff;
-}
-.product-topbar__actions .product-output-link {
-  border: 1px solid rgba(56, 189, 248, 0.35);
-  color: #e0f2fe;
-  padding: 7px 14px;
-  border-radius: 6px;
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.12) 0%, rgba(59, 130, 246, 0.15) 100%);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-  font-weight: 500;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  transition: all 160ms ease;
-}
-.product-topbar__actions .product-output-link:hover {
-  border-color: rgba(56, 189, 248, 0.6);
-  background: linear-gradient(135deg, rgba(56, 189, 248, 0.22) 0%, rgba(59, 130, 246, 0.25) 100%);
-  box-shadow: 0 0 16px rgba(56, 189, 248, 0.25);
-  color: #ffffff;
-}
 .product-content {
   width: 100%;
   flex: 1;
@@ -139,10 +39,10 @@
 .product-shell .hud-console {
   background: none;
   min-height: auto;
-  max-width: 1440px;
+  max-width: var(--broadcast-shell-max-width);
   width: 100%;
   margin: 0 auto;
-  padding: 32px 36px 48px;
+  padding: 32px var(--broadcast-shell-page-gutter) 48px;
   color: var(--product-ink);
 }
 .product-shell .operator-shell {
@@ -264,9 +164,7 @@
 .dashboard-empty a:hover {
   background: rgba(56, 189, 248, 0.18);
   border-color: rgba(56, 189, 248, 0.5);
-  box-shadow: 0 0 14px rgba(56, 189, 248, 0.25);
   color: #ffffff;
-  transform: translateY(-1px);
 }
 .dashboard-empty__signal {
   width: 56px;
@@ -449,10 +347,8 @@
   transition: all 160ms ease;
 }
 .dashboard-shortcuts a:hover {
-  background: var(--product-raised);
-  border-color: rgba(56, 189, 248, 0.35);
-  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.3);
-  transform: translateY(-1px);
+  background: var(--product-raised-hover);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 .dashboard-shortcuts a:hover > span:last-child {
   transform: translate(2px, -2px);
@@ -927,19 +823,6 @@
   }
 }
 @media (max-width: 1100px) {
-  .product-topbar {
-    padding: 0 24px;
-    gap: 24px;
-  }
-  .product-brand b {
-    display: none;
-  }
-  .product-topbar nav {
-    gap: 12px;
-  }
-  .product-topbar__actions {
-    gap: 16px;
-  }
   .product-shell .operator-shell,
   .product-shell .debug-shell,
   .product-shell .hud-console {
@@ -955,25 +838,6 @@
   }
 }
 @media (max-width: 800px) {
-  .product-topbar {
-    flex-wrap: wrap;
-    gap: 0 20px;
-    padding: 12px 18px 0;
-    height: auto;
-    min-height: auto;
-  }
-  .product-brand {
-    flex: 1;
-  }
-  .product-topbar nav {
-    order: 3;
-    width: 100%;
-    min-height: 48px;
-    margin-top: 8px;
-  }
-  .product-topbar__actions > a:first-child {
-    display: none;
-  }
   .dashboard-workspace {
     grid-template-columns: 1fr;
   }
@@ -1004,13 +868,6 @@
   }
   .product-shell .hud-console__header-meta {
     margin-top: 14px;
-  }
-  .product-topbar {
-    padding: 10px 14px 0;
-  }
-  .product-topbar__actions .product-output-link {
-    padding: 6px 10px;
-    font-size: 11px;
   }
   .product-shell .debug-metrics {
     grid-template-columns: 1fr;

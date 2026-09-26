@@ -116,6 +116,7 @@ async function receiveFrame(socket: net.Socket, initialBuffer: Buffer): Promise<
 async function connectRawWebSocket(
   app: { listen(options: { host: string; port: number }): Promise<string>; server: net.Server },
   route: string,
+  userAgent?: string,
 ): Promise<{ readonly socket: net.Socket; readonly firstFrame: Promise<WebSocketFrame> }> {
   await app.listen({ host: '127.0.0.1', port: 0 });
   const address = app.server.address();
@@ -134,6 +135,7 @@ async function connectRawWebSocket(
       'Sec-WebSocket-Version: 13\r\n' +
       `Sec-WebSocket-Key: ${key}\r\n` +
       `Origin: ${LOOPBACK_HEADERS.origin}\r\n` +
+      (userAgent === undefined ? '' : `User-Agent: ${userAgent}\r\n`) +
       `Sec-WebSocket-Protocol: ${LOCAL_WEB_SUBPROTOCOL}\r\n` +
       '\r\n',
   );
@@ -148,12 +150,35 @@ describe('production local web host', () => {
     try {
       await mkdir(join(root, 'assets'));
       await writeFile(join(root, 'index.html'), '<!doctype html><div id="root">built</div>');
+      await writeFile(
+        join(root, 'product-shell.css'),
+        ':root { --broadcast-shell-topbar-height: 60px; }',
+      );
       await writeFile(join(root, 'assets', 'main-123.js'), 'console.log("built");');
       await writeFile(join(root, 'robots.txt'), 'User-agent: *');
 
       const app = buildApp({ webRoot: root });
       apps.push(app);
       await app.ready();
+
+      const hostDiagnostics = await app.inject({ method: 'GET', url: '/debug/hosts' });
+      expect(hostDiagnostics.statusCode).toBe(200);
+      expect(hostDiagnostics.json()).toMatchObject({
+        active: {
+          obs: 0,
+          browser: 0,
+          unknown: 0,
+          byChannel: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          obsVersions: [],
+        },
+        totals: {
+          connected: 0,
+          disconnected: 0,
+          connectionLimitRejected: 0,
+          slowConsumerTerminated: 0,
+        },
+        recentEvents: [],
+      });
 
       for (const route of ['/program', '/operator', '/operator/hud', '/debug', '/qualification']) {
         const response = await app.inject({ method: 'GET', url: route });
@@ -183,6 +208,10 @@ describe('production local web host', () => {
       const asset = await app.inject({ method: 'GET', url: '/assets/main-123.js' });
       expect(asset.statusCode).toBe(200);
       expect(asset.headers['cache-control']).toBe('public, max-age=31536000, immutable');
+
+      const shellStyles = await app.inject({ method: 'GET', url: '/product-shell.css' });
+      expect(shellStyles.statusCode).toBe(200);
+      expect(shellStyles.body).toContain('--broadcast-shell-topbar-height: 60px');
 
       const other = await app.inject({ method: 'GET', url: '/robots.txt' });
       expect(other.statusCode).toBe(200);
@@ -226,6 +255,46 @@ describe('production local web host', () => {
       connection.socket.destroy();
     },
   );
+
+  it('reports OBS host connections from the handshake without retaining the user-agent', async () => {
+    const app = buildApp();
+    apps.push(app);
+    await app.ready();
+    const userAgent = 'Mozilla/5.0 Chrome/120.0.0.0 OBS/32.0.2 private-agent-marker';
+    const connection = await connectRawWebSocket(app, LOCAL_WEB_ROUTES.program, userAgent);
+    await connection.firstFrame;
+
+    const response = await app.inject({ method: 'GET', url: '/debug/hosts' });
+    expect(response.json()).toMatchObject({
+      active: {
+        obs: 1,
+        browser: 0,
+        byChannel: { program: 1 },
+        byHostChannel: {
+          obs: { program: 1 },
+          browser: { program: 0 },
+          unknown: { program: 0 },
+        },
+        obsVersions: ['32.0.2'],
+      },
+      totals: { connected: 1 },
+      recentEvents: [{ action: 'connected', host: 'obs', channel: 'program' }],
+    });
+    expect(response.body).not.toContain('private-agent-marker');
+
+    connection.socket.destroy();
+    const deadline = Date.now() + 1000;
+    while (Date.now() < deadline) {
+      const current = await app.inject({ method: 'GET', url: '/debug/hosts' });
+      const diagnostics = current.json<{ active: { obs: number } }>();
+      if (diagnostics.active.obs === 0) break;
+      await new Promise((resolve) => setTimeout(resolve, 10));
+    }
+    expect((await app.inject({ method: 'GET', url: '/debug/hosts' })).json()).toMatchObject({
+      active: { obs: 0 },
+      totals: { disconnected: 1 },
+    });
+  });
 
   it('rejects missing/unsupported subprotocol and non-loopback origin before upgrade', async () => {
     const app = buildApp();

@@ -23,7 +23,9 @@ function objectiveTimingLabel(value) {
 }
 
 function qualificationProfileLabel(value) {
-  return value === 'objective-timing' ? '目标时钟专项验收' : '常规现场验收';
+  if (value === 'objective-timing') return '目标时钟专项验收';
+  if (value === 'release') return '生产环境准入验收（Release Profile）';
+  return '常规现场验收';
 }
 
 function truthLabel(value, inconclusive = '证据不足') {
@@ -60,6 +62,7 @@ export function renderReport({
   objectiveTiming,
   qualificationProfile = qualification.profile ?? 'base',
   checks,
+  hostCheckpoints = [],
 }) {
   const lines = [
     '# RivalHub Broadcast 现场验收报告',
@@ -129,6 +132,32 @@ export function renderReport({
   else
     for (const marker of scenario.markers)
       lines.push(`- ${marker.wallClockAt} — ${markerLabel(marker)}`);
+
+  if (qualificationProfile === 'release') {
+    lines.push('', '## Host 生产场景检查点', '');
+    const checkpoints = hostCheckpoints ?? [];
+    if (checkpoints.length === 0) {
+      lines.push('- 未记录 Host 检查点。');
+    } else {
+      const scenarioTitles = {
+        'browser-reload': '普通浏览器重载',
+        'obs-reload': 'OBS Browser Source 重载',
+        'scene-visibility': 'OBS 场景可见性切换',
+        'companion-restart': '制播服务受控重启',
+      };
+      for (const cp of checkpoints) {
+        const title = scenarioTitles[cp.scenario] ?? cp.scenario;
+        const phase = cp.phase === 'before' ? '前' : '后';
+        const visible =
+          cp.programVisible !== undefined
+            ? `，目视确认：${cp.programVisible ? '画面正常' : '画面异常'}`
+            : '';
+        lines.push(
+          `- ${cp.timestamp?.utc ?? '未知时间'} — ${title}（${phase}）[运行状态: ${freshnessLabel(cp.runtime?.freshness)}${visible}]`,
+        );
+      }
+    }
+  }
   lines.push(
     '',
     '## 最终运行状态',

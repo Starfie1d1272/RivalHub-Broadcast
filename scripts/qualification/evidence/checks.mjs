@@ -1,4 +1,8 @@
-import { QUALIFICATION_CHECK_KEYS, QualificationEvidenceError } from './contract.mjs';
+import {
+  QUALIFICATION_CHECK_KEYS,
+  RELEASE_CHECK_KEYS,
+  QualificationEvidenceError,
+} from './contract.mjs';
 import { observationKey } from './capture.mjs';
 import { isRecord } from './integrity.mjs';
 import { hasOrderedMarkers, markerIndex } from './scenario.mjs';
@@ -144,7 +148,15 @@ function liveMarkerCausalityPassed(markers, kind, captureResults, finalRuntime, 
   );
 }
 
-export function checksFrom({ markers, finalRuntime, captureResults, captureErrors, artifact }) {
+export function checksFrom({
+  markers,
+  finalRuntime,
+  captureResults,
+  captureErrors,
+  artifact,
+  qualificationProfile = 'base',
+  hostCheckpoints = [],
+}) {
   const resetPassed = markerResetPassed(markers);
   const stopPassed = realSilenceToStalePassed(markers);
   const reopenedBeforeB = hasOrderedMarkers(markers, [
@@ -212,9 +224,160 @@ export function checksFrom({ markers, finalRuntime, captureResults, captureError
     checks.captureIntegrity.status = 'FAIL';
     checks.captureIntegrity.reason = '缺少验收包身份信息。';
   }
+
+  if (qualificationProfile === 'release') {
+    const getMaxEventSequence = (checkpoint) => {
+      const events = checkpoint?.host?.recentEvents;
+      if (!Array.isArray(events) || events.length === 0) return 0;
+      return Math.max(0, ...events.map((e) => (typeof e?.sequence === 'number' ? e.sequence : 0)));
+    };
+
+    const hasOrderedDisconnectConnect = (events, host, channel, baselineSequence) => {
+      if (!Array.isArray(events)) return false;
+      const targetEvents = events.filter(
+        (e) =>
+          typeof e?.sequence === 'number' &&
+          e.sequence > baselineSequence &&
+          e.host === host &&
+          e.channel === channel,
+      );
+      const discIndex = targetEvents.findIndex((e) => e.action === 'disconnected');
+      if (discIndex === -1) return false;
+      return targetEvents.slice(discIndex + 1).some((e) => e.action === 'connected');
+    };
+
+    const hasNoDisconnectWithCompleteWindow = (events, host, channel, baselineSequence) => {
+      if (!Array.isArray(events) || events.length === 0) return false;
+      const newEvents = events
+        .filter((e) => typeof e?.sequence === 'number' && e.sequence > baselineSequence)
+        .sort((left, right) => left.sequence - right.sequence);
+      if (newEvents.length === 0) return true;
+      let expectedSequence = baselineSequence + 1;
+      for (const event of newEvents) {
+        if (event.sequence !== expectedSequence) return false;
+        expectedSequence++;
+      }
+      return !newEvents.some(
+        (e) => e.host === host && e.channel === channel && e.action === 'disconnected',
+      );
+    };
+
+    const browserBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'browser-reload' && c.phase === 'before',
+    );
+    const browserAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'browser-reload' && c.phase === 'after',
+    );
+    const browserPassed =
+      browserBefore !== undefined &&
+      browserAfter !== undefined &&
+      browserBefore.host?.byHostChannel?.browser?.program >= 1 &&
+      browserAfter.host?.byHostChannel?.browser?.program >= 1 &&
+      browserBefore.runtime?.producerInstanceId === browserAfter.runtime?.producerInstanceId &&
+      hasOrderedDisconnectConnect(
+        browserAfter.host?.recentEvents,
+        'browser',
+        'program',
+        getMaxEventSequence(browserBefore),
+      ) &&
+      browserAfter.runtime?.freshness === 'fresh' &&
+      browserAfter.programVisible === true;
+
+    const obsBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'obs-reload' && c.phase === 'before',
+    );
+    const obsAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'obs-reload' && c.phase === 'after',
+    );
+    const obsPassed =
+      obsBefore !== undefined &&
+      obsAfter !== undefined &&
+      obsBefore.host?.byHostChannel?.obs?.program >= 1 &&
+      obsAfter.host?.byHostChannel?.obs?.program >= 1 &&
+      obsBefore.runtime?.producerInstanceId === obsAfter.runtime?.producerInstanceId &&
+      hasOrderedDisconnectConnect(
+        obsAfter.host?.recentEvents,
+        'obs',
+        'program',
+        getMaxEventSequence(obsBefore),
+      ) &&
+      obsAfter.runtime?.freshness === 'fresh' &&
+      obsAfter.programVisible === true;
+
+    const sceneBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'scene-visibility' && c.phase === 'before',
+    );
+    const sceneAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'scene-visibility' && c.phase === 'after',
+    );
+    const scenePassed =
+      sceneBefore !== undefined &&
+      sceneAfter !== undefined &&
+      sceneBefore.host?.byHostChannel?.obs?.program >= 1 &&
+      sceneAfter.host?.byHostChannel?.obs?.program >= 1 &&
+      sceneBefore.runtime?.producerInstanceId === sceneAfter.runtime?.producerInstanceId &&
+      hasNoDisconnectWithCompleteWindow(
+        sceneAfter.host?.recentEvents,
+        'obs',
+        'program',
+        getMaxEventSequence(sceneBefore),
+      ) &&
+      sceneAfter.runtime?.freshness === 'fresh' &&
+      sceneAfter.programVisible === true;
+
+    const restartBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'companion-restart' && c.phase === 'before',
+    );
+    const restartAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'companion-restart' && c.phase === 'after',
+    );
+    const restartPassed =
+      restartBefore !== undefined &&
+      restartAfter !== undefined &&
+      restartBefore.host?.byHostChannel?.obs?.program >= 1 &&
+      restartAfter.host?.byHostChannel?.obs?.program >= 1 &&
+      restartAfter.runtime?.producerInstanceId !== restartBefore.runtime?.producerInstanceId &&
+      restartAfter.runtime?.freshness === 'fresh' &&
+      restartAfter.programVisible === true;
+
+    checks.browserReload = {
+      label: '普通浏览器重载',
+      status: browserPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: browserPassed
+        ? '普通浏览器已成功重载且画面恢复。'
+        : '等待完成普通浏览器重载前/后检查点与目视确认。',
+    };
+    checks.obsReload = {
+      label: 'OBS Browser Source 重载',
+      status: obsPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: obsPassed
+        ? 'OBS Browser Source 已成功重载且画面恢复。'
+        : '等待完成 OBS Browser Source 重载前/后检查点与目视确认。',
+    };
+    checks.sceneVisibility = {
+      label: 'OBS 场景可见性切换',
+      status: scenePassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: scenePassed
+        ? 'OBS 场景可见性切换完成且连接未中断。'
+        : '等待完成 OBS 场景切换前/后检查点与目视确认。',
+    };
+    checks.companionRestart = {
+      label: '制播服务受控重启',
+      status: restartPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: restartPassed
+        ? '制播服务已成功受控重启，OBS 源自动重连且画面恢复。'
+        : '等待完成服务重启前/后检查点与目视确认。',
+    };
+  }
+
+  const expectedKeys =
+    qualificationProfile === 'release'
+      ? [...QUALIFICATION_CHECK_KEYS, ...RELEASE_CHECK_KEYS]
+      : QUALIFICATION_CHECK_KEYS;
+
   if (
-    Object.keys(checks).length !== QUALIFICATION_CHECK_KEYS.length ||
-    QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
+    Object.keys(checks).length !== expectedKeys.length ||
+    expectedKeys.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
   ) {
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '现场验收检查与证据契约不一致');
   }

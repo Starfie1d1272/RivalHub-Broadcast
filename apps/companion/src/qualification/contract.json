@@ -49,5 +49,10 @@
     "programTelemetryCleared"
   ],
   "resetKind": "map-execution-reset",
-  "resetReason": "operator-correction"
+  "resetReason": "operator-correction",
+  "qualificationProfiles": ["base", "objective-timing", "release"],
+  "hostCheckpointSchemaVersion": 1,
+  "hostScenarios": ["browser-reload", "obs-reload", "scene-visibility", "companion-restart"],
+  "restartRequestExitCode": 75,
+  "releaseCheckKeys": ["browserReload", "obsReload", "sceneVisibility", "companionRestart"]
 }

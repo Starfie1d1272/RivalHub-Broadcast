@@ -481,6 +481,12 @@ describe('qualification-only Companion surface', () => {
     expect(page).not.toContain('stopdemo');
     expect(page).not.toContain('Qualification workflow');
     expect(page).toContain('<title>现场验收 · RivalHub Broadcast</title>');
+    expect(page).toContain('<link rel="stylesheet" href="/product-shell.css" />');
+    expect(page).toContain('<header class="product-topbar" aria-label="制作导航">');
+    expect(page).toContain('href="/qualification" aria-current="page">现场验收</a>');
+    expect(page).toContain('aria-label="浏览器接入状态"');
+    expect(page).toContain('id="qualification-host-obs">正在读取');
+    expect(page).toContain('无法读取本地通道状态');
     expect(page).toContain('data-action="cs2-closed">我已退出 CS2</button>');
     expect(page).toContain(
       "byId('confirm-stop').disabled = objectiveMode || !data.markers.includes('demo-a-live') || data.markers.includes('cs2-closed');",
@@ -769,5 +775,80 @@ describe('qualification-only Companion surface', () => {
         demoBRecovery: { status: 'PASS' },
       },
     });
+  });
+
+  it('supports host checkpoints, controlled restart, and release profile finish gate', async () => {
+    temporaryDirectory = await mkdtemp(join(tmpdir(), 'rivalhub-qualification-release-'));
+    const scenarioPath = join(temporaryDirectory, 'scenario.jsonl');
+    const hostCheckpointsPath = join(temporaryDirectory, 'host-checkpoints.jsonl');
+
+    let restarted = false;
+
+    app = buildApp({
+      gsiToken: GSI_TOKEN,
+      recorder: new FakeRecorder(),
+      qualificationMode: true,
+      qualificationControlToken: CONTROL_TOKEN,
+      qualificationRunId: 'release-test-run',
+      qualificationScenarioPath: scenarioPath,
+      qualificationHostCheckpointsPath: hostCheckpointsPath,
+      qualificationProfile: 'release',
+      onQualificationRestart: () => {
+        restarted = true;
+      },
+    });
+
+    const headers = { 'x-qualification-token': CONTROL_TOKEN };
+
+    // Initial finish attempt fails with 409 because workflow is incomplete
+    const earlyFinish = await app.inject({
+      method: 'POST',
+      url: '/qualification/finish',
+      headers,
+    });
+    expect(earlyFinish.statusCode).toBe(409);
+    expect(earlyFinish.json()).toMatchObject({ error: 'qualification_release_incomplete' });
+
+    // Record host checkpoint: browser-reload before
+    const bBefore = await app.inject({
+      method: 'POST',
+      url: '/qualification/host-checkpoint',
+      headers,
+      payload: { scenario: 'browser-reload', phase: 'before' },
+    });
+    expect(bBefore.statusCode).toBe(200);
+
+    // Record host checkpoint: browser-reload after with programVisible
+    const bAfter = await app.inject({
+      method: 'POST',
+      url: '/qualification/host-checkpoint',
+      headers,
+      payload: { scenario: 'browser-reload', phase: 'after', programVisible: true },
+    });
+    expect(bAfter.statusCode).toBe(200);
+
+    // Call restart-companion
+    const restartRes = await app.inject({
+      method: 'POST',
+      url: '/qualification/restart-companion',
+      headers,
+    });
+    expect(restartRes.statusCode).toBe(200);
+    await new Promise<void>((resolve) => setImmediate(resolve));
+    expect(restarted).toBe(true);
+
+    // Verify host-checkpoints.jsonl contains both checkpoints plus companion-restart before
+    const lines = (await readFile(hostCheckpointsPath, 'utf8')).trim().split('\n');
+    expect(lines.length).toBe(3);
+    const parsed = lines.map(
+      (l) => JSON.parse(l) as { scenario: string; phase: string; programVisible?: boolean },
+    );
+    expect(parsed[0]?.scenario).toBe('browser-reload');
+    expect(parsed[0]?.phase).toBe('before');
+    expect(parsed[1]?.scenario).toBe('browser-reload');
+    expect(parsed[1]?.phase).toBe('after');
+    expect(parsed[1]?.programVisible).toBe(true);
+    expect(parsed[2]?.scenario).toBe('companion-restart');
+    expect(parsed[2]?.phase).toBe('before');
   });
 });

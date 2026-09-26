@@ -165,24 +165,42 @@ pnpm qualification:verify <evidence-dir-or-zip>
 
 HUD 编辑器的浏览器验收覆盖样例、确定性重放与实时来源切换；实时来源失效时保持选择并安全隐藏，恢复后继续读取当前状态。验证已实现组件的显隐、拖动、Radar 尺寸与视野、保存/启用和冲突语义。普通 UI 不提供外观工作区、外观选择或未实现组件的占位与交互，既有 theme/placement schema 继续兼容。Program 保持透明且不包含产品导航或编辑辅助层。严格截图比较使用 canonical Linux / Chromium baseline，其它平台仅做临时预览与浏览器冒烟。
 
-## 5. Windows + CS2 现场验收包
+## 5. Windows 便携产品与现场验收
 
 真实 CS2 输入使用绑定 exact git SHA 的便携式 Windows 验收包。目标机不需要安装 Git、pnpm 或 Node，也不在现场改代码。
 
 稳定结构：
 
 ```text
-rivalhub-broadcast-qualification-<shortSHA>-win-x64/
-  runtime/node.exe
-  app/
-  scripts/
-  config/
-  metadata/
-  evidence/
+rivalhub-broadcast-<shortSHA>-win-x64/
+  RivalHub Broadcast.exe
   README.txt
+  resources/
+    runtime/node.exe
+    app/
+    web/dist/
+    scripts/
+    config/
+    metadata/
+  state/
+    data/
+    logs/
+    evidence/
 ```
 
-标准流程：
+正式包需要 Windows x64 构建，编译系统 .NET Framework 的薄 launcher 并绑定 bundled Node / supervisor 摘要。`--skip-node-runtime` 只生成结构检查包；`--allow-dirty` 生成的包同样标记 `developmentOnly`，不能作为产品启动或真实验收的 exact-revision artifact。
+
+双击 EXE 默认进入 `/operator`。`resources/scripts/start-product.ps1` / `stop-product.ps1` 是自动化备用入口。GSI 配置使用 `install-gsi.ps1 -Product` 安装、`restore-gsi.ps1 -Product` 恢复；安装和恢复前停止服务。现场验收仍使用同目录下 `install-gsi.ps1`、`start.ps1` 与 `stop.ps1`，不要混用两种模式。
+
+`BROADCAST_STATE_ROOT` 可以指定 resources 之外的绝对目录；正常运行、GSI 脚本和验收必须使用相同值。HUD 配置、系列进度、capture 和日志均进入该目录。现场验收临时状态位于 `state/qualification`，完成后仍由现有 supervisor 恢复 GSI 配置并清理。
+
+Windows CI 从带空格路径解压 ZIP，以 `product-smoke.mjs` 调用真实 EXE，检查冷启动、同 artifact 复用、停止/重启、未知端口占用、资源损坏和 GSI 安装/恢复。该 smoke 没有 CS2/OBS，不能构成生产验收通过。
+
+React 制作界面与 standalone `/qualification` 页面通过打包的 `product-shell.css` 共用颜色、字体、导航和外边距 token；验收页仍由 Companion 独立生成。Windows portable smoke 会确认 exact artifact 提供这份共享样式。
+
+同一 exact artifact 随后由 `product-soak.mjs` 在单个 Companion 进程中运行三段各 24 回合的脚本化合成地图流程。测试以已脱敏 GSI fixture 的 observation 形状生成回合状态，经认证 `/gsi` 入口和 production telemetry adapter 进入 Runtime，同时观察 Program / Radar / Operator publication、浏览器断线重连、投递合并/失败、Host 连接、慢消费者事件和 Companion CPU / working set。`host-soak.json` 与 ZIP 一同作为 exact-SHA CI artifact 上传。该脚本只验证便携产品中的连续状态更新与有界投递；合成流程不是完整真实比赛录制，也不能替代 Windows + CS2 + OBS 现场验收。
+
+现场验收标准流程：
 
 ```text
 安装 GSI 配置

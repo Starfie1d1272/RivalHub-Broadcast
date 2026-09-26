@@ -46,6 +46,9 @@ function validateQualificationContract(contract) {
     'checkKeys',
     'resetDispositionValues',
     'resetEvidenceFields',
+    'qualificationProfiles',
+    'hostScenarios',
+    'releaseCheckKeys',
   ]) {
     if (
       !Array.isArray(contract[key]) ||
@@ -83,6 +86,11 @@ export const QUALIFICATION_RESET_DISPOSITIONS = new Set(
 );
 export const QUALIFICATION_RESET_EVIDENCE_FIELDS = QUALIFICATION_CONTRACT.resetEvidenceFields;
 export const QUALIFICATION_CHECK_KEYS = QUALIFICATION_CONTRACT.checkKeys;
+export const QUALIFICATION_PROFILES = new Set(QUALIFICATION_CONTRACT.qualificationProfiles);
+export const HOST_CHECKPOINT_SCHEMA_VERSION = QUALIFICATION_CONTRACT.hostCheckpointSchemaVersion;
+export const HOST_SCENARIOS = new Set(QUALIFICATION_CONTRACT.hostScenarios);
+export const RESTART_REQUEST_EXIT_CODE = QUALIFICATION_CONTRACT.restartRequestExitCode;
+export const RELEASE_CHECK_KEYS = QUALIFICATION_CONTRACT.releaseCheckKeys;
 export const SHA256_PATTERN = /^[a-f0-9]{64}$/;
 export const STEAM_LIKE_ID_PATTERN = /\b\d{17}\b/;
 export const SECRET_PATTERN = /(?:token|password|secret|authorization|bearer)/i;

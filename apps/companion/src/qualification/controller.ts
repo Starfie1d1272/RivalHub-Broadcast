@@ -4,6 +4,10 @@ import { performance } from 'node:perf_hooks';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import type { MapExecutionResetReason, RuntimeTime } from '@rivalhub-broadcast/core/runtime';
 
+import type {
+  LocalWebHostDiagnostics,
+  LocalWebHostEvent,
+} from '../local-web/websocket-transport.js';
 import type { DebugRuntimeResponse } from '../runtime/debug-state.js';
 import type { ProgramRuntime, ProgramRuntimeSnapshot } from '../runtime/program-runtime.js';
 import {
@@ -12,6 +16,7 @@ import {
   type RecorderHealth,
 } from '../telemetry/capture-recorder.js';
 import {
+  HOST_SCENARIOS,
   QUALIFICATION_CHECK_KEYS,
   QUALIFICATION_LIVE_MARKER_KINDS,
   QUALIFICATION_MARKER_KINDS,
@@ -19,11 +24,18 @@ import {
   QUALIFICATION_RESET_KIND,
   QUALIFICATION_RESET_REASON,
   QUALIFICATION_SCHEMA_VERSION,
+  RELEASE_CHECK_KEYS,
+  type HostCheckpoint,
+  type HostCheckpointHostSnapshot,
+  type HostCheckpointPhase,
+  type HostCheckpointRuntimeSnapshot,
+  type HostCheckpointScenario,
   type QualificationClock,
   type QualificationEvidenceStore,
   type QualificationFreshness,
   type QualificationMarker,
   type QualificationMarkerKind,
+  type QualificationProfile,
   type QualificationResetEvidence,
 } from './evidence.js';
 import { qualificationPageHtml } from './page.js';
@@ -32,7 +44,7 @@ export interface QualificationControllerOptions {
   readonly controlToken: string;
   readonly runId: string;
   readonly evidence: QualificationEvidenceStore;
-  readonly qualificationProfile?: 'base' | 'objective-timing';
+  readonly qualificationProfile?: QualificationProfile;
   readonly clock?: QualificationClock;
   readonly getDebugResponse: (nowMonotonicMs: number) => DebugRuntimeResponse;
   readonly programRuntime: ProgramRuntime;
@@ -41,7 +53,9 @@ export interface QualificationControllerOptions {
     readonly previousCaptureId: string;
     readonly captureId: string;
   }>;
+  readonly getHostDiagnostics?: () => LocalWebHostDiagnostics;
   readonly onAcceptedMapReset?: () => void;
+  readonly onRestart?: () => void | Promise<void>;
   readonly onFinish?: (input: QualificationFinishInput) => void | Promise<void>;
 }
 
@@ -250,6 +264,7 @@ function evaluateChecks(
   response: DebugRuntimeResponse,
   snapshot: ReturnType<QualificationEvidenceStore['getSnapshot']>,
   recorderHealth: RecorderHealth,
+  qualificationProfile: QualificationProfile,
 ): Record<string, QualificationCheck> {
   const markers = snapshot.markers;
   const demoALive = markers.find((marker) => marker.kind === 'demo-a-live');
@@ -342,10 +357,173 @@ function evaluateChecks(
             : '等待服务正常结束并完成采集记录整理。',
     },
   };
+
+  if (qualificationProfile === 'release') {
+    const getMaxEventSequence = (checkpoint: HostCheckpoint | undefined): number => {
+      const events = checkpoint?.host.recentEvents;
+      if (!events || events.length === 0) return 0;
+      let maxSeq = 0;
+      for (const e of events) {
+        if (e.sequence > maxSeq) {
+          maxSeq = e.sequence;
+        }
+      }
+      return maxSeq;
+    };
+
+    const hasOrderedDisconnectConnect = (
+      events: readonly LocalWebHostEvent[] | undefined,
+      host: string,
+      channel: string,
+      baselineSequence: number,
+    ): boolean => {
+      if (!events || events.length === 0) return false;
+      const targetEvents = events.filter(
+        (e) => e.sequence > baselineSequence && e.host === host && e.channel === channel,
+      );
+      const discIndex = targetEvents.findIndex((e) => e.action === 'disconnected');
+      if (discIndex === -1) return false;
+      return targetEvents.slice(discIndex + 1).some((e) => e.action === 'connected');
+    };
+
+    const hasNoDisconnectWithCompleteWindow = (
+      events: readonly LocalWebHostEvent[] | undefined,
+      host: string,
+      channel: string,
+      baselineSequence: number,
+    ): boolean => {
+      if (!events || events.length === 0) return false;
+      const newEvents = events
+        .filter((e) => e.sequence > baselineSequence)
+        .sort((left, right) => left.sequence - right.sequence);
+      if (newEvents.length === 0) return true;
+      let expectedSequence = baselineSequence + 1;
+      for (const event of newEvents) {
+        if (event.sequence !== expectedSequence) return false;
+        expectedSequence++;
+      }
+      return !newEvents.some(
+        (e) => e.host === host && e.channel === channel && e.action === 'disconnected',
+      );
+    };
+
+    const hostCheckpoints = snapshot.hostCheckpoints;
+    const browserBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'browser-reload' && c.phase === 'before',
+    );
+    const browserAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'browser-reload' && c.phase === 'after',
+    );
+    const browserPassed =
+      browserBefore !== undefined &&
+      browserAfter !== undefined &&
+      browserBefore.host.byHostChannel.browser.program >= 1 &&
+      browserAfter.host.byHostChannel.browser.program >= 1 &&
+      browserBefore.runtime.producerInstanceId === browserAfter.runtime.producerInstanceId &&
+      hasOrderedDisconnectConnect(
+        browserAfter.host.recentEvents,
+        'browser',
+        'program',
+        getMaxEventSequence(browserBefore),
+      ) &&
+      browserAfter.runtime.freshness === 'fresh' &&
+      browserAfter.programVisible === true;
+
+    const obsBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'obs-reload' && c.phase === 'before',
+    );
+    const obsAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'obs-reload' && c.phase === 'after',
+    );
+    const obsPassed =
+      obsBefore !== undefined &&
+      obsAfter !== undefined &&
+      obsBefore.host.byHostChannel.obs.program >= 1 &&
+      obsAfter.host.byHostChannel.obs.program >= 1 &&
+      obsBefore.runtime.producerInstanceId === obsAfter.runtime.producerInstanceId &&
+      hasOrderedDisconnectConnect(
+        obsAfter.host.recentEvents,
+        'obs',
+        'program',
+        getMaxEventSequence(obsBefore),
+      ) &&
+      obsAfter.runtime.freshness === 'fresh' &&
+      obsAfter.programVisible === true;
+
+    const sceneBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'scene-visibility' && c.phase === 'before',
+    );
+    const sceneAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'scene-visibility' && c.phase === 'after',
+    );
+    const scenePassed =
+      sceneBefore !== undefined &&
+      sceneAfter !== undefined &&
+      sceneBefore.host.byHostChannel.obs.program >= 1 &&
+      sceneAfter.host.byHostChannel.obs.program >= 1 &&
+      sceneBefore.runtime.producerInstanceId === sceneAfter.runtime.producerInstanceId &&
+      hasNoDisconnectWithCompleteWindow(
+        sceneAfter.host.recentEvents,
+        'obs',
+        'program',
+        getMaxEventSequence(sceneBefore),
+      ) &&
+      sceneAfter.runtime.freshness === 'fresh' &&
+      sceneAfter.programVisible === true;
+
+    const restartBefore = hostCheckpoints.find(
+      (c) => c.scenario === 'companion-restart' && c.phase === 'before',
+    );
+    const restartAfter = hostCheckpoints.find(
+      (c) => c.scenario === 'companion-restart' && c.phase === 'after',
+    );
+    const restartPassed =
+      restartBefore !== undefined &&
+      restartAfter !== undefined &&
+      restartBefore.host.byHostChannel.obs.program >= 1 &&
+      restartAfter.host.byHostChannel.obs.program >= 1 &&
+      restartAfter.runtime.producerInstanceId !== restartBefore.runtime.producerInstanceId &&
+      restartAfter.runtime.freshness === 'fresh' &&
+      restartAfter.programVisible === true;
+
+    checks.browserReload = {
+      label: '普通浏览器重载',
+      status: browserPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: browserPassed
+        ? '普通浏览器已成功重载且画面恢复。'
+        : '等待完成普通浏览器重载前/后检查点与目视确认。',
+    };
+    checks.obsReload = {
+      label: 'OBS Browser Source 重载',
+      status: obsPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: obsPassed
+        ? 'OBS Browser Source 已成功重载且画面恢复。'
+        : '等待完成 OBS Browser Source 重载前/后检查点与目视确认。',
+    };
+    checks.sceneVisibility = {
+      label: 'OBS 场景可见性切换',
+      status: scenePassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: scenePassed
+        ? 'OBS 场景可见性切换完成且连接未中断。'
+        : '等待完成 OBS 场景切换前/后检查点与目视确认。',
+    };
+    checks.companionRestart = {
+      label: '制播服务受控重启',
+      status: restartPassed ? 'PASS' : 'INCONCLUSIVE',
+      reason: restartPassed
+        ? '制播服务已成功受控重启，OBS 源自动重连且画面恢复。'
+        : '等待完成服务重启前/后检查点与目视确认。',
+    };
+  }
+
+  const expectedKeys =
+    qualificationProfile === 'release'
+      ? [...QUALIFICATION_CHECK_KEYS, ...RELEASE_CHECK_KEYS]
+      : QUALIFICATION_CHECK_KEYS;
   const checkKeys = Object.keys(checks);
   if (
-    checkKeys.length !== QUALIFICATION_CHECK_KEYS.length ||
-    QUALIFICATION_CHECK_KEYS.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
+    checkKeys.length !== expectedKeys.length ||
+    expectedKeys.some((key) => !Object.prototype.hasOwnProperty.call(checks, key))
   ) {
     throw new Error('现场验收检查与证据契约不一致');
   }
@@ -381,18 +559,30 @@ function boundedStatus(
   snapshot: ReturnType<QualificationEvidenceStore['getSnapshot']>,
   recorderHealth: RecorderHealth,
   nowMonotonicMs: number,
-  qualificationProfile: 'base' | 'objective-timing',
+  qualificationProfile: QualificationProfile,
+  hostDiagnostics?: LocalWebHostDiagnostics,
 ): Record<string, unknown> {
-  const checks = evaluateChecks(response, snapshot, recorderHealth);
+  const checks = evaluateChecks(response, snapshot, recorderHealth, qualificationProfile);
   const captureIntegrity = checks.captureIntegrity;
   if (captureIntegrity === undefined) {
     throw new Error('现场验收检查缺少 captureIntegrity');
   }
   const objectiveProgress = objectiveScenarioProgress(snapshot.markers);
+  const baseState = stateFrom(response, snapshot.markers);
+  const releaseReady =
+    qualificationProfile === 'release' &&
+    baseState === 'ready' &&
+    RELEASE_CHECK_KEYS.every((key) => checks[key]?.status === 'PASS');
   const state =
     qualificationProfile === 'objective-timing' && objectiveProgress.complete
       ? 'ready'
-      : stateFrom(response, snapshot.markers);
+      : qualificationProfile === 'release'
+        ? releaseReady
+          ? 'ready'
+          : baseState === 'ready'
+            ? 'receiving'
+            : baseState
+        : baseState;
   const gsi =
     response.raw.current === null
       ? 'never-seen'
@@ -416,6 +606,8 @@ function boundedStatus(
     objectiveScenarioProgress: objectiveProgress,
     markers: snapshot.markers.map((marker) => marker.kind),
     lastMarker: snapshot.lastMarker?.kind ?? null,
+    hostCheckpoints: snapshot.hostCheckpoints,
+    activeHosts: hostDiagnostics?.active,
     producerInstanceId: response.producerInstanceId,
     sourceGeneration: response.sourceGeneration,
     mapEpoch: extractMapEpoch(response),
@@ -471,6 +663,7 @@ export function registerQualificationRoutes(
       resolveCaptureRecorder(options.recorder).getHealth(),
       nowMonotonicMs,
       options.qualificationProfile ?? 'base',
+      options.getHostDiagnostics?.(),
     );
   };
 
@@ -622,11 +815,10 @@ export function registerQualificationRoutes(
     const body = {
       ok: result.disposition.kind === 'accepted',
       reason: RESET_REASON,
-      timestamp: at,
-      producerInstanceId: after.producerInstanceId,
-      sourceGeneration: after.sourceGeneration,
       previousMapEpoch: beforeEpoch,
       mapEpoch: after.current.map.epoch,
+      sourceGeneration: after.current.programSource.generation,
+      producerInstanceId: after.producerInstanceId,
       runtimeSeq: after.current.runtimeSeq,
       programTelemetryCleared: reset.programTelemetryCleared,
       disposition: result.disposition,
@@ -660,12 +852,198 @@ export function registerQualificationRoutes(
     }
   });
 
+  app.post('/qualification/host-checkpoint', async (request, reply) => {
+    if (!tokenMatches(request, options.controlToken)) {
+      unauthorized(reply);
+      return;
+    }
+    const body = request.body;
+    if (!isRecord(body) || typeof body.scenario !== 'string' || typeof body.phase !== 'string') {
+      return reply.code(400).send({ error: 'qualification_invalid_checkpoint_request' });
+    }
+    const scenario = body.scenario as HostCheckpointScenario;
+    const phase = body.phase as HostCheckpointPhase;
+    const programVisible =
+      typeof body.programVisible === 'boolean' ? body.programVisible : undefined;
+
+    const debug = getDebug();
+    const runtimeSnapshot = options.programRuntime.getSnapshot();
+    const runtime: HostCheckpointRuntimeSnapshot = {
+      producerInstanceId: runtimeSnapshot.producerInstanceId,
+      freshness: freshnessFromDebug(debug),
+      mapEpoch: runtimeSnapshot.current.map.epoch,
+      sourceGeneration: runtimeSnapshot.current.programSource.generation,
+      runtimeSeq: runtimeSnapshot.current.runtimeSeq,
+    };
+
+    const hostDiagnostics = options.getHostDiagnostics?.() ?? {
+      active: {
+        obs: 0,
+        browser: 0,
+        unknown: 0,
+        byChannel: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        byHostChannel: {
+          obs: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        },
+        obsVersions: [],
+      },
+      totals: {
+        connected: 0,
+        disconnected: 0,
+        messagesReceived: 0,
+        messagesSent: 0,
+        connectionLimitRejected: 0,
+        rateLimited: 0,
+        malformedMessages: 0,
+      },
+      recentEvents: [],
+    };
+    const host: HostCheckpointHostSnapshot = {
+      active: {
+        obs: hostDiagnostics.active.obs,
+        browser: hostDiagnostics.active.browser,
+        unknown: hostDiagnostics.active.unknown,
+      },
+      byHostChannel: hostDiagnostics.active.byHostChannel ?? {
+        obs: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+      },
+      obsVersions: [...hostDiagnostics.active.obsVersions],
+      recentEvents: [...hostDiagnostics.recentEvents],
+    };
+
+    try {
+      const checkpoint = await options.evidence.recordHostCheckpoint({
+        scenario,
+        phase,
+        runtime,
+        host,
+        ...(programVisible !== undefined ? { programVisible } : {}),
+      });
+      return reply.code(200).send({
+        ok: true,
+        checkpoint,
+        message: `${scenario} (${phase}) 检查点已记录`,
+      });
+    } catch (error: unknown) {
+      return reply.code(503).send({
+        error: 'qualification_host_checkpoint_failed',
+        message: String(error),
+      });
+    }
+  });
+
+  app.post('/qualification/restart-companion', async (request, reply) => {
+    if (!tokenMatches(request, options.controlToken)) {
+      unauthorized(reply);
+      return;
+    }
+    const debug = getDebug();
+    const runtimeSnapshot = options.programRuntime.getSnapshot();
+    const runtime: HostCheckpointRuntimeSnapshot = {
+      producerInstanceId: runtimeSnapshot.producerInstanceId,
+      freshness: freshnessFromDebug(debug),
+      mapEpoch: runtimeSnapshot.current.map.epoch,
+      sourceGeneration: runtimeSnapshot.current.programSource.generation,
+      runtimeSeq: runtimeSnapshot.current.runtimeSeq,
+    };
+    const hostDiagnostics = options.getHostDiagnostics?.() ?? {
+      active: {
+        obs: 0,
+        browser: 0,
+        unknown: 0,
+        byChannel: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        byHostChannel: {
+          obs: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        },
+        obsVersions: [],
+      },
+      totals: {
+        connected: 0,
+        disconnected: 0,
+        messagesReceived: 0,
+        messagesSent: 0,
+        connectionLimitRejected: 0,
+        rateLimited: 0,
+        malformedMessages: 0,
+      },
+      recentEvents: [],
+    };
+    const host: HostCheckpointHostSnapshot = {
+      active: {
+        obs: hostDiagnostics.active.obs,
+        browser: hostDiagnostics.active.browser,
+        unknown: hostDiagnostics.active.unknown,
+      },
+      byHostChannel: hostDiagnostics.active.byHostChannel ?? {
+        obs: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+      },
+      obsVersions: [...hostDiagnostics.active.obsVersions],
+      recentEvents: [...hostDiagnostics.recentEvents],
+    };
+
+    try {
+      await options.evidence.recordHostCheckpoint({
+        scenario: 'companion-restart',
+        phase: 'before',
+        runtime,
+        host,
+      });
+    } catch (error: unknown) {
+      return reply.code(503).send({
+        error: 'qualification_restart_checkpoint_failed',
+        message: String(error),
+      });
+    }
+
+    setImmediate(() => {
+      void Promise.resolve(options.onRestart?.()).catch(() => undefined);
+    });
+
+    return reply.code(200).send({
+      ok: true,
+      message: 'Companion 即将受控重启（exit code 75）',
+    });
+  });
+
   app.post('/qualification/finish', async (request, reply) => {
     if (!tokenMatches(request, options.controlToken)) {
       unauthorized(reply);
       return;
     }
     const status = await getStatus();
+    if (options.qualificationProfile === 'release') {
+      const snapshot = options.evidence.getSnapshot();
+      const hasBase =
+        hasMarker(snapshot.markers, 'demo-a-live') &&
+        hasMarker(snapshot.markers, 'cs2-closed') &&
+        hasMarker(snapshot.markers, 'runtime-stale') &&
+        hasMarker(snapshot.markers, 'next-execution') &&
+        hasMarker(snapshot.markers, 'cs2-reopened') &&
+        hasMarker(snapshot.markers, 'demo-b-live');
+      const missingHost = HOST_SCENARIOS.filter((scenario) => {
+        const before = snapshot.hostCheckpoints.some(
+          (c) => c.scenario === scenario && c.phase === 'before',
+        );
+        const after = snapshot.hostCheckpoints.some(
+          (c) => c.scenario === scenario && c.phase === 'after' && c.programVisible === true,
+        );
+        return !before || !after;
+      });
+      if (!hasBase || missingHost.length > 0) {
+        return reply.code(409).send({
+          error: 'qualification_release_incomplete',
+          message: 'Release 验收要求基础流程与全部 4 个 Host 生产场景检查点均已完整记录。',
+        });
+      }
+    }
     const finishDebug = getDebug();
     const finishRuntime = options.programRuntime.getSnapshot();
     const finishInput: QualificationFinishInput = {

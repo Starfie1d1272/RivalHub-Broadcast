@@ -2,7 +2,16 @@
 $ErrorActionPreference = 'Stop'
 
 $script:BundleRoot = Split-Path -Parent $PSScriptRoot
-$script:QualificationStateRoot = Join-Path $script:BundleRoot '.qualification-local'
+$script:ProductRoot = Split-Path -Parent $script:BundleRoot
+$script:StateRoot = Join-Path $script:ProductRoot 'state'
+if ($env:BROADCAST_STATE_ROOT) {
+    if (-not [System.IO.Path]::IsPathRooted($env:BROADCAST_STATE_ROOT)) { throw '运行数据目录必须是绝对路径' }
+    $script:StateRoot = [System.IO.Path]::GetFullPath($env:BROADCAST_STATE_ROOT)
+}
+$resourcePath = [System.IO.Path]::GetFullPath($script:BundleRoot).TrimEnd('\')
+$statePath = [System.IO.Path]::GetFullPath($script:StateRoot).TrimEnd('\')
+if ($statePath -eq $resourcePath -or $statePath.StartsWith($resourcePath + '\', [System.StringComparison]::OrdinalIgnoreCase)) { throw '运行数据目录不能位于程序资源目录内' }
+$script:QualificationStateRoot = Join-Path $script:StateRoot 'qualification'
 $script:InstallStatePath = Join-Path $script:QualificationStateRoot 'install.json'
 $script:RunStatePath = Join-Path $script:QualificationStateRoot 'run.json'
 

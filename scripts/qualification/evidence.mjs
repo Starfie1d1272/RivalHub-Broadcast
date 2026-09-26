@@ -14,8 +14,14 @@ export {
   QUALIFICATION_RESULT_VALUES,
   QUALIFICATION_REPOSITORY,
   QUALIFICATION_SCHEMA_VERSION,
+  QUALIFICATION_PROFILES,
+  HOST_CHECKPOINT_SCHEMA_VERSION,
+  HOST_SCENARIOS,
+  RESTART_REQUEST_EXIT_CODE,
+  RELEASE_CHECK_KEYS,
   QualificationEvidenceError,
 } from './evidence/contract.mjs';
+export { readHostCheckpoints, validateHostCheckpoint } from './evidence/host-checkpoints.mjs';
 export { iterateCaptureFrames, verifyCaptureDirectory } from './evidence/capture.mjs';
 export {
   analyzeObjectiveTimingCapture,

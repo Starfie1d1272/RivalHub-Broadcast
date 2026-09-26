@@ -66,6 +66,8 @@ export function assertUtc(value, name) {
 export function validateArtifact(artifact) {
   if (!isRecord(artifact))
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份文件必须是对象');
+  if (artifact.developmentOnly === true)
+    throw new QualificationEvidenceError('INVALID_EVIDENCE', '开发结构包不能作为真实环境验收产物');
   if (artifact.schemaVersion !== 1)
     throw new QualificationEvidenceError('INVALID_EVIDENCE', '验收包身份文件的格式版本不受支持');
   if (artifact.repository !== QUALIFICATION_REPOSITORY)
