@@ -218,9 +218,9 @@ describe('Player Rails card presentation', () => {
         />,
       );
     });
-    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
-      'exit',
-    );
+    expect(
+      container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase'),
+    ).toBe('exit');
 
     act(() => {
       vi.advanceTimersByTime(110);
@@ -230,16 +230,16 @@ describe('Player Rails card presentation', () => {
     act(() => {
       root?.render(<PlayerCard player={carrier} presentationRevision={0} />);
     });
-    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
-      'enter',
-    );
+    expect(
+      container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase'),
+    ).toBe('enter');
 
     act(() => {
       vi.advanceTimersByTime(110);
     });
-    expect(container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase')).toBe(
-      'steady',
-    );
+    expect(
+      container.querySelector('[data-equipment="kit"]')?.getAttribute('data-motion-phase'),
+    ).toBe('steady');
   });
 
   it('keeps the dead structural row and renders unavailable spent as a single dash', () => {
