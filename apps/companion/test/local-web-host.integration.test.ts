@@ -155,12 +155,30 @@ describe('production local web host', () => {
       apps.push(app);
       await app.ready();
 
-      for (const route of ['/', '/program', '/operator', '/debug']) {
+      for (const route of ['/program', '/operator', '/operator/hud', '/debug', '/qualification']) {
         const response = await app.inject({ method: 'GET', url: route });
         expect(response.statusCode).toBe(200);
         expect(response.headers['cache-control']).toBe('no-store');
         expect(response.body).toContain('built');
       }
+
+      const entry = await app.inject({ method: 'GET', url: '/' });
+      expect(entry.statusCode).toBe(302);
+      expect(entry.headers.location).toBe('/operator');
+      const missing = await app.inject({
+        method: 'GET',
+        url: '/missing-page',
+        headers: { accept: 'text/html' },
+      });
+      expect(missing.statusCode).toBe(404);
+      expect(missing.body).toContain('built');
+      const missingApi = await app.inject({
+        method: 'GET',
+        url: '/operator/series/missing',
+        headers: { accept: 'text/html' },
+      });
+      expect(missingApi.statusCode).toBe(404);
+      expect(missingApi.body).not.toContain('built');
 
       const asset = await app.inject({ method: 'GET', url: '/assets/main-123.js' });
       expect(asset.statusCode).toBe(200);

@@ -40,6 +40,7 @@ test-results/
 playwright-report/
 playwright-acceptance-report/
 blob-report/
+.playwright-cli/
 
 # Temporary files
 .tmp/

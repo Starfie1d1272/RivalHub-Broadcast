@@ -163,7 +163,7 @@ pnpm qualification:verify <evidence-dir-or-zip>
 
 具体 PR 由 planner 选择子集；手工排查时可直接运行需要的完整命令。
 
-HUD 控制台的视觉验证必须同时检查测试场景选择、Current Live 在没有已接收初始状态时 disabled、已选 Current Live 在 stale/重连/协议错误时保持选择但 fail-closed、新初始状态恢复后继续 live、编辑层拖动/尺寸控件、品牌色十六进制输入、三套草稿跨工作区保留，以及正式节目路由不包含编辑辅助层；还要验证 preset/appearance 只为未实现组件显示占位，layout 工作区才提供选择/拖动/resize chrome。严格截图断言只使用 canonical Linux / Chromium baseline；其它平台只做本地预览或浏览器冒烟。视觉测试中的 fixture 不是生产 telemetry，也不能作为当前实时来源失效时的 fallback。
+HUD 编辑器的浏览器验收覆盖样例、确定性重放与实时来源切换；实时来源失效时保持选择并安全隐藏，恢复后继续读取当前状态。验证已实现组件的显隐、拖动、Radar 尺寸与视野、保存/启用和冲突语义。普通 UI 不提供外观工作区、外观选择或未实现组件的占位与交互，既有 theme/placement schema 继续兼容。Program 保持透明且不包含产品导航或编辑辅助层。严格截图比较使用 canonical Linux / Chromium baseline，其它平台仅做临时预览与浏览器冒烟。
 
 ## 5. Windows + CS2 现场验收包
 

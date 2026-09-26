@@ -1,14 +1,23 @@
 import { existsSync, statSync } from 'node:fs';
+import { extname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import fastifyStatic from '@fastify/static';
 import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 
-const SURFACE_ROUTES = ['/', '/program', '/operator', '/debug'] as const;
-const RESERVED_PREFIXES = ['/debug/', '/gsi', '/health', '/local/v1', '/qualification'] as const;
+const SURFACE_ROUTES = ['/program', '/operator', '/operator/hud', '/debug'] as const;
+const RESERVED_PREFIXES = [
+  '/debug',
+  '/operator/series',
+  '/gsi',
+  '/health',
+  '/local/v1',
+  '/qualification',
+] as const;
 
 export interface StaticHostOptions {
   readonly webRoot?: string;
+  readonly qualificationMode?: boolean;
 }
 
 function defaultWebRoot(): string {
@@ -67,6 +76,13 @@ export function registerStaticHost(app: FastifyInstance, options: StaticHostOpti
     },
   });
 
+  app.get('/', async (_request, reply) => reply.redirect('/operator'));
+  if (!options.qualificationMode) {
+    app.get('/qualification', async (_request, reply) =>
+      sendStaticFile(reply, 'index.html', 'no-store'),
+    );
+  }
+
   for (const route of SURFACE_ROUTES) {
     app.get(route, async (_request, reply) => sendStaticFile(reply, 'index.html', 'no-store'));
   }
@@ -81,6 +97,10 @@ export function registerStaticHost(app: FastifyInstance, options: StaticHostOpti
     if (shouldLeaveForApi(pathname)) return reply.callNotFound();
     const filename = pathFromRequest(request);
     if (filename.length === 0) return reply.callNotFound();
+    if (extname(filename) === '' && request.headers.accept?.includes('text/html')) {
+      reply.code(404);
+      return sendStaticFile(reply, 'index.html', 'no-store');
+    }
     return sendStaticFile(reply, filename, 'no-cache');
   });
 

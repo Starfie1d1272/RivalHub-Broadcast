@@ -69,7 +69,13 @@ describe('web surface shell', () => {
     ['/operator', 'operator'],
     ['/debug', 'debug'],
   ] as const)('maps %s to the %s surface', (pathname, expectedId) => {
-    expect(surfaceForPath(pathname).id).toBe(expectedId);
+    expect(surfaceForPath(pathname)?.id).toBe(expectedId);
+  });
+
+  it('routes root to operator and never treats unknown paths as Program', () => {
+    expect(surfaceForPath('/')?.id).toBe('operator');
+    expect(surfaceForPath('/operator/hud')?.id).toBe('hud');
+    expect(surfaceForPath('/missing')).toBeUndefined();
   });
 
   it('renders a surface-owned React page element', () => {
@@ -161,6 +167,8 @@ describe('web surface shell', () => {
 
     expect(container!.textContent).toContain('正常');
     expect(container!.textContent).toContain('de_ancient');
+    expect(container!.querySelector('details')?.open).toBe(false);
+    expect(container!.textContent).toContain('高级技术信息');
     expect(container!.textContent).toContain('已接收原始数据');
     expect(container!.textContent).toContain('标准化观测');
     expect(container!.textContent).toContain('当前运行状态');

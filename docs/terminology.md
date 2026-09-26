@@ -20,7 +20,7 @@
 
 | Canonical term / 代码概念 | 开发者文档 | 用户界面 / 现场文案 |
 | --- | --- | --- |
-| Program | `Program` / 正式节目 | 正式节目 |
+| Program | `Program` / 播出画面 | 播出画面 |
 | Operator | `Operator` / 制作控制 | 制作控制 |
 | Observer Assist | `Observer Assist` / 观察辅助 | 观察辅助 |
 | Broadcast Workspace | 制播工作区（Broadcast Workspace） | 制播工作区 |

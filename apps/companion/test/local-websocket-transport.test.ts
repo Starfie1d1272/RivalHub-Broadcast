@@ -78,13 +78,13 @@ class FakeSocket extends EventEmitter {
   readonly closeCalls: Array<{ readonly code: number; readonly reason: string }> = [];
   terminated = 0;
   pings = 0;
-  sendError: Error | undefined;
+  sendError: Error | null | undefined;
   deferSend = false;
   deferCloseEvent = false;
-  private readonly deferredCallbacks: Array<(error?: Error) => void> = [];
+  private readonly deferredCallbacks: Array<(error?: Error | null) => void> = [];
   private deferredClose: { readonly code: number; readonly reason: string } | undefined;
 
-  send(data: string, callback: (error?: Error) => void): void {
+  send(data: string, callback: (error?: Error | null) => void): void {
     this.sent.push(data);
     if (this.deferSend) {
       this.deferredCallbacks.push(callback);
@@ -184,22 +184,28 @@ function attach(transport: LocalWebSocketTransport, socket: FakeSocket): void {
 }
 
 describe('local WebSocket transport lifecycle', () => {
-  it('sends the publisher baseline first and forwards later full snapshots', async () => {
-    const publisher = new FakePublisher();
-    publisher.publish({ channel: 'program', value: 'baseline' });
-    const socket = new FakeSocket();
-    const transport = createTransport(publisher);
+  it.each([undefined, null])(
+    'accepts successful send callback %s and keeps forwarding snapshots',
+    async (success) => {
+      const publisher = new FakePublisher();
+      publisher.publish({ channel: 'program', value: 'baseline' });
+      const socket = new FakeSocket();
+      socket.sendError = success;
+      const transport = createTransport(publisher);
 
-    attach(transport, socket);
-    await flushMicrotasks();
-    publisher.publish({ channel: 'program', value: 'latest' });
-    await flushMicrotasks();
+      attach(transport, socket);
+      await flushMicrotasks();
+      publisher.publish({ channel: 'program', value: 'latest' });
+      await flushMicrotasks();
 
-    expect(socket.sent.map((value) => JSON.parse(value) as unknown)).toEqual([
-      { channel: 'program', channelSeq: 1, value: 'baseline' },
-      { channel: 'program', channelSeq: 2, value: 'latest' },
-    ]);
-  });
+      expect(socket.terminated).toBe(0);
+      expect(publisher.subscriberCount).toBe(1);
+      expect(socket.sent.map((value) => JSON.parse(value) as unknown)).toEqual([
+        { channel: 'program', channelSeq: 1, value: 'baseline' },
+        { channel: 'program', channelSeq: 2, value: 'latest' },
+      ]);
+    },
+  );
 
   it('removes only the failed subscriber and keeps another channel consumer live', async () => {
     const publisher = new FakePublisher();

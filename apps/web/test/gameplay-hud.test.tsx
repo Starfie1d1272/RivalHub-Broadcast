@@ -101,6 +101,28 @@ describe('GameplayHud shared renderer boundary', () => {
     expect(childrenOf(preview)).toHaveLength(9);
   });
 
+  it('never exposes unimplemented widgets even when a saved layout makes them visible', () => {
+    const preset = getBuiltinResolvedPreset();
+    const resolvedPreset = {
+      ...preset,
+      layout: {
+        ...preset.layout,
+        widgets: {
+          ...preset.layout.widgets,
+          objective: { ...preset.layout.widgets.objective, visible: true },
+          'round-result': { ...preset.layout.widgets['round-result'], visible: true },
+        },
+      },
+    };
+    for (const mode of ['layout', 'preview'] as const) {
+      const editor = HudEditorOverlay({ resolvedPreset, selectedWidgetId: null, mode });
+      const children = childrenOf(editor);
+      expect(children[7]).toBeNull();
+      expect(children[8]).toBeNull();
+      if (mode === 'preview') expect(children.every((child) => child === null)).toBe(true);
+    }
+  });
+
   it('keeps Radar rendered when Program truth is unavailable and hides Program widgets', () => {
     function RadarProbe({ radarSnapshot }: RadarHudWidgetRendererProps) {
       return <div data-radar-probe={radarSnapshot?.channel ?? 'missing'} />;

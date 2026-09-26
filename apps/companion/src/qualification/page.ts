@@ -1,8 +1,8 @@
 const PAGE_STYLE = `
 :root {
-  color: #edf2ee;
-  background: #101818;
-  font-family: "Avenir Next", "Segoe UI", system-ui, sans-serif;
+  color: #eceef2;
+  background: #17191e;
+  font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Segoe UI", sans-serif;
   font-synthesis: none;
   text-rendering: optimizeLegibility;
 }
@@ -10,18 +10,18 @@ const PAGE_STYLE = `
 body { margin: 0; min-width: 320px; }
 button { font: inherit; }
 .qualification-shell {
-  --ink: #edf2ee;
-  --muted: #9cafaa;
-  --faint: #667971;
-  --panel: #172321;
-  --panel-deep: #111b19;
-  --line: #30403b;
-  --lime: #c9ed82;
-  --amber: #f2bd70;
+  --ink: #eceef2;
+  --muted: #969da9;
+  --faint: #858d99;
+  --panel: #202329;
+  --panel-deep: #1b1e24;
+  --line: #333740;
+  --lime: #a6c5b6;
+  --amber: #e3b693;
   background:
     linear-gradient(90deg, rgb(201 237 130 / .035) 1px, transparent 1px) 0 0 / 3.5rem 3.5rem,
     radial-gradient(circle at 88% 0%, rgb(242 189 112 / .13), transparent 28rem),
-    #101818;
+    #17191e;
   color: var(--ink);
   display: grid;
   gap: 2rem;
@@ -92,6 +92,19 @@ button { font: inherit; }
   .qualification-flow, .qualification-grid { grid-template-columns: 1fr; }
   .qualification-header h1 { font-size: clamp(2.8rem, 17vw, 5rem); }
 }
+.qualification-nav { min-height:76px; display:flex; flex-wrap:wrap; align-items:center; gap:24px; padding:20px 32px; border-bottom:1px solid #333740; background:#1c1e24; font-size:14px; }
+.qualification-nav strong { margin-right:24px; }
+.qualification-nav a { color:#969da9; text-decoration:none; }
+.qualification-nav a[aria-current] { color:#e3b693; }
+.qualification-shell { background:#17191e; gap:24px; padding:36px 44px; max-width:1440px; margin:auto; min-height:calc(100vh - 76px); align-content:start; }
+.qualification-header { gap:12px; }
+.qualification-header h1 { font-family:inherit; font-size:28px; letter-spacing:-.03em; line-height:1.3; max-width:none; }
+.qualification-signal { max-width:78rem; }
+.qualification-header p { font-size:14px; }
+.qualification-step { min-height:9rem; border-radius:6px; }
+.qualification-panel { border-radius:8px; }
+.qualification-signal { border-radius:6px; background:#202329; }
+.qualification-actions button { border-radius:5px; font-size:13px; }
 @media (prefers-reduced-motion: reduce) { * { scroll-behavior: auto !important; } }
 `;
 
@@ -153,7 +166,7 @@ function escapeHtml(value) {
 async function call(path, method = 'GET', body) {
   const response = await fetch(path, requestOptions(method, body));
   const data = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(data.message || '本地制播服务请求失败');
+  if (!response.ok) throw new Error('本地制播服务请求失败，请检查服务后重试');
   return data;
 }
 
@@ -208,9 +221,9 @@ async function refresh() {
   if (finalizationComplete) return;
   try {
     render(await call('/qualification/status'));
-  } catch (error) {
+  } catch {
     stateText.textContent = '无法连接本地制播服务';
-    message.textContent = error.message;
+    message.textContent = '操作或连接未完成，请检查本地制播服务后重试。';
     signal.dataset.tone = 'neutral';
   }
 }
@@ -266,8 +279,8 @@ async function act(path, method = 'POST', body) {
       return;
     }
     await refresh();
-  } catch (error) {
-    message.textContent = error.message;
+  } catch {
+    message.textContent = '操作或连接未完成，请检查本地制播服务后重试。';
     await refresh();
   }
 }
@@ -297,18 +310,19 @@ export function qualificationPageHtml(
     <style>${PAGE_STYLE}</style>
   </head>
   <body>
+    <nav class="qualification-nav" aria-label="制作导航"><strong>RivalHub Broadcast</strong><a href="/operator">制作控制</a><a href="/operator/hud">HUD 编辑器</a><a href="/debug">运行诊断</a><a href="/qualification" aria-current="page">现场验收</a><a href="/program" target="_blank" rel="noreferrer">打开播出画面 ↗</a></nav>
     <main class="qualification-shell">
-      <header class="qualification-header">
-        <p class="qualification-kicker">RivalHub Broadcast / 现场验收</p>
-        <h1>让真实比赛<br />自己作证。</h1>
-        <p>${objectiveMode ? '这个页面用于目标时钟专项验收：八类场景由 PowerShell 标记明确圈定，页面只显示采集状态与场景窗口进度；最终语义与数值结论由离线证据验证器计算。' : '这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。'}</p>
-      </header>
-
       <section class="qualification-signal" aria-live="polite">
         <span class="qualification-signal__dot" aria-hidden="true"></span>
-        <span class="qualification-signal__label">本地制播服务状态</span>
+        <span class="qualification-signal__label">比赛数据</span>
         <strong class="qualification-signal__state" id="qualification-state">正在读取状态</strong>
       </section>
+
+      <header class="qualification-header">
+        <p class="qualification-kicker">RivalHub Broadcast / 现场验收</p>
+        <h1>现场验收</h1>
+        <p>${objectiveMode ? '这个页面用于目标时钟专项验收：八类场景由 PowerShell 标记明确圈定，页面只显示采集状态与场景窗口进度；最终语义与数值结论由离线证据验证器计算。' : '这个页面用于连续两场 Demo 的真实环境验收：确认第一场数据正常，退出 CS2 并等待比赛数据过期，再开始下一场，验证第二场从干净状态恢复。'}</p>
+      </header>
 
       <section class="qualification-flow" aria-label="现场验收流程">
         <article class="qualification-step" data-step="a"><span class="qualification-step__index">01 / 第一场</span><h2>播放 Demo A</h2><p>等页面显示正在接收比赛数据后，确认第一场正常。</p><span class="qualification-step__status" data-step-status>等待操作</span></article>
@@ -336,7 +350,7 @@ export function qualificationPageHtml(
         </article>
       </section>
 
-      <footer class="qualification-footer">本地现场验收页面 · 不进入正式节目或 OBS 输出 · 机器结果保存在 evidence/REPORT.md 与 qualification.json</footer>
+      <footer class="qualification-footer">本地现场验收页面 · 验收证据与播出画面独立 · 机器结果保存在 evidence/REPORT.md 与 qualification.json</footer>
     </main>
     <script>${PAGE_SCRIPT(controlToken, qualificationProfile)}</script>
   </body>

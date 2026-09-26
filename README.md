@@ -1,8 +1,8 @@
 # RivalHub Broadcast
 
-RivalHub Broadcast 是一套 **本地优先、开源、中文优先的 CS2 赛事制播工具**。它把赛事上下文、CS2 实时数据、HUD、雷达、场景、制作控制和观察辅助放在同一套可靠运行时上，同时保持正式节目与辅助信息严格隔离。
+RivalHub Broadcast 是一套 **本地优先、开源、中文优先的 CS2 赛事制播工具**。它把赛事上下文、CS2 实时数据、HUD、雷达、场景、制作控制和观察辅助放在同一套可靠运行时上，同时保持播出画面与辅助信息严格隔离。
 
-产品方向同时包含**独立模式**和 **RivalHub 连接模式**。RivalHub 是最完整的第一方赛事上下文提供方，但不应成为运行 HUD、雷达、正式节目或观察辅助的前置条件。当前实现优先服务自己的真实赛事，并逐步补齐独立模式所需的本地比赛配置、安装与使用体验。
+产品方向同时包含**独立模式**和 **RivalHub 连接模式**。RivalHub 是最完整的第一方赛事上下文提供方，但不应成为运行 HUD、雷达、播出画面或观察辅助的前置条件。当前实现优先服务自己的真实赛事，并逐步补齐独立模式所需的本地比赛配置、安装与使用体验。
 
 ## 产品形态
 
@@ -24,7 +24,7 @@ RivalHub Broadcast
 产品可以从四个层次理解：
 
 - **制播工作区（Broadcast Workspace）**：制作人员实际使用的统一工作环境；CS2 画面保持视觉主体，雷达、状态、控制和辅助信息围绕它组织。
-- **Lookahead 观察辅助**：利用较早的比赛时间轴，为延迟正式节目生成低干扰的确定性提示。
+- **Lookahead 观察辅助**：利用较早的比赛时间轴，为延迟播出画面生成低干扰的确定性提示。
 - **运行时基础**：负责数据源连续性、身份、状态、Projection、本地协议、replay 和有界投递。
 - **中文、开源、本地优先**：降低校园赛与社区赛的部署门槛，并让赛事方长期掌控自己的制播工具。
 
@@ -49,8 +49,8 @@ CS2 数据源 → RuntimeState
 
 - 官方赛事事实与本地实时观测分权；
 - Core 只有一份 `RuntimeState`，不同消费面通过独立 Projection 读取所需数据；
-- 正式节目只消费 Program-safe 数据；
-- Lookahead 的未来信息只进入观察辅助，不进入正式节目、OBS 正式输出或公开实时状态；
+- 播出画面只消费 Program-safe 数据；
+- Lookahead 的未来信息只进入观察辅助，不进入播出画面、OBS 正式输出或公开实时状态；
 - 高频 snapshot 采用 latest-wins 的有界投递，不积压旧状态；
 - 数据源重连、进程重启、地图执行和比赛会话使用不同的连续性标识；
 - Raw GSI 和第三方 CSTV parser 类型都被限制在各自 adapter 内；
@@ -63,7 +63,7 @@ CS2 数据源 → RuntimeState
 生产构建由 Companion 同时提供静态网页与本地 WebSocket：
 
 ```text
-/program   正式节目画面
+/program   播出画面
 /operator  制作控制
 /operator/hud  Gameplay HUD 控制台
 /debug     运行诊断
@@ -83,14 +83,14 @@ http://127.0.0.1:4173
 
 非本机回环访问必须显式开启 `LOCAL_WEB_LAN_MODE=1`，并通过 `LOCAL_WEB_ALLOWED_ORIGINS` 提供精确 Origin allowlist。
 
-正式节目使用 Local Protocol V1。当前 channel schema 版本以 [`packages/protocol/src/version.ts`](packages/protocol/src/version.ts) 为唯一代码来源；协议语义见 [`docs/protocol.md`](docs/protocol.md)。
+播出画面使用 Local Protocol V1。当前 channel schema 版本以 [`packages/protocol/src/version.ts`](packages/protocol/src/version.ts) 为唯一代码来源；协议语义见 [`docs/protocol.md`](docs/protocol.md)。
 
 ## 仓库结构
 
 ```text
 apps/
   companion/            本地服务、组合根、GSI/CSTV 接入、网页与协议承载
-  web/                  正式节目、制作控制、运行诊断
+  web/                  播出画面、制作控制、运行诊断
 
 packages/
   cs2-assets/           CS2 official presentation assets、semantic catalog 与 provenance

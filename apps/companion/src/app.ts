@@ -180,7 +180,10 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
     logger: options.logger ?? false,
     requestTimeout: GSI_REQUEST_TIMEOUT_MS,
   });
-  registerStaticHost(app, options.webRoot === undefined ? {} : { webRoot: options.webRoot });
+  registerStaticHost(app, {
+    ...(options.webRoot === undefined ? {} : { webRoot: options.webRoot }),
+    qualificationMode: options.qualificationMode ?? false,
+  });
   const hudConfigStore =
     options.hudConfigStore ??
     new HudConfigStore({

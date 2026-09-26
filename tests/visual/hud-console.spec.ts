@@ -361,40 +361,21 @@ test.describe('HUD 编辑器', () => {
     );
   });
 
-  test('覆盖品牌色十六进制输入、面板和圆角选项', async ({ page }) => {
+  test('只公开已有播出效果的配置能力', async ({ page }) => {
     await page.goto('/operator/hud');
-    await page.getByRole('button', { name: '外观', exact: true }).click();
-
-    await expect(page.getByLabel('品牌色十六进制值')).toHaveValue('#c8ef78');
-    await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
-    await page.getByRole('radio', { name: '轻量' }).check();
-    await page.getByRole('radio', { name: '圆润' }).check();
-    await expect(page.getByLabel('品牌色十六进制值')).toHaveValue('#ff00aa');
-    await expect(page.locator('.hud-console')).toHaveScreenshot(
-      'hud-console-theme.png',
-      HUD_SCREENSHOT_OPTIONS,
-    );
-  });
-
-  test('非法品牌色在本地标记并保留上一次有效预览', async ({ page }) => {
-    await page.goto('/operator/hud');
-    await page.getByRole('button', { name: '外观', exact: true }).click();
-
-    const colorInput = page.getByLabel('品牌色十六进制值');
-    await colorInput.fill('#ff00aa');
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
-
-    await colorInput.fill('not-a-color');
-    await expect(colorInput).toHaveAttribute('aria-invalid', 'true');
-    await expect(page.getByRole('alert')).toContainText('请输入 6 位十六进制颜色');
-    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
+    await expect(page.getByRole('button', { name: '外观', exact: true })).toHaveCount(0);
+    await expect(page.getByLabel('品牌色十六进制值')).toHaveCount(0);
+    await expect(page.getByLabel('外观', { exact: true })).toHaveCount(0);
+    await page.getByRole('button', { name: '布局', exact: true }).click();
+    await expect(page.getByRole('button', { name: '选择目标状态' })).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '选择回合结果' })).toHaveCount(0);
+    await expect(
+      page.locator('[data-hud-editor-overlay] [data-hud-widget="objective"]'),
+    ).toHaveCount(0);
+    await expect(
+      page.locator('[data-hud-editor-overlay] [data-hud-widget="round-result"]'),
+    ).toHaveCount(0);
+    await expect(page.getByRole('button', { name: '选择雷达' })).toBeVisible();
   });
 
   test('所有资源名称都使用本地校验并阻止保存', async ({ page }) => {
@@ -407,69 +388,24 @@ test.describe('HUD 编辑器', () => {
     await expect(page.getByRole('button', { name: '布局', exact: true })).toBeVisible();
   });
 
-  test('跨工作区持续组合未保存的布局与外观草稿', async ({ page }) => {
+  test('预设与布局切换保留未保存布局，名称无效时仍可预览', async ({ page }) => {
     await page.goto('/operator/hud');
     await page.getByRole('button', { name: '布局', exact: true }).click();
     await page.getByRole('button', { name: '选择顶部比分条' }).click();
     await page.getByLabel('X 偏移').fill('120');
-    const topScoreBar = page.locator(
-      '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
-    );
-    await expect(topScoreBar).toHaveCSS('left', '840px');
-
-    await page.getByRole('button', { name: '外观', exact: true }).click();
-    await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
-    const previewTopScoreBar = page.locator(
-      '[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]',
-    );
-    await expect(previewTopScoreBar).toHaveCSS('left', '840px');
-
+    await page.getByLabel('名称').fill('');
+    await expect(page.getByRole('alert')).toContainText('名称不能为空');
+    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
     await page.getByRole('button', { name: '预设', exact: true }).click();
     await expect(
       page.locator('[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]'),
     ).toHaveCSS('left', '840px');
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
-  });
-
-  test('名称无效只阻止保存，不冻结其它有效预览修改', async ({ page }) => {
-    await page.goto('/operator/hud');
-    await page.getByRole('button', { name: '外观', exact: true }).click();
-    await page.getByLabel('品牌色十六进制值').fill('#ff00aa');
-    await page.getByLabel('名称').fill('');
-    await expect(page.getByRole('alert')).toContainText('名称不能为空');
-    await expect(page.getByRole('button', { name: '另存为' })).toBeDisabled();
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
-
     await page.getByRole('button', { name: '布局', exact: true }).click();
-    await page.getByRole('button', { name: '选择顶部比分条' }).click();
-    await page.getByLabel('X 偏移').fill('140');
-    const topScoreBar = page.locator(
-      '[data-hud-editor-overlay="true"] [data-hud-widget="top-score-bar"]',
-    );
-    await expect(topScoreBar).toHaveCSS('left', '860px');
-
-    await page.getByRole('button', { name: '外观', exact: true }).click();
     await expect(page.getByLabel('名称')).toHaveValue('');
-    await expect(page.locator('[data-gameplay-hud="true"]')).toHaveAttribute(
-      'style',
-      /--rh-hud-brand: #ff00aa/,
-    );
-    await expect(
-      page.locator('[data-gameplay-hud="true"] [data-hud-widget="top-score-bar"]'),
-    ).toHaveCSS('left', '860px');
+    await expect(page.getByLabel('X 偏移')).toHaveValue('120');
   });
 
-  test('输出画面路由不包含编辑辅助层', async ({ page }) => {
+  test('播出画面路由不包含编辑辅助层', async ({ page }) => {
     await page.goto('/__visual/program/live-canonical');
     await expect(page.locator('[data-hud-editor-overlay="true"]')).toHaveCount(0);
     await expect(page.locator('[data-gameplay-hud="true"]')).toHaveCount(1);

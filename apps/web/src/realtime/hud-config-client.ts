@@ -77,13 +77,13 @@ function asRecord(value: unknown): Record<string, unknown> {
 function parseOnAirResponse(value: unknown): HudConfigResponse {
   const record = asRecord(value);
   if (typeof record.etag !== 'string' || typeof record.activeRevision !== 'string') {
-    throw new Error('正式节目配置响应缺少版本信息');
+    throw new Error('播出画面配置响应缺少版本信息');
   }
   let resolved: HudResolvedPreset;
   try {
     resolved = parseHudResolvedPreset(record.resolved);
   } catch {
-    throw new Error('正式节目配置响应无效');
+    throw new Error('播出画面配置响应无效');
   }
   return { resolved, etag: record.etag, activeRevision: record.activeRevision };
 }
@@ -208,7 +208,7 @@ export class HudConfigClient {
       this.update({
         status: 'error',
         error:
-          error instanceof Error ? error.message : '正式节目配置暂不可用，继续使用最近有效版本',
+          error instanceof Error ? error.message : '播出画面配置暂不可用，继续使用最近有效版本',
       });
     } finally {
       this.requestInFlight = false;
