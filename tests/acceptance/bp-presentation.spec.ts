@@ -43,13 +43,19 @@ for (const key of ['semifinalA', 'final'] as const) {
     try {
       await page.goto('/operator/bp');
       await expect(page.getByRole('button', { name: '播放 BP', exact: true })).toBeDisabled();
-      await page.getByText('导入比赛清单', { exact: true }).click();
-      await page.getByLabel('比赛清单 JSON').setInputFiles({
-        name: 'rivals.json',
-        mimeType: 'application/json',
-        buffer: Buffer.from(JSON.stringify(bpManifestFixture(key))),
-      });
-      await page.getByRole('button', { name: '导入并切换比赛', exact: true }).click();
+      if (key === 'semifinalA') {
+        await page
+          .getByRole('button', { name: "半决赛 BO3（猛男队 vs D'avenir）", exact: true })
+          .click();
+      } else {
+        await page.getByText('导入比赛清单', { exact: true }).click();
+        await page.getByLabel('比赛清单 JSON').setInputFiles({
+          name: 'rivals.json',
+          mimeType: 'application/json',
+          buffer: Buffer.from(JSON.stringify(bpManifestFixture(key))),
+        });
+        await page.getByRole('button', { name: '导入并切换比赛', exact: true }).click();
+      }
       await expect(page.getByText('比赛清单已导入，请核对两队与 BP。')).toBeVisible();
       const program = await context.newPage();
       await program.goto('/program/bp');

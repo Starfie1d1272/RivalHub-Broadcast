@@ -1,15 +1,16 @@
 import { useState } from 'react';
+import { bpManifestFixture } from './manifest-fixtures.js';
+
 export function BpImport({ revision }: { readonly revision: string | undefined }) {
   const [file, setFile] = useState<File | null>(null);
   const [busy, setBusy] = useState(false);
   const [message, setMessage] = useState('');
-  async function submit() {
-    if (!file || !revision || busy) return;
+
+  async function sendManifest(manifest: unknown) {
+    if (!revision || busy) return;
     setBusy(true);
     setMessage('');
     try {
-      if (file.size > 240_000) throw new Error('清单文件过大，请使用比赛清单 JSON。');
-      const manifest: unknown = JSON.parse(await file.text());
       const response = await fetch('/operator/bp-manifest', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -40,26 +41,60 @@ export function BpImport({ revision }: { readonly revision: string | undefined }
       setBusy(false);
     }
   }
+
+  async function submitFile() {
+    if (!file) return;
+    if (file.size > 240_000) {
+      setMessage('清单文件过大，请使用比赛清单 JSON。');
+      return;
+    }
+    try {
+      const parsed: unknown = JSON.parse(await file.text());
+      await sendManifest(parsed);
+    } catch {
+      setMessage('文件不是有效 JSON。');
+    }
+  }
+
   return (
-    <details className="bp-import">
-      <summary>导入比赛清单</summary>
-      <p>
-        选择 RivalHub Broadcast Manifest JSON。导入会切换当前比赛并收起
-        BP；无效清单会清空旧比赛。服务重启后请重新导入并核对。
-      </p>
-      <label>
-        比赛清单 JSON{' '}
-        <input
-          type="file"
-          accept="application/json,.json"
-          disabled={busy}
-          onChange={(event) => setFile(event.target.files?.[0] ?? null)}
-        />
-      </label>
-      <button disabled={!file || !revision || busy} onClick={() => void submit()}>
-        {busy ? '正在导入…' : '导入并切换比赛'}
-      </button>
+    <div className="bp-import-section">
+      <div className="bp-preset-bar">
+        <span>快速载入内置真实 BP：</span>
+        <button
+          type="button"
+          disabled={!revision || busy}
+          onClick={() => void sendManifest(bpManifestFixture('semifinalA'))}
+        >
+          半决赛 BO3（猛男队 vs D'avenir）
+        </button>
+        <button
+          type="button"
+          disabled={!revision || busy}
+          onClick={() => void sendManifest(bpManifestFixture('final'))}
+        >
+          总决赛 BO5（Plasma vs 車一进一）
+        </button>
+      </div>
+      <details className="bp-import">
+        <summary>导入比赛清单</summary>
+        <p>
+          选择 RivalHub Broadcast Manifest JSON。导入会切换当前比赛并收起
+          BP；无效清单会清空旧比赛。服务重启后请重新导入并核对。
+        </p>
+        <label>
+          比赛清单 JSON{' '}
+          <input
+            type="file"
+            accept="application/json,.json"
+            disabled={busy}
+            onChange={(event) => setFile(event.target.files?.[0] ?? null)}
+          />
+        </label>
+        <button disabled={!file || !revision || busy} onClick={() => void submitFile()}>
+          {busy ? '正在导入…' : '导入并切换比赛'}
+        </button>
+      </details>
       <p role="status">{message}</p>
-    </details>
+    </div>
   );
 }
