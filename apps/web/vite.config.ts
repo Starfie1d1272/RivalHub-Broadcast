@@ -91,6 +91,7 @@ function replayPrefixDevelopmentApi() {
             const message = error instanceof Error ? error.message : 'Replay rebuild failed';
             throw new Error(
               `current-worktree testkit source · capture sanitizer v${String(sanitizerVersion)} · ${message}`,
+              { cause: error },
             );
           }
           response.statusCode = 200;
