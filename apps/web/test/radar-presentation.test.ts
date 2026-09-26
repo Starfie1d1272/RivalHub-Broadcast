@@ -288,7 +288,7 @@ describe('Radar renderer local lifecycle', () => {
     // Even if later telemetry position/velocity is noisy, a settled smoke remains
     // anchored to the first authoritative effect position for this lifecycle.
     const noisy = next(ownerDrift);
-    noisy.payload.grenades[0]!.position!.x += 400;
+    noisy.payload.grenades[0]!.position = { x: 1_000_000, y: 1_000_000, z: 75.9 };
     noisy.payload.grenades[0]!.velocity = { x: 400, y: 0, z: 0 };
     noisy.payload.grenades[0]!.lifetimeSeconds = 19.61;
     noisy.payload.grenades[0]!.effectTimeSeconds = 17.156;
