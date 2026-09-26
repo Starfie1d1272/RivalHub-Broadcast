@@ -545,7 +545,10 @@ export class RadarPresentation {
             phase,
             phaseStartedAt: old.phase === phase ? old.phaseStartedAt : now,
             stationarySampleCount: 0,
-            positionAvailable: false,
+            // An established smoke is stationary presentation truth. Real captures can
+            // omit one grenade position sample; retain the last trusted spatial anchor
+            // instead of blinking the mature effect off for that frame.
+            positionAvailable: phase === 'effect' ? old.positionAvailable : false,
             trail: phase === 'projectile' ? old.trail : [],
           });
         }
