@@ -19,7 +19,8 @@ function displayMoney(value: number | null): string {
 }
 
 function displaySpent(value: number | null): string {
-  return value === null ? '—' : '-
+  return value === null ? '—' : '-\\u0024' + Math.round(value).toLocaleString('en-US');
+}
 
 type PresencePhase = 'enter' | 'steady' | 'exit';
 
