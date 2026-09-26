@@ -35,7 +35,9 @@ function usePresenceItems<T extends { readonly key: string }>(
   exitMs = 110,
 ): readonly PresenceItem<T>[] {
   const itemsRef = useRef(items);
-  itemsRef.current = items;
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
   const revisionRef = useRef(presentationRevision);
   const [rendered, setRendered] = useState<readonly PresenceItem<T>[]>(() =>
     items.map((item) => ({ ...item, motionPhase: 'steady' as const })),
