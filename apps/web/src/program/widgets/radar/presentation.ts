@@ -102,23 +102,6 @@ export function smokeRemaining(effectTimeSeconds: number | null): number | null 
       );
 }
 
-/**
- * Smoke effect maturity is source-owned whenever GSI effecttime exists.
- * Renderer-local phase time is only a fallback for incomplete telemetry.
- * This prevents seek, dropped samples, owner drift, or motion resets from
- * replaying the entrance of an already-mature smoke.
- */
-export function smokeEnterProgress(
-  effectTimeSeconds: number | null,
-  phaseStartedAt: number,
-  now: number,
-): number {
-  const elapsedMs =
-    effectTimeSeconds !== null && effectTimeSeconds > 0
-      ? effectTimeSeconds * 1_000
-      : Math.max(0, now - phaseStartedAt);
-  return Math.min(1, Math.max(0, elapsedMs / RADAR_PRESENTATION.smokeEnterMs));
-}
 export function radarBoundary(snapshot: RadarSnapshot): string {
   const c = snapshot.cursor;
   return JSON.stringify([
@@ -656,9 +639,13 @@ export class RadarPresentation {
       }
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
-      const restoredInfernoEnterMs =
-        restoringPresentationHistory && phase === 'effect' && source.kind === 'inferno'
-          ? RADAR_PRESENTATION.infernoEnterMs
+      const restoredEffectEnterMs =
+        restoringPresentationHistory && phase === 'effect'
+          ? source.kind === 'smoke'
+            ? RADAR_PRESENTATION.smokeEnterMs
+            : source.kind === 'inferno'
+              ? RADAR_PRESENTATION.infernoEnterMs
+              : 0
           : 0;
       this.grenades.set(id, {
         ...(source.kind === 'smoke' && phase === 'effect'
@@ -670,8 +657,8 @@ export class RadarPresentation {
         side,
         phase,
         phaseStartedAt:
-          restoredInfernoEnterMs > 0
-            ? now - restoredInfernoEnterMs
+          restoredEffectEnterMs > 0
+            ? now - restoredEffectEnterMs
             : phaseContinuous
               ? old.phaseStartedAt
               : now,
