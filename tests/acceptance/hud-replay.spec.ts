@@ -164,7 +164,7 @@ test.describe('HUD 编辑器 Replay acceptance', () => {
     await page.goto('/operator/hud');
     await page.getByLabel('预览来源').selectOption('replay');
 
-    const replay = page.getByRole('region', { name: 'Replay 控制' });
+    const replay = page.getByRole('region', { name: '重放控制' });
     await expect(replay).toHaveAttribute('data-replay-cursor', '587');
     await expect(page.locator('body')).toContainText('FURIA');
     await expect(page.locator('body')).toContainText('G2.Esports');
@@ -187,7 +187,7 @@ test.describe('HUD 编辑器 Replay acceptance', () => {
     await page.goto('/operator/hud');
     await pauseReplayClock(page);
     await page.getByLabel('预览来源').selectOption('replay');
-    const replay = page.getByRole('region', { name: 'Replay 控制' });
+    const replay = page.getByRole('region', { name: '重放控制' });
     await expect(replay).toHaveAttribute('data-replay-cursor', '587');
 
     const eventsResponse = await page.request.get('/fixtures/ancient-round-03/replay/events.jsonl');
@@ -250,7 +250,7 @@ test.describe('HUD 编辑器 Replay acceptance', () => {
     await page.goto('/operator/hud');
     await pauseReplayClock(page);
     await page.getByLabel('预览来源').selectOption('replay');
-    const replay = page.getByRole('region', { name: 'Replay 控制' });
+    const replay = page.getByRole('region', { name: '重放控制' });
     const radar = page.locator('[data-hud-widget="radar"] canvas.radar');
     const { events, frames } = await loadAncientReplay(page);
 
@@ -346,7 +346,7 @@ test.describe('HUD 编辑器 Replay acceptance', () => {
     await page.goto('/operator/hud');
     await pauseReplayClock(page);
     await page.getByLabel('预览来源').selectOption('replay');
-    const replay = page.getByRole('region', { name: 'Replay 控制' });
+    const replay = page.getByRole('region', { name: '重放控制' });
     const { events, frames } = await loadAncientReplay(page);
     const planting = eventAt(events, 'bomb-state', 1016, (event) => event.detail.to === 'planting');
     const planted = eventAt(events, 'bomb-state', 1029, (event) => event.detail.to === 'planted');
@@ -412,7 +412,7 @@ test.describe('HUD 编辑器 Replay acceptance', () => {
     await page.goto('/operator/hud', { waitUntil: 'domcontentloaded' });
     await pauseReplayClock(page);
     await page.getByLabel('预览来源').selectOption('replay');
-    const replay = page.getByRole('region', { name: 'Replay 控制' });
+    const replay = page.getByRole('region', { name: '重放控制' });
     const { events, frames } = await loadAncientReplay(page);
     const planted = eventAt(events, 'bomb-state', 1029, (event) => event.detail.to === 'planted');
     const switchEvent = eventAt(events, 'observer-target-switch', 1040);

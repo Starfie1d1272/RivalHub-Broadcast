@@ -31,7 +31,7 @@ export interface LocalWebSocketLike extends Pick<
   WsSocket,
   'bufferedAmount' | 'readyState' | 'protocol'
 > {
-  send(data: string, callback: (error?: Error) => void): void;
+  send(data: string, callback: (error?: Error | null) => void): void;
   close(code?: number, reason?: string): void;
   terminate(): void;
   ping(): void;
@@ -329,10 +329,10 @@ export class LocalWebSocketTransport {
 
     await new Promise<void>((resolve, reject) => {
       let settled = false;
-      const settle = (error?: Error): void => {
+      const settle = (error?: Error | null): void => {
         if (settled) return;
         settled = true;
-        if (error === undefined) resolve();
+        if (error === undefined || error === null) resolve();
         else reject(error);
       };
       try {

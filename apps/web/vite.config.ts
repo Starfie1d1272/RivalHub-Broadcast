@@ -181,6 +181,9 @@ export default defineConfig({
   },
   server: {
     proxy: {
+      '/qualification': 'http://127.0.0.1:3000',
+      '/operator/hud-config': 'http://127.0.0.1:3000',
+      '/operator/series': 'http://127.0.0.1:3000',
       '/debug/runtime': 'http://127.0.0.1:3000',
       '/local/v1': {
         target: 'http://127.0.0.1:3000',

@@ -1,13 +1,14 @@
+import { themeStyle } from './GameplayHud';
 import { Fragment, type PointerEvent } from 'react';
 
 import {
   HUD_WIDGET_REGISTRY,
+  getBuiltinResolvedPreset,
   placementToBox,
   type HudResolvedPreset,
   type HudWidgetId,
 } from '@rivalhub-broadcast/hud-config';
 
-import { themeStyle } from './GameplayHud';
 import {
   getHudRendererEntry,
   HUD_RENDERER_REGISTRY,
@@ -38,42 +39,24 @@ export function HudEditorOverlay({
 }: HudEditorOverlayProps) {
   return (
     <div
+      style={themeStyle(getBuiltinResolvedPreset().theme)}
       aria-label="HUD 编辑辅助层"
       className="hud-editor-overlay"
       data-hud-editor-overlay="true"
-      style={themeStyle(resolvedPreset.theme)}
     >
       {HUD_WIDGET_REGISTRY.map((descriptor) => {
         const placement = resolvedPreset.layout.widgets[descriptor.id];
         if (placement === undefined || !placement.visible) return null;
         const rendererEntry = getHudRendererEntry(descriptor.id, rendererRegistry);
-        const isPlaceholder = rendererEntry.renderer === null;
-        if (mode === 'preview' && !isPlaceholder) return null;
+        if (rendererEntry.renderer === null || mode === 'preview') return null;
         const box = placementToBox(descriptor.id, placement);
-        if (mode === 'preview') {
-          return (
-            <div
-              className="hud-editor-overlay__placeholder"
-              data-hud-widget={descriptor.id}
-              key={descriptor.id}
-              style={{
-                height: `${box.height}px`,
-                left: `${box.left}px`,
-                top: `${box.top}px`,
-                width: `${box.width}px`,
-              }}
-            >
-              <span className="hud-editor-overlay__widget-label">{descriptor.label}</span>
-            </div>
-          );
-        }
         const selected = selectedWidgetId === descriptor.id;
         return (
           <Fragment key={descriptor.id}>
             <button
               aria-label={`${descriptor.label}，可拖动`}
               aria-pressed={selected}
-              className={`hud-editor-overlay__widget${selected ? ' is-selected' : ''}${isPlaceholder ? ' is-placeholder' : ' is-chrome'}`}
+              className={`hud-editor-overlay__widget${selected ? ' is-selected' : ''} is-chrome`}
               data-hud-widget={descriptor.id}
               disabled={!interactive}
               onPointerDown={
@@ -86,11 +69,7 @@ export function HudEditorOverlay({
                 width: `${box.width}px`,
               }}
               type="button"
-            >
-              {isPlaceholder ? (
-                <span className="hud-editor-overlay__widget-label">{descriptor.label}</span>
-              ) : null}
-            </button>
+            ></button>
             {descriptor.id === 'radar' && selected ? (
               <button
                 aria-label="调整雷达大小"

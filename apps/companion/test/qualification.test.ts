@@ -88,10 +88,12 @@ describe('qualification-only Companion surface', () => {
     temporaryDirectory = undefined;
   });
 
-  it('is absent unless qualification mode is explicitly enabled', async () => {
+  it('keeps qualification controls absent unless qualification mode is explicitly enabled', async () => {
     app = buildApp({ gsiToken: GSI_TOKEN, recorder: new FakeRecorder() });
 
-    expect((await app.inject({ method: 'GET', url: '/qualification' })).statusCode).toBe(404);
+    expect((await app.inject({ method: 'GET', url: '/qualification/status' })).statusCode).toBe(
+      404,
+    );
     expect(
       (await app.inject({ method: 'POST', url: '/qualification/next-map-execution' })).statusCode,
     ).toBe(404);

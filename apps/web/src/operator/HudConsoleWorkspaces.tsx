@@ -2,7 +2,7 @@ import {
   HUD_ANCHORS,
   HUD_GRID_SIZE,
   HUD_WIDGET_LABELS,
-  HUD_WIDGET_IDS,
+  HUD_WIDGET_REGISTRY,
   type HudConfigDocument,
   type HudLayout,
   type HudPreset,
@@ -26,9 +26,6 @@ const ANCHOR_LABELS: Record<(typeof HUD_ANCHORS)[number], string> = {
   'bottom-center': '下中',
   'bottom-right': '右下',
 };
-
-const PANEL_LABELS = { solid: '实心', standard: '标准', light: '轻量' } as const;
-const CORNER_LABELS = { square: '方正', soft: '轻微圆角', rounded: '圆润' } as const;
 
 export interface HudConsoleWorkspaceProps {
   readonly workspace: HudWorkspace;
@@ -101,10 +98,8 @@ export function HudConsoleWorkspaces({
   selectedThemeId,
   presetDraft,
   layoutDraft,
-  themeDraft,
   presetDirty,
   layoutDirty,
-  themeDirty,
   presetNameError,
   layoutNameError,
   themeNameError,
@@ -120,7 +115,6 @@ export function HudConsoleWorkspaces({
   onUpdatePresetReference,
   onPresetDraftChange,
   onLayoutDraftChange,
-  onThemeDraftChange,
   onSelectWidget,
   onUpdateSelectedPlacement,
   onShowGridChange,
@@ -189,7 +183,7 @@ export function HudConsoleWorkspaces({
         <div className="hud-console__workspace-heading">
           <div>
             <span className="hud-console__kicker">预设</span>
-            <h2>组合布局与外观</h2>
+            <h2>管理播出预设</h2>
           </div>
         </div>
         <div className="hud-console__preset-status" aria-label="HUD 预设状态">
@@ -247,19 +241,6 @@ export function HudConsoleWorkspaces({
               onChange={(event) => onUpdatePresetReference('layout', event.target.value)}
             >
               {resourceList(configDocument, 'layout').map((resource) => (
-                <option key={resource.id} value={resource.id}>
-                  {resource.name}
-                </option>
-              ))}
-            </select>
-          </label>
-          <label className="hud-console__field">
-            外观
-            <select
-              value={presetDraft.themeId}
-              onChange={(event) => onUpdatePresetReference('theme', event.target.value)}
-            >
-              {resourceList(configDocument, 'theme').map((resource) => (
                 <option key={resource.id} value={resource.id}>
                   {resource.name}
                 </option>
@@ -341,7 +322,9 @@ export function HudConsoleWorkspaces({
           </p>
         ) : null}
         <div className="hud-console__widget-list" aria-label="可编辑组件">
-          {HUD_WIDGET_IDS.map((id) => (
+          {HUD_WIDGET_REGISTRY.filter(
+            (widget) => widget.rendererAvailability === 'implemented',
+          ).map(({ id }) => (
             <button
               aria-label={`选择${widgetLabel(id)}`}
               className={selectedWidgetId === id ? 'is-selected' : undefined}
@@ -487,113 +470,5 @@ export function HudConsoleWorkspaces({
     );
   }
 
-  return (
-    <section className="hud-console__workspace" aria-label="HUD 外观编辑">
-      <div className="hud-console__workspace-heading">
-        <div>
-          <span className="hud-console__kicker">外观</span>
-          <h2>品牌与面板</h2>
-        </div>
-        <span className="hud-console__workspace-state">
-          {themeDirty ? '有未保存更改' : '状态色由系统管理'}
-        </span>
-      </div>
-      <label className="hud-console__field">
-        外观
-        <select
-          value={selectedThemeId}
-          onChange={(event) => onSelectResource('theme', event.target.value)}
-        >
-          {resourceList(configDocument, 'theme').map((resource) => (
-            <option key={resource.id} value={resource.id}>
-              {resource.name}
-              {isBuiltin(resource.id) ? ' · 内置只读' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label className="hud-console__field">
-        名称
-        <input
-          aria-invalid={themeNameError !== null}
-          disabled={!editorReady}
-          value={themeDraft.name}
-          onChange={(event) => onThemeDraftChange({ ...themeDraft, name: event.target.value })}
-        />
-      </label>
-      {themeNameError !== null ? (
-        <p className="hud-console__field-error" role="alert">
-          {themeNameError}
-        </p>
-      ) : null}
-      <div className="hud-console__theme-control">
-        <span>品牌色</span>
-        <div className="hud-console__color-row">
-          <input
-            aria-label="品牌色选择器"
-            onChange={(event) =>
-              onThemeDraftChange({ ...themeDraft, brandColor: event.target.value })
-            }
-            type="color"
-            value={
-              /^#[0-9a-fA-F]{6}$/.test(themeDraft.brandColor) ? themeDraft.brandColor : '#c8ef78'
-            }
-          />
-          <input
-            aria-label="品牌色十六进制值"
-            aria-invalid={themeDraftInvalid}
-            className={themeDraftInvalid ? 'is-invalid' : undefined}
-            onChange={(event) =>
-              onThemeDraftChange({ ...themeDraft, brandColor: event.target.value })
-            }
-            placeholder="#RRGGBB"
-            spellCheck={false}
-            type="text"
-            value={themeDraft.brandColor}
-          />
-        </div>
-        {themeDraftInvalid ? (
-          <p className="hud-console__field-error" role="alert">
-            请输入 6 位十六进制颜色，例如 #C8EF78。
-          </p>
-        ) : null}
-      </div>
-      <fieldset className="hud-console__choice-group">
-        <legend>面板样式</legend>
-        {Object.entries(PANEL_LABELS).map(([value, label]) => (
-          <label key={value}>
-            <input
-              checked={themeDraft.panelStyle === value}
-              onChange={() =>
-                onThemeDraftChange({ ...themeDraft, panelStyle: value as HudTheme['panelStyle'] })
-              }
-              name="panel-style"
-              type="radio"
-              value={value}
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
-      <fieldset className="hud-console__choice-group">
-        <legend>圆角风格</legend>
-        {Object.entries(CORNER_LABELS).map(([value, label]) => (
-          <label key={value}>
-            <input
-              checked={themeDraft.cornerStyle === value}
-              onChange={() =>
-                onThemeDraftChange({ ...themeDraft, cornerStyle: value as HudTheme['cornerStyle'] })
-              }
-              name="corner-style"
-              type="radio"
-              value={value}
-            />
-            {label}
-          </label>
-        ))}
-      </fieldset>
-      {renderResourceActions('theme', themeDirty, selectedThemeId)}
-      <p className="hud-console__hint">队伍色和比赛状态色由系统统一管理。</p>
-    </section>
-  );
+  return null;
 }

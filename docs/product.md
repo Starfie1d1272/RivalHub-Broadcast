@@ -18,7 +18,7 @@ RivalHub 连接模式
         └──→ Broadcast Runtime
 ```
 
-RivalHub 是第一方、信息最完整的赛事上下文提供方，但不是运行 HUD、雷达、正式节目或观察辅助的前置条件。两种运行方式共享同一套 Runtime 和领域模型，只在赛事上下文来源上不同。
+RivalHub 是第一方、信息最完整的赛事上下文提供方，但不是运行 HUD、雷达、播出画面或观察辅助的前置条件。两种运行方式共享同一套 Runtime 和领域模型，只在赛事上下文来源上不同。
 
 “独立模式”是产品方向，不等于当前已经补齐完整的本地比赛配置、安装引导和全部节目流程。当前能力完成度以代码和对应 milestone 验收为准。校园赛、社区赛和小型赛事是重要适用场景，不是第三种运行模式。
 
@@ -28,7 +28,7 @@ RivalHub 是第一方、信息最完整的赛事上下文提供方，但不是�
 
 1. **本地优先。** 正式比赛的 HUD、雷达和基础节目流程不依赖持续公网连接。
 2. **赛事事实只维护一次。** 连接 RivalHub 时，不在本地重新建立第二套 Team / Player / Match / BP 数据库。
-3. **正式节目与辅助信息硬隔离。** Lookahead 未来信息永不进入正式 Program、OBS 正式输出或公开实时状态。
+3. **播出画面与辅助信息硬隔离。** Lookahead 未来信息永不进入正式 Program、OBS 正式输出或公开实时状态。
 4. **同一套运行时支持完整节目。** Gameplay HUD 是核心场景，但不是产品全部。
 5. **制作人员优先于架构术语。** 用户界面说明“发生了什么、该做什么”，不暴露内部枚举和实现名。
 6. **可靠性优先于炫技。** 高频状态不积压，断流和错场默认安全降级。
@@ -38,9 +38,9 @@ RivalHub 是第一方、信息最完整的赛事上下文提供方，但不是�
 
 传统 HUD 工作流通常把游戏、网页控制、雷达、诊断和辅助信息分散在多个窗口。RivalHub Broadcast 的长期产品形态是一套**私有制播工作区（Broadcast Workspace）**：
 
-- CS2 正式节目画面保持最大视觉权重；
+- CS2 播出画面保持最大视觉权重；
 - 更易读的雷达、比赛状态和必要控制围绕主画面组织；
-- 观察辅助信息放在私有区域，不污染正式节目；
+- 观察辅助信息放在私有区域，不污染播出画面；
 - 制作控制和诊断在需要时可见，不长期占据注意力。
 
 制播工作区是产品体验范式，不等于固定布局，也不要求某一种桌面框架。浏览器、OBS Browser Source、透明窗口或桌面容器只是不同 Host。
@@ -58,9 +58,9 @@ RivalHub 是第一方、信息最完整的赛事上下文提供方，但不是�
 
 `/operator` 表示制作控制职责，不意味着产品必须存在另一名独立“导播用户”。
 
-## 5. 正式节目制播
+## 5. 播出画面制播
 
-正式节目由 Program-safe 数据驱动，至少覆盖：
+播出画面由 Program-safe 数据驱动，至少覆盖：
 
 ```text
 Waiting / Matchup
@@ -99,7 +99,7 @@ ProgramProjection 负责完成领域解释；React 组件只负责展示。例�
 
 系列赛比分、地图结果和当前地图绑定由 Broadcast 本地 `SeriesProgress` 统一维护。地图结束后本地立即推进，不等待 RivalHub 回写；进程重启使用有界 checkpoint 恢复已冻结事实。实际服务器地图与赛前计划不一致时，比赛 telemetry 仍可继续显示，但 Series 暂停绑定并等待 Operator 明确确认。Round History 恢复不完整时显示 `partial`，不由 Renderer 补猜缺失回合。
 
-Default V1 的中央比分条使用固定 envelope 和稳定的 score / center / objective / alive 区域；状态变化优先在既有区域内替换内容，不推动其它 HUD 组件。正常阶段显示回合与时钟；planting 使用中性 C4 与水平 action progress；planted 后才进入 bomb/danger presentation，引信与 defuse action 分别表达独立事实。默认正式节目隐藏精确 objective 秒数；进度分母证据缺失时只显示状态与不可定量的轨道，不补猜时长。存活人数只在完整 current 5+5 证据且出现死亡后显示，左右沿用 entrant A/B。动画只消费已有 semantic state / progress，不拥有 gameplay timer；urgency 局部化，并支持 reduced motion。具体长期约束见 ADR-0007。
+Default V1 的中央比分条使用固定 envelope 和稳定的 score / center / objective / alive 区域；状态变化优先在既有区域内替换内容，不推动其它 HUD 组件。正常阶段显示回合与时钟；planting 使用中性 C4 与水平 action progress；planted 后才进入 bomb/danger presentation，引信与 defuse action 分别表达独立事实。默认播出画面隐藏精确 objective 秒数；进度分母证据缺失时只显示状态与不可定量的轨道，不补猜时长。存活人数只在完整 current 5+5 证据且出现死亡后显示，左右沿用 entrant A/B。动画只消费已有 semantic state / progress，不拥有 gameplay timer；urgency 局部化，并支持 reduced motion。具体长期约束见 ADR-0007。
 
 当前观察选手卡使用 `observedPlayerSourceId` 精确匹配 current player，展示身份、K/A/D、`completedAdr`、生命、护甲和真正 active item；阵亡时只保留身份和稳定统计。Default V1 使用固定 360×176 envelope 与固定 media slot，头像存在、缺失或加载失败都不改变外框和字段位置。弹药单位来自官方 item metadata；magazine reserve 使用官方 magazine HUD asset + 数量，不换算为旧式备用子弹。Program 与 HUD 编辑器共享 renderer。
 
@@ -111,24 +111,15 @@ HUD 编辑器的 Replay mode 通过 #76 的确定性 controller 浏览固定的�
 
 ### 5.1.1 Gameplay HUD 自定义
 
-Gameplay HUD 的第一版自定义面向现场制播人员，固定分为三层：
+Gameplay HUD 的普通用户界面提供“HUD 预设”和“HUD 布局”两个工作区。只展示真实 renderer 已实现的组件、显隐、锚点与偏移、Radar 正方形尺寸及完整地图 / 自动聚焦视野；网格、中心线、安全区与吸附属于编辑辅助。standalone objective / round-result 不进入组件列表或画布交互。
 
-```text
-HUD 预设
-├─ HUD 布局：组件位置、显隐和允许的几何调整
-├─ HUD 外观：品牌主色、面板风格和边角风格
-└─ 组件设置：组件内部已经冻结的展示选项
-```
+外观 schema、内置 theme 和已保存配置继续兼容；品牌色、面板风格与圆角尚未被全部生产组件一致消费，暂不开放外观工作区或预设外观选择。重新开放须有共享 renderer 与每项公开选项的视觉验收证据。
 
-正式节目只消费当前已启用的 HUD 预设；预设引用布局和外观，但“启用”不是布局或外观的独立操作。布局使用 1920×1080 logical pixels 的锚点与偏移保存，编辑器缩放不会改变持久化坐标；拖动可选择是否吸附到 10px 网格，数字编辑与持久化共同经过画布边界 canonicalizer；第一版只允许 Radar 做正方形调整，其它组件不开放任意尺寸编辑。
-
-HUD 外观的用户控制只包括品牌主色、`实心 / 标准 / 轻量` 面板风格和 `方正 / 轻微圆角 / 圆润` 边角风格。CT/T、生命状态、危险、C4、字体、阴影、CSS、赛事品牌、队伍身份和动画属于设计系统、赛事上下文或 Renderer presentation state，不是普通用户设置。
-
-HUD 控制台提供“HUD 预设”“HUD 布局”“HUD 外观”三个工作区，并提供可切换的测试场景与当前实时节目来源。三套草稿独立保留：切换工作区不会丢弃其它草稿，只有切换同类资源时才检查该类 dirty；切换预设若会覆盖未保存的布局或外观草稿则明确阻止。草稿、保存和启用相互独立：保存资源不会立即改变正式节目，只有重新启用预设才会更新正式节目使用的 on-air snapshot。编辑器预览与正式节目共享同一个 Gameplay HUD Renderer；编辑器辅助层承载辅助线、网格、选中框、拖动和尺寸控件，绝不进入正式节目。Current Live 在没有已接收初始状态时不可选；选中后若进入 stale、重连或协议错误仍保持来源选择但安全隐藏，新初始状态恢复后继续使用 Current Live，不回退到测试场景。
+保存、另存与启用相互独立；保存不会改变播出画面，只有启用预设才更新 on-air snapshot。布局按 1920×1080 logical pixels 保存，缩放不改变坐标。预览保留真实样例、确定性重放与实时比赛；实时来源失效时安全隐藏，不回退到样例。编辑器与播出画面共享 Gameplay HUD renderer。
 
 编辑器在收到 Companion 的第一份有效权威文档前只提供只读预览，不创建伪造的可保存草稿；读取失败时保留最近一次有效文档。每次保存或启用都以编辑器 revision 做 compare-and-swap，多个页面同时编辑时，干净草稿自动跟随外部更新，脏草稿在同一资源被外部改动时明确进入 conflict，并保留本地修改，不能静默覆盖。
 
-HUD 配置由本地 Companion 持久化，不以浏览器 `localStorage` 作为权威来源。custom 预设的 activation snapshot 是带独立版本边界的最后一次上屏内容；加载时严格校验其自身的布局、外观语义值和组件设置，不用当前版本 Theme recipe 重新计算后比较 bytes。Theme recipe 升级不会改变尚未重新启用的 custom on-air snapshot；重新启用才生成当前版本的新快照。built-in active reference 每次启动解析当前代码拥有的 built-in。配置损坏或暂时不可读时保留最后有效的启用快照，没有快照则使用内置默认；正式节目不会因为配置控制面短暂失败而切换到另一份比赛事实。
+HUD 配置由本地 Companion 持久化，不以浏览器 `localStorage` 作为权威来源。custom 预设的 activation snapshot 是带独立版本边界的最后一次上屏内容；加载时严格校验其自身的布局、外观语义值和组件设置，不用当前版本 Theme recipe 重新计算后比较 bytes。Theme recipe 升级不会改变尚未重新启用的 custom on-air snapshot；重新启用才生成当前版本的新快照。built-in active reference 每次启动解析当前代码拥有的 built-in。配置损坏或暂时不可读时保留最后有效的启用快照，没有快照则使用内置默认；播出画面不会因为配置控制面短暂失败而切换到另一份比赛事实。
 
 ### 5.2 雷达
 
@@ -146,7 +137,7 @@ HUD 配置由本地 Companion 持久化，不以浏览器 `localStorage` 作为�
 
 ## 6. 观察辅助（Observer Assist）
 
-观察辅助利用比正式节目更早的时间轴，把已经真实发生、但延迟 Program 尚未到达的事件转换成低认知负担的提示。
+观察辅助利用比播出画面更早的时间轴，把已经真实发生、但延迟 Program 尚未到达的事件转换成低认知负担的提示。
 
 最小有用提示只回答：
 
@@ -234,3 +225,7 @@ Debug 页面可以显示原始 JSON，但必须用中文说明数据属于哪一
 - 依赖 RivalHub 内部数据库或页面源码。
 
 产品扩展应优先通过明确的 adapter、capability interface 或独立 Projection 接入，而不是扩张一个万能状态对象。
+
+## Web 产品入口（#35 Phase 0）
+
+`/` 重定向到 `/operator`。制作控制、HUD 编辑器与运行诊断共享导航；播出画面是单独打开的透明输出，不进入产品导航 tab。未知用户路径显示中文 404。制作首页复用 OperatorSnapshot 展示比赛、系列赛、数据与异常；地图绑定仅在需要制作确认时显示。诊断首页提供中文状态，原始证据收进高级技术信息。现场验收继续由 Companion 独立提供，普通运行时只提供进入说明，不自动启动验收。OBS host 检测在后续阶段实现前不得推断连接状态。

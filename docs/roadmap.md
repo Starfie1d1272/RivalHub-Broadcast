@@ -116,3 +116,7 @@ RivalHub 是更完整的 context provider，不反向成为 Core、Radar 或 Loo
 - 用户可见文案中文优先；
 - 开发者文档保留 canonical engineering terms；
 - 真实 Windows + CS2 + OBS evidence 不由 mock 或 CI 代替。
+
+### #35 分发边界
+
+B / M2 的生产收口包含 Web-first 便携 Windows 产品与最小 EXE launcher。F 继续负责最终 installer、updater、migration、signing、rollback 与长期分发硬化。Phase 0 先独立验收 Web 产品壳，不改变 Runtime 或 Gameplay ownership。
