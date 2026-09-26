@@ -185,9 +185,10 @@ function knownWeapons(player: ProgramPayload['players'][number]): readonly Playe
   return player.weapons.map(weaponPresentation);
 }
 
-function primaryAndSecondary(
-  weapons: readonly PlayerRailWeapon[],
-): { readonly primary: PlayerRailWeapon | null; readonly secondary: PlayerRailWeapon | null } {
+function primaryAndSecondary(weapons: readonly PlayerRailWeapon[]): {
+  readonly primary: PlayerRailWeapon | null;
+  readonly secondary: PlayerRailWeapon | null;
+} {
   const firearms = weapons.filter(
     (weapon) => weapon.item?.kind === 'firearm' && weapon.item.family !== 'pistol',
   );
