@@ -166,7 +166,13 @@ describe('Radar renderer local lifecycle', () => {
 
     const marker = model.grenades.get('synthetic-projectile');
     expect(marker?.phase).toBe('effect');
-    expect(smokeEnterProgress(marker?.source.effectTimeSeconds ?? null, marker?.phaseStartedAt ?? 0, 1_000)).toBe(1);
+    expect(
+      smokeEnterProgress(
+        marker?.source.effectTimeSeconds ?? null,
+        marker?.phaseStartedAt ?? 0,
+        1_000,
+      ),
+    ).toBe(1);
   });
 
   it('keeps a mature smoke steady when sample continuity resets', () => {
@@ -256,45 +262,45 @@ describe('Radar renderer local lifecycle', () => {
     expect(model.exits.get('synthetic-projectile')?.marker.phase).toBe('effect');
   });
 
-  it('keeps an established smoke effect latched when owner identity drifts', () => {
+  it('keeps the real seq 925→926 smoke stable across owner identity drift', () => {
     const before = single();
     const owner = before.payload.players[0]!.sourcePlayerId;
     before.payload.grenades = [
       {
         ...before.payload.grenades[0]!,
+        sourceEntityId: '160',
         kind: 'smoke',
         ownerSourceId: owner,
-        velocity: { x: 22.894, y: 0, z: 0 },
-        lifetimeSeconds: 17.611,
-        effectTimeSeconds: 15.156,
+        position: { x: -2071.5, y: 377.1, z: 75.9 },
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 19.11,
+        effectTimeSeconds: 16.656,
       },
     ];
+
     const model = new RadarPresentation();
     model.accept(before, 0);
-    const initial = model.grenades.get('synthetic-projectile')!;
+    const initial = model.grenades.get('160')!;
     expect(initial).toMatchObject({
       phase: 'effect',
       side: before.payload.players[0]!.side,
     });
-    const initialAnchor = { x: initial.x, y: initial.y, target: initial.target };
     const initialPhaseStartedAt = initial.phaseStartedAt;
+    const initialAnchor = {
+      x: initial.x,
+      y: initial.y,
+      target: structuredClone(initial.target),
+    };
 
-    const started = next(before);
-    started.payload.grenades[0]!.effectTimeSeconds = 15.406;
-    started.payload.grenades[0]!.lifetimeSeconds = 17.857;
-    started.payload.grenades[0]!.velocity = { x: 0, y: 0, z: 0 };
-    model.accept(started, 100);
-    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
-
-    const ownerDrift = next(started);
+    // Ancient acceptance replay seq 926 keeps the same smoke entity and position,
+    // but its owner changes from a Steam64 id to "263".
+    const ownerDrift = next(before);
     ownerDrift.payload.grenades[0]!.ownerSourceId = '263';
-    ownerDrift.payload.grenades[0]!.effectTimeSeconds = 15.656;
-    ownerDrift.payload.grenades[0]!.lifetimeSeconds = 18.111;
-    ownerDrift.payload.grenades[0]!.velocity = { x: 22.894, y: 0, z: 0 };
-    ownerDrift.payload.grenades[0]!.position!.x += 400;
-    model.accept(ownerDrift, 200);
+    ownerDrift.payload.grenades[0]!.lifetimeSeconds = 19.352;
+    ownerDrift.payload.grenades[0]!.effectTimeSeconds = 16.906;
+    model.accept(ownerDrift, 250);
 
-    const drifted = model.grenades.get('synthetic-projectile')!;
+    const drifted = model.grenades.get('160')!;
     expect(drifted).toMatchObject({
       phase: 'effect',
       side: before.payload.players[0]!.side,
@@ -303,7 +309,24 @@ describe('Radar renderer local lifecycle', () => {
       y: initialAnchor.y,
       target: initialAnchor.target,
     });
-    expect(smokeEnterProgress(drifted.source.effectTimeSeconds, drifted.phaseStartedAt, 200)).toBe(1);
+    expect(smokeEnterProgress(drifted.source.effectTimeSeconds, drifted.phaseStartedAt, 250)).toBe(1);
+
+    // Even if later telemetry position/velocity is noisy, a settled smoke remains
+    // anchored to the first authoritative effect position for this lifecycle.
+    const noisy = next(ownerDrift);
+    noisy.payload.grenades[0]!.position!.x += 400;
+    noisy.payload.grenades[0]!.velocity = { x: 400, y: 0, z: 0 };
+    noisy.payload.grenades[0]!.lifetimeSeconds = 19.61;
+    noisy.payload.grenades[0]!.effectTimeSeconds = 17.156;
+    model.accept(noisy, 500);
+
+    expect(model.grenades.get('160')).toMatchObject({
+      phase: 'effect',
+      x: initialAnchor.x,
+      y: initialAnchor.y,
+      target: initialAnchor.target,
+      phaseStartedAt: initialPhaseStartedAt,
+    });
   });
 
   it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
