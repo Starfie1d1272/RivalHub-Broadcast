@@ -425,13 +425,12 @@ export class RadarPresentation {
       nextSequence !== undefined &&
       nextSequence !== null &&
       nextSequence !== previousSequence + 1;
-    if (
+    const restoringPresentationHistory =
       reconnect ||
       this.boundary !== boundary ||
       skippedSample ||
-      (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs)
-    )
-      this.reset();
+      (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs);
+    if (restoringPresentationHistory) this.reset();
     if (this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq) return;
     // Runtime-only publications do not constitute a new GSI HP/ammo/trail sample.
     if (this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence) {
@@ -608,7 +607,7 @@ export class RadarPresentation {
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
       const restoredEffectEnterMs =
-        reconnect && phase === 'effect'
+        restoringPresentationHistory && phase === 'effect'
           ? source.kind === 'smoke'
             ? RADAR_PRESENTATION.smokeEnterMs
             : source.kind === 'inferno'
