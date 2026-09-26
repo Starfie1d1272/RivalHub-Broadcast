@@ -419,7 +419,12 @@ export class RadarPresentation {
     const boundary = radarBoundary(snapshot);
     const layer = selectLayer(snapshot, geometry);
     const sameBoundary = this.boundary === boundary;
-    if (!reconnect && sameBoundary && this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq)
+    if (
+      !reconnect &&
+      sameBoundary &&
+      this.snapshot &&
+      snapshot.channelSeq <= this.snapshot.channelSeq
+    )
       return;
     const runtimeOnlyPublication =
       !reconnect &&
