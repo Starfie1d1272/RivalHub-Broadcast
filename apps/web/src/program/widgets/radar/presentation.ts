@@ -327,23 +327,10 @@ function transitionSmokePhase(
 }
 
 function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): old is GrenadeMarker {
-  if (
-    source.kind !== 'smoke' ||
-    old?.source.kind !== 'smoke' ||
-    old.source.sourceEntityId !== source.sourceEntityId
-  )
-    return false;
-
-  // Entity identity + an already-established effect is the lifecycle boundary.
-  // Owner, velocity, position and small timer jitter are telemetry attributes,
-  // not lifecycle identity. A positive effecttime returning to zero is the one
-  // explicit in-place restart signal; disappearance already removes the marker.
-  return !(
-    old.phase === 'effect' &&
-    old.source.effectTimeSeconds !== null &&
-    old.source.effectTimeSeconds > 0 &&
-    source.effectTimeSeconds !== null &&
-    source.effectTimeSeconds <= 0
+  return (
+    source.kind === 'smoke' &&
+    old?.source.kind === 'smoke' &&
+    old.source.sourceEntityId === source.sourceEntityId
   );
 }
 
@@ -669,13 +656,9 @@ export class RadarPresentation {
       }
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
-      const restoredEffectEnterMs =
-        restoringPresentationHistory && phase === 'effect'
-          ? source.kind === 'smoke'
-            ? RADAR_PRESENTATION.smokeEnterMs
-            : source.kind === 'inferno'
-              ? RADAR_PRESENTATION.infernoEnterMs
-              : 0
+      const restoredInfernoEnterMs =
+        restoringPresentationHistory && phase === 'effect' && source.kind === 'inferno'
+          ? RADAR_PRESENTATION.infernoEnterMs
           : 0;
       this.grenades.set(id, {
         ...(source.kind === 'smoke' && phase === 'effect'
@@ -687,8 +670,8 @@ export class RadarPresentation {
         side,
         phase,
         phaseStartedAt:
-          restoredEffectEnterMs > 0
-            ? now - restoredEffectEnterMs
+          restoredInfernoEnterMs > 0
+            ? now - restoredInfernoEnterMs
             : phaseContinuous
               ? old.phaseStartedAt
               : now,
