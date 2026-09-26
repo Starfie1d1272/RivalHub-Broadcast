@@ -473,7 +473,7 @@ export function Radar({
 
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
-            const timerRadius = radius * 0.525;
+            const timerRadius = radius * 0.4;
             const remainingRatio = remaining / SMOKE_PRESENTATION_DURATION_SECONDS;
             const startAngle = -Math.PI / 2;
             const endAngle = startAngle + Math.PI * 2 * remainingRatio;
@@ -497,7 +497,7 @@ export function Radar({
             ctx.beginPath();
             ctx.arc(x, y, timerRadius, startAngle, endAngle);
             ctx.strokeStyle = sideColor(marker.side);
-            ctx.lineWidth = 7.5;
+            ctx.lineWidth = 9;
             ctx.lineCap = 'round';
             ctx.stroke();
           }
