@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { bpManifestFixture } from './manifest-fixtures.js';
+import { bpManifestFixture } from './manifest-fixtures';
 
 export function BpImport({ revision }: { readonly revision: string | undefined }) {
   const [file, setFile] = useState<File | null>(null);
