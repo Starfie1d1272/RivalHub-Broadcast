@@ -264,7 +264,8 @@ describe('Radar renderer local lifecycle', () => {
 
   it('keeps the real seq 925→926 smoke stable across owner identity drift', () => {
     const before = single();
-    const owner = before.payload.players[0]!.sourcePlayerId;
+    const owner = '76561197960690195';
+    before.payload.players[0] = { ...before.payload.players[0]!, sourcePlayerId: owner };
     before.payload.grenades = [
       {
         ...before.payload.grenades[0]!,
