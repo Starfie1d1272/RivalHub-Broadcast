@@ -101,6 +101,24 @@ export function smokeRemaining(effectTimeSeconds: number | null): number | null 
         ),
       );
 }
+
+/**
+ * Smoke effect maturity is source-owned whenever GSI effecttime exists.
+ * Renderer-local phase time is only a fallback for incomplete telemetry.
+ * This prevents seek, dropped samples, owner drift, or motion resets from
+ * replaying the entrance of an already-mature smoke.
+ */
+export function smokeEnterProgress(
+  effectTimeSeconds: number | null,
+  phaseStartedAt: number,
+  now: number,
+): number {
+  const elapsedMs =
+    effectTimeSeconds !== null && effectTimeSeconds > 0
+      ? effectTimeSeconds * 1_000
+      : Math.max(0, now - phaseStartedAt);
+  return Math.min(1, Math.max(0, elapsedMs / RADAR_PRESENTATION.smokeEnterMs));
+}
 export function radarBoundary(snapshot: RadarSnapshot): string {
   const c = snapshot.cursor;
   return JSON.stringify([
@@ -309,15 +327,23 @@ function transitionSmokePhase(
 }
 
 function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): old is GrenadeMarker {
-  return (
-    source.kind === 'smoke' &&
-    old?.source.kind === 'smoke' &&
-    old.source.sourceEntityId === source.sourceEntityId &&
-    !(
-      old.source.lifetimeSeconds !== null &&
-      source.lifetimeSeconds !== null &&
-      source.lifetimeSeconds < old.source.lifetimeSeconds
-    )
+  if (
+    source.kind !== 'smoke' ||
+    old?.source.kind !== 'smoke' ||
+    old.source.sourceEntityId !== source.sourceEntityId
+  )
+    return false;
+
+  // Entity identity + an already-established effect is the lifecycle boundary.
+  // Owner, velocity, position and small timer jitter are telemetry attributes,
+  // not lifecycle identity. A positive effecttime returning to zero is the one
+  // explicit in-place restart signal; disappearance already removes the marker.
+  return !(
+    old.phase === 'effect' &&
+    old.source.effectTimeSeconds !== null &&
+    old.source.effectTimeSeconds > 0 &&
+    source.effectTimeSeconds !== null &&
+    source.effectTimeSeconds <= 0
   );
 }
 
@@ -560,9 +586,13 @@ export class RadarPresentation {
       const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
       const smokeLifecycleContinuous = sameSmokeLifecycle(old, source);
       const side =
-        owner?.side ??
-        (smokeLifecycleContinuous && old?.side !== undefined ? old.side : 'unknown');
-      const continuous =
+        smokeLifecycleContinuous && old.side !== 'unknown'
+          ? old.side
+          : (owner?.side ?? (smokeLifecycleContinuous ? old.side : 'unknown'));
+
+      // Motion continuity answers only "may this moving marker interpolate?".
+      // It does not own utility lifecycle or effect entrance timing.
+      const motionContinuous =
         old &&
         old.source.kind === source.kind &&
         old.source.ownerSourceId === source.ownerSourceId &&
@@ -575,7 +605,7 @@ export class RadarPresentation {
         );
       const stationarySampleCount =
         source.kind === 'smoke' &&
-        continuous &&
+        motionContinuous &&
         old.phase === 'projectile' &&
         source.effectTimeSeconds !== null &&
         worldDisplacement(old.previousPosition, world) <=
@@ -585,6 +615,12 @@ export class RadarPresentation {
       const phase = smokeLifecycleContinuous
         ? transitionSmokePhase(old.phase, source, stationarySampleCount)
         : radarUtilityPhase(source);
+      const phaseContinuous =
+        old !== undefined &&
+        old.source.kind === source.kind &&
+        old.phase === phase &&
+        (source.kind !== 'smoke' || smokeLifecycleContinuous);
+
       if (old && old.phase !== phase) {
         const infernoHandoff =
           old.source.kind === 'firebomb' &&
@@ -595,8 +631,32 @@ export class RadarPresentation {
       }
       const activeExit = this.exits.get(id);
       if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+
+      // Once smoke becomes an area effect it is spatially stationary. Capture the
+      // first authoritative effect anchor and keep it for the lifecycle; later
+      // owner/velocity/position noise may update metadata and countdown only.
+      if (
+        source.kind === 'smoke' &&
+        smokeLifecycleContinuous &&
+        old.phase === 'effect' &&
+        phase === 'effect'
+      ) {
+        this.grenades.set(id, {
+          ...old,
+          source,
+          side,
+          iconUrl: grenadeIcon(source.kind, side),
+          trail: [],
+          stationarySampleCount: 0,
+          positionAvailable: true,
+        });
+        continue;
+      }
+
       const trail =
-        continuous && old.phase === 'projectile' && phase === 'projectile' ? old.trail.slice() : [];
+        motionContinuous && old.phase === 'projectile' && phase === 'projectile'
+          ? old.trail.slice()
+          : [];
       const lastTrailPoint = trail.at(-1);
       if (
         phase === 'projectile' &&
@@ -618,14 +678,18 @@ export class RadarPresentation {
               : 0
           : 0;
       this.grenades.set(id, {
-        ...(continuous ? retarget(old, world, point, 0, now) : motion(world, point, 0, now)),
+        ...(source.kind === 'smoke' && phase === 'effect'
+          ? motion(world, point, 0, now)
+          : motionContinuous
+            ? retarget(old, world, point, 0, now)
+            : motion(world, point, 0, now)),
         source,
         side,
         phase,
         phaseStartedAt:
           restoredEffectEnterMs > 0
             ? now - restoredEffectEnterMs
-            : continuous && old.phase === phase
+            : phaseContinuous
               ? old.phaseStartedAt
               : now,
         iconUrl: grenadeIcon(source.kind, side),
@@ -696,7 +760,8 @@ export class RadarPresentation {
       }
       updateMotion(marker);
     }
-    for (const marker of this.grenades.values()) updateMotion(marker);
+    for (const marker of this.grenades.values())
+      if (marker.phase === 'projectile') updateMotion(marker);
     for (const [id, exit] of this.exits) if (now >= exit.until) this.exits.delete(id);
     let x = 0.5;
     let y = 0.5;
