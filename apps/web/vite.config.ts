@@ -44,7 +44,6 @@ function replayPrefixDevelopmentApi() {
           readonly radarSnapshot: unknown;
         }>;
       };
-      let replayModulePromise: Promise<ReplayModule> | null = null;
       server.middlewares.use('/__local/replay-prefix', (request, response, next) => {
         if (request.method !== 'POST') return next();
         void (async () => {
@@ -68,16 +67,33 @@ function replayPrefixDevelopmentApi() {
           if (targetSequence < source.firstSequence || targetSequence > source.lastSequence) {
             throw new Error('Replay sequence is outside the fixed source selection');
           }
-          replayModulePromise ??= server.ssrLoadModule(
+          const { replayRealProgram } = (await server.ssrLoadModule(
             `/@fs/${resolve(repositoryRoot, 'apps/companion/test/support/real-program-replay.ts')
               .split(sep)
               .join('/')}`,
-          ) as unknown as Promise<ReplayModule>;
-          const { replayRealProgram } = await replayModulePromise;
-          const result = await replayRealProgram({
-            capturePath: source.capturePath,
-            targetSequence,
-          });
+          )) as unknown as ReplayModule;
+          let result: Awaited<ReturnType<ReplayModule['replayRealProgram']>>;
+          try {
+            result = await replayRealProgram({
+              capturePath: source.capturePath,
+              targetSequence,
+            });
+          } catch (error) {
+            let sanitizerVersion: unknown = 'unreadable';
+            try {
+              const manifest = JSON.parse(
+                await readFile(resolve(source.capturePath, 'manifest.json'), 'utf8'),
+              ) as { readonly provenance?: { readonly sanitizerVersion?: unknown } };
+              sanitizerVersion = manifest.provenance?.sanitizerVersion ?? 'missing';
+            } catch {
+              // Keep the original replay error authoritative; diagnostics are best-effort.
+            }
+            const message = error instanceof Error ? error.message : 'Replay rebuild failed';
+            throw new Error(
+              `current-worktree testkit source · capture sanitizer v${String(sanitizerVersion)} · ${message}`,
+              { cause: error },
+            );
+          }
           response.statusCode = 200;
           response.setHeader('Content-Type', 'application/json; charset=utf-8');
           response.setHeader('Cache-Control', 'no-store');
@@ -155,6 +171,14 @@ function replayPublicAssets() {
 export default defineConfig({
   plugins: [react(), replayPublicAssets(), replayPrefixDevelopmentApi()],
   publicDir: cs2AssetsPublicDir,
+  resolve: {
+    alias: {
+      // The replay-prefix API is development-only and loads test support through Vite SSR.
+      // Bind it to the current worktree source so seek cannot consume a stale testkit dist
+      // or dependency-cache entry after fixture provenance/schema changes.
+      '@rivalhub-broadcast/testkit': resolve(repositoryRoot, 'packages/testkit/src/index.ts'),
+    },
+  },
   server: {
     proxy: {
       '/debug/runtime': 'http://127.0.0.1:3000',

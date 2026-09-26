@@ -1,6 +1,15 @@
-import type { CSSProperties } from 'react';
+import { useEffect, useRef, useState, type CSSProperties } from 'react';
+import type { ProjectionCursor } from '@rivalhub-broadcast/protocol/shared';
 
 import { observerHotkeyLabel } from '../../observer-hotkey';
+import {
+  CombatTransitionEffects,
+  DamageGhost,
+  PlayerImpactEffects,
+  type DamageGhostState,
+  useCombatFeedback,
+} from '../player-status-effects/combat-feedback';
+import { PlayerStatusEffects } from '../player-status-effects/PlayerStatusEffects';
 import {
   weaponVisualRole,
   type PlayerCardPresentation,
@@ -18,7 +27,67 @@ function displayMoney(value: number | null): string {
 }
 
 function displaySpent(value: number | null): string {
-  return value === null ? '—' : `-$${Math.round(value).toLocaleString('en-US')}`;
+  return value === null
+    ? '—'
+    : '-' + String.fromCharCode(36) + Math.round(value).toLocaleString('en-US');
+}
+
+type PresencePhase = 'enter' | 'steady' | 'exit';
+
+type PresenceItem<T extends { readonly key: string }> = T & {
+  readonly motionPhase: PresencePhase;
+};
+
+function usePresenceItems<T extends { readonly key: string }>(
+  items: readonly T[],
+  signature: string,
+  presentationRevision: number,
+  exitMs = 110,
+): readonly PresenceItem<T>[] {
+  const itemsRef = useRef(items);
+  useEffect(() => {
+    itemsRef.current = items;
+  }, [items]);
+  const revisionRef = useRef(presentationRevision);
+  const [rendered, setRendered] = useState<readonly PresenceItem<T>[]>(() =>
+    items.map((item) => ({ ...item, motionPhase: 'steady' as const })),
+  );
+
+  useEffect(() => {
+    const current = itemsRef.current;
+    if (revisionRef.current !== presentationRevision) {
+      revisionRef.current = presentationRevision;
+      setRendered(current.map((item) => ({ ...item, motionPhase: 'steady' as const })));
+      return;
+    }
+
+    setRendered((previous) => {
+      const previousByKey = new Map(previous.map((item) => [item.key, item]));
+      const currentKeys = new Set(current.map((item) => item.key));
+      return [
+        ...current.map((item) => ({
+          ...item,
+          motionPhase: previousByKey.has(item.key) ? ('steady' as const) : ('enter' as const),
+        })),
+        ...previous
+          .filter((item) => !currentKeys.has(item.key) && item.motionPhase !== 'exit')
+          .map((item) => ({ ...item, motionPhase: 'exit' as const })),
+      ];
+    });
+
+    const timer = window.setTimeout(() => {
+      setRendered((previous) =>
+        previous
+          .filter((item) => item.motionPhase !== 'exit')
+          .map((item) =>
+            item.motionPhase === 'enter' ? { ...item, motionPhase: 'steady' as const } : item,
+          ),
+      );
+    }, exitMs);
+    return () => window.clearTimeout(timer);
+  }, [exitMs, presentationRevision, signature]);
+
+  return rendered;
 }
 
 function MaskIcon({
@@ -92,29 +161,49 @@ function Avatar({
   );
 }
 
-function Equipment({ player }: { readonly player: PlayerCardPresentation }) {
+function Equipment({
+  player,
+  presentationRevision,
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly presentationRevision: number;
+}) {
   const slots = [
     { key: 'armor', label: 'Armor', asset: player.armorAsset },
     { key: 'kit', label: 'Defuse kit', asset: player.defuserAsset },
     { key: 'c4', label: 'C4', asset: player.c4Asset },
     { key: 'zeus', label: 'Zeus', asset: player.zeus?.asset ?? null },
-  ] as const;
+  ].filter(
+    (slot): slot is { key: string; label: string; asset: PlayerRailAsset } => slot.asset !== null,
+  );
+  const signature = slots.map((slot) => `${slot.key}:${slot.asset.canonicalKey}`).join('|');
+  const visibleSlots = usePresenceItems(slots, signature, presentationRevision);
+
   return (
     <div className="player-rail__equipment" data-player-equipment="true">
-      {slots
-        .filter((slot) => slot.asset !== null)
-        .map((slot) => (
-          <span className="player-rail__equipment-slot" data-equipment={slot.key} key={slot.key}>
-            <MaskIcon asset={slot.asset} label={slot.label} />
-          </span>
-        ))}
+      {visibleSlots.map((slot) => (
+        <span
+          className="player-rail__equipment-slot"
+          data-equipment={slot.key}
+          data-motion-phase={slot.motionPhase}
+          key={slot.key}
+        >
+          <MaskIcon asset={slot.asset} label={slot.label} />
+        </span>
+      ))}
     </div>
   );
 }
 
 const UTILITY_FAMILIES = ['smoke', 'flash', 'he', 'fire'] as const;
 
-function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
+function UtilityIcons({
+  player,
+  presentationRevision,
+}: {
+  readonly player: PlayerCardPresentation;
+  readonly presentationRevision: number;
+}) {
   const counts = new Map<
     PlayerCardPresentation['utility'][number]['family'],
     { count: number; asset: PlayerRailAsset | null }
@@ -130,20 +219,26 @@ function UtilityIcons({ player }: { readonly player: PlayerCardPresentation }) {
   const icons = UTILITY_FAMILIES.flatMap((family) => {
     const utility = counts.get(family);
     if (utility === undefined || utility.asset === null) return [];
+    const asset = utility.asset;
     return Array.from({ length: utility.count }, (_, index) => ({
-      asset: utility.asset,
+      asset,
       family,
       key: `${family}-${index}`,
     }));
   }).slice(0, 4);
+  const signature = icons
+    .map((utility) => `${utility.key}:${utility.asset.canonicalKey}`)
+    .join('|');
+  const visibleIcons = usePresenceItems(icons, signature, presentationRevision);
 
   return (
     <div className="player-rail__utility-icons" data-utility-count={icons.length}>
-      {icons.map((utility) => (
+      {visibleIcons.map((utility) => (
         <span
           aria-label={utility.family}
           className="player-rail__utility-item"
           data-utility-family={utility.family}
+          data-motion-phase={utility.motionPhase}
           key={utility.key}
         >
           <MaskIcon asset={utility.asset} label={utility.family} />
@@ -206,12 +301,16 @@ function RoundKillBadge({ kills }: { readonly kills: number }) {
 function PlayerBody({
   player,
   dead,
+  presentationRevision,
+  damageGhost,
 }: {
   readonly player: PlayerCardPresentation;
   readonly dead: boolean;
+  readonly presentationRevision: number;
+  readonly damageGhost: DamageGhostState | null;
 }) {
   const healthStyle = { '--player-rail-health': `${player.healthPercent ?? 0}%` } as CSSProperties;
-  const secondaryVisible = player.mode === 'freezetime' && player.secondaryWeapon !== null;
+  const secondaryVisible = player.secondaryWeapon !== null;
   const pairedWithFirearm = [
     player.primaryWeapon,
     secondaryVisible ? player.secondaryWeapon : null,
@@ -222,7 +321,11 @@ function PlayerBody({
         <span className="player-rail__name" title={player.displayName ?? undefined}>
           {player.displayName ?? 'PLAYER'}
         </span>
-        {dead ? null : (
+        {dead ? (
+          <span className="player-rail__life-state" data-life-state-label="dead">
+            DEAD
+          </span>
+        ) : (
           <strong className="player-rail__health-value" data-health-value="true">
             {displayNumber(player.health)}
           </strong>
@@ -230,10 +333,13 @@ function PlayerBody({
       </div>
 
       {dead ? (
-        <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true" />
+        <div aria-hidden="true" className="player-rail__health-spacer" data-health-spacer="true">
+          <DamageGhost state={damageGhost} />
+        </div>
       ) : (
         <div className="player-rail__health-bar" data-health-bar="true">
           <span style={healthStyle} />
+          <DamageGhost state={damageGhost} />
         </div>
       )}
 
@@ -274,8 +380,8 @@ function PlayerBody({
                   ) : null}
                 </div>
               </div>
-              <Equipment player={player} />
-              <UtilityIcons player={player} />
+              <Equipment player={player} presentationRevision={presentationRevision} />
+              <UtilityIcons player={player} presentationRevision={presentationRevision} />
             </div>
           )}
         </div>
@@ -292,7 +398,7 @@ function PlayerBody({
           data-round-kill-slot="true"
         >
           {player.roundKills !== null && player.roundKills > 0 ? (
-            <RoundKillBadge kills={player.roundKills} />
+            <RoundKillBadge key={player.roundKills} kills={player.roundKills} />
           ) : null}
         </span>
       </div>
@@ -302,15 +408,33 @@ function PlayerBody({
 
 export function PlayerCard({
   player,
+  cursor = null,
   physicalSide = 'left',
+  presentationRevision = 0,
 }: {
   readonly player: PlayerCardPresentation;
+  readonly cursor?: ProjectionCursor | null;
   readonly physicalSide?: 'left' | 'right';
+  readonly presentationRevision?: number;
 }) {
   const dead = player.mode === 'dead';
+  const combatFeedback = useCombatFeedback({
+    sourcePlayerId: player.sourcePlayerId,
+    health: player.health,
+    dead,
+    cursor,
+    presentationRevision,
+  });
   const hasAvatar = player.avatarUrl !== null;
   const avatar = <Avatar dead={dead} player={player} />;
-  const body = <PlayerBody dead={dead} player={player} />;
+  const body = (
+    <PlayerBody
+      damageGhost={combatFeedback.damageGhost}
+      dead={dead}
+      player={player}
+      presentationRevision={presentationRevision}
+    />
+  );
   const hotkeyLabel = observerHotkeyLabel(player.observerSlot);
   const endcap = (
     <div
@@ -340,6 +464,17 @@ export function PlayerCard({
     >
       {avatar}
       {body}
+      <PlayerStatusEffects
+        key={`status:${presentationRevision}`}
+        anchor={physicalSide}
+        state={player.statusEffects}
+      />
+      <PlayerImpactEffects
+        anchor={physicalSide}
+        sourcePlayerId={player.sourcePlayerId}
+        surface="rail"
+      />
+      <CombatTransitionEffects feedback={combatFeedback} surface="rail" />
       {endcap}
     </article>
   );

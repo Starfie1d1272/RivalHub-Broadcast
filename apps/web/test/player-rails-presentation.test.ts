@@ -70,6 +70,13 @@ describe('Player Rails presentation selector', () => {
     expect(pistolPlayer?.secondaryWeapon?.asset).not.toBeNull();
     expect(pistolPlayer?.roundMoneySpent).toBe(1_200);
 
+    const live = buildPlayerRailsPresentation(current);
+    const livePaired = [...live.ct.players, ...live.t.players].find(
+      (player) => player.primaryWeapon !== null && player.secondaryWeapon !== null,
+    );
+    expect(live.phase).toBe('live');
+    expect(livePaired?.secondaryWeapon?.item?.family).toBe('pistol');
+
     const deadPlayer = freezetime.ct.players[2];
     expect(deadPlayer).toMatchObject({ mode: 'dead', primaryWeapon: null, utility: [] });
     expect(deadPlayer?.currentRoundDamage).toBe(72);

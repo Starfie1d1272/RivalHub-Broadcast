@@ -250,7 +250,14 @@ export async function loadReplayFixture(id: ReplaySourceId): Promise<LoadedRepla
           body: JSON.stringify({ sourceId: id, targetSequence: expected.cursor.sequence }),
         });
         if (!response.ok) {
-          throw new Error(`Replay prefix rebuild failed (${response.status})`);
+          const body = (await response.json().catch(() => null)) as {
+            readonly error?: unknown;
+          } | null;
+          const detail =
+            typeof body?.error === 'string' && body.error.trim().length > 0
+              ? `: ${body.error}`
+              : '';
+          throw new Error(`Replay prefix rebuild failed (${response.status})${detail}`);
         }
         const rebuilt = (await response.json()) as {
           readonly targetSequence: number;

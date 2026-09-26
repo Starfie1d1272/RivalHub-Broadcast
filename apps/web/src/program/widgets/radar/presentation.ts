@@ -101,6 +101,7 @@ export function smokeRemaining(effectTimeSeconds: number | null): number | null 
         ),
       );
 }
+
 export function radarBoundary(snapshot: RadarSnapshot): string {
   const c = snapshot.cursor;
   return JSON.stringify([
@@ -267,8 +268,11 @@ export function radarUtilityPhase(g: Grenade): RadarUtilityPhase {
         g.effectTimeSeconds >= SMOKE_PRESENTATION_DURATION_SECONDS
       )
         return 'terminal';
-      if (moving) return 'projectile';
-      return g.effectTimeSeconds !== null && g.effectTimeSeconds > 0 ? 'effect' : 'projectile';
+      // effectTime is authoritative lifecycle evidence. Real GSI captures can retain a
+      // stale non-zero grenade velocity long after the smoke has settled; this matters
+      // especially on seek/reconnect where renderer-local phase history is intentionally reset.
+      if (g.effectTimeSeconds !== null && g.effectTimeSeconds > 0) return 'effect';
+      return 'projectile';
     case 'firebomb':
       return moving ? 'projectile' : 'terminal';
     case 'inferno':
@@ -309,7 +313,7 @@ function sameSmokeLifecycle(old: GrenadeMarker | undefined, source: Grenade): ol
   return (
     source.kind === 'smoke' &&
     old?.source.kind === 'smoke' &&
-    old.source.ownerSourceId === source.ownerSourceId &&
+    old.source.sourceEntityId === source.sourceEntityId &&
     !(
       old.source.lifetimeSeconds !== null &&
       source.lifetimeSeconds !== null &&
@@ -414,6 +418,22 @@ export class RadarPresentation {
     this.diagnosticReason = null;
     const boundary = radarBoundary(snapshot);
     const layer = selectLayer(snapshot, geometry);
+    const sameBoundary = this.boundary === boundary;
+    if (
+      !reconnect &&
+      sameBoundary &&
+      this.snapshot &&
+      snapshot.channelSeq <= this.snapshot.channelSeq
+    )
+      return;
+    const runtimeOnlyPublication =
+      !reconnect &&
+      sameBoundary &&
+      this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence;
+    if (runtimeOnlyPublication) {
+      this.snapshot = snapshot;
+      return;
+    }
     const previousSequence = this.snapshot?.cursor.programReceiveSequence;
     const nextSequence = snapshot.cursor.programReceiveSequence;
     const skippedSample =
@@ -422,18 +442,20 @@ export class RadarPresentation {
       nextSequence !== undefined &&
       nextSequence !== null &&
       nextSequence !== previousSequence + 1;
-    if (
-      reconnect ||
-      this.boundary !== boundary ||
-      skippedSample ||
-      (this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs)
-    )
+    const sampleGap =
+      this.acceptedAt !== null && now - this.acceptedAt > RADAR_PRESENTATION.sampleGapMs;
+    const hardBoundaryReset = reconnect || !sameBoundary;
+    const samplingDiscontinuity = skippedSample || sampleGap;
+    const restoringPresentationHistory = hardBoundaryReset || samplingDiscontinuity;
+    const preservedSmokeEffects =
+      samplingDiscontinuity && !hardBoundaryReset
+        ? [...this.grenades.entries()].filter(
+            ([, marker]) => marker.source.kind === 'smoke' && marker.phase === 'effect',
+          )
+        : [];
+    if (restoringPresentationHistory) {
       this.reset();
-    if (this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq) return;
-    // Runtime-only publications do not constitute a new GSI HP/ammo/trail sample.
-    if (this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence) {
-      this.snapshot = snapshot;
-      return;
+      for (const [id, marker] of preservedSmokeEffects) this.grenades.set(id, marker);
     }
     const previousBomb = this.snapshot?.payload.bomb?.state;
     this.boundary = boundary;
@@ -529,6 +551,35 @@ export class RadarPresentation {
     for (const source of snapshot.payload.grenades.slice(0, RADAR_PRESENTATION.maxGrenades)) {
       const id = source.sourceEntityId;
       const old = this.grenades.get(id);
+      const smokeLifecycleContinuous = sameSmokeLifecycle(old, source);
+      const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
+      const smokeSide =
+        smokeLifecycleContinuous && old.side !== 'unknown'
+          ? old.side
+          : (owner?.side ?? (smokeLifecycleContinuous ? old.side : 'unknown'));
+
+      // A settled smoke is a stationary area effect, not a moving grenade marker.
+      // Once its effect anchor exists, later source position/velocity cannot move,
+      // hide, or restart it. Only lifecycle phase and metadata continue to update.
+      if (smokeLifecycleContinuous && old.phase === 'effect') {
+        currentGrenades.add(id);
+        const phase = transitionSmokePhase(old.phase, source, 0);
+        if (phase !== old.phase) this.beginExit(id, old, now);
+        const activeExit = this.exits.get(id);
+        if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+        this.grenades.set(id, {
+          ...old,
+          source,
+          side: smokeSide,
+          phase,
+          iconUrl: grenadeIcon(source.kind, smokeSide),
+          trail: [],
+          stationarySampleCount: 0,
+          positionAvailable: phase === 'effect' ? old.positionAvailable : false,
+        });
+        continue;
+      }
+
       const world = presentationPosition(source);
       if (world === null) {
         if (sameSmokeLifecycle(old, source)) {
@@ -543,7 +594,10 @@ export class RadarPresentation {
             phase,
             phaseStartedAt: old.phase === phase ? old.phaseStartedAt : now,
             stationarySampleCount: 0,
-            positionAvailable: false,
+            // An established smoke is stationary presentation truth. Real captures can
+            // omit one grenade position sample; retain the last trusted spatial anchor
+            // instead of blinking the mature effect off for that frame.
+            positionAvailable: phase === 'effect' ? old.positionAvailable : false,
             trail: phase === 'projectile' ? old.trail : [],
           });
         }
@@ -552,9 +606,11 @@ export class RadarPresentation {
       const point = projectWorldPosition(world, geometry);
       if (!point || point.outOfBounds) continue;
       currentGrenades.add(id);
-      const owner = snapshot.payload.players.find((p) => p.sourcePlayerId === source.ownerSourceId);
-      const side = owner?.side ?? 'unknown';
-      const continuous =
+      const side = smokeSide;
+
+      // Motion continuity answers only "may this moving marker interpolate?".
+      // It does not own utility lifecycle or effect entrance timing.
+      const motionContinuous =
         old &&
         old.source.kind === source.kind &&
         old.source.ownerSourceId === source.ownerSourceId &&
@@ -567,16 +623,22 @@ export class RadarPresentation {
         );
       const stationarySampleCount =
         source.kind === 'smoke' &&
-        continuous &&
+        motionContinuous &&
         old.phase === 'projectile' &&
         source.effectTimeSeconds !== null &&
         worldDisplacement(old.previousPosition, world) <=
           RADAR_PRESENTATION.smokeStationaryWorldThreshold
           ? old.stationarySampleCount + 1
           : 0;
-      const phase = sameSmokeLifecycle(old, source)
+      const phase = smokeLifecycleContinuous
         ? transitionSmokePhase(old.phase, source, stationarySampleCount)
         : radarUtilityPhase(source);
+      const phaseContinuous =
+        old !== undefined &&
+        old.source.kind === source.kind &&
+        old.phase === phase &&
+        (source.kind !== 'smoke' || smokeLifecycleContinuous);
+
       if (old && old.phase !== phase) {
         const infernoHandoff =
           old.source.kind === 'firebomb' &&
@@ -587,8 +649,11 @@ export class RadarPresentation {
       }
       const activeExit = this.exits.get(id);
       if (activeExit && activeExit.marker.phase === phase) this.exits.delete(id);
+
       const trail =
-        continuous && old.phase === 'projectile' && phase === 'projectile' ? old.trail.slice() : [];
+        motionContinuous && old.phase === 'projectile' && phase === 'projectile'
+          ? old.trail.slice()
+          : [];
       const lastTrailPoint = trail.at(-1);
       if (
         phase === 'projectile' &&
@@ -601,12 +666,29 @@ export class RadarPresentation {
       }
       if (trail.length > RADAR_PRESENTATION.trailPoints)
         trail.splice(0, trail.length - RADAR_PRESENTATION.trailPoints);
+      const restoredEffectEnterMs =
+        restoringPresentationHistory && phase === 'effect'
+          ? source.kind === 'smoke'
+            ? RADAR_PRESENTATION.smokeEnterMs
+            : source.kind === 'inferno'
+              ? RADAR_PRESENTATION.infernoEnterMs
+              : 0
+          : 0;
       this.grenades.set(id, {
-        ...(continuous ? retarget(old, world, point, 0, now) : motion(world, point, 0, now)),
+        ...(source.kind === 'smoke' && phase === 'effect'
+          ? motion(world, point, 0, now)
+          : motionContinuous
+            ? retarget(old, world, point, 0, now)
+            : motion(world, point, 0, now)),
         source,
         side,
         phase,
-        phaseStartedAt: continuous && old.phase === phase ? old.phaseStartedAt : now,
+        phaseStartedAt:
+          restoredEffectEnterMs > 0
+            ? now - restoredEffectEnterMs
+            : phaseContinuous
+              ? old.phaseStartedAt
+              : now,
         iconUrl: grenadeIcon(source.kind, side),
         trail,
         previousPosition: world,
@@ -675,7 +757,8 @@ export class RadarPresentation {
       }
       updateMotion(marker);
     }
-    for (const marker of this.grenades.values()) updateMotion(marker);
+    for (const marker of this.grenades.values())
+      if (marker.phase === 'projectile') updateMotion(marker);
     for (const [id, exit] of this.exits) if (now >= exit.until) this.exits.delete(id);
     let x = 0.5;
     let y = 0.5;

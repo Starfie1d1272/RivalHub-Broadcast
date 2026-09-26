@@ -124,9 +124,96 @@ describe('Radar renderer local lifecycle', () => {
 
     expect(radarUtilityPhase(movingSmoke)).toBe('projectile');
     expect(isActiveSmoke(movingSmoke)).toBe(false);
+    expect(
+      radarUtilityPhase({
+        ...movingSmoke,
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      }),
+    ).toBe('effect');
     expect(radarUtilityPhase(stationarySmoke)).toBe('effect');
     expect(isActiveSmoke(stationarySmoke)).toBe(true);
     expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
+  });
+
+  it('restores a mature smoke effect without replaying its enter animation', () => {
+    const restored = single();
+    restored.payload.grenades = [
+      {
+        ...restored.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(restored, 1_000, true);
+
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
+    });
+  });
+
+  it('does not reset presentation history for runtime-only publications', () => {
+    const source = single();
+    source.payload.grenades = [
+      {
+        ...source.payload.grenades[0]!,
+        kind: 'smoke',
+        lifetimeSeconds: 5,
+        effectTimeSeconds: 2.5,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(source, 1_000);
+    const smoke = model.grenades.get('synthetic-projectile');
+    const player = model.players.get(source.payload.players[0]!.sourcePlayerId);
+    expect(smoke?.phase).toBe('effect');
+
+    const runtimeOnly = structuredClone(source);
+    runtimeOnly.channelSeq += 1;
+    runtimeOnly.cursor.runtimeSeq += 1;
+    model.accept(runtimeOnly, 2_000);
+
+    expect(model.grenades.get('synthetic-projectile')).toBe(smoke);
+    expect(model.players.get(source.payload.players[0]!.sourcePlayerId)).toBe(player);
+    expect(model.snapshot).toBe(runtimeOnly);
+  });
+
+  it('keeps a mature smoke steady when sample continuity resets', () => {
+    const restored = single();
+    restored.payload.grenades = [
+      {
+        ...restored.payload.grenades[0]!,
+        kind: 'smoke',
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 17.611,
+        effectTimeSeconds: 15.156,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(restored, 1_000);
+    const established = model.grenades.get('synthetic-projectile');
+    expect(established).toMatchObject({
+      phase: 'effect',
+      phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
+    });
+    const establishedAnchor = structuredClone(established?.target);
+    const establishedPhaseStartedAt = established?.phaseStartedAt;
+
+    const skipped = next(restored);
+    skipped.cursor.programReceiveSequence = (restored.cursor.programReceiveSequence ?? 0) + 2;
+    skipped.payload.grenades[0]!.position = { x: 1_000_000, y: 1_000_000, z: 0 };
+    skipped.payload.grenades[0]!.effectTimeSeconds = 15.406;
+    model.accept(skipped, 1_100);
+    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+      phase: 'effect',
+      phaseStartedAt: establishedPhaseStartedAt,
+      target: establishedAnchor,
+    });
   });
 
   it('latches smoke from projectile to effect and never returns on residual velocity', () => {
@@ -146,7 +233,12 @@ describe('Radar renderer local lifecycle', () => {
     const started = next(before);
     started.payload.grenades[0]!.effectTimeSeconds = 0.2;
     model.accept(started, 100);
-    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
+    const effectAnchor = model.grenades.get('synthetic-projectile')!;
+    expect(effectAnchor).toMatchObject({
+      phase: 'effect',
+      phaseStartedAt: 100,
+    });
+    const anchoredTarget = effectAnchor.target;
 
     const missingPosition = next(started);
     missingPosition.payload.grenades[0]!.position = null;
@@ -154,7 +246,7 @@ describe('Radar renderer local lifecycle', () => {
     model.accept(missingPosition, 150);
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
       phase: 'effect',
-      positionAvailable: false,
+      positionAvailable: true,
     });
 
     const residualVelocity = next(missingPosition);
@@ -166,6 +258,7 @@ describe('Radar renderer local lifecycle', () => {
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
       phase: 'effect',
       positionAvailable: true,
+      target: anchoredTarget,
     });
 
     const expired = next(residualVelocity);
@@ -173,6 +266,106 @@ describe('Radar renderer local lifecycle', () => {
     model.accept(expired, 300);
     expect(model.grenades.get('synthetic-projectile')?.phase).toBe('terminal');
     expect(model.exits.get('synthetic-projectile')?.marker.phase).toBe('effect');
+  });
+
+  it('keeps the real seq 925→926 smoke stable across owner identity drift', () => {
+    const before = single();
+    const owner = '76561197960690195';
+    before.payload.players[0] = { ...before.payload.players[0]!, sourcePlayerId: owner };
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        sourceEntityId: '160',
+        kind: 'smoke',
+        ownerSourceId: owner,
+        position: { x: -2071.5, y: 377.1, z: 75.9 },
+        velocity: { x: 20.557, y: -5.244, z: -8.604 },
+        lifetimeSeconds: 19.11,
+        effectTimeSeconds: 16.656,
+      },
+    ];
+
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    const initial = model.grenades.get('160')!;
+    expect(initial).toMatchObject({
+      phase: 'effect',
+      side: before.payload.players[0].side,
+    });
+    const initialPhaseStartedAt = initial.phaseStartedAt;
+    const initialAnchor = {
+      x: initial.x,
+      y: initial.y,
+      target: structuredClone(initial.target),
+    };
+
+    // Ancient acceptance replay seq 926 keeps the same smoke entity and position,
+    // but its owner changes from a Steam64 id to "263".
+    const ownerDrift = next(before);
+    ownerDrift.payload.grenades[0]!.ownerSourceId = '263';
+    ownerDrift.payload.grenades[0]!.lifetimeSeconds = 19.352;
+    ownerDrift.payload.grenades[0]!.effectTimeSeconds = 16.906;
+    model.accept(ownerDrift, 250);
+
+    const drifted = model.grenades.get('160')!;
+    expect(drifted).toMatchObject({
+      phase: 'effect',
+      side: before.payload.players[0].side,
+      phaseStartedAt: initialPhaseStartedAt,
+      x: initialAnchor.x,
+      y: initialAnchor.y,
+      target: initialAnchor.target,
+    });
+    // Even if later telemetry position/velocity is noisy, a settled smoke remains
+    // anchored to the first authoritative effect position for this lifecycle.
+    const noisy = next(ownerDrift);
+    noisy.payload.grenades[0]!.position = { x: 1_000_000, y: 1_000_000, z: 75.9 };
+    noisy.payload.grenades[0]!.velocity = { x: 400, y: 0, z: 0 };
+    noisy.payload.grenades[0]!.lifetimeSeconds = 19.61;
+    noisy.payload.grenades[0]!.effectTimeSeconds = 17.156;
+    model.accept(noisy, 500);
+
+    expect(model.grenades.get('160')).toMatchObject({
+      phase: 'effect',
+      x: initialAnchor.x,
+      y: initialAnchor.y,
+      target: initialAnchor.target,
+      phaseStartedAt: initialPhaseStartedAt,
+    });
+  });
+
+  it('starts a fresh smoke lifecycle when the same entity id is reused after lifetime rewind', () => {
+    const before = single();
+    before.payload.grenades = [
+      {
+        ...before.payload.grenades[0]!,
+        sourceEntityId: '160',
+        kind: 'smoke',
+        position: { x: -2071.5, y: 377.1, z: 75.9 },
+        lifetimeSeconds: 19.11,
+        effectTimeSeconds: 16.656,
+      },
+    ];
+
+    const model = new RadarPresentation();
+    model.accept(before, 0);
+    const previous = model.grenades.get('160');
+    expect(previous?.phase).toBe('effect');
+
+    const reused = next(before);
+    reused.payload.grenades[0]!.position = { x: -1200, y: 900, z: 75.9 };
+    reused.payload.grenades[0]!.velocity = { x: 300, y: 0, z: 0 };
+    reused.payload.grenades[0]!.lifetimeSeconds = 0.2;
+    reused.payload.grenades[0]!.effectTimeSeconds = 0;
+    model.accept(reused, 250);
+
+    const fresh = model.grenades.get('160');
+    expect(fresh).toMatchObject({
+      phase: 'projectile',
+      positionAvailable: true,
+    });
+    expect(fresh?.target).not.toEqual(previous?.target);
+    expect(fresh?.phaseStartedAt).toBe(250);
   });
 
   it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {

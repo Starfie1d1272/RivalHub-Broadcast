@@ -37,6 +37,7 @@
   width: 3px;
   background: #6aa8ff;
   content: '';
+  transition: background-color 160ms ease-out;
 }
 
 .player-rail--t .player-rail__header::before {
@@ -107,6 +108,7 @@
   flex: 0 0 78px;
   overflow: hidden;
   background: #0b1119;
+  transition: background-color 160ms ease-out;
 }
 
 .player-rail__card[data-side='CT'] .player-rail__avatar {
@@ -123,6 +125,9 @@
   height: 78px;
   object-fit: cover;
   object-position: center 36%;
+  transition:
+    filter 160ms ease-out,
+    opacity 160ms ease-out;
 }
 
 .player-rail__avatar::after {
@@ -151,6 +156,7 @@
   grid-template-rows: 24px 3px 25px 26px;
   overflow: hidden;
   background: #111923;
+  transition: background-color 160ms ease-out;
 }
 
 .player-rail__body::before {
@@ -160,6 +166,7 @@
   background: linear-gradient(90deg, rgba(106, 168, 255, 0.11), transparent);
   content: '';
   pointer-events: none;
+  transition: opacity 160ms ease-out;
 }
 
 .player-rail__card[data-side='T'] .player-rail__body::before {
@@ -184,21 +191,27 @@
   background: #242b32;
 }
 
-.player-rail__card[data-observed='true']::after {
+.player-rail__card::after {
   position: absolute;
   top: 0;
   bottom: 0;
   width: 2px;
   background: #f3f6fa;
   content: '';
+  opacity: 0;
   pointer-events: none;
+  transition: opacity 100ms ease-out;
 }
 
-.player-rail__card[data-physical-side='left'][data-observed='true']::after {
+.player-rail__card[data-observed='true']::after {
+  opacity: 1;
+}
+
+.player-rail__card[data-physical-side='left']::after {
   right: 0;
 }
 
-.player-rail__card[data-physical-side='right'][data-observed='true']::after {
+.player-rail__card[data-physical-side='right']::after {
   left: 0;
 }
 
@@ -377,6 +390,16 @@
   justify-content: center;
 }
 
+.player-rail__equipment-slot[data-motion-phase='enter'],
+.player-rail__utility-item[data-motion-phase='enter'] {
+  animation: player-rail-item-in 100ms ease-out both;
+}
+
+.player-rail__equipment-slot[data-motion-phase='exit'],
+.player-rail__utility-item[data-motion-phase='exit'] {
+  animation: player-rail-item-out 110ms ease-in both;
+}
+
 .player-rail__utility-icons {
   display: flex;
   width: 100%;
@@ -418,7 +441,7 @@
   height: 24px;
 }
 
-.player-rail__combat[data-phase='freezetime'][data-secondary='true']
+.player-rail__combat[data-secondary='true']
   .player-rail__icon[data-weapon-visual-role='primary-firearm'] {
   width: 80px;
   max-width: 80px;
@@ -596,6 +619,9 @@
   overflow: hidden;
   background: #6aa8ff;
   border: 1px solid rgba(11, 17, 25, 0.5);
+  transition:
+    background-color 100ms ease-out,
+    opacity 100ms ease-out;
 }
 
 .player-rail__endcap--right {
@@ -619,6 +645,7 @@
   font-weight: 900;
   line-height: 18px;
   text-align: center;
+  transition: color 140ms ease-out;
 }
 
 .player-rail__card[data-physical-side='left'] .player-rail__body,
@@ -642,11 +669,22 @@
   border-bottom: 1px solid rgba(243, 246, 250, 0.12);
   opacity: 0;
   pointer-events: none;
+  transform: translateY(-7px) scaleY(0.88);
+  transform-origin: top center;
+  transition:
+    opacity 180ms ease-in,
+    transform 220ms cubic-bezier(0.4, 0, 0.2, 1),
+    visibility 0s linear 220ms;
   visibility: hidden;
 }
 
 .player-rail__summary.is-visible {
   opacity: 1;
+  transform: translateY(0) scaleY(1);
+  transition:
+    opacity 140ms ease-out,
+    transform 180ms cubic-bezier(0.2, 0.8, 0.2, 1),
+    visibility 0s;
   visibility: visible;
 }
 
@@ -885,6 +923,14 @@
   height: 26px;
 }
 
+.player-rail__round-kill-badge {
+  animation: player-rail-kill-pop 150ms cubic-bezier(0.2, 0.9, 0.25, 1.15) both;
+}
+
+.player-rail__card--dead .player-rail__dead-stats {
+  animation: player-rail-death-content-in 160ms ease-out both;
+}
+
 .player-rail__round-kill-badge path,
 .player-rail__round-kill-badge circle {
   fill: none;
@@ -1023,4 +1069,78 @@
 
 .player-rail__summary-utility[aria-label$=' 0'] {
   opacity: 0.45;
+}
+
+@keyframes player-rail-item-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px) scale(0.92);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes player-rail-item-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+
+  to {
+    opacity: 0;
+    transform: translateY(-2px) scale(0.9);
+  }
+}
+
+@keyframes player-rail-kill-pop {
+  0% {
+    opacity: 0;
+    transform: scale(0.72);
+  }
+
+  72% {
+    opacity: 1;
+    transform: scale(1.08);
+  }
+
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes player-rail-death-content-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .player-rail__summary,
+  .player-rail__header::before,
+  .player-rail__card::after,
+  .player-rail__endcap,
+  .player-rail__endcap strong,
+  .player-rail__avatar,
+  .player-rail__avatar img,
+  .player-rail__body,
+  .player-rail__body::before {
+    transition: none;
+  }
+
+  .player-rail__equipment-slot,
+  .player-rail__utility-item,
+  .player-rail__round-kill-badge,
+  .player-rail__dead-stats {
+    animation: none;
+  }
 }

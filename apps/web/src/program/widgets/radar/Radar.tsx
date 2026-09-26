@@ -59,6 +59,7 @@ export function Radar({
     let lastStatic: RadarSnapshot | null | undefined;
     let lastConnection: unknown;
     let lastPresentationRevision = currentPresentationRevision.current;
+    let restoreStaticBoundary = false;
     const updateUtilityPhaseDataset = () => {
       let phases = '';
       let projectiles = '';
@@ -93,14 +94,14 @@ export function Radar({
     const render = (now: number) => {
       if (disposed) return;
       if (!client && lastPresentationRevision !== currentPresentationRevision.current) {
-        model.reset();
         lastPresentationRevision = currentPresentationRevision.current;
         lastStatic = undefined;
-        updateUtilityPhaseDataset();
+        restoreStaticBoundary = true;
       }
       if (!client && lastStatic !== currentSnapshot.current) {
         lastStatic = currentSnapshot.current;
-        model.accept(lastStatic ?? null, now);
+        model.accept(lastStatic ?? null, now, restoreStaticBoundary);
+        restoreStaticBoundary = false;
         updateUtilityPhaseDataset();
       }
       model.tick(now, zoomMode === 'auto');
@@ -472,7 +473,7 @@ export function Radar({
 
           const remaining = smokeRemaining(marker.source.effectTimeSeconds);
           if (remaining !== null) {
-            const timerRadius = radius * 0.525;
+            const timerRadius = radius * 0.4;
             const remainingRatio = remaining / SMOKE_PRESENTATION_DURATION_SECONDS;
             const startAngle = -Math.PI / 2;
             const endAngle = startAngle + Math.PI * 2 * remainingRatio;
@@ -492,11 +493,12 @@ export function Radar({
               ctx.fill();
             }
 
-            ctx.globalAlpha = opacity * 0.94;
+            ctx.globalAlpha = opacity * 0.96;
             ctx.beginPath();
             ctx.arc(x, y, timerRadius, startAngle, endAngle);
             ctx.strokeStyle = sideColor(marker.side);
-            ctx.lineWidth = 3.5;
+            ctx.lineWidth = 9;
+            ctx.lineCap = 'round';
             ctx.stroke();
           }
           ctx.restore();

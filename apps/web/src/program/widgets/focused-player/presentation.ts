@@ -4,6 +4,7 @@ import {
   weaponPresentation,
   utilityPresentation,
 } from '../player-rails/presentation';
+import { playerStatusEffectState } from '../player-status-effects/presentation';
 
 export type FocusedPlayerItemKind =
   'firearm' | 'knife' | 'grenade' | 'objective' | 'taser' | 'other';
@@ -66,6 +67,8 @@ export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
   )
     return null;
   const dead = player.lifeState === 'dead';
+  const statusEffectsVisible =
+    !dead && (payload.round?.phase === 'live' || payload.clock?.phase === 'live');
   const team =
     player.side === 'CT' ? payload.teams.ct : player.side === 'T' ? payload.teams.t : null;
   const hasC4 =
@@ -99,6 +102,7 @@ export function buildFocusedPlayerPresentation(payload: ProgramPayload) {
     teamName: team?.mode === 'canonical' ? team.name : (player.side ?? '—'),
     teamLogoUrl: team?.mode === 'canonical' ? team.logoUrl : null,
     dead,
+    statusEffects: playerStatusEffectState(player, statusEffectsVisible),
     stats: {
       kills: player.matchStats?.kills ?? null,
       assists: player.matchStats?.assists ?? null,

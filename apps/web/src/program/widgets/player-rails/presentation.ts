@@ -5,6 +5,10 @@ import {
   type Cs2ItemMetadata,
 } from '@rivalhub-broadcast/cs2-assets';
 import type { ProgramPayload } from '@rivalhub-broadcast/protocol/program';
+import {
+  playerStatusEffectState,
+  type PlayerStatusEffectState,
+} from '../player-status-effects/presentation';
 
 export type PlayerRailSide = 'CT' | 'T';
 export type PlayerRailsPhase = 'freezetime' | 'live' | 'unknown';
@@ -53,6 +57,7 @@ export interface PlayerCardPresentation {
   readonly lifeState: 'alive' | 'dead' | 'unknown';
   readonly mode: 'freezetime' | 'live' | 'dead' | 'unknown';
   readonly observed: boolean;
+  readonly statusEffects: PlayerStatusEffectState;
   readonly health: number | null;
   readonly healthPercent: number | null;
   readonly armorAsset: PlayerRailAsset | null;
@@ -180,10 +185,10 @@ function knownWeapons(player: ProgramPayload['players'][number]): readonly Playe
   return player.weapons.map(weaponPresentation);
 }
 
-function primaryAndSecondary(
-  weapons: readonly PlayerRailWeapon[],
-  phase: PlayerRailsPhase,
-): { readonly primary: PlayerRailWeapon | null; readonly secondary: PlayerRailWeapon | null } {
+function primaryAndSecondary(weapons: readonly PlayerRailWeapon[]): {
+  readonly primary: PlayerRailWeapon | null;
+  readonly secondary: PlayerRailWeapon | null;
+} {
   const firearms = weapons.filter(
     (weapon) => weapon.item?.kind === 'firearm' && weapon.item.family !== 'pistol',
   );
@@ -191,7 +196,7 @@ function primaryAndSecondary(
     (weapon) => weapon.item?.kind === 'firearm' && weapon.item.family === 'pistol',
   );
   const primary = firearms[0] ?? pistols[0] ?? null;
-  const secondary = phase === 'freezetime' && firearms.length > 0 ? (pistols[0] ?? null) : null;
+  const secondary = firearms.length > 0 ? (pistols[0] ?? null) : null;
   return { primary, secondary };
 }
 
@@ -248,7 +253,7 @@ function playerPresentation(
 ): PlayerCardPresentation {
   const weapons = knownWeapons(player);
   const dead = player.lifeState === 'dead';
-  const { primary, secondary } = primaryAndSecondary(weapons, phase);
+  const { primary, secondary } = primaryAndSecondary(weapons);
   const armorAsset =
     player.state?.armor !== null && player.state?.armor !== undefined && player.state.armor > 0
       ? assetForCanonicalKey(
@@ -270,6 +275,7 @@ function playerPresentation(
     lifeState: player.lifeState,
     mode,
     observed: payload.observedPlayerSourceId === player.sourcePlayerId,
+    statusEffects: playerStatusEffectState(player, mode === 'live'),
     health: dead ? null : (player.state?.health ?? null),
     healthPercent: dead ? null : healthPercent(player.state?.health ?? null),
     armorAsset: dead ? null : armorAsset,
