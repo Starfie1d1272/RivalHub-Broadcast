@@ -157,6 +157,32 @@ describe('Radar renderer local lifecycle', () => {
     });
   });
 
+  it('does not reset presentation history for runtime-only publications', () => {
+    const source = single();
+    source.payload.grenades = [
+      {
+        ...source.payload.grenades[0]!,
+        kind: 'smoke',
+        lifetimeSeconds: 5,
+        effectTimeSeconds: 2.5,
+      },
+    ];
+    const model = new RadarPresentation();
+    model.accept(source, 1_000);
+    const smoke = model.grenades.get('synthetic-projectile');
+    const player = model.players.get(source.payload.players[0]!.sourcePlayerId);
+    expect(smoke?.phase).toBe('effect');
+
+    const runtimeOnly = structuredClone(source);
+    runtimeOnly.channelSeq += 1;
+    runtimeOnly.cursor.runtimeSeq += 1;
+    model.accept(runtimeOnly, 2_000);
+
+    expect(model.grenades.get('synthetic-projectile')).toBe(smoke);
+    expect(model.players.get(source.payload.players[0]!.sourcePlayerId)).toBe(player);
+    expect(model.snapshot).toBe(runtimeOnly);
+  });
+
   it('keeps a mature smoke steady when sample continuity resets', () => {
     const restored = single();
     restored.payload.grenades = [
