@@ -163,7 +163,9 @@ function Equipment({
     { key: 'kit', label: 'Defuse kit', asset: player.defuserAsset },
     { key: 'c4', label: 'C4', asset: player.c4Asset },
     { key: 'zeus', label: 'Zeus', asset: player.zeus?.asset ?? null },
-  ].filter((slot): slot is { key: string; label: string; asset: PlayerRailAsset } => slot.asset !== null);
+  ].filter(
+    (slot): slot is { key: string; label: string; asset: PlayerRailAsset } => slot.asset !== null,
+  );
   const signature = slots.map((slot) => `${slot.key}:${slot.asset.canonicalKey}`).join('|');
   const visibleSlots = usePresenceItems(slots, signature, presentationRevision);
 
@@ -207,13 +209,16 @@ function UtilityIcons({
   const icons = UTILITY_FAMILIES.flatMap((family) => {
     const utility = counts.get(family);
     if (utility === undefined || utility.asset === null) return [];
+    const asset = utility.asset;
     return Array.from({ length: utility.count }, (_, index) => ({
-      asset: utility.asset,
+      asset,
       family,
       key: `${family}-${index}`,
     }));
   }).slice(0, 4);
-  const signature = icons.map((utility) => `${utility.key}:${utility.asset.canonicalKey}`).join('|');
+  const signature = icons
+    .map((utility) => `${utility.key}:${utility.asset.canonicalKey}`)
+    .join('|');
   const visibleIcons = usePresenceItems(icons, signature, presentationRevision);
 
   return (
