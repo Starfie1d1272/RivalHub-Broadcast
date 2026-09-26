@@ -24,9 +24,7 @@ export interface ProgramCueEffectProviderProps {
 
 export function ProgramCueEffectProvider({ snapshot, children }: ProgramCueEffectProviderProps) {
   return (
-    <ProgramCueEffectContext.Provider value={snapshot}>
-      {children}
-    </ProgramCueEffectContext.Provider>
+    <ProgramCueEffectContext.Provider value={snapshot}>{children}</ProgramCueEffectContext.Provider>
   );
 }
 

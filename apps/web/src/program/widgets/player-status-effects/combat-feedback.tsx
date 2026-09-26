@@ -101,10 +101,7 @@ export function useCombatFeedback({
       previousHealth > 25 &&
       currentHealth <= 25;
     const healthRestored =
-      !dead &&
-      previousHealth !== null &&
-      currentHealth !== null &&
-      currentHealth > previousHealth;
+      !dead && previousHealth !== null && currentHealth !== null && currentHealth > previousHealth;
 
     if (healthRestored || (prior.dead && !dead)) {
       if (damageTimer.current !== null) window.clearTimeout(damageTimer.current);
