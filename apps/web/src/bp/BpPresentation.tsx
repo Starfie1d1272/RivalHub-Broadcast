@@ -58,7 +58,9 @@ export function BpPresentation({
             {projection.cards.map((card, index) => {
               const steps = projection.steps.slice(0, snapshot.revealedCount);
               const shown = steps.some((s) => s.cardIndex === index && s.kind === 'card');
-              const sideShown = steps.some((s) => s.cardIndex === index && s.kind === 'start-side');
+              const sideShown = steps.some(
+                (s) => s.cardIndex === index && s.kind === 'side-choice',
+              );
               const image = getMapThumbnail(card.mapName);
               const team = card.entrant === null ? null : projection.entrants[card.entrant];
               return (
@@ -91,16 +93,17 @@ export function BpPresentation({
                         ? '决胜地图'
                         : `${team?.name ?? ''} · ${card.kind === 'ban' ? '禁用' : '选择'}`}
                     </div>
-                    <div className="bp-sides" data-visible={sideShown} aria-hidden={!sideShown}>
-                      {card.startSides
-                        ? (['a', 'b'] as const).map((key) => (
-                            <div className="bp-side" key={key} data-entrant={key}>
-                              <span>{projection.entrants[key].name}</span>
-                              <strong>{card.startSides![key]} 开</strong>
-                            </div>
-                          ))
-                        : null}
-                    </div>
+                    {card.sideChoice ? (
+                      <div
+                        className="bp-side-choice"
+                        data-visible={sideShown}
+                        data-entrant={card.sideChoice.entrant}
+                        aria-hidden={!sideShown}
+                      >
+                        <span>{projection.entrants[card.sideChoice.entrant].name}</span>
+                        <strong>{card.sideChoice.side} 开</strong>
+                      </div>
+                    ) : null}
                   </div>
                 </article>
               );

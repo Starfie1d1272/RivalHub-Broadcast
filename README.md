@@ -64,7 +64,7 @@ CS2 数据源 → RuntimeState
 
 ```text
 /program   播出画面
-/program/bp  BP 透明播出画面
+/program/bp  BP 全屏播出画面
 /operator/bp  BP 控制与预览
 /operator  制作控制
 /operator/hud  Gameplay HUD 控制台
@@ -156,4 +156,4 @@ RivalHub Broadcast 使用 **GNU Affero General Public License v3.0 only（AGPL-3
 
 ## BP 播放
 
-制作控制首页的“地图禁选”提供播放/收起；打开 BP 预览后，可导入 RivalHub Broadcast Manifest JSON，核对双方与地图后播放。系统每 1.6 秒逐项揭示，最终完整 BP 保持显示。OBS 添加 `http://127.0.0.1:3000/program/bp`，宽 1920、高 1080，透明输出；该浏览器源与 `/program` Gameplay 分开装载。重启服务后重新导入清单，播放不会自动恢复。
+在 `/operator/bp` 工作台确认来源与 BP 后，可播放/收起并在同一页面预览。RivalHub 比赛复用已绑定的比赛上下文；没有可用 BP 时，可结构化填写本地比赛与 veto。保存会把填写内容转换成标准 Broadcast Manifest 并写入现有本机缓存，不会反写 RivalHub。系统每 1.6 秒逐项揭示，最终完整 BP 保持显示。OBS 添加 `http://127.0.0.1:3000/program/bp`，宽 1920、高 1080，作为独立不透明的全屏赛前场景装载；它与 `/program` Gameplay 分开。服务重启后比赛上下文从同一缓存恢复，播放会话保持收起。

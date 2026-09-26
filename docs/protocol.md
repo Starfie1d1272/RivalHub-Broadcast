@@ -475,4 +475,10 @@ reset 都从当前时刻重新开始，不补播旧动画。
 
 `POST /operator/bp-command` 接收 `{kind: "play" | "hide", expectedRevision}`。revision 在命令、比赛/BP 变更和回到 hidden 时变化；自动 reveal 仅改变 ETag，避免正常推进导致收起请求冲突。只允许 loopback 与有效 Origin，旧 revision 返回 409；不自动重试或排队。
 
-`POST /operator/bp-manifest` 接收 `{manifest, expectedRevision}`，通过既有 Manifest validator → MatchContextController → ProjectionCoordinator 切换比赛。请求体最多 256 KiB，使用相同本机来源校验和 revision 冲突保护。开始导入后清空旧 binding，非法清单不留下上一场画面。它导入完整既有契约，不是独立 BP 数据模型或 standalone authoring 表单。缓存写入失败会显式告知；服务重启仍需主动重新导入，BP 从 hidden 开始。该入口不会写 RivalHub 官方数据。
+`GET /local/v1/bp-workspace` 返回独立 `rivalhub.bp-workspace.v1` schema，暴露有限的来源、就绪状态、比赛双方公开名称、LocalBpDraft、map catalog 和当前 context revision；不暴露内部 matchId、roster、诊断或 schema version。来源显示值为 `none | online | local | cache`，测试/开发的 fixture 不进入普通 UI。
+
+`POST /operator/bp-local-save` 接收 `{draft: LocalBpDraft, expectedContextRevision}`，请求体最多 65,536 bytes。Companion 校验结构化输入、按固定赛制生成 veto sequence，编译成标准 BroadcastManifest，再经过现有 validator、MatchContextController、ProjectionCoordinator 和本机 LKG store。保存前不清除当前 binding；校验、revision 或原子持久化失败时旧 binding 保持有效。成功后来源成为 `local`，播放 session 回到 hidden。该流程不创建第二份 LocalBPState，也不写 RivalHub。
+
+`POST /operator/bp-rivalhub` 只确认切换到 MatchContextController 已暂存的 online candidate，不负责获取网络数据。当前 RivalHub `main` 没有正式 BroadcastManifest HTTP endpoint；未来接入必须复用 shared controller。online candidate 恢复时不会自动覆盖 local 或 cached-from-local 比赛，只有制作人员显式确认后才切换并更新 LKG。
+
+以上写入口仅允许 loopback 与有效 Origin；LAN 模式拒绝写入。旧 context revision 返回 409，不自动重试或排队。生产 `match-context.json` LKG 在重启后恢复比赛上下文并标记为 `cache`，BP playback session 仍从 hidden 开始。

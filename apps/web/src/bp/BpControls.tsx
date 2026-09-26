@@ -8,7 +8,13 @@ const labels = {
   shown: '完整 BP · 保持显示',
   hiding: '正在收起',
 } as const;
-export function BpControls({ snapshot }: { readonly snapshot: BpSnapshot | null }) {
+export function BpControls({
+  snapshot,
+  showStatus = true,
+}: {
+  readonly snapshot: BpSnapshot | null;
+  readonly showStatus?: boolean;
+}) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   async function send(kind: 'play' | 'hide') {
@@ -25,13 +31,15 @@ export function BpControls({ snapshot }: { readonly snapshot: BpSnapshot | null 
   }
   return (
     <div className="bp-controls">
-      <p role="status">
-        {snapshot === null
-          ? '正在连接 BP 服务'
-          : snapshot.projection === null
-            ? '暂无可播放的 BP，请先接入有效比赛上下文。'
-            : labels[snapshot.state]}
-      </p>
+      {showStatus ? (
+        <p role="status">
+          {snapshot === null
+            ? '制作服务断开'
+            : snapshot.projection === null
+              ? '当前比赛尚未录入可播放 BP。'
+              : labels[snapshot.state]}
+        </p>
+      ) : null}
       <div className="bp-actions">
         <button
           disabled={busy || !snapshot?.projection || snapshot.state !== 'hidden'}

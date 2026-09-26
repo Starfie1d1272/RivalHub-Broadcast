@@ -43,4 +43,4 @@ ADR-0003 第 9 节中的 `interpolation math / autozoom math` 是早期 broad wo
 
 - [`0008-portable-web-product-runtime.md`](0008-portable-web-product-runtime.md)：#35 Web-first 便携产品、不可变 payload / 可写 state、launcher 与 Companion ownership。
 
-- [`0009-bp-presentation-host.md`](0009-bp-presentation-host.md)：BP 独立透明 Host、有限投影、播放会话与导入/恢复边界。
+- [`0009-bp-presentation-host.md`](0009-bp-presentation-host.md)：BP 全屏 Host、本地 authoring、有限投影、播放会话与来源恢复边界。

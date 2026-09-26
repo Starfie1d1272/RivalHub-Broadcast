@@ -265,4 +265,4 @@ INCONCLUSIVE
 
 只有 installer、Windows packaging、topmost/click-through window 等平台本身就是功能语义的工作，才适合把实现 ownership 整体交给 Windows-specific contributor。
 
-BP 浏览器验收从已提交 NJU Rivals BO3/BO5 记录构造 Manifest 测试封装，经过生产 validator、MatchContextController、Core projection、Companion session 和共享 Web renderer。只补 fixture-local transport map ID，缺失名单保持空，不伪造 gameplay evidence。覆盖清单导入、双 Host 同步、累积 reveal、具名开局边、最终停留、reload/断连恢复不重播、收起与重复播放。单测覆盖缺失/冲突 side、decider ownership、非法来源、LAN、并发旧请求和会话重置。Windows + OBS 的实际透明合成仍属于真实环境验收。
+BP 浏览器验收从已提交 NJU Rivals BO3/BO5 记录构造 MatchContext 测试封装，经过生产 validator、MatchContextController、Core projection、Companion session 和共享 Web renderer。只补 fixture-local transport map ID，缺失名单保持空，不伪造 gameplay evidence。Connected 路径覆盖同一 Preview/Program 累积 reveal、BO3 决胜图只显示 SIDE_PICK actor、BO5 刀局不显示选边、reload/断连恢复 baseline、收起与重播。Local authoring 覆盖固定 BO sequence、7-map pool、选边必填、decider 自动取剩余地图、标准 Manifest validation、保存失败保持旧 binding、LKG 保存及服务重启后 cache 恢复但 session hidden。浏览器还检查 320/390px 横向溢出、键盘焦点和 reduced-motion；1.0.0 前不维护截图/pixel baseline。OBS 真实场景装载仍属于真实环境验收。

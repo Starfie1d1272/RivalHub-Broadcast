@@ -53,6 +53,13 @@ export const surfaceDefinitions = [
     realtimeChannel: null,
   },
   {
+    id: 'bp',
+    path: '/operator/bp',
+    title: 'BP 制作',
+    description: '本地 BP 编写、比赛上下文和 Veto 播出控制。',
+    realtimeChannel: null,
+  },
+  {
     id: 'hud',
     path: '/operator/hud',
     title: 'HUD 编辑器',
