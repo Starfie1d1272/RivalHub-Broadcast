@@ -421,6 +421,14 @@ export class RadarPresentation {
     const sameBoundary = this.boundary === boundary;
     if (!reconnect && sameBoundary && this.snapshot && snapshot.channelSeq <= this.snapshot.channelSeq)
       return;
+    const runtimeOnlyPublication =
+      !reconnect &&
+      sameBoundary &&
+      this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence;
+    if (runtimeOnlyPublication) {
+      this.snapshot = snapshot;
+      return;
+    }
     const previousSequence = this.snapshot?.cursor.programReceiveSequence;
     const nextSequence = snapshot.cursor.programReceiveSequence;
     const skippedSample =
@@ -443,11 +451,6 @@ export class RadarPresentation {
     if (restoringPresentationHistory) {
       this.reset();
       for (const [id, marker] of preservedSmokeEffects) this.grenades.set(id, marker);
-    }
-    // Runtime-only publications do not constitute a new GSI HP/ammo/trail sample.
-    if (this.snapshot?.cursor.programReceiveSequence === snapshot.cursor.programReceiveSequence) {
-      this.snapshot = snapshot;
-      return;
     }
     const previousBomb = this.snapshot?.payload.bomb?.state;
     this.boundary = boundary;
