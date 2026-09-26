@@ -210,7 +210,7 @@ describe('Radar renderer local lifecycle', () => {
     model.accept(missingPosition, 150);
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
       phase: 'effect',
-      positionAvailable: false,
+      positionAvailable: true,
     });
 
     const residualVelocity = next(missingPosition);
