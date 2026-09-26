@@ -8,6 +8,7 @@ import {
   radarPlayerMarkerKind,
   radarUtilityPhase,
   shortestAngle,
+  smokeEnterProgress,
   smokeRemaining,
   RADAR_PRESENTATION,
 } from '../src/program/widgets/radar/presentation';
@@ -137,6 +138,18 @@ describe('Radar renderer local lifecycle', () => {
     expect(radarUtilityPhase({ ...stationarySmoke, effectTimeSeconds: 20 })).toBe('terminal');
   });
 
+  it('derives smoke entrance maturity from effecttime instead of renderer history', () => {
+    expect(smokeEnterProgress(15.156, 10_000, 10_000)).toBe(1);
+    expect(smokeEnterProgress(0.04, 10_000, 10_000)).toBeCloseTo(
+      40 / RADAR_PRESENTATION.smokeEnterMs,
+      6,
+    );
+    expect(smokeEnterProgress(null, 10_000, 10_080)).toBeCloseTo(
+      80 / RADAR_PRESENTATION.smokeEnterMs,
+      6,
+    );
+  });
+
   it('restores a mature smoke effect without replaying its enter animation', () => {
     const restored = single();
     restored.payload.grenades = [
@@ -151,10 +164,9 @@ describe('Radar renderer local lifecycle', () => {
     const model = new RadarPresentation();
     model.accept(restored, 1_000, true);
 
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
-      phase: 'effect',
-      phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
-    });
+    const marker = model.grenades.get('synthetic-projectile');
+    expect(marker?.phase).toBe('effect');
+    expect(smokeEnterProgress(marker?.source.effectTimeSeconds ?? null, marker?.phaseStartedAt ?? 0, 1_000)).toBe(1);
   });
 
   it('keeps a mature smoke steady when sample continuity resets', () => {
@@ -170,19 +182,29 @@ describe('Radar renderer local lifecycle', () => {
     ];
     const model = new RadarPresentation();
     model.accept(restored, 1_000);
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
-      phase: 'effect',
-      phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
-    });
+    const firstMarker = model.grenades.get('synthetic-projectile');
+    expect(firstMarker?.phase).toBe('effect');
+    expect(
+      smokeEnterProgress(
+        firstMarker?.source.effectTimeSeconds ?? null,
+        firstMarker?.phaseStartedAt ?? 0,
+        1_000,
+      ),
+    ).toBe(1);
 
     const skipped = next(restored);
     skipped.cursor.programReceiveSequence = (restored.cursor.programReceiveSequence ?? 0) + 2;
     skipped.payload.grenades[0]!.effectTimeSeconds = 15.406;
     model.accept(skipped, 1_100);
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
-      phase: 'effect',
-      phaseStartedAt: 1_100 - RADAR_PRESENTATION.smokeEnterMs,
-    });
+    const restoredMarker = model.grenades.get('synthetic-projectile');
+    expect(restoredMarker?.phase).toBe('effect');
+    expect(
+      smokeEnterProgress(
+        restoredMarker?.source.effectTimeSeconds ?? null,
+        restoredMarker?.phaseStartedAt ?? 0,
+        1_100,
+      ),
+    ).toBe(1);
   });
 
   it('latches smoke from projectile to effect and never returns on residual velocity', () => {
@@ -202,7 +224,9 @@ describe('Radar renderer local lifecycle', () => {
     const started = next(before);
     started.payload.grenades[0]!.effectTimeSeconds = 0.2;
     model.accept(started, 100);
-    expect(model.grenades.get('synthetic-projectile')?.phase).toBe('effect');
+    const effectAnchor = model.grenades.get('synthetic-projectile')!;
+    expect(effectAnchor.phase).toBe('effect');
+    const anchoredTarget = effectAnchor.target;
 
     const missingPosition = next(started);
     missingPosition.payload.grenades[0]!.position = null;
@@ -222,6 +246,7 @@ describe('Radar renderer local lifecycle', () => {
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
       phase: 'effect',
       positionAvailable: true,
+      target: anchoredTarget,
     });
 
     const expired = next(residualVelocity);
@@ -246,10 +271,13 @@ describe('Radar renderer local lifecycle', () => {
     ];
     const model = new RadarPresentation();
     model.accept(before, 0);
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+    const initial = model.grenades.get('synthetic-projectile')!;
+    expect(initial).toMatchObject({
       phase: 'effect',
       side: before.payload.players[0]!.side,
     });
+    const initialAnchor = { x: initial.x, y: initial.y, target: initial.target };
+    const initialPhaseStartedAt = initial.phaseStartedAt;
 
     const started = next(before);
     started.payload.grenades[0]!.effectTimeSeconds = 15.406;
@@ -263,12 +291,19 @@ describe('Radar renderer local lifecycle', () => {
     ownerDrift.payload.grenades[0]!.effectTimeSeconds = 15.656;
     ownerDrift.payload.grenades[0]!.lifetimeSeconds = 18.111;
     ownerDrift.payload.grenades[0]!.velocity = { x: 22.894, y: 0, z: 0 };
+    ownerDrift.payload.grenades[0]!.position!.x += 400;
     model.accept(ownerDrift, 200);
 
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+    const drifted = model.grenades.get('synthetic-projectile')!;
+    expect(drifted).toMatchObject({
       phase: 'effect',
       side: before.payload.players[0]!.side,
+      phaseStartedAt: initialPhaseStartedAt,
+      x: initialAnchor.x,
+      y: initialAnchor.y,
+      target: initialAnchor.target,
     });
+    expect(smokeEnterProgress(drifted.source.effectTimeSeconds, drifted.phaseStartedAt, 200)).toBe(1);
   });
 
   it('uses two consecutive stationary authoritative displacements when velocity is missing', () => {
