@@ -117,12 +117,7 @@
       rgba(235, 63, 32, 0.38) 61%,
       transparent 79%
     ),
-    linear-gradient(
-      0deg,
-      rgba(232, 78, 31, 0.3) 0%,
-      rgba(255, 151, 48, 0.1) 25%,
-      transparent 58%
-    );
+    linear-gradient(0deg, rgba(232, 78, 31, 0.3) 0%, rgba(255, 151, 48, 0.1) 25%, transparent 58%);
   filter: saturate(1.16);
   mix-blend-mode: screen;
   transition: opacity 260ms ease-out;
