@@ -45,7 +45,7 @@ async function assertNoSymlinks(directory) {
 async function assertBundleSmoke(outputRoot) {
   const entries = await readdir(outputRoot, { withFileTypes: true });
   const bundle = entries.find(
-    (entry) => entry.isDirectory() && entry.name.startsWith('rivalhub-broadcast-qualification-'),
+    (entry) => entry.isDirectory() && entry.name.startsWith('rivalhub-broadcast-'),
   );
   const archive = entries.find((entry) => entry.isFile() && entry.name.endsWith('.zip'));
   if (bundle === undefined || archive === undefined)
@@ -82,12 +82,26 @@ async function assertBundleSmoke(outputRoot) {
     'config/gamestate_integration_rivalhub_broadcast.cfg.template',
     'metadata/artifact.json',
     'metadata/SHA256SUMS',
-    'evidence/.gitkeep',
     'README.txt',
   ])
-    await assertFile(join(bundleDir, relativePath), relativePath);
-  await assertNoSymlinks(join(bundleDir, 'app'));
-  const artifact = JSON.parse(await readFile(join(bundleDir, 'metadata/artifact.json'), 'utf8'));
+    await assertFile(
+      join(bundleDir, relativePath === 'README.txt' ? relativePath : 'resources/' + relativePath),
+      relativePath,
+    );
+  for (const name of ['data', 'logs', 'evidence'])
+    await assertFile(join(bundleDir, 'state', name), name);
+  await assertNoSymlinks(join(bundleDir, 'resources/app'));
+  let hasDependencyTests = false;
+  try {
+    await access(join(bundleDir, 'resources/app/node_modules/@fastify/send/test'));
+    hasDependencyTests = true;
+  } catch (error) {
+    if (error?.code !== 'ENOENT') throw error;
+  }
+  if (hasDependencyTests) throw new Error('production 包仍包含依赖测试夹具目录');
+  const artifact = JSON.parse(
+    await readFile(join(bundleDir, 'resources/metadata/artifact.json'), 'utf8'),
+  );
   const expectedSha = await new Promise((resolvePromise, reject) => {
     const child = spawn('git', ['rev-parse', 'HEAD'], {
       cwd: rootDir,
@@ -114,6 +128,8 @@ async function assertBundleSmoke(outputRoot) {
   );
   if (
     artifact.platform !== 'win32-x64' ||
+    artifact.productSchemaVersion !== 1 ||
+    !artifact.developmentOnly ||
     artifact.qualificationSchemaVersion !== contract.schemaVersion ||
     artifact.nodeVersion !== contract.nodeRuntimeVersion ||
     !contract.resetEvidenceFields?.includes('programTelemetryCleared') ||
@@ -121,17 +137,17 @@ async function assertBundleSmoke(outputRoot) {
     contract.markerKinds?.includes('demo-a-stopped')
   )
     throw new Error('qualification artifact metadata 无效');
-  const deployedPackage = await readFile(join(bundleDir, 'app/package.json'), 'utf8');
+  const deployedPackage = await readFile(join(bundleDir, 'resources/app/package.json'), 'utf8');
   if (deployedPackage.includes('/Users/') || deployedPackage.includes('\\Users\\'))
     throw new Error('qualification deploy 包含绑定主机的绝对工作区路径');
   const config = await readFile(
-    join(bundleDir, 'config/gamestate_integration_rivalhub_broadcast.cfg.template'),
+    join(bundleDir, 'resources/config/gamestate_integration_rivalhub_broadcast.cfg.template'),
     'utf8',
   );
   if (!config.includes('REPLACE_WITH_GSI_TOKEN'))
     throw new Error('qualification 配置模板缺少 token 占位符');
-  const scripts = await readFile(join(bundleDir, 'scripts/start.ps1'), 'utf8');
-  const installer = await readFile(join(bundleDir, 'scripts/install-gsi.ps1'), 'utf8');
+  const scripts = await readFile(join(bundleDir, 'resources/scripts/start.ps1'), 'utf8');
+  const installer = await readFile(join(bundleDir, 'resources/scripts/install-gsi.ps1'), 'utf8');
   const readme = await readFile(join(bundleDir, 'README.txt'), 'utf8');
   if (
     !scripts.includes('runtime\\node.exe') ||
@@ -141,7 +157,7 @@ async function assertBundleSmoke(outputRoot) {
     !installer.includes('GsiEndpointConflictWarning') ||
     readme.includes('stopdemo') ||
     readme.includes('This bundle') ||
-    !readme.includes('快速开始') ||
+    !readme.includes('正常制作') ||
     !readme.includes('quit') ||
     !readme.includes('rotate.ps1')
   )

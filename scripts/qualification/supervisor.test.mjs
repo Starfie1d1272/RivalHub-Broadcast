@@ -1,4 +1,6 @@
 import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { PassThrough } from 'node:stream';
+import { setTimeout } from 'node:timers';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -9,6 +11,7 @@ import {
   completionPage,
   finalizeQualificationRun,
   markCleanupFailure,
+  runCompanionLifecycle,
   shouldCleanupQualificationState,
 } from './supervisor.mjs';
 
@@ -116,5 +119,65 @@ describe('qualification supervisor finalization', () => {
     expect(
       shouldCleanupQualificationState({ ...completion, verification: 'failed', cleanup: 'passed' }),
     ).toBe(false);
+  });
+
+  it('respawns companion on exit code 75 without changing run state or finalizing', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'rivalhub-supervisor-lifecycle-'));
+    try {
+      const statePath = join(dir, 'state.json');
+      await writeFile(statePath, JSON.stringify({ runId: 'run-1', processId: 100 }), 'utf8');
+      const companionStdoutPath = join(dir, 'companion.log');
+      const companionStderrPath = join(dir, 'companion.stderr.log');
+      const supervisorLogPath = join(dir, 'supervisor.log');
+
+      let spawns = 0;
+      const mockSpawn = () => {
+        spawns++;
+        const currentPid = 1000 + spawns;
+        const listeners = {};
+        const stdout = new PassThrough();
+        const stderr = new PassThrough();
+        const child = {
+          pid: currentPid,
+          stdout,
+          stderr,
+          once: (event, handler) => {
+            listeners[event] = handler;
+          },
+        };
+        setTimeout(() => {
+          stdout.end();
+          stderr.end();
+          if (spawns === 1) {
+            listeners.exit?.(75, null);
+          } else {
+            listeners.exit?.(0, null);
+          }
+        }, 10);
+        return child;
+      };
+
+      const result = await runCompanionLifecycle({
+        nodePath: 'node',
+        appRoot: dir,
+        statePath,
+        companionStdoutPath,
+        companionStderrPath,
+        supervisorLogPath,
+        spawnProcess: mockSpawn,
+        restartExitCode: 75,
+      });
+
+      expect(spawns).toBe(2);
+      expect(result.restartCount).toBe(1);
+      expect(result.exitResult.code).toBe(0);
+      const state = JSON.parse(await readFile(statePath, 'utf8'));
+      expect(state.runId).toBe('run-1');
+      expect(state.processId).toBe(1002);
+      const log = await readFile(supervisorLogPath, 'utf8');
+      expect(log).toContain('捕获到受控重启退出码 75');
+    } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
   });
 });

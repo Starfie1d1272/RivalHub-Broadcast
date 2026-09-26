@@ -1,8 +1,11 @@
+import { readFileSync } from 'node:fs';
 import { appendFile, mkdir } from 'node:fs/promises';
 import { dirname } from 'node:path';
 
 import type { RuntimeTime } from '@rivalhub-broadcast/core/runtime';
 
+import type { LocalWebChannel } from '../local-web/transport-constants.js';
+import type { LocalWebHostEvent, LocalWebHostKind } from '../local-web/websocket-transport.js';
 import type { ProgramRuntimeSnapshot } from '../runtime/program-runtime.js';
 import qualificationContractJson from './contract.json' with { type: 'json' };
 
@@ -21,7 +24,63 @@ type QualificationContract = {
   readonly resetEvidenceFields: readonly QualificationResetEvidenceField[];
   readonly resetKind: 'map-execution-reset';
   readonly resetReason: 'operator-correction';
+  readonly qualificationProfiles: readonly QualificationProfile[];
+  readonly hostCheckpointSchemaVersion: 1;
+  readonly hostScenarios: readonly HostCheckpointScenario[];
+  readonly restartRequestExitCode: 75;
+  readonly releaseCheckKeys: readonly ReleaseCheckKey[];
 };
+
+export type QualificationProfile = 'base' | 'objective-timing' | 'release';
+
+export type HostCheckpointScenario =
+  'browser-reload' | 'obs-reload' | 'scene-visibility' | 'companion-restart';
+
+export type HostCheckpointPhase = 'before' | 'after';
+
+export type ReleaseCheckKey =
+  'browserReload' | 'obsReload' | 'sceneVisibility' | 'companionRestart';
+
+export interface HostCheckpointIdentity {
+  readonly runId: string;
+  readonly gitSha?: string;
+  readonly artifactSha256?: string;
+}
+
+export interface HostCheckpointRuntimeSnapshot {
+  readonly producerInstanceId: string;
+  readonly freshness: QualificationFreshness;
+  readonly mapEpoch: number;
+  readonly sourceGeneration: number;
+  readonly runtimeSeq: number;
+}
+
+export interface HostCheckpointHostSnapshot {
+  readonly active: {
+    readonly obs: number;
+    readonly browser: number;
+    readonly unknown: number;
+  };
+  readonly byHostChannel: Readonly<
+    Record<LocalWebHostKind, Readonly<Record<LocalWebChannel, number>>>
+  >;
+  readonly obsVersions: readonly string[];
+  readonly recentEvents: readonly LocalWebHostEvent[];
+}
+
+export interface HostCheckpoint {
+  readonly schemaVersion: 1;
+  readonly scenario: HostCheckpointScenario;
+  readonly phase: HostCheckpointPhase;
+  readonly timestamp: {
+    readonly monotonicMs: number;
+    readonly utc: string;
+  };
+  readonly identity: HostCheckpointIdentity;
+  readonly runtime: HostCheckpointRuntimeSnapshot;
+  readonly host: HostCheckpointHostSnapshot;
+  readonly programVisible?: boolean;
+}
 
 // Objective scenario markers use phase=before/after to bind operator intent to
 // the exact capture window that the offline analyzer must verify.
@@ -34,6 +93,7 @@ export type QualificationObjectiveScenarioMarkerKind =
   | 'objective-too-late-defuse'
   | 'objective-fast-defuse-missing-planted-sample'
   | 'objective-reconnect-restart';
+
 export type QualificationMarkerKind =
   | 'demo-a-live'
   | 'cs2-closed'
@@ -42,6 +102,7 @@ export type QualificationMarkerKind =
   | 'cs2-reopened'
   | 'demo-b-live'
   | QualificationObjectiveScenarioMarkerKind;
+
 export type QualificationMarkerPhase = 'before' | 'after';
 export type QualificationFreshness = 'awaiting' | 'fresh' | 'stale';
 export type QualificationResult = 'PASS' | 'FAIL' | 'INCONCLUSIVE';
@@ -74,6 +135,11 @@ export const QUALIFICATION_CHECK_KEYS = qualificationContract.checkKeys;
 export const QUALIFICATION_RESET_EVIDENCE_FIELDS = qualificationContract.resetEvidenceFields;
 export const QUALIFICATION_RESET_KIND = qualificationContract.resetKind;
 export const QUALIFICATION_RESET_REASON = qualificationContract.resetReason;
+export const QUALIFICATION_PROFILES = qualificationContract.qualificationProfiles;
+export const HOST_CHECKPOINT_SCHEMA_VERSION = qualificationContract.hostCheckpointSchemaVersion;
+export const HOST_SCENARIOS = qualificationContract.hostScenarios;
+export const RESTART_REQUEST_EXIT_CODE = qualificationContract.restartRequestExitCode;
+export const RELEASE_CHECK_KEYS = qualificationContract.releaseCheckKeys;
 
 export interface QualificationClock {
   now(): RuntimeTime;
@@ -120,18 +186,28 @@ export interface QualificationMarker {
 export interface QualificationEvidenceStoreOptions {
   readonly runId: string;
   readonly scenarioPath?: string;
+  readonly hostCheckpointsPath?: string;
   readonly clock: QualificationClock;
   readonly maxMarkers?: number;
+  readonly maxHostCheckpoints?: number;
+  readonly gitSha?: string;
+  readonly artifactSha256?: string;
 }
 
 export interface QualificationEvidenceSnapshot {
   readonly markers: readonly QualificationMarker[];
   readonly lastMarker: QualificationMarker | null;
   readonly scenarioWriteFailed: boolean;
+  readonly hostCheckpoints: readonly HostCheckpoint[];
+  readonly hostCheckpointsWriteFailed: boolean;
 }
 
 function isQualificationMarkerKind(value: unknown): value is QualificationMarkerKind {
   return typeof value === 'string' && QUALIFICATION_MARKER_KINDS.some((kind) => kind === value);
+}
+
+function isHostCheckpointScenario(value: unknown): value is HostCheckpointScenario {
+  return typeof value === 'string' && HOST_SCENARIOS.some((scenario) => scenario === value);
 }
 
 function isObjectiveScenarioMarkerKind(
@@ -170,12 +246,19 @@ function acceptedObservationFrom(
 export class QualificationEvidenceStore {
   private readonly runId: string;
   private readonly scenarioPath: string | undefined;
+  private readonly hostCheckpointsPath: string | undefined;
   private readonly clock: QualificationClock;
   private readonly maxMarkers: number;
+  private readonly maxHostCheckpoints: number;
+  private readonly gitSha: string | undefined;
+  private readonly artifactSha256: string | undefined;
   private readonly markers: QualificationMarker[] = [];
+  private readonly hostCheckpoints: HostCheckpoint[] = [];
   private writeChain: Promise<void> = Promise.resolve();
+  private hostCheckpointsWriteChain: Promise<void> = Promise.resolve();
   private lastFreshness: QualificationFreshness | undefined;
   private scenarioWriteFailed = false;
+  private hostCheckpointsWriteFailed = false;
 
   constructor(options: QualificationEvidenceStoreOptions) {
     if (options.runId.trim().length === 0) throw new Error('现场验收轮次编号不能为空。');
@@ -189,8 +272,44 @@ export class QualificationEvidenceStore {
     }
     this.runId = options.runId;
     this.scenarioPath = options.scenarioPath;
+    this.hostCheckpointsPath = options.hostCheckpointsPath;
     this.clock = options.clock;
     this.maxMarkers = options.maxMarkers ?? QUALIFICATION_MAX_MARKERS;
+    this.maxHostCheckpoints = options.maxHostCheckpoints ?? QUALIFICATION_MAX_MARKERS;
+    this.gitSha = options.gitSha;
+    this.artifactSha256 = options.artifactSha256;
+
+    if (this.scenarioPath !== undefined) {
+      try {
+        const text = readFileSync(this.scenarioPath, 'utf8');
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed.length === 0) continue;
+          const parsed = JSON.parse(trimmed) as QualificationMarker;
+          if (isQualificationMarkerKind(parsed.kind)) {
+            this.markers.push(parsed);
+          }
+        }
+      } catch {
+        // file doesn't exist yet or is unreadable
+      }
+    }
+
+    if (this.hostCheckpointsPath !== undefined) {
+      try {
+        const text = readFileSync(this.hostCheckpointsPath, 'utf8');
+        for (const line of text.split('\n')) {
+          const trimmed = line.trim();
+          if (trimmed.length === 0) continue;
+          const parsed = JSON.parse(trimmed) as HostCheckpoint;
+          if (parsed.schemaVersion === 1 && isHostCheckpointScenario(parsed.scenario)) {
+            this.hostCheckpoints.push(parsed);
+          }
+        }
+      } catch {
+        // file doesn't exist yet or is unreadable
+      }
+    }
   }
 
   async recordMarker(
@@ -270,6 +389,63 @@ export class QualificationEvidenceStore {
     return marker;
   }
 
+  async recordHostCheckpoint(options: {
+    readonly scenario: HostCheckpointScenario;
+    readonly phase: HostCheckpointPhase;
+    readonly runtime: HostCheckpointRuntimeSnapshot;
+    readonly host: HostCheckpointHostSnapshot;
+    readonly programVisible?: boolean;
+    readonly at?: RuntimeTime;
+  }): Promise<HostCheckpoint> {
+    if (!isHostCheckpointScenario(options.scenario)) {
+      throw new Error(`不支持的 Host 场景：${String(options.scenario)}`);
+    }
+    if (options.phase !== 'before' && options.phase !== 'after') {
+      throw new Error(`不支持的 Host 检查点阶段：${String(options.phase)}`);
+    }
+    const at = options.at ?? this.clock.now();
+    assertFiniteRuntimeTime(at);
+
+    const checkpoint: HostCheckpoint = {
+      schemaVersion: 1,
+      scenario: options.scenario,
+      phase: options.phase,
+      timestamp: {
+        monotonicMs: at.monotonicMs,
+        utc: at.utc,
+      },
+      identity: {
+        runId: this.runId,
+        ...(this.gitSha === undefined ? {} : { gitSha: this.gitSha }),
+        ...(this.artifactSha256 === undefined ? {} : { artifactSha256: this.artifactSha256 }),
+      },
+      runtime: options.runtime,
+      host: options.host,
+      ...(options.programVisible === undefined ? {} : { programVisible: options.programVisible }),
+    };
+
+    const write = this.hostCheckpointsWriteChain.then(async () => {
+      if (this.hostCheckpointsPath === undefined) return;
+      await mkdir(dirname(this.hostCheckpointsPath), { recursive: true });
+      await appendFile(this.hostCheckpointsPath, `${JSON.stringify(checkpoint)}\n`, {
+        encoding: 'utf8',
+        mode: 0o600,
+      });
+    });
+    this.hostCheckpointsWriteChain = write.catch(() => undefined);
+    try {
+      await write;
+    } catch (error) {
+      this.hostCheckpointsWriteFailed = true;
+      throw error;
+    }
+
+    this.hostCheckpoints.push(checkpoint);
+    const overflow = this.hostCheckpoints.length - this.maxHostCheckpoints;
+    if (overflow > 0) this.hostCheckpoints.splice(0, overflow);
+    return checkpoint;
+  }
+
   async observeFreshness(
     freshness: QualificationFreshness,
     snapshot: ProgramRuntimeSnapshot,
@@ -286,6 +462,8 @@ export class QualificationEvidenceStore {
       markers,
       lastMarker: markers.at(-1) ?? null,
       scenarioWriteFailed: this.scenarioWriteFailed,
+      hostCheckpoints: this.hostCheckpoints.slice(),
+      hostCheckpointsWriteFailed: this.hostCheckpointsWriteFailed,
     };
   }
 }

@@ -1,5 +1,18 @@
-﻿param([string]$Cs2Root)
+﻿param([string]$Cs2Root, [switch]$Product)
 . (Join-Path $PSScriptRoot 'common.ps1')
+if (@(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction SilentlyContinue).Count -gt 0) { throw '请先停止本地制播服务，再安装或验证 GSI 配置' }
+if ($Product) {
+    $script:QualificationStateRoot = Join-Path $script:StateRoot 'data\gsi-install'
+    $script:InstallStatePath = Join-Path $script:QualificationStateRoot 'install.json'
+}
+if (Test-Path -LiteralPath $script:InstallStatePath -PathType Leaf) {
+    $existing = Read-InstallState
+    if ($Cs2Root) { throw '已有安装记录，请先恢复配置后再选择其它 CS2 目录' }
+    if (-not (Test-Path -LiteralPath $existing.cfgPath -PathType Leaf) -or
+        (Get-FileHash -LiteralPath $existing.cfgPath -Algorithm SHA256).Hash.ToLowerInvariant() -ne [string]$existing.cfgFingerprint) { throw '现有 GSI 配置与安装记录不一致，已保留原备份；请先恢复配置' }
+    Write-Output 'GSI 配置已安装且一致。'
+    exit 0
+}
 
 function Get-SteamInstallRoots {
     $roots = @()
@@ -94,6 +107,19 @@ $hadExisting = Test-Path -LiteralPath $cfgPath -PathType Leaf
 if ($hadExisting) { Copy-Item -LiteralPath $cfgPath -Destination $backupPath -Force }
 
 $token = New-QualificationToken
+if ($Product) {
+    $tokenPath = Join-Path $script:StateRoot 'data\gsi-token.txt'
+    if (Test-Path -LiteralPath $tokenPath -PathType Leaf) {
+        $token = (Get-Content -LiteralPath $tokenPath -Raw -Encoding UTF8).Trim()
+        if ($token -notmatch '^[a-f0-9]{64}$') { throw '本地 GSI 令牌文件无效' }
+    } else {
+        $bytes = [byte[]]::new(32)
+        $rng = [System.Security.Cryptography.RandomNumberGenerator]::Create()
+        try { $rng.GetBytes($bytes) } finally { $rng.Dispose() }
+        $token = [BitConverter]::ToString($bytes).Replace('-', '').ToLowerInvariant()
+        Write-Utf8NoBom -Path $tokenPath -Content $token
+    }
+}
 $templatePath = Join-Path $script:BundleRoot 'config\gamestate_integration_rivalhub_broadcast.cfg.template'
 $template = Get-Content -LiteralPath $templatePath -Raw -Encoding UTF8
 $materialized = $template.Replace('REPLACE_WITH_GSI_TOKEN', $token)
@@ -126,5 +152,5 @@ Write-JsonFile -Path $script:InstallStatePath -Value $state
 
 Write-Output "GSI 配置已安装：$cfgPath"
 Write-Output "配置指纹（SHA-256）：$fingerprint"
-Write-Output 'GSI 令牌已生成，仅保存在本地验收状态中。'
-Write-Output '下一步：执行 start.ps1。'
+Write-Output 'GSI 令牌仅保存在本地运行数据目录。'
+if ($Product) { Write-Output '下一步：双击 RivalHub Broadcast.exe。' } else { Write-Output '下一步：执行 start.ps1。' }

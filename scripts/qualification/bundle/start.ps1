@@ -1,11 +1,12 @@
-﻿param([switch]$ObjectiveTiming)
+param([switch]$ObjectiveTiming, [switch]$Release)
 . (Join-Path $PSScriptRoot 'common.ps1')
 
-$qualificationProfile = if ($ObjectiveTiming) { 'objective-timing' } else { 'base' }
+$qualificationProfile = if ($Release) { 'release' } elseif ($ObjectiveTiming) { 'objective-timing' } else { 'base' }
 
 $install = Read-InstallState
 Write-GsiEndpointConflictWarning -CfgDirectory (Split-Path -Parent ([string]$install.cfgPath)) -CanonicalCfgPath ([string]$install.cfgPath) | Out-Null
 $artifact = Read-JsonFile -Path (Join-Path $script:BundleRoot 'metadata\artifact.json')
+if ($artifact.PSObject.Properties.Name -contains 'developmentOnly' -and $artifact.developmentOnly) { throw '开发结构包不能作为真实环境验收产物，请使用 CI exact-revision 产品包' }
 $nodePath = Join-Path $script:BundleRoot 'runtime\node.exe'
 $appPath = Join-Path $script:BundleRoot 'app'
 if (-not (Test-Path -LiteralPath $nodePath -PathType Leaf)) { throw '验收包内缺少 runtime\node.exe' }
@@ -18,11 +19,12 @@ $listeners = @(Get-NetTCPConnection -LocalPort 3000 -State Listen -ErrorAction S
 if ($listeners.Count -gt 0) { throw '3000 端口已被占用；请先停止其他进程再开始现场验收' }
 
 $runId = "$((Get-Date).ToUniversalTime().ToString('yyyyMMddTHHmmssZ'))-$([guid]::NewGuid().ToString('N').Substring(0, 8))"
-$runDir = Join-Path $script:BundleRoot "evidence\$runId"
+$runDir = Join-Path $script:StateRoot "evidence\$runId"
 foreach ($directory in @($runDir, (Join-Path $runDir 'recorder'), (Join-Path $runDir 'debug'), (Join-Path $runDir 'logs'), (Join-Path $runDir 'cfg'))) {
     New-Item -ItemType Directory -Force -Path $directory | Out-Null
 }
 New-Item -ItemType File -Force -Path (Join-Path $runDir 'scenario.jsonl') | Out-Null
+New-Item -ItemType File -Force -Path (Join-Path $runDir 'host-checkpoints.jsonl') | Out-Null
 Copy-Item -LiteralPath (Join-Path $script:BundleRoot 'metadata\artifact.json') -Destination (Join-Path $runDir 'artifact.json') -Force
 Write-JsonFile -Path (Join-Path $runDir 'cfg\fingerprint.json') -Value ([ordered]@{
     schemaVersion = 1
@@ -59,6 +61,15 @@ $runState = [ordered]@{
 }
 Write-JsonFile -Path $script:RunStatePath -Value $runState
 
+$env:HOST = '127.0.0.1'
+$env:PORT = '3000'
+$env:LOCAL_WEB_LAN_MODE = '0'
+$env:WEB_ROOT = Join-Path $script:BundleRoot 'web\dist'
+$env:HUD_CONFIG_PATH = Join-Path $script:StateRoot 'data\hud-config.json'
+$env:SERIES_PROGRESS_CHECKPOINT_PATH = Join-Path $script:StateRoot 'data\series-progress.json'
+Remove-Item Env:BROADCAST_PRODUCT_INSTANCE -ErrorAction SilentlyContinue
+Remove-Item Env:BROADCAST_RUNTIME_TOKEN -ErrorAction SilentlyContinue
+Remove-Item Env:NODE_OPTIONS -ErrorAction SilentlyContinue
 $env:BROADCAST_COMMIT = [string]$artifact.gitSha
 $env:GSI_TOKEN = [string]$install.gsiToken
 $env:CAPTURE_DIR = (Join-Path $runDir 'recorder')
@@ -70,6 +81,7 @@ $env:QUALIFICATION_WINDOWS_VERSION = $windowsVersion
 $env:QUALIFICATION_CS2_VERSION = $cs2Version
 $env:QUALIFICATION_ARTIFACT_SHA256 = [string]$artifact.artifactSha256
 $env:QUALIFICATION_SCENARIO_PATH = (Join-Path $runDir 'scenario.jsonl')
+$env:QUALIFICATION_HOST_CHECKPOINTS_PATH = (Join-Path $runDir 'host-checkpoints.jsonl')
 $env:QUALIFICATION_EVIDENCE_DIR = $runDir
 $env:QUALIFICATION_BUNDLE_ROOT = $script:BundleRoot
 $env:QUALIFICATION_APP_ROOT = $appPath

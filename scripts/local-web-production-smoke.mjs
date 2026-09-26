@@ -235,6 +235,12 @@ async function main() {
       await assetResponse.arrayBuffer();
       assert(assetResponse.status === 200, `${assetPath} returned HTTP ${assetResponse.status}`);
     });
+    await runPhase('shared product shell stylesheet', async () => {
+      const response = await globalThis.fetch(`${baseUrl}/product-shell.css`, requestOptions);
+      const body = await response.text();
+      assert(response.status === 200, `/product-shell.css returned HTTP ${response.status}`);
+      assert(/\.product-topbar\s*\{/.test(body), 'shared product topbar styles are missing');
+    });
     await runPhase('CS2 assets', () => assertCs2Assets(baseUrl, requestOptions));
     await runPhase('WS baseline', () =>
       assertProgramBaseline(address.port, LOCAL_WEB_SUBPROTOCOL, LOCAL_WEB_ROUTES.program),

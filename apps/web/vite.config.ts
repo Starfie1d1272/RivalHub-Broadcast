@@ -168,8 +168,88 @@ function replayPublicAssets() {
   };
 }
 
+function hostDiagnosticsDevelopmentApi() {
+  return {
+    name: 'rivalhub-host-diagnostics-development-api',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use('/debug/hosts', (_request, response) => {
+        void (async () => {
+          try {
+            const companionResponse = await fetch('http://127.0.0.1:3000/debug/hosts');
+            if (companionResponse.ok) {
+              const data = await companionResponse.text();
+              response.statusCode = companionResponse.status;
+              response.setHeader('Content-Type', 'application/json; charset=utf-8');
+              response.setHeader('Cache-Control', 'no-cache');
+              response.end(data);
+              return;
+            }
+          } catch {
+            // Companion is not running (e.g. during standalone Vite acceptance tests)
+          }
+          response.statusCode = 200;
+          response.setHeader('Content-Type', 'application/json; charset=utf-8');
+          response.setHeader('Cache-Control', 'no-cache');
+          response.end(
+            JSON.stringify({
+              active: {
+                obs: 0,
+                browser: 0,
+                unknown: 0,
+                byChannel: {},
+                byHostChannel: { obs: {}, browser: {}, unknown: {} },
+                obsVersions: [],
+              },
+              totals: {
+                connected: 0,
+                disconnected: 0,
+                connectionLimitRejected: 0,
+                slowConsumerTerminated: 0,
+                snapshotOversize: 0,
+                heartbeatTerminated: 0,
+                sendFailed: 0,
+              },
+              recentEvents: [],
+            }),
+          );
+        })();
+      });
+    },
+  };
+}
+
+function productShellStylesheet() {
+  const stylesheet = resolve(import.meta.dirname, 'src/product-shell.css');
+  return {
+    name: 'rivalhub-product-shell-stylesheet',
+    configureServer(server: import('vite').ViteDevServer) {
+      server.middlewares.use('/product-shell.css', (_request, response, next) => {
+        void readFile(stylesheet)
+          .then((bytes) => {
+            response.statusCode = 200;
+            response.setHeader('Content-Type', 'text/css; charset=utf-8');
+            response.setHeader('Cache-Control', 'no-cache');
+            response.end(bytes);
+          })
+          .catch(next);
+      });
+    },
+    async closeBundle() {
+      await cp(stylesheet, resolve(import.meta.dirname, 'dist/product-shell.css'), {
+        force: true,
+      });
+    },
+  };
+}
+
 export default defineConfig({
-  plugins: [react(), replayPublicAssets(), replayPrefixDevelopmentApi()],
+  plugins: [
+    react(),
+    replayPublicAssets(),
+    replayPrefixDevelopmentApi(),
+    productShellStylesheet(),
+    hostDiagnosticsDevelopmentApi(),
+  ],
   publicDir: cs2AssetsPublicDir,
   resolve: {
     alias: {
@@ -181,7 +261,6 @@ export default defineConfig({
   },
   server: {
     proxy: {
-      '/qualification': 'http://127.0.0.1:3000',
       '/operator/hud-config': 'http://127.0.0.1:3000',
       '/operator/series': 'http://127.0.0.1:3000',
       '/debug/runtime': 'http://127.0.0.1:3000',

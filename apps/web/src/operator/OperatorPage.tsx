@@ -4,6 +4,7 @@ import type { FormEvent } from 'react';
 import { OperatorShell } from './OperatorShell';
 
 import { type LocalChannelConnectionState, useLocalChannelClient } from '../realtime';
+import { useBrowserHostDiagnostics } from '../debug/host-diagnostics';
 
 function connectionStateLabel(state: LocalChannelConnectionState): string {
   switch (state) {
@@ -60,6 +61,7 @@ function HealthCard({
 
 export function OperatorPage() {
   const client = useLocalChannelClient('operator');
+  const hosts = useBrowserHostDiagnostics();
   const connection = useSyncExternalStore(client.subscribe, client.getSnapshot, client.getSnapshot);
   const snapshot = connection.current;
   const payload = snapshot?.payload;
@@ -115,7 +117,7 @@ export function OperatorPage() {
       <main className="operator-shell dashboard" data-surface="operator">
         <header className="product-heading">
           <h1>制作控制</h1>
-          <p>比赛、画面与现场状态，尽在此处。</p>
+          <p>查看当前比赛、数据接入与播出状态。</p>
         </header>
         <div className="dashboard-workspace">
           <div className="dashboard-primary">
@@ -160,7 +162,7 @@ export function OperatorPage() {
               )}
               <p className="dashboard-match__map">
                 当前地图 · {payload?.runtime.mapName ?? '等待比赛数据'}
-                {series?.currentMapOrder ? ` · 第 ${series.currentMapOrder} 张` : ''} · 系列赛比分
+                {series?.currentMapOrder ? ` · 第 ${series.currentMapOrder} 张` : ''}
               </p>
             </section>
             {needsBinding || issues.length > 0 || !connected ? (
@@ -326,8 +328,20 @@ export function OperatorPage() {
             />
             <HealthCard
               label="OBS 浏览器源"
-              value="暂未提供检测"
-              note="请在 OBS 中确认浏览器源与播出画面"
+              value={
+                hosts === null
+                  ? '正在读取'
+                  : hosts.active.obs === 0
+                    ? '尚未连接'
+                    : `已连接 ${hosts.active.obs} 个通道`
+              }
+              note={
+                hosts === null
+                  ? '正在读取本地通道状态'
+                  : hosts.active.obsVersions.length > 0
+                    ? `识别版本 ${hosts.active.obsVersions.join('、')}；请再核对实际画面`
+                    : '按连接标识统计；请再核对实际画面'
+              }
             />
           </aside>
         </div>

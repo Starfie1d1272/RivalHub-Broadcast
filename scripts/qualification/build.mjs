@@ -180,7 +180,11 @@ async function listFiles(root, ignored = new Set()) {
     }
   }
   await visit(root);
-  return files.sort();
+  return files.sort((a, b) => {
+    const left = relative(root, a).replaceAll('\\', '/');
+    const right = relative(root, b).replaceAll('\\', '/');
+    return left < right ? -1 : left > right ? 1 : 0;
+  });
 }
 
 async function sha256File(path) {
@@ -192,7 +196,7 @@ async function sha256File(path) {
 async function contentDigest(bundleDir) {
   const files = await listFiles(
     bundleDir,
-    new Set(['metadata/artifact.json', 'metadata/SHA256SUMS']),
+    new Set(['resources/metadata/artifact.json', 'resources/metadata/SHA256SUMS', 'state']),
   );
   const hash = createHash('sha256');
   for (const path of files) {
@@ -229,6 +233,22 @@ async function createDeployWorkspace(workspaceDir) {
   }
 }
 
+async function pruneDependencyTestFiles(appDir) {
+  const developmentDirectories = new Set(['test', 'tests', '__tests__']);
+  async function visit(directory) {
+    for (const entry of await readdir(directory, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      const path = join(directory, entry.name);
+      if (developmentDirectories.has(entry.name)) {
+        await rm(path, { recursive: true, force: true });
+      } else {
+        await visit(path);
+      }
+    }
+  }
+  await visit(join(appDir, 'node_modules'));
+}
+
 async function restorePortableWorkspaceDependencySpecifiers(appDir) {
   const deployedManifestPath = join(appDir, 'package.json');
   const sourceManifestPath = join(rootDir, 'apps', 'companion', 'package.json');
@@ -243,8 +263,8 @@ async function restorePortableWorkspaceDependencySpecifiers(appDir) {
 }
 
 async function writeShaSums(bundleDir) {
-  const sumsPath = join(bundleDir, 'metadata', 'SHA256SUMS');
-  const files = await listFiles(bundleDir, new Set(['metadata/SHA256SUMS']));
+  const sumsPath = join(bundleDir, 'resources', 'metadata', 'SHA256SUMS');
+  const files = await listFiles(bundleDir, new Set(['resources/metadata/SHA256SUMS', 'state']));
   const lines = [];
   for (const path of files)
     lines.push(`${await sha256File(path)}  ${relative(bundleDir, path).replaceAll('\\', '/')}`);
@@ -266,7 +286,7 @@ async function main() {
   await ensureCleanCheckout(options.allowDirty);
   const gitSha = await commandOutput('git', ['rev-parse', 'HEAD']);
   const shortSha = gitSha.slice(0, 7);
-  const bundleName = `rivalhub-broadcast-qualification-${shortSha}-win-x64`;
+  const bundleName = `rivalhub-broadcast-${shortSha}-win-x64`;
   await mkdir(options.output, { recursive: true });
   const bundleDir = join(options.output, bundleName);
   const archivePath = join(options.output, `${bundleName}.zip`);
@@ -285,15 +305,16 @@ async function main() {
   const stagingDir = join(stagingParent, bundleName);
   const deployWorkspaceDir = join(stagingParent, '.deploy-workspace');
   const deployedAppDir = join(stagingDir, '.deployed-app');
-  const appDir = join(stagingDir, 'app');
+  const resourcesDir = join(stagingDir, 'resources');
+  const appDir = join(resourcesDir, 'app');
   const downloadDir = await mkdtemp(join(options.output, '.node-runtime-'));
   try {
-    await mkdir(join(stagingDir, 'runtime'), { recursive: true });
-    await mkdir(join(stagingDir, 'scripts'), { recursive: true });
-    await mkdir(join(stagingDir, 'config'), { recursive: true });
-    await mkdir(join(stagingDir, 'metadata'), { recursive: true });
-    await mkdir(join(stagingDir, 'evidence'), { recursive: true });
-    await writeFile(join(stagingDir, 'evidence', '.gitkeep'), '', 'utf8');
+    await mkdir(join(resourcesDir, 'runtime'), { recursive: true });
+    await mkdir(join(resourcesDir, 'scripts'), { recursive: true });
+    await mkdir(join(resourcesDir, 'config'), { recursive: true });
+    await mkdir(join(resourcesDir, 'metadata'), { recursive: true });
+    for (const name of ['data', 'logs', 'evidence'])
+      await mkdir(join(stagingDir, 'state', name), { recursive: true });
     await createDeployWorkspace(deployWorkspaceDir);
     await runCommand(
       'pnpm',
@@ -308,18 +329,22 @@ async function main() {
       { cwd: deployWorkspaceDir },
     );
     await cp(deployedAppDir, appDir, { recursive: true, dereference: true });
+    await pruneDependencyTestFiles(appDir);
     await rm(deployedAppDir, { recursive: true, force: true });
     await restorePortableWorkspaceDependencySpecifiers(appDir);
-    await cp(join(rootDir, 'apps', 'web', 'dist'), join(stagingDir, 'web', 'dist'), {
+    await cp(join(rootDir, 'apps', 'web', 'dist'), join(resourcesDir, 'web', 'dist'), {
       recursive: true,
       dereference: true,
     });
     const nodeVersion = options.skipNodeRuntime
       ? QUALIFICATION_NODE_VERSION
-      : await downloadNodeRuntime(join(stagingDir, 'runtime'), options.nodeVersion, downloadDir);
+      : await downloadNodeRuntime(join(resourcesDir, 'runtime'), options.nodeVersion, downloadDir);
     for (const name of [
+      'start-product.ps1',
+      'stop-product.ps1',
       'common.ps1',
       'install-gsi.ps1',
+      'restore-gsi.ps1',
       'start.ps1',
       'rotate.ps1',
       'mark.ps1',
@@ -329,32 +354,32 @@ async function main() {
     ]) {
       await cp(
         join(scriptDir, 'bundle', name),
-        join(stagingDir, name === 'README.txt' ? name : join('scripts', name)),
+        name === 'README.txt' ? join(stagingDir, name) : join(resourcesDir, 'scripts', name),
       );
     }
-    await cp(join(scriptDir, 'evidence.mjs'), join(stagingDir, 'scripts', 'verify-evidence.mjs'));
-    await cp(join(scriptDir, 'evidence'), join(stagingDir, 'scripts', 'evidence'), {
+    await cp(join(scriptDir, 'evidence.mjs'), join(resourcesDir, 'scripts', 'verify-evidence.mjs'));
+    await cp(join(scriptDir, 'evidence'), join(resourcesDir, 'scripts', 'evidence'), {
       recursive: true,
     });
     await cp(
       join(rootDir, 'packages', 'telemetry-gsi', 'src', 'production-config.json'),
-      join(stagingDir, 'scripts', 'evidence', 'production-gsi-config.json'),
+      join(resourcesDir, 'scripts', 'evidence', 'production-gsi-config.json'),
     );
     await cp(
       join(rootDir, 'packages', 'core', 'src', 'runtime', 'objective-timing-policy.json'),
-      join(stagingDir, 'scripts', 'evidence', 'objective-timing-policy.json'),
+      join(resourcesDir, 'scripts', 'evidence', 'objective-timing-policy.json'),
     );
     await cp(
       join(scriptDir, 'supervisor.mjs'),
-      join(stagingDir, 'scripts', 'qualification-supervisor.mjs'),
+      join(resourcesDir, 'scripts', 'qualification-supervisor.mjs'),
     );
     await cp(
       join(rootDir, 'apps', 'companion', 'src', 'qualification', 'contract.json'),
-      join(stagingDir, 'scripts', 'qualification-contract.json'),
+      join(resourcesDir, 'scripts', 'qualification-contract.json'),
     );
     await cp(
       join(rootDir, 'config', 'gamestate_integration_rivalhub_broadcast.cfg.example'),
-      join(stagingDir, 'config', 'gamestate_integration_rivalhub_broadcast.cfg.template'),
+      join(resourcesDir, 'config', 'gamestate_integration_rivalhub_broadcast.cfg.template'),
     );
     await writeFile(
       join(stagingDir, 'README.txt'),
@@ -364,10 +389,47 @@ async function main() {
       'utf8',
     );
 
+    await cp(
+      join(scriptDir, 'product-runtime.mjs'),
+      join(resourcesDir, 'scripts', 'product-runtime.mjs'),
+    );
+    const developmentOnly =
+      options.allowDirty || options.skipNodeRuntime || process.platform !== 'win32';
+    if (process.platform === 'win32' && !options.skipNodeRuntime) {
+      const source = (await readFile(join(scriptDir, 'launcher', 'Program.cs'), 'utf8'))
+        .replace('__NODE_SHA256__', await sha256File(join(resourcesDir, 'runtime', 'node.exe')))
+        .replace(
+          '__SUPERVISOR_SHA256__',
+          await sha256File(join(resourcesDir, 'scripts', 'product-runtime.mjs')),
+        );
+      const sourcePath = join(stagingParent, 'Program.cs');
+      await writeFile(sourcePath, source, 'utf8');
+      const compiler = join(
+        process.env.WINDIR,
+        'Microsoft.NET',
+        'Framework64',
+        'v4.0.30319',
+        'csc.exe',
+      );
+      await runCommand(compiler, [
+        '/nologo',
+        '/target:winexe',
+        '/platform:x64',
+        '/reference:System.Windows.Forms.dll',
+        `/out:${join(stagingDir, 'RivalHub Broadcast.exe')}`,
+        sourcePath,
+      ]);
+    } else if (!options.skipNodeRuntime) {
+      throw new Error(
+        '正式产品包需要在 Windows x64 构建 EXE；本机结构检查请使用 --skip-node-runtime',
+      );
+    }
     const buildTimestamp = new Date().toISOString();
     const digest = await contentDigest(stagingDir);
     const artifact = {
       schemaVersion: 1,
+      productSchemaVersion: 1,
+      developmentOnly,
       repository: REPOSITORY,
       gitSha,
       buildTimestamp,
@@ -377,7 +439,7 @@ async function main() {
       artifactSha256: digest,
     };
     await writeFile(
-      join(stagingDir, 'metadata', 'artifact.json'),
+      join(resourcesDir, 'metadata', 'artifact.json'),
       `${JSON.stringify(artifact, null, 2)}\n`,
       'utf8',
     );

@@ -266,6 +266,49 @@ async function restoreGsiConfig(statePath) {
   await writeJson(statePath, { ...state, gsiRestored: true });
 }
 
+export async function runCompanionLifecycle({
+  nodePath,
+  appRoot,
+  statePath,
+  companionStdoutPath,
+  companionStderrPath,
+  supervisorLogPath,
+  spawnProcess = spawn,
+  restartExitCode = 75,
+}) {
+  let restartCount = 0;
+  while (true) {
+    const child = spawnProcess(nodePath, ['dist/server.js'], {
+      cwd: appRoot,
+      env: process.env,
+      stdio: ['ignore', 'pipe', 'pipe'],
+      shell: false,
+      windowsHide: true,
+    });
+    const companionStdout = createWriteStream(companionStdoutPath, { flags: 'a' });
+    const companionStderr = createWriteStream(companionStderrPath, { flags: 'a' });
+    child.stdout.pipe(companionStdout);
+    child.stderr.pipe(companionStderr);
+
+    const runState = await readJson(statePath);
+    await writeJson(statePath, { ...runState, processId: child.pid });
+
+    const exitResult = await waitForChild(child);
+    await Promise.all([waitForStream(companionStdout), waitForStream(companionStderr)]);
+
+    if (exitResult.code === restartExitCode) {
+      restartCount++;
+      await appendFile(
+        supervisorLogPath,
+        `[supervisor] 捕获到受控重启退出码 ${restartExitCode}，正在重新拉起制播进程（保持相同 runId 与凭据，重启次数: ${restartCount}）...\n`,
+        'utf8',
+      ).catch(() => undefined);
+      continue;
+    }
+    return { exitResult, restartCount };
+  }
+}
+
 async function main() {
   const bundleRoot = resolve(process.env.QUALIFICATION_BUNDLE_ROOT ?? DEFAULT_BUNDLE_ROOT);
   const appRoot = resolve(process.env.QUALIFICATION_APP_ROOT ?? join(bundleRoot, 'app'));
@@ -288,21 +331,17 @@ async function main() {
   const companionStdoutPath = join(logsDir, 'companion.log');
   const companionStderrPath = join(logsDir, 'companion.stderr.log');
   const supervisorLogPath = join(dirname(statePath), 'supervisor.log');
-  const child = spawn(nodePath, ['dist/server.js'], {
-    cwd: appRoot,
-    env: process.env,
-    stdio: ['ignore', 'pipe', 'pipe'],
-    shell: false,
-    windowsHide: true,
+
+  await runCompanionLifecycle({
+    nodePath,
+    appRoot,
+    statePath,
+    companionStdoutPath,
+    companionStderrPath,
+    supervisorLogPath,
   });
-  const companionStdout = createWriteStream(companionStdoutPath, { flags: 'a' });
-  const companionStderr = createWriteStream(companionStderrPath, { flags: 'a' });
-  child.stdout.pipe(companionStdout);
-  child.stderr.pipe(companionStderr);
 
   const runState = await readJson(statePath);
-  await writeJson(statePath, { ...runState, processId: child.pid });
-
   const reportPath = relativeBundlePath(bundleRoot, join(runDir, 'REPORT.md'));
   let completion = {
     schemaVersion: FINALIZATION_SCHEMA_VERSION,
@@ -315,9 +354,6 @@ async function main() {
     diagnosticsPath: relativeBundlePath(bundleRoot, supervisorLogPath),
   };
   await writeJson(finalizationStatePath, completion);
-
-  await waitForChild(child);
-  await Promise.all([waitForStream(companionStdout), waitForStream(companionStderr)]);
   let completionServer;
   try {
     completionServer = await listenCompletionServer({

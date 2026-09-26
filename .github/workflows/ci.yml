@@ -257,47 +257,12 @@ jobs:
           $env:STEAMROOT = $fakeSteamRoot
           Push-Location $bundleRoot.FullName
           try {
-            $installOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\install-gsi.ps1 2>&1 | Out-String
+            & .\resources\runtime\node.exe ($env:GITHUB_WORKSPACE + '\scripts\qualification\product-smoke.mjs') $bundleRoot.FullName
+            if ($LASTEXITCODE -ne 0) { throw '便携 EXE smoke 失败' }
+            $installOutput = & powershell -NoProfile -ExecutionPolicy Bypass -File .\resources\scripts\install-gsi.ps1 2>&1 | Out-String
             Write-Output $installOutput
             if ($LASTEXITCODE -ne 0) { throw 'install-gsi.ps1 执行失败' }
             if ($installOutput -notmatch 'GSI 配置冲突') { throw '未输出 GSI 配置冲突预检警告' }
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\start.ps1
-            if ($LASTEXITCODE -ne 0) { throw 'start.ps1 执行失败' }
-            $install = Get-Content -LiteralPath .\.qualification-local\install.json -Raw | ConvertFrom-Json
-            $run = Get-Content -LiteralPath .\.qualification-local\run.json -Raw | ConvertFrom-Json
-            $headers = @{ 'Content-Type' = 'application/json' }
-            $assetManifest = Invoke-WebRequest -UseBasicParsing -Uri 'http://127.0.0.1:3000/assets/cs2/manifest.json'
-            if ($assetManifest.StatusCode -ne 200) { throw 'CS2 asset manifest HTTP smoke 失败' }
-            if ($assetManifest.Headers['Content-Type'] -notmatch 'application/json') { throw 'CS2 asset manifest MIME 不正确' }
-            $manifest = $assetManifest.Content | ConvertFrom-Json
-            foreach ($asset in $manifest.assets.PSObject.Properties) {
-              $assetResponse = Invoke-WebRequest -UseBasicParsing -Uri ('http://127.0.0.1:3000' + $asset.Value.outputPath)
-              if ($assetResponse.StatusCode -ne 200) { throw ('CS2 SVG asset HTTP smoke 失败：' + $asset.Name) }
-              if ($assetResponse.Headers['Content-Type'] -notmatch 'image/svg\+xml') { throw ('CS2 SVG MIME 不正确：' + $asset.Name) }
-            }
-            $payload = @{ auth = @{ token = [string]$install.gsiToken }; map = @{ name = 'de_nuke'; phase = 'live' }; round = @{ phase = 'freezetime' } } | ConvertTo-Json -Depth 10 -Compress
-            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/gsi' -Headers $headers -Body $payload | Out-Null
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-a-live
-            if ($LASTEXITCODE -ne 0) { throw 'mark.ps1 demo-a-live 执行失败' }
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1
-            if ($LASTEXITCODE -ne 0) { throw '首次 check.ps1 执行失败' }
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\check.ps1 -WaitForStale -TimeoutSeconds 35
-            if ($LASTEXITCODE -ne 0) { throw 'check.ps1 stale 轮询失败' }
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 cs2-closed
-            if ($LASTEXITCODE -ne 0) { throw 'mark.ps1 cs2-closed 执行失败' }
-            $controlHeaders = @{ 'x-qualification-token' = [string]$run.controlToken }
-            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/qualification/next-map-execution' -Headers $controlHeaders -ContentType 'application/json' -Body '{}' | Out-Null
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 cs2-reopened
-            $payload = @{ auth = @{ token = [string]$install.gsiToken }; map = @{ name = 'de_nuke'; phase = 'live' }; round = @{ phase = 'freezetime' } } | ConvertTo-Json -Depth 10 -Compress
-            Invoke-RestMethod -Method POST -Uri 'http://127.0.0.1:3000/gsi' -Headers $headers -Body $payload | Out-Null
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\mark.ps1 demo-b-live
-            if ($LASTEXITCODE -ne 0) { throw 'mark.ps1 demo-b-live 执行失败' }
-            & powershell -NoProfile -ExecutionPolicy Bypass -File .\scripts\stop.ps1
-            if ($LASTEXITCODE -ne 0) { throw 'stop.ps1 执行失败' }
-            $stateRoot = Join-Path $bundleRoot.FullName '.qualification-local'
-            $cleanupDeadline = (Get-Date).AddSeconds(10)
-            while ((Get-Date) -lt $cleanupDeadline -and (Test-Path -LiteralPath $stateRoot -PathType Container)) { Start-Sleep -Milliseconds 250 }
-            if (Test-Path -LiteralPath $stateRoot -PathType Container) { throw 'supervisor 负责的 qualification 状态清理未完成' }
           } finally {
             Pop-Location
           }
@@ -308,6 +273,11 @@ jobs:
         run: |
           $extractedRoot = Join-Path $env:RUNNER_TEMP 'qualification extracted path'
           $logs = @(Get-ChildItem -LiteralPath $extractedRoot -Recurse -File -Include 'companion.log', 'companion.stderr.log', 'supervisor.log', 'supervisor.stderr.log' -ErrorAction SilentlyContinue)
+          $state = Get-ChildItem -LiteralPath $extractedRoot -Directory -Recurse -Filter state -ErrorAction SilentlyContinue | Select-Object -First 1
+          if ($null -ne $state) {
+            Write-Output "--- state tree $($state.FullName)"
+            Get-ChildItem -LiteralPath $state.FullName -Force -Recurse -File -ErrorAction SilentlyContinue | Select-Object FullName,Length
+          }
           if ($logs.Count -eq 0) { Write-Output '未生成 Companion 日志。'; exit 0 }
           foreach ($log in $logs) {
             Write-Output "--- $($log.FullName)"
@@ -318,7 +288,9 @@ jobs:
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: rivalhub-broadcast-qualification-${{ github.event.pull_request.head.sha || github.sha }}-win-x64
-          path: ${{ env.QUALIFICATION_BUILD_ROOT }}/*.zip
+          path: |
+            ${{ env.QUALIFICATION_BUILD_ROOT }}/*.zip
+            ${{ env.QUALIFICATION_BUILD_ROOT }}/host-soak.json
           if-no-files-found: error
 
   qualification_offline:

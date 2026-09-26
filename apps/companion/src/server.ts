@@ -20,6 +20,7 @@ import {
 import { PRODUCTION_GSI_CONFIG } from './telemetry/gsi-ingress.js';
 import { parseAllowedOrigins } from './local-web/origin-policy.js';
 import { HudConfigStore } from './hud-config/store.js';
+import type { QualificationProfile } from './qualification/evidence.js';
 
 const host = process.env.HOST ?? '127.0.0.1';
 const port = Number.parseInt(process.env.PORT ?? '3000', 10);
@@ -33,13 +34,22 @@ const seriesProgressCheckpointPath =
   process.env.SERIES_PROGRESS_CHECKPOINT_PATH ?? join(captureDir, '..', 'series-progress.json');
 const broadcastCommit = process.env.BROADCAST_COMMIT ?? 'unknown';
 const qualificationMode = /^(?:1|true)$/i.test(process.env.QUALIFICATION_MODE ?? '');
-const qualificationProfile =
-  process.env.QUALIFICATION_PROFILE === 'objective-timing' ? 'objective-timing' : 'base';
+const qualificationProfile: QualificationProfile =
+  process.env.QUALIFICATION_PROFILE === 'release'
+    ? 'release'
+    : process.env.QUALIFICATION_PROFILE === 'objective-timing'
+      ? 'objective-timing'
+      : 'base';
 const qualificationControlToken = process.env.QUALIFICATION_CONTROL_TOKEN;
 const qualificationRunId = process.env.QUALIFICATION_RUN_ID ?? randomUUID();
 const qualificationEvidenceDir = process.env.QUALIFICATION_EVIDENCE_DIR;
 const qualificationScenarioPath =
   process.env.QUALIFICATION_SCENARIO_PATH ?? join(captureDir, '..', 'scenario.jsonl');
+const qualificationHostCheckpointsPath =
+  process.env.QUALIFICATION_HOST_CHECKPOINTS_PATH ??
+  (qualificationEvidenceDir
+    ? join(qualificationEvidenceDir, 'host-checkpoints.jsonl')
+    : join(captureDir, '..', 'host-checkpoints.jsonl'));
 const qualificationFinalRuntimePath =
   qualificationMode && qualificationEvidenceDir !== undefined
     ? join(qualificationEvidenceDir, 'debug', 'final-runtime.json')
@@ -133,7 +143,23 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
     seriesProgressCheckpointStore,
     onSeriesProgressDiagnostic: ({ code }) => console.warn(`系列进度检查点诊断：${code}`),
   });
+  const productInstance = process.env.BROADCAST_PRODUCT_INSTANCE;
+  const productArtifact = process.env.BROADCAST_ARTIFACT_SHA256;
+  const productToken = process.env.BROADCAST_RUNTIME_TOKEN;
+  if (productInstance !== undefined && (qualificationMode || !productArtifact || !productToken)) {
+    throw new Error('便携产品运行身份不完整或模式冲突');
+  }
   const app = buildApp({
+    ...(productInstance === undefined
+      ? {}
+      : {
+          productRuntime: {
+            instanceId: productInstance,
+            artifactSha256: productArtifact!,
+            controlToken: productToken!,
+            stop: () => shutdown('product-stop'),
+          },
+        }),
     logger: true,
     gsiToken,
     recorder,
@@ -156,7 +182,9 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       ? {
           qualificationRunId,
           qualificationScenarioPath,
+          qualificationHostCheckpointsPath,
           qualificationProfile,
+          onQualificationRestart: () => shutdown('qualification-restart', 75),
           onQualificationRecorderRotate: async (currentRecorder) => {
             if (currentRecorder !== recorder) {
               throw new Error('采集记录在切换过程中发生了意外变化。');
@@ -194,7 +222,7 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
   });
   let shutdownPromise: Promise<void> | undefined;
 
-  function shutdown(signal: string): void {
+  function shutdown(signal: string, exitCode = 0): void {
     shutdownPromise ??= (async () => {
       let appClosed = false;
       const watchdog = setTimeout(() => {
@@ -209,7 +237,8 @@ if (gsiToken === undefined || gsiToken.trim().length === 0) {
       try {
         await app.close();
         appClosed = true;
-        app.log.info({ signal }, 'Companion 已停止');
+        app.log.info({ signal, exitCode }, 'Companion 已停止');
+        process.exitCode = exitCode;
       } catch (error: unknown) {
         app.log.error(error, 'Companion 关闭失败');
         process.exitCode = 1;

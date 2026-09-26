@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { randomUUID, timingSafeEqual } from 'node:crypto';
 import { performance } from 'node:perf_hooks';
 
 import Fastify, { type FastifyInstance } from 'fastify';
@@ -25,6 +25,7 @@ import {
   createQualificationEvidenceStore,
   type QualificationClock,
   type QualificationEvidenceStore,
+  type QualificationProfile,
 } from './qualification/evidence.js';
 import { createDisabledRecorder, type CaptureRecorder } from './telemetry/capture-recorder.js';
 import {
@@ -51,6 +52,12 @@ import {
 } from './local-web/websocket-transport.js';
 
 export interface CompanionAppOptions {
+  readonly productRuntime?: {
+    readonly artifactSha256: string;
+    readonly instanceId: string;
+    readonly controlToken: string;
+    readonly stop: () => void;
+  };
   readonly logger?: boolean;
   readonly gsiToken?: string;
   readonly recorder?: CaptureRecorder;
@@ -77,7 +84,8 @@ export interface CompanionAppOptions {
   readonly hudConfigStore?: HudConfigStore;
   readonly qualificationRunId?: string;
   readonly qualificationScenarioPath?: string;
-  readonly qualificationProfile?: 'base' | 'objective-timing';
+  readonly qualificationHostCheckpointsPath?: string;
+  readonly qualificationProfile?: QualificationProfile;
   readonly qualificationClock?: QualificationClock;
   readonly qualificationEvidenceStore?: QualificationEvidenceStore;
   readonly objectiveReferenceSource?: {
@@ -89,6 +97,7 @@ export interface CompanionAppOptions {
     readonly captureId: string;
     readonly nextRecorder: CaptureRecorder;
   }>;
+  readonly onQualificationRestart?: () => void | Promise<void>;
   readonly onQualificationFinish?: (input: QualificationFinishInput) => void | Promise<void>;
   readonly webRoot?: string;
   readonly host?: string;
@@ -277,8 +286,38 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       status: runtimeDegraded || recorderDegraded || cstvDegraded ? 'degraded' : 'ok',
       recorder: recorderHealth,
       cstv: cstvHealth,
+      ...(options.productRuntime === undefined
+        ? {}
+        : {
+            product: {
+              repository: 'Starfie1d1272/RivalHub-Broadcast',
+              artifactSha256: options.productRuntime.artifactSha256,
+              instanceId: options.productRuntime.instanceId,
+              mode: 'product',
+            },
+          }),
     };
   });
+
+  if (options.productRuntime !== undefined) {
+    const product = options.productRuntime;
+    app.post('/operator/runtime/stop', (request, reply) => {
+      const token = request.headers['x-runtime-token'];
+      const expected = Buffer.from(product.controlToken);
+      const supplied = Buffer.from(typeof token === 'string' ? token : '');
+      // Only the local supervisor holds this per-launch capability. Browsers cannot stop it.
+      if (
+        request.headers.origin !== undefined ||
+        supplied.length !== expected.length ||
+        expected.length === 0 ||
+        !timingSafeEqual(supplied, expected)
+      ) {
+        return reply.code(403).send({ error: 'runtime-control-denied' });
+      }
+      setImmediate(product.stop);
+      return reply.code(202).send({ status: 'stopping' });
+    });
+  }
 
   app.get('/debug/runtime', () =>
     debugEvidenceStore.getResponse({
@@ -291,6 +330,8 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       },
     }),
   );
+
+  app.get('/debug/hosts', () => localWebTransport.getHostDiagnostics());
 
   if (options.gsiToken !== undefined) {
     registerGsiIngress(app, {
@@ -335,6 +376,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         ...(options.qualificationScenarioPath === undefined
           ? {}
           : { scenarioPath: options.qualificationScenarioPath }),
+        ...(options.qualificationHostCheckpointsPath === undefined
+          ? {}
+          : { hostCheckpointsPath: options.qualificationHostCheckpointsPath }),
         clock: options.qualificationClock ?? {
           now: () => ({ monotonicMs: performance.now(), utc: new Date().toISOString() }),
         },
@@ -345,6 +389,7 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
       evidence,
       qualificationProfile: options.qualificationProfile ?? 'base',
       ...(options.qualificationClock === undefined ? {} : { clock: options.qualificationClock }),
+      getHostDiagnostics: () => localWebTransport.getHostDiagnostics(),
       getDebugResponse: (nowMonotonicMs) =>
         debugEvidenceStore.getResponse({
           nowMonotonicMs,
@@ -357,6 +402,9 @@ export function buildApp(options: CompanionAppOptions = {}): FastifyInstance {
         }),
       programRuntime,
       recorder: currentRecorder,
+      ...(options.onQualificationRestart === undefined
+        ? {}
+        : { onRestart: options.onQualificationRestart }),
       ...(options.onQualificationRecorderRotate === undefined
         ? {}
         : {

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { DebugPage, SurfacePage, surfaceDefinitions, surfaceForPath } from '../src/App';
 import { parseDebugRuntimeResponse, type DebugRuntimeResponse } from '../src/debug/runtime';
+import { parseBrowserHostDiagnostics } from '../src/debug/host-diagnostics';
 
 const DEBUG_RESPONSE: DebugRuntimeResponse = {
   producerInstanceId: 'web-test-producer',
@@ -107,6 +108,48 @@ describe('web surface shell', () => {
 
   it('rejects a response missing required debug fields instead of guessing state', () => {
     expect(parseDebugRuntimeResponse({ freshness: 'fresh' })).toBeUndefined();
+  });
+
+  it('accepts bounded and sanitized browser host diagnostics', () => {
+    expect(
+      parseBrowserHostDiagnostics({
+        active: {
+          obs: 1,
+          browser: 2,
+          unknown: 0,
+          byChannel: { program: 1, operator: 2 },
+          byHostChannel: {
+            obs: { program: 1, operator: 0 },
+            browser: { program: 0, operator: 2 },
+            unknown: { program: 0, operator: 0 },
+          },
+          obsVersions: ['32.0.2'],
+        },
+        totals: {
+          connected: 5,
+          disconnected: 2,
+          connectionLimitRejected: 0,
+          slowConsumerTerminated: 1,
+          snapshotOversize: 0,
+          heartbeatTerminated: 0,
+          sendFailed: 0,
+        },
+        recentEvents: [
+          {
+            sequence: 7,
+            at: '2026-09-26T00:00:00.000Z',
+            action: 'connected',
+            host: 'obs',
+            channel: 'program',
+            obsVersion: '32.0.2',
+          },
+        ],
+      }),
+    ).toMatchObject({
+      active: { obs: 1, browser: 2, obsVersions: ['32.0.2'] },
+      totals: { connected: 5, slowConsumerTerminated: 1 },
+      recentEvents: [{ host: 'obs', channel: 'program' }],
+    });
   });
 
   it('renders the loading state while the first Companion request is pending', () => {

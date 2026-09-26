@@ -8,6 +8,7 @@ import { describe, expect, it } from 'vitest';
 import {
   readQualificationEvidence,
   scanJsonForSecrets,
+  validateHostCheckpoint,
   writeQualificationEvidence,
 } from './evidence.mjs';
 
@@ -407,8 +408,538 @@ describe('qualification evidence verifier', () => {
     }
   });
 
+  it('evaluates release profile host checks and renders host checkpoints in report', async () => {
+    const run = await createEvidenceRun({ complete: true, qualificationProfile: 'release' });
+    try {
+      // 1. Without host checkpoints, release checks evaluate to INCONCLUSIVE
+      const writtenInconclusive = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+          qualificationProfile: 'release',
+        },
+      });
+      expect(writtenInconclusive.qualification.result).toBe('INCONCLUSIVE');
+      expect(writtenInconclusive.qualification.checks.browserReload).toBe('INCONCLUSIVE');
+      expect(writtenInconclusive.qualification.checks.obsReload).toBe('INCONCLUSIVE');
+      expect(writtenInconclusive.qualification.checks.sceneVisibility).toBe('INCONCLUSIVE');
+      expect(writtenInconclusive.qualification.checks.companionRestart).toBe('INCONCLUSIVE');
+      expect(writtenInconclusive.report).toContain('## Host 生产场景检查点');
+      expect(writtenInconclusive.report).toContain('- 未记录 Host 检查点。');
+
+      // 2. Reject empty recentEvents as INCONCLUSIVE (prevent false PASS)
+      const emptyEventsCheckpoints = [
+        {
+          schemaVersion: 1,
+          scenario: 'browser-reload',
+          phase: 'before',
+          timestamp: { monotonicMs: 1000, utc: '2026-09-15T00:00:01.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 1,
+          },
+          host: {
+            active: { obs: 1, browser: 1, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [],
+          },
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'browser-reload',
+          phase: 'after',
+          timestamp: { monotonicMs: 2000, utc: '2026-09-15T00:00:02.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 2,
+          },
+          host: {
+            active: { obs: 1, browser: 1, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [],
+          },
+          programVisible: true,
+        },
+      ];
+      await writeFile(
+        join(run.runDir, 'host-checkpoints.jsonl'),
+        emptyEventsCheckpoints.map((cp) => JSON.stringify(cp)).join('\n') + '\n',
+        'utf8',
+      );
+      const writtenNoAction = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+          qualificationProfile: 'release',
+        },
+      });
+      expect(writtenNoAction.qualification.checks.browserReload).toBe('INCONCLUSIVE');
+      expect(writtenNoAction.qualification.result).toBe('INCONCLUSIVE');
+
+      // 3. Add complete host checkpoints with authentic event causality
+      const hostCheckpoints = [
+        {
+          schemaVersion: 1,
+          scenario: 'browser-reload',
+          phase: 'before',
+          timestamp: { monotonicMs: 1000, utc: '2026-09-15T00:00:01.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 1,
+          },
+          host: {
+            active: { obs: 1, browser: 1, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 1,
+                at: '2026-09-15T00:00:01.000Z',
+                action: 'connected',
+                host: 'browser',
+                channel: 'program',
+              },
+            ],
+          },
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'browser-reload',
+          phase: 'after',
+          timestamp: { monotonicMs: 2000, utc: '2026-09-15T00:00:02.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 2,
+          },
+          host: {
+            active: { obs: 1, browser: 1, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 1,
+                at: '2026-09-15T00:00:01.000Z',
+                action: 'connected',
+                host: 'browser',
+                channel: 'program',
+              },
+              {
+                sequence: 2,
+                at: '2026-09-15T00:00:01.500Z',
+                action: 'disconnected',
+                host: 'browser',
+                channel: 'program',
+              },
+              {
+                sequence: 3,
+                at: '2026-09-15T00:00:02.000Z',
+                action: 'connected',
+                host: 'browser',
+                channel: 'program',
+              },
+            ],
+          },
+          programVisible: true,
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'obs-reload',
+          phase: 'before',
+          timestamp: { monotonicMs: 3000, utc: '2026-09-15T00:00:03.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 3,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 3,
+                at: '2026-09-15T00:00:02.000Z',
+                action: 'connected',
+                host: 'browser',
+                channel: 'program',
+              },
+            ],
+          },
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'obs-reload',
+          phase: 'after',
+          timestamp: { monotonicMs: 4000, utc: '2026-09-15T00:00:04.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 4,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 4,
+                at: '2026-09-15T00:00:03.500Z',
+                action: 'disconnected',
+                host: 'obs',
+                channel: 'program',
+              },
+              {
+                sequence: 5,
+                at: '2026-09-15T00:00:04.000Z',
+                action: 'connected',
+                host: 'obs',
+                channel: 'program',
+              },
+            ],
+          },
+          programVisible: true,
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'scene-visibility',
+          phase: 'before',
+          timestamp: { monotonicMs: 5000, utc: '2026-09-15T00:00:05.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 5,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 5,
+                at: '2026-09-15T00:00:04.000Z',
+                action: 'connected',
+                host: 'obs',
+                channel: 'program',
+              },
+            ],
+          },
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'scene-visibility',
+          phase: 'after',
+          timestamp: { monotonicMs: 6000, utc: '2026-09-15T00:00:06.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 6,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 5,
+                at: '2026-09-15T00:00:04.000Z',
+                action: 'connected',
+                host: 'obs',
+                channel: 'program',
+              },
+            ],
+          },
+          programVisible: true,
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'companion-restart',
+          phase: 'before',
+          timestamp: { monotonicMs: 7000, utc: '2026-09-15T00:00:07.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-1',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 7,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 5,
+                at: '2026-09-15T00:00:04.000Z',
+                action: 'connected',
+                host: 'obs',
+                channel: 'program',
+              },
+            ],
+          },
+        },
+        {
+          schemaVersion: 1,
+          scenario: 'companion-restart',
+          phase: 'after',
+          timestamp: { monotonicMs: 8000, utc: '2026-09-15T00:00:08.000Z' },
+          identity: {
+            runId: run.runId,
+            gitSha: artifact().gitSha,
+            artifactSha256: ARTIFACT_DIGEST,
+          },
+          runtime: {
+            producerInstanceId: 'inst-2',
+            freshness: 'fresh',
+            mapEpoch: 1,
+            sourceGeneration: 0,
+            runtimeSeq: 8,
+          },
+          host: {
+            active: { obs: 1, browser: 0, unknown: 0 },
+            byHostChannel: {
+              obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              browser: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+              unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+            },
+            obsVersions: ['31.0.0'],
+            recentEvents: [
+              {
+                sequence: 1,
+                at: '2026-09-15T00:00:08.000Z',
+                action: 'connected',
+                host: 'obs',
+                channel: 'program',
+              },
+            ],
+          },
+          programVisible: true,
+        },
+      ];
+      await writeFile(
+        join(run.runDir, 'host-checkpoints.jsonl'),
+        hostCheckpoints.map((cp) => JSON.stringify(cp)).join('\n') + '\n',
+        'utf8',
+      );
+
+      const writtenPass = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+          qualificationProfile: 'release',
+        },
+      });
+      expect(writtenPass.qualification.result).toBe('PASS');
+      expect(writtenPass.qualification.checks.browserReload).toBe('PASS');
+      expect(writtenPass.qualification.checks.obsReload).toBe('PASS');
+      expect(writtenPass.qualification.checks.sceneVisibility).toBe('PASS');
+      expect(writtenPass.qualification.checks.companionRestart).toBe('PASS');
+      expect(writtenPass.report).toContain('普通浏览器重载（后）');
+      expect(writtenPass.report).toContain('制播服务受控重启（后）');
+
+      const verified = await readQualificationEvidence(run.runDir);
+      expect(verified.qualification.result).toBe('PASS');
+      expect(verified.environment.finishedAt).toBeDefined();
+      expect(verified.environment.obsVersions).toEqual(['31.0.0']);
+
+      // A bounded recent-event window cannot prove absence if events since the
+      // before checkpoint have already been truncated from the ring.
+      const truncatedSceneWindow = hostCheckpoints.map((checkpoint) =>
+        checkpoint.scenario === 'scene-visibility' && checkpoint.phase === 'after'
+          ? {
+              ...checkpoint,
+              host: {
+                ...checkpoint.host,
+                recentEvents: [
+                  {
+                    sequence: 7,
+                    at: '2026-09-15T00:00:06.000Z',
+                    action: 'connected',
+                    host: 'browser',
+                    channel: 'operator',
+                  },
+                ],
+              },
+            }
+          : checkpoint,
+      );
+      await writeFile(
+        join(run.runDir, 'host-checkpoints.jsonl'),
+        truncatedSceneWindow.map((checkpoint) => JSON.stringify(checkpoint)).join('\n') + '\n',
+        'utf8',
+      );
+      const truncatedWindowResult = await writeQualificationEvidence({
+        runDir: run.runDir,
+        artifact: artifact(),
+        environment: {
+          runId: run.runId,
+          windowsVersion: 'Windows 11 test',
+          cs2Version: 'CS2 test',
+          qualificationProfile: 'release',
+        },
+      });
+      expect(truncatedWindowResult.qualification.checks.sceneVisibility).toBe('INCONCLUSIVE');
+      expect(truncatedWindowResult.qualification.result).toBe('INCONCLUSIVE');
+    } finally {
+      await rm(run.runDir, { recursive: true, force: true });
+    }
+  });
+
   it('rejects secret-bearing evidence fields', () => {
     expect(() => scanJsonForSecrets({ token: 'must-not-ship' })).toThrow('不应公开的敏感值');
     expect(() => scanJsonForSecrets({ player: '76561198000000001' })).toThrow('Steam 身份');
+  });
+
+  it('rejects host checkpoint with mismatched gitSha or artifactSha256', () => {
+    const validCp = {
+      schemaVersion: 1,
+      scenario: 'browser-reload',
+      phase: 'before',
+      timestamp: { monotonicMs: 1000, utc: '2026-09-15T00:00:01.000Z' },
+      identity: { runId: 'run-1', gitSha: 'wrong-git-sha', artifactSha256: ARTIFACT_DIGEST },
+      runtime: {
+        producerInstanceId: 'inst-1',
+        freshness: 'fresh',
+        mapEpoch: 1,
+        sourceGeneration: 0,
+        runtimeSeq: 1,
+      },
+      host: {
+        active: { obs: 1, browser: 1, unknown: 0 },
+        byHostChannel: {
+          obs: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          browser: { program: 1, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+          unknown: { program: 0, radar: 0, operator: 0, assist: 0, 'program-cue': 0 },
+        },
+        obsVersions: ['31.0.0'],
+        recentEvents: [],
+      },
+    };
+    expect(() => validateHostCheckpoint(validCp, 'run-1', 1, artifact())).toThrow(
+      '代码提交与本次 artifact.json 不一致',
+    );
+
+    const wrongShaCp = {
+      ...validCp,
+      identity: {
+        runId: 'run-1',
+        gitSha: artifact().gitSha,
+        artifactSha256: '0000000000000000000000000000000000000000000000000000000000000000',
+      },
+    };
+    expect(() => validateHostCheckpoint(wrongShaCp, 'run-1', 1, artifact())).toThrow(
+      '产物摘要与本次 artifact.json 不一致',
+    );
   });
 });
