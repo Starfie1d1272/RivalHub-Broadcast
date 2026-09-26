@@ -68,9 +68,7 @@ function usePresenceItems<T extends { readonly key: string }>(
         previous
           .filter((item) => item.motionPhase !== 'exit')
           .map((item) =>
-            item.motionPhase === 'enter'
-              ? { ...item, motionPhase: 'steady' as const }
-              : item,
+            item.motionPhase === 'enter' ? { ...item, motionPhase: 'steady' as const } : item,
           ),
       );
     }, exitMs);
@@ -400,11 +398,7 @@ export function PlayerCard({
   const hasAvatar = player.avatarUrl !== null;
   const avatar = <Avatar dead={dead} player={player} />;
   const body = (
-    <PlayerBody
-      dead={dead}
-      player={player}
-      presentationRevision={presentationRevision}
-    />
+    <PlayerBody dead={dead} player={player} presentationRevision={presentationRevision} />
   );
   const hotkeyLabel = observerHotkeyLabel(player.observerSlot);
   const endcap = (
