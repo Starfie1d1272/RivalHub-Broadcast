@@ -4,7 +4,11 @@ import { PlayerCard } from './PlayerCard';
 import { buildPlayerRailsPresentation } from './presentation';
 import { TeamSummary } from './TeamSummary';
 
-export function PlayerRail({ snapshot, widgetId, presentationRevision = 0 }: HudWidgetRendererProps) {
+export function PlayerRail({
+  snapshot,
+  widgetId,
+  presentationRevision = 0,
+}: HudWidgetRendererProps) {
   const presentation = buildPlayerRailsPresentation(snapshot.payload);
   const physicalSide = widgetId === 'team-t-rail' ? 'right' : 'left';
   const rail = physicalSide === 'left' ? presentation.left : presentation.right;
