@@ -170,18 +170,23 @@ describe('Radar renderer local lifecycle', () => {
     ];
     const model = new RadarPresentation();
     model.accept(restored, 1_000);
-    expect(model.grenades.get('synthetic-projectile')).toMatchObject({
+    const established = model.grenades.get('synthetic-projectile');
+    expect(established).toMatchObject({
       phase: 'effect',
       phaseStartedAt: 1_000 - RADAR_PRESENTATION.smokeEnterMs,
     });
+    const establishedAnchor = structuredClone(established?.target);
+    const establishedPhaseStartedAt = established?.phaseStartedAt;
 
     const skipped = next(restored);
     skipped.cursor.programReceiveSequence = (restored.cursor.programReceiveSequence ?? 0) + 2;
+    skipped.payload.grenades[0]!.position = { x: 1_000_000, y: 1_000_000, z: 0 };
     skipped.payload.grenades[0]!.effectTimeSeconds = 15.406;
     model.accept(skipped, 1_100);
     expect(model.grenades.get('synthetic-projectile')).toMatchObject({
       phase: 'effect',
-      phaseStartedAt: 1_100 - RADAR_PRESENTATION.smokeEnterMs,
+      phaseStartedAt: establishedPhaseStartedAt,
+      target: establishedAnchor,
     });
   });
 
