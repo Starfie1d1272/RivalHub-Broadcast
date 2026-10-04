@@ -1,4 +1,4 @@
-import { Button } from '../ui';
+import { Button, Select } from '../ui';
 import { ToolShell } from '../patterns';
 import {
   Fragment,
@@ -159,6 +159,8 @@ export function HudConsolePage() {
   const editorStatus = visualFixtureMode ? 'ready' : hudEditor.status;
   const initialDocument = fixtureDocument;
   const [workspace, setWorkspace] = useState<HudWorkspace>('preset');
+  const [mapBackground, setMapBackground] = useState(true);
+  const reviewFrameRef = useRef<HTMLDivElement>(null);
   const [selectedPresetId, setSelectedPresetId] = useState(() => activePresetId(initialDocument));
   const [selectedLayoutId, setSelectedLayoutId] = useState(() => {
     const preset = resourceFor(initialDocument, 'preset', activePresetId(initialDocument));
@@ -824,8 +826,25 @@ export function HudConsolePage() {
         </header>
 
         <div className="hud-console__layout">
-          <div className="hud-console__preview-column">
+          <div className="hud-console__preview-column" ref={reviewFrameRef}>
             <section className="hud-console__preview-toolbar" aria-label="预览设置">
+              <Select
+                label="预览背景"
+                value={mapBackground ? 'map' : 'plain'}
+                onChange={(event) => setMapBackground(event.target.value === 'map')}
+              >
+                <option value="map">静态地图</option>
+                <option value="plain">纯色底板</option>
+              </Select>
+              {document.fullscreenEnabled ? (
+                <Button
+                  onClick={() =>
+                    void reviewFrameRef.current?.requestFullscreen().catch(() => undefined)
+                  }
+                >
+                  全屏预览
+                </Button>
+              ) : null}
               <div>
                 <span className="hud-console__kicker">预览</span>
                 <strong>
@@ -1036,6 +1055,7 @@ export function HudConsolePage() {
             ) : null}
 
             <HudCanvasPreview
+              mapBackground={mapBackground}
               radarSnapshot={activeRadarSnapshot}
               radarClient={activePreviewSource === 'current-live' ? radarClient : undefined}
               presentationRevision={
@@ -1050,9 +1070,9 @@ export function HudConsolePage() {
               onWidgetPointerDown={workspace === 'layout' ? startMove : undefined}
               resolvedPreset={previewResolved}
               selectedWidgetId={workspace === 'layout' ? selectedWidgetId : null}
-              showCenter={showCenter}
-              showGrid={showGrid}
-              showSafeArea={showSafeArea}
+              showCenter={workspace === 'layout' && showCenter}
+              showGrid={workspace === 'layout' && showGrid}
+              showSafeArea={workspace === 'layout' && showSafeArea}
               snapshot={activeSnapshot}
             />
             <p className="hud-console__preview-caption">1920 × 1080 · 10px 网格</p>
